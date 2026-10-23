@@ -1,0 +1,296 @@
+{
+ "schema_version": "n2_s0_ten_sample_freeze/1",
+ "generated_at": "2026-10-22T16:47:17+08:00",
+ "stage": "N2 S0：只做代表 SKU 选样与冻结；不做链条表、不出任何补货数量",
+ "inputs": {
+  "plan": {
+   "path": "out/business_phase/plan.json",
+   "sha256": "8bae9082d86390def7dcac9e01545d260a98e53b11038f8a10e17e39b12df719"
+  },
+  "ranking": {
+   "path": "out/business_phase/ranking.json",
+   "sha256": "bb042cc881817a7b99565b739e6802eb1d2a22dcd85547ce1d18b9ad2b894db8"
+  },
+  "destinations": {
+   "path": "out/business_phase/destinations.json",
+   "sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
+  },
+  "db": {
+   "path": "D:/Work/fzh-order-store/order_store.duckdb",
+   "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9"
+  }
+ },
+ "selection_policy": {
+  "candidate_universe": "ranking.json 的 Top50 ∪ 紧急履约例外 = 122（与 plan.json 行一一对应）",
+  "ranking_priority": "先按 Top50 名次，其次按紧急例外顺序（waiting 降序）；不重排销量",
+  "main_category_order": [
+   "urgent",
+   "overlap",
+   "in_production",
+   "PO",
+   "zero_stock",
+   "normal"
+  ],
+  "main_category_note": "一个 SKU 只按主类别占一个名额；其它属性只写入 cross_labels，不额外占位",
+  "overlap_definition": "open_po_qty>0 ∧ intransit>0 ∧ intransit==open_po_qty（同一批被两个阶段重复记录）",
+  "in_stock_split": "表面充足 = available ≥ P50；可能不足 = available < P50（P50 是估计值，两者都不构成结论）",
+  "no_substitution": "取不到的属性记 shortfall，写明原因；不换 SKU 顶替、不放宽定义"
+ },
+ "universe_counts": {
+  "urgent": 75,
+  "overlap": 18,
+  "PO": 8,
+  "zero_stock": 3,
+  "normal": 18
+ },
+ "slots": [
+  {
+   "slot": "S1_urgent",
+   "sub": null,
+   "category": "urgent",
+   "status": "filled",
+   "sku": "TT0031038K0062927",
+   "reason": "紧急履约：waiting_shipment>0；Top50 排名最高的紧急例外（也是交集三项之一）",
+   "rank_top50": 2,
+   "urgent_order": 10,
+   "cross_labels": [
+    "top50_rank=2",
+    "urgent_waiting_shipment",
+    "overlap_suspected_duplicate",
+    "open_po",
+    "in_stock",
+    "intransit"
+   ],
+   "evidence_snapshot": {
+    "available": 350,
+    "intransit": 201,
+    "open_po_qty": 201,
+    "open_po_lines": 2,
+    "waiting_shipment": 5,
+    "zero_stock_with_sales": false
+   },
+   "evidence_pointer": "stock_latest[sku='TT0031038K0062927']; tongtool_po[goods_sku='TT0031038K0062927']; gs_orders[sku_tongtool='TT0031038K0062927', despatch<=2026-09-30]; model_race.py window_calibration(mean3,90d,asof=2026-10-22)"
+  },
+  {
+   "slot": "S2_overlap_1",
+   "sub": null,
+   "category": "overlap",
+   "status": "filled",
+   "sku": "C/Linen-Natural-100-688-wow",
+   "reason": "多阶段重叠：open_po 与 intransit 数值相同（121），同一批被两个阶段重复记录",
+   "rank_top50": 4,
+   "urgent_order": null,
+   "cross_labels": [
+    "top50_rank=4",
+    "overlap_suspected_duplicate",
+    "open_po",
+    "in_stock",
+    "intransit"
+   ],
+   "evidence_snapshot": {
+    "available": 55,
+    "intransit": 121,
+    "open_po_qty": 121,
+    "open_po_lines": 1,
+    "waiting_shipment": 0,
+    "zero_stock_with_sales": false
+   },
+   "evidence_pointer": "stock_latest[sku='C/Linen-Natural-100-688-wow']; tongtool_po[goods_sku='C/Linen-Natural-100-688-wow']; gs_orders[sku_tongtool='C/Linen-Natural-100-688-wow', despatch<=2026-09-30]; model_race.py window_calibration(mean3,90d,asof=2026-10-22)"
+  },
+  {
+   "slot": "S2_overlap_2",
+   "sub": null,
+   "category": "overlap",
+   "status": "filled",
+   "sku": "TT0312701K0064561",
+   "reason": "多阶段重叠：open_po 与 intransit 数值相同（480），同一批被两个阶段重复记录",
+   "rank_top50": 5,
+   "urgent_order": null,
+   "cross_labels": [
+    "top50_rank=5",
+    "overlap_suspected_duplicate",
+    "open_po",
+    "in_stock",
+    "intransit"
+   ],
+   "evidence_snapshot": {
+    "available": 181,
+    "intransit": 480,
+    "open_po_qty": 480,
+    "open_po_lines": 1,
+    "waiting_shipment": 0,
+    "zero_stock_with_sales": false
+   },
+   "evidence_pointer": "stock_latest[sku='TT0312701K0064561']; tongtool_po[goods_sku='TT0312701K0064561']; gs_orders[sku_tongtool='TT0312701K0064561', despatch<=2026-09-30]; model_race.py window_calibration(mean3,90d,asof=2026-10-22)"
+  },
+  {
+   "slot": "S3_in_production",
+   "category": "in_production",
+   "status": "shortfall",
+   "sku": null,
+   "reason": "在产 WO 不在本快照：order_store.duckdb 无工单/生产表，EN 在产需另行取数；按 D16/D17 记准确阻塞，不用别的 SKU 顶替",
+   "shortfall_reason_code": "work_order_not_in_snapshot"
+  },
+  {
+   "slot": "S4_po_eta_verifiable",
+   "category": "PO",
+   "sub": "eta_verifiable",
+   "status": "shortfall",
+   "sku": null,
+   "reason": "全库未结 PO 行 248 条，will_arrive_date 非空 0 条；不存在 ETA 可验证的样本，记缺额不放宽定义",
+   "shortfall_reason_code": "no_open_po_line_with_eta"
+  },
+  {
+   "slot": "S5_po_eta_uncertain",
+   "sub": null,
+   "category": "PO",
+   "status": "filled",
+   "sku": "C/Cord-DKBlue-100-713-wow",
+   "reason": "有未结 PO 且 ETA 不确定：open_po>0 且 intransit≠open_po（非重复嫌疑口径），全库 ETA 缺失",
+   "rank_top50": 7,
+   "urgent_order": null,
+   "cross_labels": [
+    "top50_rank=7",
+    "open_po",
+    "in_stock",
+    "intransit"
+   ],
+   "evidence_snapshot": {
+    "available": 6,
+    "intransit": 120,
+    "open_po_qty": 240,
+    "open_po_lines": 2,
+    "waiting_shipment": 0,
+    "zero_stock_with_sales": false
+   },
+   "evidence_pointer": "stock_latest[sku='C/Cord-DKBlue-100-713-wow']; tongtool_po[goods_sku='C/Cord-DKBlue-100-713-wow']; gs_orders[sku_tongtool='C/Cord-DKBlue-100-713-wow', despatch<=2026-09-30]; model_race.py window_calibration(mean3,90d,asof=2026-10-22)"
+  },
+  {
+   "slot": "S6_zero_stock_1",
+   "sub": null,
+   "category": "zero_stock",
+   "status": "filled",
+   "sku": "C/Velvet-White-100-664-wow",
+   "reason": "零库存但有历史销量：available=0，P1C 需求可预测",
+   "rank_top50": 26,
+   "urgent_order": null,
+   "cross_labels": [
+    "top50_rank=26",
+    "zero_stock"
+   ],
+   "evidence_snapshot": {
+    "available": 0,
+    "intransit": 0,
+    "open_po_qty": 0,
+    "open_po_lines": 0,
+    "waiting_shipment": 0,
+    "zero_stock_with_sales": true
+   },
+   "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow']; tongtool_po[goods_sku='C/Velvet-White-100-664-wow']; gs_orders[sku_tongtool='C/Velvet-White-100-664-wow', despatch<=2026-09-30]; model_race.py window_calibration(mean3,90d,asof=2026-10-22)"
+  },
+  {
+   "slot": "S6_zero_stock_2",
+   "sub": null,
+   "category": "zero_stock",
+   "status": "filled",
+   "sku": "TT0031010K0062880",
+   "reason": "零库存但有历史销量：available=0，P1C 需求可预测",
+   "rank_top50": 47,
+   "urgent_order": null,
+   "cross_labels": [
+    "top50_rank=47",
+    "zero_stock"
+   ],
+   "evidence_snapshot": {
+    "available": 0,
+    "intransit": 0,
+    "open_po_qty": 0,
+    "open_po_lines": 0,
+    "waiting_shipment": 0,
+    "zero_stock_with_sales": true
+   },
+   "evidence_pointer": "stock_latest[sku='TT0031010K0062880']; tongtool_po[goods_sku='TT0031010K0062880']; gs_orders[sku_tongtool='TT0031010K0062880', despatch<=2026-09-30]; model_race.py window_calibration(mean3,90d,asof=2026-10-22)"
+  },
+  {
+   "slot": "S7_in_stock_sufficient",
+   "sub": null,
+   "category": "normal",
+   "status": "filled",
+   "sku": "C/Linen-Natural-194-688-wow",
+   "reason": "有库存·表面充足：available ≥ P50 点估计（P90 仍高于在手，故只是“表面”）",
+   "rank_top50": 6,
+   "urgent_order": null,
+   "cross_labels": [
+    "top50_rank=6",
+    "in_stock"
+   ],
+   "evidence_snapshot": {
+    "available": 366,
+    "intransit": 0,
+    "open_po_qty": 0,
+    "open_po_lines": 0,
+    "waiting_shipment": 0,
+    "zero_stock_with_sales": false
+   },
+   "evidence_pointer": "stock_latest[sku='C/Linen-Natural-194-688-wow']; tongtool_po[goods_sku='C/Linen-Natural-194-688-wow']; gs_orders[sku_tongtool='C/Linen-Natural-194-688-wow', despatch<=2026-09-30]; model_race.py window_calibration(mean3,90d,asof=2026-10-22)"
+  },
+  {
+   "slot": "S8_in_stock_short",
+   "sub": null,
+   "category": "normal",
+   "status": "filled",
+   "sku": "CENCord995-DKGrey-97",
+   "reason": "有库存·可能不足：available < P50 点估计，Top50 第 1 名",
+   "rank_top50": 1,
+   "urgent_order": null,
+   "cross_labels": [
+    "top50_rank=1",
+    "in_stock"
+   ],
+   "evidence_snapshot": {
+    "available": 1,
+    "intransit": 0,
+    "open_po_qty": 0,
+    "open_po_lines": 0,
+    "waiting_shipment": 0,
+    "zero_stock_with_sales": false
+   },
+   "evidence_pointer": "stock_latest[sku='CENCord995-DKGrey-97']; tongtool_po[goods_sku='CENCord995-DKGrey-97']; gs_orders[sku_tongtool='CENCord995-DKGrey-97', despatch<=2026-09-30]; model_race.py window_calibration(mean3,90d,asof=2026-10-22)"
+  }
+ ],
+ "totals": {
+  "slots": 10,
+  "filled": 8,
+  "shortfall": 2,
+  "distinct_skus": 8,
+  "by_category": {
+   "urgent": 1,
+   "overlap": 2,
+   "PO": 1,
+   "zero_stock": 2,
+   "normal": 2
+  }
+ },
+ "shortfalls": [
+  {
+   "slot": "S3_in_production",
+   "category": "in_production",
+   "reason": "在产 WO 不在本快照：order_store.duckdb 无工单/生产表，EN 在产需另行取数；按 D16/D17 记准确阻塞，不用别的 SKU 顶替",
+   "code": "work_order_not_in_snapshot"
+  },
+  {
+   "slot": "S4_po_eta_verifiable",
+   "category": "PO",
+   "reason": "全库未结 PO 行 248 条，will_arrive_date 非空 0 条；不存在 ETA 可验证的样本，记缺额不放宽定义",
+   "code": "no_open_po_line_with_eta"
+  }
+ ],
+ "freeze": {
+  "frozen": true,
+  "frozen_at": "2026-10-22T16:47:18+08:00",
+  "statement": "名单冻结后不再更换（no swapping after freeze）",
+  "scope": "仅本 N2 链条样例；Top50 扩展等表验收后另行处理"
+ },
+ "no_quantities_produced": true,
+ "note": "本文件只做选样与冻结。evidence_snapshot 里的 available/intransit/open_po/waiting 是 P1C 已冻结值的摘录，用于证明名额判定，不是本阶段计算的补货数量。"
+}

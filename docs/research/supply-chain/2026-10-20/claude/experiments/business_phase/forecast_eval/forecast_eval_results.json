@@ -1,0 +1,1259 @@
+{
+ "schema_version": "t2_forecast_eval/2",
+ "inputs": {
+  "db": {
+   "path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+   "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9"
+  },
+  "destinations_sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
+ },
+ "settings": {
+  "window_days": 90,
+  "min_train_months": 24,
+  "validation_origins": [
+   "2025-01",
+   "2025-02",
+   "2025-03",
+   "2025-04",
+   "2025-05",
+   "2025-06"
+  ],
+  "test_origins": [
+   "2025-10",
+   "2025-11",
+   "2025-12",
+   "2026-01",
+   "2026-02",
+   "2026-03"
+  ],
+  "candidates": [
+   "naive",
+   "seasonal_naive",
+   "ma3",
+   "ma6",
+   "ma12",
+   "tsb",
+   "croston",
+   "autoets",
+   "combo_dynamic_ew"
+  ],
+  "combo_definition": "combo_dynamic_ew = per-cell equal-weight mean of the SIMPLE candidates that produced a forecast in that cell; composition reported per split",
+  "zero_rule": "zero-actual cells are KEPT in WAPE; the aggregate is undefined only when the actual total is zero",
+  "common_subset_rule": "validation and test are compared on cells where EVERY candidate produced a forecast",
+  "selection_rule": "lowest validation WAPE on the common subset, keep-zero; the test set is reported only",
+  "calibration_rule": "same-shape rolling residuals with label_available_at <= decision date; estimate, not a guarantee"
+ },
+ "library_versions": {
+  "statsforecast": "2.1.1",
+  "statsmodels": "0.15.0",
+  "numpy": "2.4.4",
+  "pandas": "3.0.2"
+ },
+ "runs": [
+  {
+   "run": "minimal",
+   "n_series": 200,
+   "availability": {
+    "attempted": {
+     "naive|val": 200,
+     "seasonal_naive|val": 200,
+     "ma3|val": 200,
+     "ma6|val": 200,
+     "ma12|val": 200,
+     "tsb|val": 200,
+     "croston|val": 200,
+     "autoets|val": 200,
+     "naive|test": 200,
+     "seasonal_naive|test": 200,
+     "ma3|test": 200,
+     "ma6|test": 200,
+     "ma12|test": 200,
+     "tsb|test": 200,
+     "croston|test": 200,
+     "autoets|test": 200
+    },
+    "available": {
+     "naive": {
+      "val": 200,
+      "test": 200
+     },
+     "seasonal_naive": {
+      "val": 163,
+      "test": 200
+     },
+     "ma3": {
+      "val": 200,
+      "test": 200
+     },
+     "ma6": {
+      "val": 200,
+      "test": 200
+     },
+     "ma12": {
+      "val": 200,
+      "test": 200
+     },
+     "tsb": {
+      "val": 200,
+      "test": 200
+     },
+     "croston": {
+      "val": 200,
+      "test": 200
+     },
+     "autoets": {
+      "val": 200,
+      "test": 200
+     },
+     "combo_dynamic_ew": {
+      "val": 200,
+      "test": 200
+     }
+    },
+    "measured": {
+     "naive": {
+      "val": 200,
+      "test": 200
+     },
+     "seasonal_naive": {
+      "val": 163,
+      "test": 200
+     },
+     "ma3": {
+      "val": 200,
+      "test": 200
+     },
+     "ma6": {
+      "val": 200,
+      "test": 200
+     },
+     "ma12": {
+      "val": 200,
+      "test": 200
+     },
+     "tsb": {
+      "val": 200,
+      "test": 200
+     },
+     "croston": {
+      "val": 200,
+      "test": 200
+     },
+     "autoets": {
+      "val": 200,
+      "test": 200
+     },
+     "combo_dynamic_ew": {
+      "val": 200,
+      "test": 200
+     }
+    },
+    "common": {
+     "val": 163,
+     "test": 200
+    },
+    "failures": {
+     "seasonal_naive:ValueError:history_lt_13m": 37
+    },
+    "n_failures_total": 37
+   },
+   "combo_composition": {
+    "val": {
+     "5": 163,
+     "4": 37
+    },
+    "test": {
+     "5": 200
+    }
+   },
+   "validation_own": {
+    "naive": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5534,
+     "wape_exclude_zero": 0.5523,
+     "bias": -0.4258,
+     "mase": 1.249,
+     "coverage": null,
+     "width": null
+    },
+    "seasonal_naive": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.4,
+     "wape_exclude_zero": 0.3942,
+     "bias": -0.0968,
+     "mase": 0.8964,
+     "coverage": null,
+     "width": null
+    },
+    "ma3": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5675,
+     "wape_exclude_zero": 0.5659,
+     "bias": -0.4753,
+     "mase": 1.2807,
+     "coverage": null,
+     "width": null
+    },
+    "ma6": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5756,
+     "wape_exclude_zero": 0.5708,
+     "bias": -0.4461,
+     "mase": 1.2989,
+     "coverage": null,
+     "width": null
+    },
+    "ma12": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.4735,
+     "wape_exclude_zero": 0.4679,
+     "bias": -0.3101,
+     "mase": 1.0687,
+     "coverage": null,
+     "width": null
+    },
+    "tsb": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.535,
+     "wape_exclude_zero": 0.5308,
+     "bias": -0.4273,
+     "mase": 1.2073,
+     "coverage": null,
+     "width": null
+    },
+    "croston": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.531,
+     "wape_exclude_zero": 0.5249,
+     "bias": -0.4185,
+     "mase": 1.1984,
+     "coverage": null,
+     "width": null
+    },
+    "autoets": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.4504,
+     "wape_exclude_zero": 0.4459,
+     "bias": -0.298,
+     "mase": 1.0163,
+     "coverage": null,
+     "width": null
+    },
+    "combo_dynamic_ew": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.4615,
+     "wape_exclude_zero": 0.4579,
+     "bias": -0.3586,
+     "mase": 1.0414,
+     "coverage": null,
+     "width": null
+    }
+   },
+   "validation_common": {
+    "naive": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5473,
+     "wape_exclude_zero": 0.5459,
+     "bias": -0.4602,
+     "mase": 1.2264,
+     "coverage": null,
+     "width": null
+    },
+    "seasonal_naive": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.4,
+     "wape_exclude_zero": 0.3942,
+     "bias": -0.0968,
+     "mase": 0.8964,
+     "coverage": null,
+     "width": null
+    },
+    "ma3": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5751,
+     "wape_exclude_zero": 0.5733,
+     "bias": -0.5025,
+     "mase": 1.2887,
+     "coverage": null,
+     "width": null
+    },
+    "ma6": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5815,
+     "wape_exclude_zero": 0.5758,
+     "bias": -0.4583,
+     "mase": 1.303,
+     "coverage": null,
+     "width": null
+    },
+    "ma12": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.4639,
+     "wape_exclude_zero": 0.4572,
+     "bias": -0.2959,
+     "mase": 1.0396,
+     "coverage": null,
+     "width": null
+    },
+    "tsb": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5402,
+     "wape_exclude_zero": 0.5353,
+     "bias": -0.4399,
+     "mase": 1.2106,
+     "coverage": null,
+     "width": null
+    },
+    "croston": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5345,
+     "wape_exclude_zero": 0.5271,
+     "bias": -0.4274,
+     "mase": 1.1976,
+     "coverage": null,
+     "width": null
+    },
+    "autoets": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.4366,
+     "wape_exclude_zero": 0.4313,
+     "bias": -0.283,
+     "mase": 0.9784,
+     "coverage": null,
+     "width": null
+    },
+    "combo_dynamic_ew": {
+     "n": 163,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.4495,
+     "wape_exclude_zero": 0.4452,
+     "bias": -0.3627,
+     "mase": 1.0072,
+     "coverage": null,
+     "width": null
+    }
+   },
+   "test_own": {
+    "naive": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.602,
+     "wape_exclude_zero": 0.6005,
+     "bias": -0.2443,
+     "mase": 0.7884,
+     "coverage": 0.75,
+     "width": 77.175
+    },
+    "seasonal_naive": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.7464,
+     "wape_exclude_zero": 0.7435,
+     "bias": 0.3518,
+     "mase": 0.9775,
+     "coverage": 0.935,
+     "width": 102.477
+    },
+    "ma3": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5865,
+     "wape_exclude_zero": 0.5848,
+     "bias": -0.101,
+     "mase": 0.768,
+     "coverage": 0.89,
+     "width": 104.336
+    },
+    "ma6": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.6647,
+     "wape_exclude_zero": 0.6619,
+     "bias": 0.1385,
+     "mase": 0.8705,
+     "coverage": 0.975,
+     "width": 140.623
+    },
+    "ma12": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.6033,
+     "wape_exclude_zero": 0.6005,
+     "bias": 0.3171,
+     "mase": 0.79,
+     "coverage": 0.985,
+     "width": 74.828
+    },
+    "tsb": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5448,
+     "wape_exclude_zero": 0.5414,
+     "bias": 0.0756,
+     "mase": 0.7134,
+     "coverage": 0.98,
+     "width": 90.491
+    },
+    "croston": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5357,
+     "wape_exclude_zero": 0.5309,
+     "bias": 0.2089,
+     "mase": 0.7015,
+     "coverage": 1.0,
+     "width": 88.116
+    },
+    "autoets": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.6631,
+     "wape_exclude_zero": 0.6602,
+     "bias": 0.2356,
+     "mase": 0.8684,
+     "coverage": 0.94,
+     "width": 121.913
+    },
+    "combo_dynamic_ew": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5151,
+     "wape_exclude_zero": 0.5128,
+     "bias": 0.0924,
+     "mase": 0.6746,
+     "coverage": 0.975,
+     "width": 69.504
+    }
+   },
+   "test_common": {
+    "naive": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.602,
+     "wape_exclude_zero": 0.6005,
+     "bias": -0.2443,
+     "mase": 0.7884,
+     "coverage": 0.75,
+     "width": 77.175
+    },
+    "seasonal_naive": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.7464,
+     "wape_exclude_zero": 0.7435,
+     "bias": 0.3518,
+     "mase": 0.9775,
+     "coverage": 0.935,
+     "width": 102.477
+    },
+    "ma3": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5865,
+     "wape_exclude_zero": 0.5848,
+     "bias": -0.101,
+     "mase": 0.768,
+     "coverage": 0.89,
+     "width": 104.336
+    },
+    "ma6": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.6647,
+     "wape_exclude_zero": 0.6619,
+     "bias": 0.1385,
+     "mase": 0.8705,
+     "coverage": 0.975,
+     "width": 140.623
+    },
+    "ma12": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.6033,
+     "wape_exclude_zero": 0.6005,
+     "bias": 0.3171,
+     "mase": 0.79,
+     "coverage": 0.985,
+     "width": 74.828
+    },
+    "tsb": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5448,
+     "wape_exclude_zero": 0.5414,
+     "bias": 0.0756,
+     "mase": 0.7134,
+     "coverage": 0.98,
+     "width": 90.491
+    },
+    "croston": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5357,
+     "wape_exclude_zero": 0.5309,
+     "bias": 0.2089,
+     "mase": 0.7015,
+     "coverage": 1.0,
+     "width": 88.116
+    },
+    "autoets": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.6631,
+     "wape_exclude_zero": 0.6602,
+     "bias": 0.2356,
+     "mase": 0.8684,
+     "coverage": 0.94,
+     "width": 121.913
+    },
+    "combo_dynamic_ew": {
+     "n": 200,
+     "zero_actual_cells": 7,
+     "wape_keep_zero": 0.5151,
+     "wape_exclude_zero": 0.5128,
+     "bias": 0.0924,
+     "mase": 0.6746,
+     "coverage": 0.975,
+     "width": 69.504
+    }
+   },
+   "selected_model": "seasonal_naive",
+   "selection_basis": "validation common subset, keep-zero WAPE",
+   "selection_uncertainty": {
+    "bootstrap": 300,
+    "best_model_frequency": {
+     "seasonal_naive": 180,
+     "autoets": 79,
+     "combo_dynamic_ew": 37,
+     "ma12": 4
+    },
+    "wape_p5_p95": {
+     "naive": [
+      0.4643,
+      0.6132
+     ],
+     "seasonal_naive": [
+      0.3369,
+      0.4797
+     ],
+     "ma3": [
+      0.4787,
+      0.6497
+     ],
+     "ma6": [
+      0.4845,
+      0.6592
+     ],
+     "ma12": [
+      0.3997,
+      0.5137
+     ],
+     "tsb": [
+      0.4432,
+      0.614
+     ],
+     "croston": [
+      0.4414,
+      0.61
+     ],
+     "autoets": [
+      0.3557,
+      0.5243
+     ],
+     "combo_dynamic_ew": [
+      0.3834,
+      0.5054
+     ]
+    }
+   },
+   "groups_post_hoc": {
+    "tier:high": {
+     "n": 66,
+     "zero_cells": 0,
+     "wape": 0.6006,
+     "bias": 0.1765
+    },
+    "warehouse:美中-FZH-DANEEY": {
+     "n": 71,
+     "zero_cells": 1,
+     "wape": 0.7215,
+     "bias": 0.3585
+    },
+    "intermittent:no": {
+     "n": 192,
+     "zero_cells": 4,
+     "wape": 0.7365,
+     "bias": 0.3431
+    },
+    "warehouse:美东-CENTRADE": {
+     "n": 38,
+     "zero_cells": 1,
+     "wape": 0.4818,
+     "bias": -0.0812
+    },
+    "warehouse:WayfairCG-Cranbury仓": {
+     "n": 1,
+     "zero_cells": 0,
+     "wape": 3.2475,
+     "bias": 3.2475
+    },
+    "warehouse:波兰-FZHPoland-covers": {
+     "n": 89,
+     "zero_cells": 5,
+     "wape": 1.188,
+     "bias": 1.1027
+    },
+    "tier:mid": {
+     "n": 66,
+     "zero_cells": 0,
+     "wape": 1.2751,
+     "bias": 1.0873
+    },
+    "tier:low": {
+     "n": 68,
+     "zero_cells": 7,
+     "wape": 4.1628,
+     "bias": 3.9154
+    },
+    "warehouse:FZH-DANEEY-成品仓": {
+     "n": 1,
+     "zero_cells": 0,
+     "wape": 0.7391,
+     "bias": -0.7391
+    },
+    "intermittent:yes": {
+     "n": 8,
+     "zero_cells": 3,
+     "wape": 8.6873,
+     "bias": 7.3803
+    }
+   },
+   "groups_note": "post-hoc only: tier uses TEST-period sales, intermittent uses full-history zero share, warehouse uses the CURRENT primary warehouse -- none of these is known at the forecast origin"
+  },
+  {
+   "run": "full",
+   "n_series": 774,
+   "availability": {
+    "attempted": {
+     "naive|val": 4644,
+     "seasonal_naive|val": 4644,
+     "ma3|val": 4644,
+     "ma6|val": 4644,
+     "ma12|val": 4644,
+     "tsb|val": 4644,
+     "croston|val": 4644,
+     "autoets|val": 4644,
+     "naive|test": 4644,
+     "seasonal_naive|test": 4644,
+     "ma3|test": 4644,
+     "ma6|test": 4644,
+     "ma12|test": 4644,
+     "tsb|test": 4644,
+     "croston|test": 4644,
+     "autoets|test": 4644
+    },
+    "available": {
+     "naive": {
+      "val": 4644,
+      "test": 4644
+     },
+     "seasonal_naive": {
+      "val": 3031,
+      "test": 4644
+     },
+     "ma3": {
+      "val": 4644,
+      "test": 4644
+     },
+     "ma6": {
+      "val": 4644,
+      "test": 4644
+     },
+     "ma12": {
+      "val": 4644,
+      "test": 4644
+     },
+     "tsb": {
+      "val": 4644,
+      "test": 4644
+     },
+     "croston": {
+      "val": 4644,
+      "test": 4644
+     },
+     "autoets": {
+      "val": 4372,
+      "test": 4644
+     },
+     "combo_dynamic_ew": {
+      "val": 4644,
+      "test": 4644
+     }
+    },
+    "measured": {
+     "naive": {
+      "val": 4644,
+      "test": 4644
+     },
+     "seasonal_naive": {
+      "val": 3031,
+      "test": 4644
+     },
+     "ma3": {
+      "val": 4644,
+      "test": 4644
+     },
+     "ma6": {
+      "val": 4644,
+      "test": 4644
+     },
+     "ma12": {
+      "val": 4644,
+      "test": 4644
+     },
+     "tsb": {
+      "val": 4644,
+      "test": 4644
+     },
+     "croston": {
+      "val": 4644,
+      "test": 4644
+     },
+     "autoets": {
+      "val": 4372,
+      "test": 4644
+     },
+     "combo_dynamic_ew": {
+      "val": 4644,
+      "test": 4644
+     }
+    },
+    "common": {
+     "val": 3031,
+     "test": 4644
+    },
+    "failures": {
+     "seasonal_naive:ValueError:history_lt_13m": 1613,
+     "autoets:NotImplementedError:tiny datasets": 272
+    },
+    "n_failures_total": 1885
+   },
+   "combo_composition": {
+    "val": {
+     "5": 3031,
+     "4": 1613
+    },
+    "test": {
+     "5": 4644
+    }
+   },
+   "validation_own": {
+    "naive": {
+     "n": 4644,
+     "zero_actual_cells": 443,
+     "wape_keep_zero": 0.5983,
+     "wape_exclude_zero": 0.5951,
+     "bias": -0.2782,
+     "mase": 1.0088,
+     "coverage": 0.5549,
+     "width": 17.681
+    },
+    "seasonal_naive": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.6577,
+     "wape_exclude_zero": 0.6438,
+     "bias": 0.1591,
+     "mase": 1.0658,
+     "coverage": 0.8156,
+     "width": 66.807
+    },
+    "ma3": {
+     "n": 4644,
+     "zero_actual_cells": 443,
+     "wape_keep_zero": 0.6136,
+     "wape_exclude_zero": 0.6074,
+     "bias": -0.2213,
+     "mase": 1.0347,
+     "coverage": 0.6253,
+     "width": 16.172
+    },
+    "ma6": {
+     "n": 4644,
+     "zero_actual_cells": 443,
+     "wape_keep_zero": 0.6382,
+     "wape_exclude_zero": 0.6285,
+     "bias": -0.1658,
+     "mase": 1.0762,
+     "coverage": 0.6919,
+     "width": 17.117
+    },
+    "ma12": {
+     "n": 4644,
+     "zero_actual_cells": 443,
+     "wape_keep_zero": 0.6258,
+     "wape_exclude_zero": 0.6134,
+     "bias": -0.0886,
+     "mase": 1.0551,
+     "coverage": 0.7558,
+     "width": 23.408
+    },
+    "tsb": {
+     "n": 4644,
+     "zero_actual_cells": 443,
+     "wape_keep_zero": 0.5943,
+     "wape_exclude_zero": 0.5855,
+     "bias": -0.1838,
+     "mase": 1.0021,
+     "coverage": 0.6964,
+     "width": 17.106
+    },
+    "croston": {
+     "n": 4644,
+     "zero_actual_cells": 443,
+     "wape_keep_zero": 0.6071,
+     "wape_exclude_zero": 0.5892,
+     "bias": -0.1503,
+     "mase": 1.0237,
+     "coverage": 0.708,
+     "width": 13.064
+    },
+    "autoets": {
+     "n": 4372,
+     "zero_actual_cells": 404,
+     "wape_keep_zero": 0.5663,
+     "wape_exclude_zero": 0.5565,
+     "bias": -0.1767,
+     "mase": 0.9588,
+     "coverage": 0.6751,
+     "width": 20.637
+    },
+    "combo_dynamic_ew": {
+     "n": 4644,
+     "zero_actual_cells": 443,
+     "wape_keep_zero": 0.5778,
+     "wape_exclude_zero": 0.569,
+     "bias": -0.1486,
+     "mase": 0.9743,
+     "coverage": 0.7255,
+     "width": 20.846
+    }
+   },
+   "validation_common": {
+    "naive": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.571,
+     "wape_exclude_zero": 0.5678,
+     "bias": -0.2458,
+     "mase": 0.9253,
+     "coverage": 0.5647,
+     "width": 19.216
+    },
+    "seasonal_naive": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.6577,
+     "wape_exclude_zero": 0.6438,
+     "bias": 0.1591,
+     "mase": 1.0658,
+     "coverage": 0.8156,
+     "width": 66.807
+    },
+    "ma3": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.5822,
+     "wape_exclude_zero": 0.5768,
+     "bias": -0.1911,
+     "mase": 0.9433,
+     "coverage": 0.6469,
+     "width": 17.667
+    },
+    "ma6": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.6085,
+     "wape_exclude_zero": 0.5998,
+     "bias": -0.122,
+     "mase": 0.9859,
+     "coverage": 0.715,
+     "width": 18.917
+    },
+    "ma12": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.6049,
+     "wape_exclude_zero": 0.5933,
+     "bias": -0.0003,
+     "mase": 0.9801,
+     "coverage": 0.7876,
+     "width": 26.595
+    },
+    "tsb": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.5675,
+     "wape_exclude_zero": 0.5594,
+     "bias": -0.1346,
+     "mase": 0.9196,
+     "coverage": 0.7264,
+     "width": 18.909
+    },
+    "croston": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.5809,
+     "wape_exclude_zero": 0.5642,
+     "bias": -0.098,
+     "mase": 0.9413,
+     "coverage": 0.7343,
+     "width": 14.434
+    },
+    "autoets": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.5232,
+     "wape_exclude_zero": 0.5138,
+     "bias": -0.1066,
+     "mase": 0.8478,
+     "coverage": 0.6967,
+     "width": 23.355
+    },
+    "combo_dynamic_ew": {
+     "n": 3031,
+     "zero_actual_cells": 280,
+     "wape_keep_zero": 0.545,
+     "wape_exclude_zero": 0.5364,
+     "bias": -0.08,
+     "mase": 0.883,
+     "coverage": 0.757,
+     "width": 23.453
+    }
+   },
+   "test_own": {
+    "naive": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.6768,
+     "wape_exclude_zero": 0.6715,
+     "bias": 0.2335,
+     "mase": 0.7783,
+     "coverage": 0.8846,
+     "width": 34.721
+    },
+    "seasonal_naive": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.6227,
+     "wape_exclude_zero": 0.5903,
+     "bias": 0.1614,
+     "mase": 0.7161,
+     "coverage": 0.8512,
+     "width": 26.395
+    },
+    "ma3": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.7003,
+     "wape_exclude_zero": 0.6915,
+     "bias": 0.353,
+     "mase": 0.8054,
+     "coverage": 0.8544,
+     "width": 31.046
+    },
+    "ma6": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.8319,
+     "wape_exclude_zero": 0.8142,
+     "bias": 0.5073,
+     "mase": 0.9566,
+     "coverage": 0.828,
+     "width": 29.102
+    },
+    "ma12": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.6779,
+     "wape_exclude_zero": 0.6526,
+     "bias": 0.3942,
+     "mase": 0.7795,
+     "coverage": 0.8323,
+     "width": 25.914
+    },
+    "tsb": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.6962,
+     "wape_exclude_zero": 0.6806,
+     "bias": 0.4083,
+     "mase": 0.8005,
+     "coverage": 0.8435,
+     "width": 28.965
+    },
+    "croston": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.7289,
+     "wape_exclude_zero": 0.6903,
+     "bias": 0.4602,
+     "mase": 0.8382,
+     "coverage": 0.848,
+     "width": 28.438
+    },
+    "autoets": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.7108,
+     "wape_exclude_zero": 0.6934,
+     "bias": 0.3681,
+     "mase": 0.8174,
+     "coverage": 0.834,
+     "width": 29.48
+    },
+    "combo_dynamic_ew": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.61,
+     "wape_exclude_zero": 0.5921,
+     "bias": 0.3299,
+     "mase": 0.7015,
+     "coverage": 0.8553,
+     "width": 26.832
+    }
+   },
+   "test_common": {
+    "naive": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.6768,
+     "wape_exclude_zero": 0.6715,
+     "bias": 0.2335,
+     "mase": 0.7783,
+     "coverage": 0.8846,
+     "width": 34.721
+    },
+    "seasonal_naive": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.6227,
+     "wape_exclude_zero": 0.5903,
+     "bias": 0.1614,
+     "mase": 0.7161,
+     "coverage": 0.8512,
+     "width": 26.395
+    },
+    "ma3": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.7003,
+     "wape_exclude_zero": 0.6915,
+     "bias": 0.353,
+     "mase": 0.8054,
+     "coverage": 0.8544,
+     "width": 31.046
+    },
+    "ma6": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.8319,
+     "wape_exclude_zero": 0.8142,
+     "bias": 0.5073,
+     "mase": 0.9566,
+     "coverage": 0.828,
+     "width": 29.102
+    },
+    "ma12": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.6779,
+     "wape_exclude_zero": 0.6526,
+     "bias": 0.3942,
+     "mase": 0.7795,
+     "coverage": 0.8323,
+     "width": 25.914
+    },
+    "tsb": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.6962,
+     "wape_exclude_zero": 0.6806,
+     "bias": 0.4083,
+     "mase": 0.8005,
+     "coverage": 0.8435,
+     "width": 28.965
+    },
+    "croston": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.7289,
+     "wape_exclude_zero": 0.6903,
+     "bias": 0.4602,
+     "mase": 0.8382,
+     "coverage": 0.848,
+     "width": 28.438
+    },
+    "autoets": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.7108,
+     "wape_exclude_zero": 0.6934,
+     "bias": 0.3681,
+     "mase": 0.8174,
+     "coverage": 0.834,
+     "width": 29.48
+    },
+    "combo_dynamic_ew": {
+     "n": 4644,
+     "zero_actual_cells": 465,
+     "wape_keep_zero": 0.61,
+     "wape_exclude_zero": 0.5921,
+     "bias": 0.3299,
+     "mase": 0.7015,
+     "coverage": 0.8553,
+     "width": 26.832
+    }
+   },
+   "selected_model": "autoets",
+   "selection_basis": "validation common subset, keep-zero WAPE",
+   "selection_uncertainty": {
+    "bootstrap": 300,
+    "best_model_frequency": {
+     "autoets": 232,
+     "combo_dynamic_ew": 68
+    },
+    "wape_p5_p95": {
+     "naive": [
+      0.5212,
+      0.617
+     ],
+     "seasonal_naive": [
+      0.5658,
+      0.7865
+     ],
+     "ma3": [
+      0.5337,
+      0.6319
+     ],
+     "ma6": [
+      0.5596,
+      0.6572
+     ],
+     "ma12": [
+      0.5552,
+      0.6579
+     ],
+     "tsb": [
+      0.5216,
+      0.6105
+     ],
+     "croston": [
+      0.5333,
+      0.6269
+     ],
+     "autoets": [
+      0.4803,
+      0.5689
+     ],
+     "combo_dynamic_ew": [
+      0.5027,
+      0.5883
+     ]
+    }
+   },
+   "groups_post_hoc": {
+    "tier:high": {
+     "n": 1548,
+     "zero_cells": 0,
+     "wape": 0.6579,
+     "bias": 0.3275
+    },
+    "warehouse:美中-FZH-DANEEY": {
+     "n": 1254,
+     "zero_cells": 65,
+     "wape": 0.7292,
+     "bias": 0.4483
+    },
+    "intermittent:no": {
+     "n": 3726,
+     "zero_cells": 192,
+     "wape": 0.702,
+     "bias": 0.3672
+    },
+    "warehouse:波兰-FZHPoland-covers": {
+     "n": 2250,
+     "zero_cells": 290,
+     "wape": 0.8185,
+     "bias": 0.4499
+    },
+    "warehouse:美东-CENTRADE": {
+     "n": 1026,
+     "zero_cells": 85,
+     "wape": 0.6085,
+     "bias": 0.1811
+    },
+    "warehouse:WayfairCG-Cranbury仓": {
+     "n": 54,
+     "zero_cells": 0,
+     "wape": 0.4358,
+     "bias": 0.0871
+    },
+    "warehouse:FZH-DANEEY-半成品仓": {
+     "n": 18,
+     "zero_cells": 0,
+     "wape": 0.3714,
+     "bias": -0.0105
+    },
+    "tier:mid": {
+     "n": 1548,
+     "zero_cells": 3,
+     "wape": 0.8443,
+     "bias": 0.4615
+    },
+    "tier:low": {
+     "n": 1548,
+     "zero_cells": 462,
+     "wape": 2.4888,
+     "bias": 1.7881
+    },
+    "warehouse:unknown": {
+     "n": 18,
+     "zero_cells": 8,
+     "wape": 2.7708,
+     "bias": 2.7316
+    },
+    "warehouse:FZH-DANEEY-成品仓": {
+     "n": 24,
+     "zero_cells": 17,
+     "wape": 0.9603,
+     "bias": -0.046
+    },
+    "intermittent:yes": {
+     "n": 918,
+     "zero_cells": 273,
+     "wape": 1.3578,
+     "bias": 0.4366
+    }
+   },
+   "groups_note": "post-hoc only: tier uses TEST-period sales, intermittent uses full-history zero share, warehouse uses the CURRENT primary warehouse -- none of these is known at the forecast origin"
+  }
+ ]
+}

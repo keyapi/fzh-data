@@ -1,0 +1,156 @@
+{
+  "schema_version": "sc09_trial_pack/1",
+  "sources": {
+    "forward": "forward_net_rows.csv @19fb2c6e (2,309 = 条件2,058 + HOLD251)",
+    "split": "dn_split @59c4e5ec（只引用结论）",
+    "extension": "sc10_catalog_rows.csv（271 候选）"
+  },
+  "coverage": {
+    "mother_skus": 1328,
+    "covered_skus": 1328,
+    "rows": 2309,
+    "warehouses": 11,
+    "conditional": {
+      "rows": 2058,
+      "skus": 1231,
+      "sales_qty": 48000.0,
+      "sales_share": 0.9887
+    },
+    "hold": {
+      "rows": 251,
+      "skus": 251,
+      "sales_qty": 22122.0,
+      "sales_share": 0.4557
+    },
+    "mother_sales_qty_2026_04_09": 48550.0,
+    "note": "销量 = gs_orders 全渠道 despatch 2026-04-01..2026-09-30；同一 SKU 可能同时出现在两档"
+  },
+  "readiness": {
+    "条件": 2058,
+    "HOLD": 251
+  },
+  "gaps": {
+    "rows_with_gap": 397,
+    "rows_with_range": 14,
+    "rows_not_computable": 251,
+    "max_gap": 256.13,
+    "need_time": {
+      "2026-12": 75,
+      "2026-10 剩余": 258,
+      "2026-11": 64
+    }
+  },
+  "scenario": {
+    "S_phys_overlap0_onhand": 2058,
+    "S0_证据不足": 251
+  },
+  "missing_evidence": {
+    "库存口径未证(physical/net 并列)": 2058,
+    "预测率缺失：缺库存证据": 160,
+    "预测率缺失：缺需求依据": 91
+  },
+  "forecast_rate": {
+    "with_rate": 2058,
+    "null_total": 251,
+    "null_by_cause": {
+      "null · 缺库存证据（整行 HOLD，上游未出需求率）": 160,
+      "null · 缺需求依据": 91
+    },
+    "note": "null 不等于 0；上游为空的行不得填 0（301 D-minor）"
+  },
+  "to_confirm": [
+    {
+      "item": "预测率缺失",
+      "rows": 251,
+      "action": "按缺库存证据 / 缺需求依据分别补证；补证前该行只能「不可算」"
+    },
+    {
+      "item": "库存口径未证（physical/net）",
+      "rows": 2309,
+      "action": "仓储确认可售/占用口径"
+    },
+    {
+      "item": "无 WO/在制证据",
+      "rows": 2309,
+      "action": "采购·生产补未结 PO/WO 与 ETA"
+    },
+    {
+      "item": "SO 与预测重叠未证",
+      "rows": 2309,
+      "action": "运营确认内部 SO 冲减规则"
+    },
+    {
+      "item": "PO/WO/在途去重无记录",
+      "rows": 1888,
+      "action": "主数据/采购提供去重键"
+    }
+  ],
+  "extension": {
+    "n": 271,
+    "mapping_pass": 271,
+    "uom_pass": 258,
+    "stock_pass": 0,
+    "all_pass": 0,
+    "failed_uom": [
+      {
+        "sku": "CEN963Velvet-DKGreen-153",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "CENC/Linen1624-Ivory-153",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "CENC/Linen1624-Ivory-97",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "CENMM1621-Blue-138-Cover",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "SXQC-CEN003-NZAIBLUE-194",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "SXQC-CEN003-ORANGE-150",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "SXQC-CEN963Velvet-DKGreen-138",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "SXQC-CENKZ1321-Red-153",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "SXQC-CENKZ1321-Red-194",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "TT0000960K0011357",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "TT0000960K0011360",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "TT0312694K0064450",
+        "why": "FAIL(无BOM单位)"
+      },
+      {
+        "sku": "WJ-TAIDI-BAI-120CM",
+        "why": "FAIL(无BOM单位)"
+      }
+    ],
+    "note": "271 个候选**不并入**可执行数量；库存项因 uom_basis 全 unknown 一律未过"
+  },
+  "boundaries": [
+    "只汇总已 PASS 产物，未重算预测、未改上游文件。",
+    "B 情景 ≠ 采购批准：本清单一律是条件/研究口径，不含可下单量。",
+    "能否赶上：全部为无法判断——无 ETA/在途/WO 证据。",
+    "271 个扩展候选只作准备，未过项单列，未合成任何数量。"
+  ]
+}

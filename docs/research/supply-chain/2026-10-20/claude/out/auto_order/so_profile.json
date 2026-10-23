@@ -1,0 +1,972 @@
+{
+ "schema_version": "en_so_recon/1",
+ "generated_at": "2026-10-22T22:41:10+08:00",
+ "base_url": "https://erpnext.vilavi.cn",
+ "budget": {
+  "requests": 122,
+  "cap": 300,
+  "interval_s": 0.2,
+  "page_length_max": 100,
+  "elapsed_s": 24.4,
+  "by_path": {
+   "/api/resource/Company": 1,
+   "/api/resource/Sales Order": 16,
+   "/api/resource/Sales Order/<doc>": 52,
+   "/api/resource/Custom Field": 1,
+   "/api/resource/DocType": 1,
+   "/api/resource/Delivery Plan": 1,
+   "/api/resource/Delivery Plan/<doc>": 1,
+   "/api/method/frappe.client.get_list": 25,
+   "/api/method/frappe.client.get_count": 24
+  },
+  "stop_reason": null,
+  "errors": []
+ },
+ "structure": {
+  "sample_sos": [
+   {
+    "so_hash": "d9eec23e48f1",
+    "keys": [
+     "additional_discount_percentage",
+     "advance_paid",
+     "amount_eligible_for_commission",
+     "apply_discount_on",
+     "base_discount_amount",
+     "base_grand_total",
+     "base_in_words",
+     "base_net_total",
+     "base_rounded_total",
+     "base_rounding_adjustment",
+     "base_total",
+     "base_total_taxes_and_charges",
+     "billing_status",
+     "commission_rate",
+     "company",
+     "conversion_rate",
+     "creation",
+     "currency",
+     "custom_attach_file_customer_item_code",
+     "customer",
+     "customer_group",
+     "customer_name",
+     "delivery_date",
+     "delivery_status",
+     "disable_rounded_total",
+     "discount_amount",
+     "docstatus",
+     "doctype",
+     "exempt_from_sales_tax",
+     "grand_total",
+     "group_same_items",
+     "idx",
+     "ignore_pricing_rule",
+     "in_words",
+     "is_internal_customer",
+     "items",
+     "language",
+     "loyalty_amount",
+     "loyalty_points",
+     "modified",
+     "modified_by",
+     "name",
+     "naming_series",
+     "net_total",
+     "order_type",
+     "other_charges_calculation",
+     "owner",
+     "packed_items",
+     "party_account_currency",
+     "payment_schedule",
+     "per_billed",
+     "per_delivered",
+     "per_picked",
+     "plc_conversion_rate",
+     "price_list_currency",
+     "pricing_rules",
+     "represents_company",
+     "reserve_stock",
+     "rounded_total",
+     "rounding_adjustment",
+     "sales_team",
+     "selling_price_list",
+     "skip_delivery_note",
+     "status",
+     "tax_category",
+     "taxes",
+     "taxes_and_charges",
+     "title",
+     "total",
+     "total_commission",
+     "total_net_weight",
+     "total_qty",
+     "total_taxes_and_charges",
+     "transaction_date",
+     "type_of_manufacturing"
+    ],
+    "item_keys": [
+     "actual_qty",
+     "against_blanket_order",
+     "amount",
+     "base_amount",
+     "base_net_amount",
+     "base_net_rate",
+     "base_price_list_rate",
+     "base_rate",
+     "base_rate_with_margin",
+     "billed_amt",
+     "blanket_order_rate",
+     "bom_no",
+     "conversion_factor",
+     "creation",
+     "custom_fba_sku",
+     "custom_label_combination",
+     "custom_tongtool_item_name",
+     "customer_item_code",
+     "delivered_by_supplier",
+     "delivered_qty",
+     "delivery_date",
+     "description",
+     "discount_amount",
+     "discount_percentage",
+     "docstatus",
+     "doctype",
+     "ensure_delivery_based_on_produced_serial_no",
+     "grant_commission",
+     "gross_profit",
+     "idx",
+     "image",
+     "is_free_item",
+     "is_stock_item",
+     "item_code",
+     "item_group",
+     "item_name",
+     "item_tax_rate",
+     "margin_rate_or_amount",
+     "margin_type",
+     "modified",
+     "modified_by",
+     "name",
+     "net_amount",
+     "net_rate",
+     "ordered_qty",
+     "owner",
+     "page_break",
+     "parent",
+     "parentfield",
+     "parenttype",
+     "picked_qty",
+     "plan_reserved_stock_qty",
+     "planned_qty",
+     "price_list_rate",
+     "produced_qty",
+     "production_plan_qty",
+     "projected_qty",
+     "qty",
+     "rate",
+     "rate_with_margin",
+     "reserve_stock",
+     "returned_qty",
+     "stock_qty",
+     "stock_reserved_qty",
+     "stock_uom",
+     "stock_uom_rate",
+     "total_weight",
+     "transaction_date",
+     "type_of_manufacturing",
+     "uom",
+     "valuation_rate",
+     "warehouse",
+     "weight_per_unit",
+     "weight_uom",
+     "work_order_qty"
+    ]
+   },
+   {
+    "so_hash": "072dfe1061d0",
+    "keys": [
+     "additional_discount_percentage",
+     "advance_paid",
+     "amount_eligible_for_commission",
+     "apply_discount_on",
+     "base_discount_amount",
+     "base_grand_total",
+     "base_in_words",
+     "base_net_total",
+     "base_rounded_total",
+     "base_rounding_adjustment",
+     "base_total",
+     "base_total_taxes_and_charges",
+     "billing_status",
+     "commission_rate",
+     "company",
+     "conversion_rate",
+     "creation",
+     "currency",
+     "custom_attach_file_customer_item_code",
+     "customer",
+     "customer_group",
+     "customer_name",
+     "delivery_date",
+     "delivery_status",
+     "disable_rounded_total",
+     "discount_amount",
+     "docstatus",
+     "doctype",
+     "exempt_from_sales_tax",
+     "grand_total",
+     "group_same_items",
+     "idx",
+     "ignore_pricing_rule",
+     "in_words",
+     "is_internal_customer",
+     "items",
+     "language",
+     "loyalty_amount",
+     "loyalty_points",
+     "modified",
+     "modified_by",
+     "name",
+     "naming_series",
+     "net_total",
+     "order_type",
+     "other_charges_calculation",
+     "owner",
+     "packed_items",
+     "party_account_currency",
+     "payment_schedule",
+     "per_billed",
+     "per_delivered",
+     "per_picked",
+     "plc_conversion_rate",
+     "price_list_currency",
+     "pricing_rules",
+     "represents_company",
+     "reserve_stock",
+     "rounded_total",
+     "rounding_adjustment",
+     "sales_team",
+     "selling_price_list",
+     "skip_delivery_note",
+     "status",
+     "tax_category",
+     "taxes",
+     "taxes_and_charges",
+     "title",
+     "total",
+     "total_commission",
+     "total_net_weight",
+     "total_qty",
+     "total_taxes_and_charges",
+     "transaction_date",
+     "type_of_manufacturing"
+    ],
+    "item_keys": [
+     "actual_qty",
+     "against_blanket_order",
+     "amount",
+     "base_amount",
+     "base_net_amount",
+     "base_net_rate",
+     "base_price_list_rate",
+     "base_rate",
+     "base_rate_with_margin",
+     "billed_amt",
+     "blanket_order_rate",
+     "bom_no",
+     "conversion_factor",
+     "creation",
+     "custom_fba_sku",
+     "custom_label_combination",
+     "custom_tongtool_item_name",
+     "customer_item_code",
+     "delivered_by_supplier",
+     "delivered_qty",
+     "delivery_date",
+     "description",
+     "discount_amount",
+     "discount_percentage",
+     "docstatus",
+     "doctype",
+     "ensure_delivery_based_on_produced_serial_no",
+     "grant_commission",
+     "gross_profit",
+     "idx",
+     "image",
+     "is_free_item",
+     "is_stock_item",
+     "item_code",
+     "item_group",
+     "item_name",
+     "item_tax_rate",
+     "margin_rate_or_amount",
+     "margin_type",
+     "modified",
+     "modified_by",
+     "name",
+     "net_amount",
+     "net_rate",
+     "ordered_qty",
+     "owner",
+     "page_break",
+     "parent",
+     "parentfield",
+     "parenttype",
+     "picked_qty",
+     "plan_reserved_stock_qty",
+     "planned_qty",
+     "price_list_rate",
+     "produced_qty",
+     "production_plan_qty",
+     "projected_qty",
+     "qty",
+     "rate",
+     "rate_with_margin",
+     "reserve_stock",
+     "returned_qty",
+     "stock_qty",
+     "stock_reserved_qty",
+     "stock_uom",
+     "stock_uom_rate",
+     "total_weight",
+     "transaction_date",
+     "type_of_manufacturing",
+     "uom",
+     "valuation_rate",
+     "warehouse",
+     "weight_per_unit",
+     "weight_uom",
+     "work_order_qty"
+    ]
+   }
+  ],
+  "custom_fields": [
+   {
+    "dt": "Sales Order",
+    "fieldname": "custom_attach_file_customer_item_code",
+    "label": "Attach File Customer Item Code",
+    "fieldtype": "Attach",
+    "options": null
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "custom_filters",
+    "label": "Filters",
+    "fieldtype": "Section Break",
+    "options": null
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "custom_item_group",
+    "label": "Item Group",
+    "fieldtype": "Link",
+    "options": "Item Group"
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "custom_process_file_customer_item_code",
+    "label": "Process File Customer Item Code",
+    "fieldtype": "Button",
+    "options": null
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "exempt_from_sales_tax",
+    "label": "Is customer exempted from sales tax?",
+    "fieldtype": "Check",
+    "options": null
+   },
+   {
+    "dt": "Sales Order",
+    "fieldname": "type_of_manufacturing",
+    "label": "Default Manufacturing Type",
+    "fieldtype": "Select",
+    "options": "In House\nSubcontract\nMaterial Request"
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "custom_fba_sku",
+    "label": "FBA SKU",
+    "fieldtype": "Data",
+    "options": null
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "custom_label_combination",
+    "label": "Label Combination",
+    "fieldtype": "Link",
+    "options": "Label Combination"
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "custom_tongtool_item_name",
+    "label": "TongTool Item Name",
+    "fieldtype": "Data",
+    "options": null
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "plan_reserved_stock_qty",
+    "label": "Plan Reserved Stock Qty",
+    "fieldtype": "Float",
+    "options": null
+   },
+   {
+    "dt": "Sales Order Item",
+    "fieldname": "type_of_manufacturing",
+    "label": "Manufacturing Type",
+    "fieldtype": "Select",
+    "options": "In House\nSubcontract\nMaterial Request"
+   }
+  ],
+  "delivery_related_doctypes": [
+   "Delivery Note Item Cat",
+   "Delivery Note Outer Box Summary",
+   "Delivery Plan",
+   "Delivery Plan Item",
+   "Delivery Plan Item Cat",
+   "Delivery Plan Item Qty",
+   "Delivery Plan Item Unfinished Good",
+   "Delivery Note",
+   "Delivery Note Item",
+   "Delivery Settings",
+   "Delivery Stop",
+   "Delivery Trip",
+   "Shipment Delivery Note"
+  ],
+  "delivery_plan_probe": {
+   "dp_hash": "06d5e701936f",
+   "keys": [
+    "active_outer_carton_height",
+    "active_outer_carton_length",
+    "active_outer_carton_volume",
+    "active_outer_carton_weight",
+    "active_outer_carton_width",
+    "allocate_from_staging_warehouse",
+    "allow_over_qty",
+    "arrival_date",
+    "company",
+    "creation",
+    "customer",
+    "docstatus",
+    "doctype",
+    "freight",
+    "idx",
+    "ignore_tracking_number",
+    "is_dn_pending",
+    "is_strict_so_source",
+    "item_cat",
+    "item_qties",
+    "items",
+    "merge_so_detail_rows_in_dn",
+    "modified",
+    "modified_by",
+    "name",
+    "owner",
+    "sale_orders",
+    "total_actual_delivered_qty",
+    "total_assigned_actual_qty",
+    "total_planned_delivery_qty",
+    "total_staging_qty",
+    "total_weight",
+    "uf_goods"
+   ],
+   "item_keys": [
+    "actual_delivered_qty",
+    "allocated_actual_qty",
+    "creation",
+    "customer_item_code",
+    "delivered_qty",
+    "docstatus",
+    "doctype",
+    "idx",
+    "item_code",
+    "item_name",
+    "modified",
+    "modified_by",
+    "name",
+    "outer_carton_height",
+    "outer_carton_length",
+    "outer_carton_volume",
+    "outer_carton_weight",
+    "outer_carton_width",
+    "over_qty",
+    "owner",
+    "parent",
+    "parentfield",
+    "parenttype",
+    "planned_delivery_qty",
+    "po_no",
+    "qty",
+    "returned_qty",
+    "sales_order",
+    "so_detail",
+    "soi_index",
+    "uom",
+    "warehouse",
+    "weight"
+   ],
+   "relevant": [
+    "allocate_from_staging_warehouse",
+    "docstatus",
+    "total_actual_delivered_qty",
+    "total_planned_delivery_qty"
+   ],
+   "link_fields": [
+    "is_dn_pending",
+    "is_strict_so_source",
+    "merge_so_detail_rows_in_dn",
+    "sale_orders"
+   ]
+  },
+  "note": "只记录实测字段名；不猜测字段含义"
+ },
+ "companies": [
+  "FZH",
+  "美东分公司",
+  "美中分公司",
+  "波兰分公司",
+  "绍兴雪雁针纺有限公司"
+ ],
+ "monthly": [
+  {
+   "month": "2024-10",
+   "total": 0,
+   "docstatus": {
+    "0": 0,
+    "1": 0,
+    "2": 0
+   }
+  },
+  {
+   "month": "2024-11",
+   "total": 7,
+   "docstatus": {
+    "0": 0,
+    "1": 3,
+    "2": 4
+   }
+  },
+  {
+   "month": "2024-12",
+   "total": 14,
+   "docstatus": {
+    "0": 0,
+    "1": 13,
+    "2": 1
+   }
+  },
+  {
+   "month": "2025-01",
+   "total": 2,
+   "docstatus": {
+    "0": 0,
+    "1": 2,
+    "2": 0
+   }
+  },
+  {
+   "month": "2025-02",
+   "total": 23,
+   "docstatus": {
+    "0": 0,
+    "1": 21,
+    "2": 2
+   }
+  },
+  {
+   "month": "2025-03",
+   "total": 18,
+   "docstatus": {
+    "0": 0,
+    "1": 18,
+    "2": 0
+   }
+  },
+  {
+   "month": "2025-04",
+   "total": 23,
+   "docstatus": {
+    "0": 0,
+    "1": 21,
+    "2": 2
+   }
+  },
+  {
+   "month": "2025-05",
+   "total": 21,
+   "docstatus": {
+    "0": 0,
+    "1": 21,
+    "2": 0
+   }
+  },
+  {
+   "month": "2025-06",
+   "total": 27,
+   "docstatus": {
+    "0": 0,
+    "1": 27,
+    "2": 0
+   }
+  },
+  {
+   "month": "2025-07",
+   "total": 24,
+   "docstatus": {
+    "0": 0,
+    "1": 24,
+    "2": 0
+   }
+  },
+  {
+   "month": "2025-08",
+   "total": 28,
+   "docstatus": {
+    "0": 0,
+    "1": 27,
+    "2": 1
+   }
+  },
+  {
+   "month": "2025-09",
+   "total": 22,
+   "docstatus": {
+    "0": 0,
+    "1": 22,
+    "2": 0
+   }
+  },
+  {
+   "month": "2025-10",
+   "total": 13,
+   "docstatus": {
+    "0": 1,
+    "1": 11,
+    "2": 1
+   }
+  },
+  {
+   "month": "2025-11",
+   "total": 2,
+   "docstatus": {
+    "0": 0,
+    "1": 2,
+    "2": 0
+   }
+  },
+  {
+   "month": "2025-12",
+   "total": 0,
+   "docstatus": {
+    "0": 0,
+    "1": 0,
+    "2": 0
+   }
+  },
+  {
+   "month": "2026-01",
+   "total": 10,
+   "docstatus": {
+    "0": 0,
+    "1": 6,
+    "2": 4
+   }
+  },
+  {
+   "month": "2026-02",
+   "total": 0,
+   "docstatus": {
+    "0": 0,
+    "1": 0,
+    "2": 0
+   }
+  },
+  {
+   "month": "2026-03",
+   "total": 31,
+   "docstatus": {
+    "0": 0,
+    "1": 30,
+    "2": 1
+   }
+  },
+  {
+   "month": "2026-04",
+   "total": 14,
+   "docstatus": {
+    "0": 1,
+    "1": 11,
+    "2": 2
+   }
+  },
+  {
+   "month": "2026-05",
+   "total": 11,
+   "docstatus": {
+    "0": 0,
+    "1": 11,
+    "2": 0
+   }
+  },
+  {
+   "month": "2026-06",
+   "total": 17,
+   "docstatus": {
+    "0": 0,
+    "1": 16,
+    "2": 1
+   }
+  },
+  {
+   "month": "2026-07",
+   "total": 12,
+   "docstatus": {
+    "0": 0,
+    "1": 12,
+    "2": 0
+   }
+  },
+  {
+   "month": "2026-08",
+   "total": 14,
+   "docstatus": {
+    "0": 0,
+    "1": 14,
+    "2": 0
+   }
+  },
+  {
+   "month": "2026-09",
+   "total": 12,
+   "docstatus": {
+    "0": 1,
+    "1": 11,
+    "2": 0
+   }
+  },
+  {
+   "month": "2026-10",
+   "partial": true,
+   "total": 12,
+   "docstatus": {
+    "1": 12
+   }
+  }
+ ],
+ "months_expected": [
+  "2024-10",
+  "2024-11",
+  "2024-12",
+  "2025-01",
+  "2025-02",
+  "2025-03",
+  "2025-04",
+  "2025-05",
+  "2025-06",
+  "2025-07",
+  "2025-08",
+  "2025-09",
+  "2025-10",
+  "2025-11",
+  "2025-12",
+  "2026-01",
+  "2026-02",
+  "2026-03",
+  "2026-04",
+  "2026-05",
+  "2026-06",
+  "2026-07",
+  "2026-08",
+  "2026-09"
+ ],
+ "sample_requested": {
+  "plan": "3 years x companies, up to 20 names per stratum, round-robin to 50; year backfill if company strata are sparse",
+  "strata": {
+   "2024|FZH": 20,
+   "2024|美东分公司": 0,
+   "2024|美中分公司": 0,
+   "2024|波兰分公司": 0,
+   "2024|绍兴雪雁针纺有限公司": 0,
+   "2025|FZH": 20,
+   "2025|美东分公司": 0,
+   "2025|美中分公司": 0,
+   "2025|波兰分公司": 0,
+   "2025|绍兴雪雁针纺有限公司": 0,
+   "2026|FZH": 20,
+   "2026|美东分公司": 0,
+   "2026|美中分公司": 0,
+   "2026|波兰分公司": 0,
+   "2026|绍兴雪雁针纺有限公司": 0
+  },
+  "backfill": 0,
+  "selected": 50
+ },
+ "analysis": {
+  "sample": {
+   "so": 50,
+   "items": 1874,
+   "companies": {
+    "FZH": 50
+   },
+   "years": {
+    "2024": 17,
+    "2025": 17,
+    "2026": 16
+   },
+   "warehouses": {
+    "半成品仓 - FZH": 1477,
+    "仓库 - FZH": 64,
+    "成品仓 - FZH": 325,
+    "包材仓 - FZH": 8
+   },
+   "docstatus": {
+    "2": 10,
+    "1": 40
+   }
+  },
+  "association": {
+   "header": {
+    "billing_status": {
+     "present": 50,
+     "nonempty": 50
+    },
+    "custom_attach_file_customer_item_code": {
+     "present": 48,
+     "nonempty": 48
+    },
+    "delivery_date": {
+     "present": 50,
+     "nonempty": 50
+    },
+    "delivery_status": {
+     "present": 50,
+     "nonempty": 50
+    },
+    "docstatus": {
+     "present": 50,
+     "nonempty": 50
+    },
+    "packed_items": {
+     "present": 50,
+     "nonempty": 4
+    },
+    "per_delivered": {
+     "present": 50,
+     "nonempty": 32
+    },
+    "per_picked": {
+     "present": 50,
+     "nonempty": 0
+    },
+    "skip_delivery_note": {
+     "present": 50,
+     "nonempty": 0
+    },
+    "status": {
+     "present": 50,
+     "nonempty": 50
+    }
+   },
+   "item": {
+    "customer_item_code": {
+     "present": 1874,
+     "nonempty": 1147
+    },
+    "delivered_by_supplier": {
+     "present": 1874,
+     "nonempty": 0
+    },
+    "delivered_qty": {
+     "present": 1874,
+     "nonempty": 561
+    },
+    "delivery_date": {
+     "present": 1874,
+     "nonempty": 1874
+    },
+    "docstatus": {
+     "present": 1874,
+     "nonempty": 1874
+    },
+    "ensure_delivery_based_on_produced_serial_no": {
+     "present": 1874,
+     "nonempty": 0
+    },
+    "item_code": {
+     "present": 1874,
+     "nonempty": 1874
+    },
+    "picked_qty": {
+     "present": 1874,
+     "nonempty": 0
+    },
+    "plan_reserved_stock_qty": {
+     "present": 1874,
+     "nonempty": 0
+    },
+    "planned_qty": {
+     "present": 1874,
+     "nonempty": 0
+    },
+    "production_plan_qty": {
+     "present": 1874,
+     "nonempty": 769
+    },
+    "warehouse": {
+     "present": 1874,
+     "nonempty": 1874
+    }
+   },
+   "note": "仅样本内 present/nonempty 计数，不推测全量覆盖率"
+  },
+  "patterns": {
+   "pairing": {
+    "both": 28,
+    "neither": 19,
+    "cover_only": 2,
+    "inner_only": 1
+   },
+   "lines_per_so": {
+    "min": 1,
+    "median": 31.0,
+    "max": 135
+   },
+   "qty_per_line": {
+    "n": 1874,
+    "p10": 8.0,
+    "p50": 20.0,
+    "p90": 50.0,
+    "max": 1000.0
+   },
+   "order_to_delivery_days": {
+    "n": 1874,
+    "median": 15.0,
+    "min": 0,
+    "max": 36
+   },
+   "unshipped": {
+    "so_total": 40,
+    "unshipped": 35,
+    "ratio": 0.875
+   },
+   "overdue_unshipped_item_rows": 1356,
+   "status": {
+    "Cancelled": 10,
+    "Closed": 30,
+    "To Bill": 5,
+    "To Deliver and Bill": 5
+   }
+  },
+  "note": "只描述样本内看到的事实；不下单、不推断全量"
+ },
+ "facts": [
+  "结构：SO header 实测含 delivery_date/delivery_status/per_delivered/status 等；Delivery Plan 是独立 doctype，header 含 sale_orders、item 含 sales_order/so_detail；SO/Item/Delivery Plan 均未发现 scan/qr 字段",
+  "月度：2024-10..2026-09 共 345 单；零单月份：['2024-10', '2025-12', '2026-02']；2026-10 部分月 12 单",
+  "样本：50 单 / 1874 行；配对 {'both': 28, 'neither': 19, 'cover_only': 2, 'inner_only': 1}；未发货 {'so_total': 40, 'unshipped': 35, 'ratio': 0.875}；交期代理 {'n': 1874, 'median': 15.0, 'min': 0, 'max': 36}"
+ ],
+ "limits": [
+  "只读 GET；无写入",
+  "样本内计数，不外推全量",
+  "不猜测字段含义/不写下单建议"
+ ]
+}

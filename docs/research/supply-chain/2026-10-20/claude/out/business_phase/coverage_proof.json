@@ -1,0 +1,1157 @@
+{
+ "schema_version": "p1c_coverage_proof/1",
+ "generated_at": "2026-10-22T16:42:36+08:00",
+ "purpose": "P1C 收口：从产物重算 Top50 / 紧急例外 / 交集 / 并集，并与 plan.json 逐 SKU 对账",
+ "expected": {
+  "top50": 50,
+  "urgent": 75,
+  "intersection": 3,
+  "union": 122,
+  "plan_rows": 122
+ },
+ "checks": {
+  "top50_count_50": true,
+  "top50_unique": true,
+  "top50_ranks_1_to_50": true,
+  "urgent_count_75": true,
+  "urgent_unique": true,
+  "intersection_count_3": true,
+  "intersection_matches_expected": true,
+  "union_equals_50_plus_75_minus_3": true,
+  "union_count_122": true,
+  "plan_rows_122": true,
+  "plan_skus_unique": true,
+  "union_equals_plan_set": true,
+  "no_missing_or_extra": true,
+  "every_union_sku_once_in_plan": true
+ },
+ "all_checks_pass": true,
+ "top50": [
+  {
+   "rank": 1,
+   "sku": "CENCord995-DKGrey-97",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 801
+  },
+  {
+   "rank": 2,
+   "sku": "TT0031038K0062927",
+   "stratum": "沙发支撑垫",
+   "net_qty_6m": 707
+  },
+  {
+   "rank": 3,
+   "sku": "CEN003-DPBLUE-100",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 704
+  },
+  {
+   "rank": 4,
+   "sku": "C/Linen-Natural-100-688-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 675
+  },
+  {
+   "rank": 5,
+   "sku": "TT0312701K0064561",
+   "stratum": "主体骨架",
+   "net_qty_6m": 670
+  },
+  {
+   "rank": 6,
+   "sku": "C/Linen-Natural-194-688-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 643
+  },
+  {
+   "rank": 7,
+   "sku": "C/Cord-DKBlue-100-713-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 631
+  },
+  {
+   "rank": 8,
+   "sku": "C/Linen-Natural-153-688-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 627
+  },
+  {
+   "rank": 9,
+   "sku": "C/Cord-Grey-100-710-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 583
+  },
+  {
+   "rank": 10,
+   "sku": "C/Velvet-Grey-100-705-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 581
+  },
+  {
+   "rank": 11,
+   "sku": "TT0000671K0063721",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 535
+  },
+  {
+   "rank": 12,
+   "sku": "CENKZ15389463-Grey-100",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 499
+  },
+  {
+   "rank": 13,
+   "sku": "TT0312614K0064239",
+   "stratum": "身体支撑阅读枕",
+   "net_qty_6m": 497
+  },
+  {
+   "rank": 14,
+   "sku": "C/Linen-White-100-662-WOW",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 496
+  },
+  {
+   "rank": 15,
+   "sku": "TT0000668K0063796",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 490
+  },
+  {
+   "rank": 16,
+   "sku": "CEN1607NLinen-Ivory-153",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 467
+  },
+  {
+   "rank": 17,
+   "sku": "CENKZ15389465-Grey-150",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 463
+  },
+  {
+   "rank": 18,
+   "sku": "CENKZ1323-LTGrey-97",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 456
+  },
+  {
+   "rank": 19,
+   "sku": "C/Cord-White-100-706-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 454
+  },
+  {
+   "rank": 20,
+   "sku": "CENKZ159410289-BLACK-153",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 449
+  },
+  {
+   "rank": 21,
+   "sku": "CEN1607NLinen-Ivory-194",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 423
+  },
+  {
+   "rank": 22,
+   "sku": "CENKZ159410287-BLACK-97",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 422
+  },
+  {
+   "rank": 23,
+   "sku": "C/Velvet-Black-100-703-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 405
+  },
+  {
+   "rank": 24,
+   "sku": "CEN1607NLinen-Ivory-97",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 405
+  },
+  {
+   "rank": 25,
+   "sku": "TT0031085K0063342",
+   "stratum": "软包墙围",
+   "net_qty_6m": 400
+  },
+  {
+   "rank": 26,
+   "sku": "C/Velvet-White-100-664-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 395
+  },
+  {
+   "rank": 27,
+   "sku": "CENKZ15349435-DBlue-100",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 395
+  },
+  {
+   "rank": 28,
+   "sku": "TT0031099K0063666",
+   "stratum": "侧睡两用楔形枕",
+   "net_qty_6m": 386
+  },
+  {
+   "rank": 29,
+   "sku": "C/Velvet-DKBlue-100-700-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 380
+  },
+  {
+   "rank": 30,
+   "sku": "C/Linen-DKBlue-100-660-WOW",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 350
+  },
+  {
+   "rank": 31,
+   "sku": "CEN-No/B-967-Linen-Beige-194",
+   "stratum": "三角靠枕无扣",
+   "net_qty_6m": 337
+  },
+  {
+   "rank": 32,
+   "sku": "TT0031085K0063341",
+   "stratum": "软包墙围",
+   "net_qty_6m": 337
+  },
+  {
+   "rank": 33,
+   "sku": "C/Cord-Black-100-707-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 336
+  },
+  {
+   "rank": 34,
+   "sku": "CEN961NLinen-SageGreen-153",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 300
+  },
+  {
+   "rank": 35,
+   "sku": "CEN961NLinen-SageGreen-194",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 284
+  },
+  {
+   "rank": 36,
+   "sku": "TT0020013K0062821",
+   "stratum": "车载宠物窝",
+   "net_qty_6m": 277
+  },
+  {
+   "rank": 37,
+   "sku": "TT0000671K0063724",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 254
+  },
+  {
+   "rank": 38,
+   "sku": "C/Linen-Natural-138-688-wow",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 253
+  },
+  {
+   "rank": 39,
+   "sku": "C/Linen-DKGrey-100-651-WOW",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 240
+  },
+  {
+   "rank": 40,
+   "sku": "CENC/Linen-Ivory-60",
+   "stratum": "三角靠枕无扣",
+   "net_qty_6m": 238
+  },
+  {
+   "rank": 41,
+   "sku": "CEN1607NLinen-Ivory-138",
+   "stratum": "三角靠枕",
+   "net_qty_6m": 236
+  },
+  {
+   "rank": 42,
+   "sku": "CENC/Linen-Grey-60CM",
+   "stratum": "三角靠枕无扣",
+   "net_qty_6m": 211
+  },
+  {
+   "rank": 43,
+   "sku": "CEN-No/B-967-Linen-Beige-100",
+   "stratum": "三角靠枕无扣",
+   "net_qty_6m": 200
+  },
+  {
+   "rank": 44,
+   "sku": "TT0031073K0063250",
+   "stratum": "沙发床头靠枕",
+   "net_qty_6m": 128
+  },
+  {
+   "rank": 45,
+   "sku": "TT0000933K0011516",
+   "stratum": "三角带圆柱靠枕",
+   "net_qty_6m": 118
+  },
+  {
+   "rank": 46,
+   "sku": "PTC/Linen-Natural-194-681-wow",
+   "stratum": "平条靠枕无压条",
+   "net_qty_6m": 105
+  },
+  {
+   "rank": 47,
+   "sku": "TT0031010K0062880",
+   "stratum": "床楔形枕头",
+   "net_qty_6m": 104
+  },
+  {
+   "rank": 48,
+   "sku": "TT0000752K0062993",
+   "stratum": "平条靠枕",
+   "net_qty_6m": 68
+  },
+  {
+   "rank": 49,
+   "sku": "TT0000750K0063009",
+   "stratum": "平条靠枕",
+   "net_qty_6m": 65
+  },
+  {
+   "rank": 50,
+   "sku": "TT0000914K0011634",
+   "stratum": "弧形PP棉靠枕",
+   "net_qty_6m": 62
+  }
+ ],
+ "urgent_exceptions": [
+  {
+   "sku": "STPPW-04-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 16
+  },
+  {
+   "sku": "STPPW-08-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 7
+  },
+  {
+   "sku": "STPPW-02-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 6
+  },
+  {
+   "sku": "STPPW-01-1",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 5
+  },
+  {
+   "sku": "STPPW-01-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 5
+  },
+  {
+   "sku": "STPPW-04-1",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 5
+  },
+  {
+   "sku": "STPPW-06-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 5
+  },
+  {
+   "sku": "STPPW-08-1",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 5
+  },
+  {
+   "sku": "STPPW-13-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 5
+  },
+  {
+   "sku": "TT0031038K0062927",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 5
+  },
+  {
+   "sku": "STPPW-12-1",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 4
+  },
+  {
+   "sku": "TT0000931K0011512",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 3
+  },
+  {
+   "sku": "STPPW-12-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 3
+  },
+  {
+   "sku": "CENC/Linen-Yellow-60",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "TT0000933K0011516",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "DLPPW-08-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "LSPPW-02",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "LSPPW-02-2-6",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "LSPPW-08-2-6",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "PPW01904",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "PPW02004",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "STPPW-03-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "TT0001325K0010667",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "TT0031087K0063345",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "C/Linen-DKGrey-60-651-WOW",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "TT0000758K0062945",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "TT0000995K0010982",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 2
+  },
+  {
+   "sku": "TT0020013K0062821",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "CENKZ15349436-DBlue-138-DN",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "KDHY-020-MAHUI-45CM",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000668K0063798",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0020013K0062820",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "18ZHI-ZONG-302808",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "18ZHI-ZONG-423112",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "C/Linen-White-153-662-WOW",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "CFDLPPW-01-1c",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "CFDLPPW-08-1c",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "CFDLPPW-09-1c",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "DLPPW-01-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "DLPPW-05-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "DLPPW-08-1",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "KZ0001325K0005896",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "LSPPW-01-2-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "LSPPW-02-2-5",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "LSPPW-08-2-1",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "LSPPW-11-3",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "LSPPW-11-6",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "PPW01803",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "PPW01804",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "PPW01903",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "STPPW-06-1",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "STPPW-09-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "STPPW-11-2",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "STPPW-13-1",
+   "in_mother_set": false,
+   "in_eligible_ranking": false,
+   "destination": "not_in_mother_set",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0020019K0062887",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0020029K0063031",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0031010K0062877",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0031244K0064084-Cover",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0031244K0064084-Foam",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000396K0009608",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000671K0063722",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000752K0062990",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000912K0011660",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000914K0011636",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000915K0011624",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000915K0011626",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000995K0010978",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0000995K0010988",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0001005K0011138",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0001323K0010505",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0001324K0011163",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0001325K0010512",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0031009K0062882",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0312573K0064144",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  },
+  {
+   "sku": "TT0312606K0064204",
+   "in_mother_set": true,
+   "in_eligible_ranking": true,
+   "destination": "mapped_eligible",
+   "waiting_shipment_units": 1
+  }
+ ],
+ "intersection": {
+  "count": 3,
+  "expected": [
+   "TT0000933K0011516",
+   "TT0020013K0062821",
+   "TT0031038K0062927"
+  ],
+  "skus": [
+   "TT0000933K0011516",
+   "TT0020013K0062821",
+   "TT0031038K0062927"
+  ],
+  "matches_expected": true,
+  "details": [
+   {
+    "sku": "TT0000933K0011516",
+    "top50_rank": 45,
+    "urgent": {
+     "sku": "TT0000933K0011516",
+     "in_mother_set": true,
+     "in_eligible_ranking": true,
+     "destination": "mapped_eligible",
+     "waiting_shipment_units": 2
+    }
+   },
+   {
+    "sku": "TT0020013K0062821",
+    "top50_rank": 36,
+    "urgent": {
+     "sku": "TT0020013K0062821",
+     "in_mother_set": true,
+     "in_eligible_ranking": true,
+     "destination": "mapped_eligible",
+     "waiting_shipment_units": 1
+    }
+   },
+   {
+    "sku": "TT0031038K0062927",
+    "top50_rank": 2,
+    "urgent": {
+     "sku": "TT0031038K0062927",
+     "in_mother_set": true,
+     "in_eligible_ranking": true,
+     "destination": "mapped_eligible",
+     "waiting_shipment_units": 5
+    }
+   }
+  ]
+ },
+ "union": {
+  "count": 122,
+  "formula": "50 + 75 - 3 = 122",
+  "skus": [
+   "18ZHI-ZONG-302808",
+   "18ZHI-ZONG-423112",
+   "C/Cord-Black-100-707-wow",
+   "C/Cord-DKBlue-100-713-wow",
+   "C/Cord-Grey-100-710-wow",
+   "C/Cord-White-100-706-wow",
+   "C/Linen-DKBlue-100-660-WOW",
+   "C/Linen-DKGrey-100-651-WOW",
+   "C/Linen-DKGrey-60-651-WOW",
+   "C/Linen-Natural-100-688-wow",
+   "C/Linen-Natural-138-688-wow",
+   "C/Linen-Natural-153-688-wow",
+   "C/Linen-Natural-194-688-wow",
+   "C/Linen-White-100-662-WOW",
+   "C/Linen-White-153-662-WOW",
+   "C/Velvet-Black-100-703-wow",
+   "C/Velvet-DKBlue-100-700-wow",
+   "C/Velvet-Grey-100-705-wow",
+   "C/Velvet-White-100-664-wow",
+   "CEN-No/B-967-Linen-Beige-100",
+   "CEN-No/B-967-Linen-Beige-194",
+   "CEN003-DPBLUE-100",
+   "CEN1607NLinen-Ivory-138",
+   "CEN1607NLinen-Ivory-153",
+   "CEN1607NLinen-Ivory-194",
+   "CEN1607NLinen-Ivory-97",
+   "CEN961NLinen-SageGreen-153",
+   "CEN961NLinen-SageGreen-194",
+   "CENC/Linen-Grey-60CM",
+   "CENC/Linen-Ivory-60",
+   "CENC/Linen-Yellow-60",
+   "CENCord995-DKGrey-97",
+   "CENKZ1323-LTGrey-97",
+   "CENKZ15349435-DBlue-100",
+   "CENKZ15349436-DBlue-138-DN",
+   "CENKZ15389463-Grey-100",
+   "CENKZ15389465-Grey-150",
+   "CENKZ159410287-BLACK-97",
+   "CENKZ159410289-BLACK-153",
+   "CFDLPPW-01-1c",
+   "CFDLPPW-08-1c",
+   "CFDLPPW-09-1c",
+   "DLPPW-01-2",
+   "DLPPW-05-2",
+   "DLPPW-08-1",
+   "DLPPW-08-2",
+   "KDHY-020-MAHUI-45CM",
+   "KZ0001325K0005896",
+   "LSPPW-01-2-2",
+   "LSPPW-02",
+   "LSPPW-02-2-5",
+   "LSPPW-02-2-6",
+   "LSPPW-08-2-1",
+   "LSPPW-08-2-6",
+   "LSPPW-11-3",
+   "LSPPW-11-6",
+   "PPW01803",
+   "PPW01804",
+   "PPW01903",
+   "PPW01904",
+   "PPW02004",
+   "PTC/Linen-Natural-194-681-wow",
+   "STPPW-01-1",
+   "STPPW-01-2",
+   "STPPW-02-2",
+   "STPPW-03-2",
+   "STPPW-04-1",
+   "STPPW-04-2",
+   "STPPW-06-1",
+   "STPPW-06-2",
+   "STPPW-08-1",
+   "STPPW-08-2",
+   "STPPW-09-2",
+   "STPPW-11-2",
+   "STPPW-12-1",
+   "STPPW-12-2",
+   "STPPW-13-1",
+   "STPPW-13-2",
+   "TT0000396K0009608",
+   "TT0000668K0063796",
+   "TT0000668K0063798",
+   "TT0000671K0063721",
+   "TT0000671K0063722",
+   "TT0000671K0063724",
+   "TT0000750K0063009",
+   "TT0000752K0062990",
+   "TT0000752K0062993",
+   "TT0000758K0062945",
+   "TT0000912K0011660",
+   "TT0000914K0011634",
+   "TT0000914K0011636",
+   "TT0000915K0011624",
+   "TT0000915K0011626",
+   "TT0000931K0011512",
+   "TT0000933K0011516",
+   "TT0000995K0010978",
+   "TT0000995K0010982",
+   "TT0000995K0010988",
+   "TT0001005K0011138",
+   "TT0001323K0010505",
+   "TT0001324K0011163",
+   "TT0001325K0010512",
+   "TT0001325K0010667",
+   "TT0020013K0062820",
+   "TT0020013K0062821",
+   "TT0020019K0062887",
+   "TT0020029K0063031",
+   "TT0031009K0062882",
+   "TT0031010K0062877",
+   "TT0031010K0062880",
+   "TT0031038K0062927",
+   "TT0031073K0063250",
+   "TT0031085K0063341",
+   "TT0031085K0063342",
+   "TT0031087K0063345",
+   "TT0031099K0063666",
+   "TT0031244K0064084-Cover",
+   "TT0031244K0064084-Foam",
+   "TT0312573K0064144",
+   "TT0312606K0064204",
+   "TT0312614K0064239",
+   "TT0312701K0064561"
+  ],
+  "in_mother_set": 84,
+  "outside_mother_set": 38
+ },
+ "plan_cross_check": {
+  "plan_rows": 122,
+  "unique": 122,
+  "missing_in_plan": [],
+  "extra_in_plan": [],
+  "duplicates": [],
+  "sku_set_equal": true,
+  "every_union_sku_exactly_once": true
+ },
+ "inputs_snapshot": {
+  "ranking": {
+   "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\ranking.json",
+   "bytes": 158239,
+   "sha256_raw": "bb042cc881817a7b99565b739e6802eb1d2a22dcd85547ce1d18b9ad2b894db8",
+   "sha256_canonical_lf": "22c627ed6871dc2195d5e3ad7e39a363f183f4b0f65490914fb7529b882753bd",
+   "line_ending_normalization": "crlf_to_lf",
+   "frozen_commit": "d50310a6",
+   "blob_sha256": "22c627ed6871dc2195d5e3ad7e39a363f183f4b0f65490914fb7529b882753bd",
+   "content_matches_commit": true
+  },
+  "destinations": {
+   "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\destinations.json",
+   "bytes": 1813093,
+   "sha256_raw": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60",
+   "sha256_canonical_lf": "1b3032fe914ea52874924a2d93d43343245b108623f2733406064a84b0df7896",
+   "line_ending_normalization": "crlf_to_lf",
+   "frozen_commit": "44def7f5",
+   "blob_sha256": "1b3032fe914ea52874924a2d93d43343245b108623f2733406064a84b0df7896",
+   "content_matches_commit": true
+  },
+  "evidence": {
+   "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\replenishment_v0\\evidence.json",
+   "bytes": 297288,
+   "sha256_raw": "7eea7c6f41d444bb69728646fb8cb90a174bbc71f5124c3876f5bd13508175b1",
+   "sha256_canonical_lf": "15d52072dc5d0461f032de1a7df0b9a3a39f0c450da50366dbf63680693178ea",
+   "line_ending_normalization": "crlf_to_lf",
+   "frozen_commit": "f9df4357",
+   "blob_sha256": "15d52072dc5d0461f032de1a7df0b9a3a39f0c450da50366dbf63680693178ea",
+   "content_matches_commit": true
+  },
+  "model_race_json": {
+   "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\replenishment_v0\\model_race.json",
+   "bytes": 1155587,
+   "sha256_raw": "13be6ab4d6a118f3879964128a3357b2d994495fd9eb47b3bd4fa5b3628214fd",
+   "sha256_canonical_lf": "81aa9f9a71bc00ec330eb3b131573bc48ebff1c0cebc8c15860ef519f2712f84",
+   "line_ending_normalization": "crlf_to_lf",
+   "frozen_commit": "f9df4357",
+   "blob_sha256": "9dd044b1f06c8b4e765e404dd0c5b9185da50112dc5ab1d544244706f9e52946",
+   "content_matches_commit": false,
+   "actual_content_commit": "d2eac9a3",
+   "blob_sha256_d2eac9a3": "c05fd6b8965cd31e79c85fa45dadb1c0f2bdff96",
+   "matches_actual_commit": true,
+   "note": "frozen_commit 字段保留为原始 declared 基线（证据）；实际内容见 actual_content_commit"
+  },
+  "model_race_py": {
+   "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g2g3_pilot\\model_race.py",
+   "bytes": 79427,
+   "sha256_raw": "0db651a533bcf38752b73b781c557f543726e3fa00d8a83ad3fe8d05ad4ed472",
+   "sha256_canonical_lf": "869873dfeb730951d4eaf36022a15eec225951c50c317d96370d13ca356ab7ba",
+   "line_ending_normalization": "crlf_to_lf",
+   "frozen_commit": "f9df4357",
+   "blob_sha256": "929f0899dc4baab80fae44598908ed4489f05d83ae9c125950916217979982fa",
+   "content_matches_commit": false,
+   "actual_content_commit": "d2eac9a3",
+   "blob_sha256_d2eac9a3": "574b0c127d87d9f5f22da79da68a042f1480b608",
+   "matches_actual_commit": true,
+   "note": "frozen_commit 字段保留为原始 declared 基线（证据）；实际内容见 actual_content_commit"
+  },
+  "order_store_duckdb": {
+   "path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+   "bytes": 51654656,
+   "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+   "note": "本地只读快照，无 git commit（不在仓库内）"
+  }
+ },
+ "differences": [
+  {
+   "item": "model_race.json content vs declared frozen commit",
+   "declared_commit": "f9df4357",
+   "declared_blob_sha256": "9dd044b1f06c8b4e765e404dd0c5b9185da50112dc5ab1d544244706f9e52946",
+   "actual_content_sha256_lf": "81aa9f9a71bc00ec330eb3b131573bc48ebff1c0cebc8c15860ef519f2712f84",
+   "matches_commit_d2eac9a3": true,
+   "explanation": "P1C 的输入清单把 model_race 标为 f9df4357，但实际读到的文件内容是 d2eac9a3（R3 返修把 label_available_at 写进 model_race 产物与脚本）。P1C 计算用的是工作区实际内容，其 model_race_json_sha256 记录的是 raw hash，只有 commit 标签写错；本收口按实际内容披露，不改任何产物。",
+   "p1c_metadata": "plan.json inputs.model_race_commit=f9df4357",
+   "status": "resolved",
+   "resolved_in": "2026-10-22-p1c-label-fix.md",
+   "resolution": "plan.json 的两个输入标签已改为 d2eac9a3，并补充 canonical-LF sha256 与 git blob id；原始 declared 证据字段全部保留"
+  },
+  {
+   "item": "model_race.py content vs declared frozen commit",
+   "declared_commit": "f9df4357",
+   "declared_blob_sha256": "929f0899dc4baab80fae44598908ed4489f05d83ae9c125950916217979982fa",
+   "actual_content_sha256_lf": "869873dfeb730951d4eaf36022a15eec225951c50c317d96370d13ca356ab7ba",
+   "matches_commit_d2eac9a3": true,
+   "explanation": "P1C 的输入清单把 model_race 标为 f9df4357，但实际读到的文件内容是 d2eac9a3（R3 返修把 label_available_at 写进 model_race 产物与脚本）。P1C 计算用的是工作区实际内容，其 model_race_json_sha256 记录的是 raw hash，只有 commit 标签写错；本收口按实际内容披露，不改任何产物。",
+   "p1c_metadata": "plan.json inputs.model_race_commit=f9df4357",
+   "status": "resolved",
+   "resolved_in": "2026-10-22-p1c-label-fix.md",
+   "resolution": "plan.json 的两个输入标签已改为 d2eac9a3，并补充 canonical-LF sha256 与 git blob id；原始 declared 证据字段全部保留"
+  }
+ ],
+ "note": "不修改任何产物；差异只为如实披露。所有计数均由产物重算，不复制 P1C 的声明。",
+ "label_correction": {
+  "status": "resolved",
+  "resolved_in": "2026-10-22-p1c-label-fix.md",
+  "declared_baseline_commit": "f9df4357",
+  "corrected_commit": "d2eac9a3",
+  "model_race_json": {
+   "canonical_lf_sha256": "81aa9f9a71bc00ec330eb3b131573bc48ebff1c0cebc8c15860ef519f2712f84",
+   "blob_d2eac9a3": "c05fd6b8965cd31e79c85fa45dadb1c0f2bdff96",
+   "declared_baseline_blob_f9df4357": "9dd044b1f06c8b4e765e404dd0c5b9185da50112dc5ab1d544244706f9e52946"
+  },
+  "model_race_py": {
+   "canonical_lf_sha256": "869873dfeb730951d4eaf36022a15eec225951c50c317d96370d13ca356ab7ba",
+   "blob_d2eac9a3": "574b0c127d87d9f5f22da79da68a042f1480b608",
+   "declared_baseline_blob_f9df4357": "929f0899dc4baab80fae44598908ed4489f05d83ae9c125950916217979982fa"
+  },
+  "p1c_consumed": "P1C 的需求侧消费的是 d2eac9a3 的 model_race（含 label_available_at 与 conformal-style 标定），不是 f9df4357 的字节内容",
+  "plan_json_note": "本 proof 未记录 plan.json 的 sha256，故无该值需要重算；plan.json 的 rows 数值零变化见记录"
+ }
+}

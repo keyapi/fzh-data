@@ -1,0 +1,173 @@
+{
+  "schema_version": "sc05_integration/2",
+  "cut": "2026-03",
+  "actual_months": [
+    "2026-04",
+    "2026-05",
+    "2026-06",
+    "2026-07",
+    "2026-08",
+    "2026-09"
+  ],
+  "universes": {
+    "scored790": {
+      "units": 1354,
+      "skus": 790,
+      "frozen_hash": "e977e8311a69c428"
+    },
+    "verifiable239": {
+      "units": 178,
+      "skus": 156,
+      "frozen_hash": "066150d3bf4fb22d"
+    }
+  },
+  "intersection_note": "239 与 790 的交集为 0（239 是可验证短史档、790 是已评分档），两套单元各自独立运行、分别报覆盖，不合并不外推",
+  "policy": {
+    "lead_months": 2,
+    "review_months": 1,
+    "beta_target": 0.95,
+    "protection_months": 3,
+    "forecast_horizon_months": 3,
+    "coverage_note": "L+R = 3 个月 = 预测窗 3 个月，已覆盖；若保护期更长必须标未覆盖",
+    "sizing": "S = mean_f × (L+R) × (1 + 1.645×CV/√(L+R))（参照规则，非 D40 网格值）",
+    "semantics": "lost_sales"
+  },
+  "tiers": {
+    "T5": "T5 AutoETS 等效率（T3 回退）",
+    "combo": "naive+ma3+tsb 等权",
+    "tree": "MLForecast+LightGBM（同批单元训练）"
+  },
+  "runs": {
+    "scored790": {
+      "units": 1354,
+      "hash": "e977e8311a69c428",
+      "results": {
+        "T5": {
+          "units": 1354,
+          "beta": 0.7849311914399367,
+          "alpha": 0.8672995780590717,
+          "avg_inventory": 12.5451,
+          "excess": 23664.33
+        },
+        "combo": {
+          "units": 1354,
+          "beta": 0.719729641842239,
+          "alpha": 0.770042194092827,
+          "avg_inventory": 13.3776,
+          "excess": 27883.56
+        },
+        "tree": {
+          "units": 1354,
+          "beta": 0.6577890274140836,
+          "alpha": 0.8911392405063291,
+          "avg_inventory": 11.5693,
+          "excess": 24548.46
+        }
+      },
+      "beta_ci": {
+        "T5": [
+          0.692,
+          0.8717
+        ],
+        "combo": [
+          0.6474,
+          0.791
+        ],
+        "tree": [
+          0.5804,
+          0.7348
+        ]
+      },
+      "delta_vs_T5": {
+        "combo": {
+          "delta": -0.0652,
+          "ci95": [
+            -0.1153,
+            -0.0155
+          ],
+          "significant": true
+        },
+        "tree": {
+          "delta": -0.1271,
+          "ci95": [
+            -0.1823,
+            -0.0759
+          ],
+          "significant": true
+        }
+      }
+    },
+    "verifiable239": {
+      "units": 178,
+      "hash": "066150d3bf4fb22d",
+      "results": {
+        "T5": {
+          "units": 178,
+          "beta": 0.9581812126170343,
+          "alpha": 0.9284037558685446,
+          "avg_inventory": 13.5449,
+          "excess": 2935.98
+        },
+        "combo": {
+          "units": 178,
+          "beta": 0.7782133607478987,
+          "alpha": 0.8133802816901409,
+          "avg_inventory": 10.44,
+          "excess": 2544.24
+        },
+        "tree": {
+          "units": 178,
+          "beta": 0.7219091966485376,
+          "alpha": 0.8157276995305164,
+          "avg_inventory": 8.1446,
+          "excess": 2039.47
+        }
+      },
+      "beta_ci": {
+        "T5": [
+          0.9174,
+          0.9911
+        ],
+        "combo": [
+          0.6769,
+          0.8874
+        ],
+        "tree": [
+          0.6223,
+          0.8413
+        ]
+      },
+      "delta_vs_T5": {
+        "combo": {
+          "delta": -0.18,
+          "ci95": [
+            -0.2723,
+            -0.0797
+          ],
+          "significant": true
+        },
+        "tree": {
+          "delta": -0.2363,
+          "ci95": [
+            -0.3347,
+            -0.121
+          ],
+          "significant": true
+        }
+      }
+    }
+  },
+  "bootstrap": {
+    "resamples": 2000,
+    "seed": 20261023,
+    "cluster": "unit = SKU×仓",
+    "includes_retrain_variance": false,
+    "note": "SKU 整簇重采样；模型与预测固定，不含重训方差"
+  },
+  "boundaries": [
+    "不替换任何生产默认",
+    "不出补货量",
+    "不外推到未入选单元",
+    "790 与 239 分别报覆盖"
+  ]
+}

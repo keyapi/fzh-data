@@ -1,0 +1,764 @@
+{
+ "schema_version": "t16_short_history/1",
+ "status": "development validation on already-seen data — NOT an independent hold-out",
+ "inputs": {
+  "db_sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+  "destinations_sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
+ },
+ "pre_registered": {
+  "scope": "eligible SKUs with <24 months inside label coverage (2026-09)",
+  "window": "cumulative monthly h=3 (origin+1..origin+3)",
+  "origins": "every 3rd month from the first origin with >=3 training months; target window fully inside label coverage",
+  "alignment": "five-method common intersection of (SKU, origin), then aggregate",
+  "category_peer": "peer needs >=24 months AT THE SAME origin; shape from the 12 months ending at that origin",
+  "combo": "fixed equal weight of naive/SES/TSB",
+  "low_confidence": "history <12 months OR <3 common windows",
+  "metric": "MAE / WAPE=Σ|F−A|/ΣA / Bias=Σ(F−A)/ΣA; zero-demand retained in numerator"
+ },
+ "scope": {
+  "series_total": 1237,
+  "short_total": 463,
+  "buckets": {
+   "13<=n<24": 245,
+   "3<=n<13": 203,
+   "n<3": 15
+  },
+  "evaluable_skus": 403,
+  "aligned_skus": 151,
+  "aligned_cells": 685,
+  "all_cells": 1457
+ },
+ "methods": {
+  "total": {
+   "n_cells": 685,
+   "n_skus": 151,
+   "denominator": 11497.0,
+   "naive": {
+    "mae": 10.778,
+    "wape": 0.6422,
+    "bias": -0.1279
+   },
+   "ses": {
+    "mae": 10.095,
+    "wape": 0.6015,
+    "bias": -0.1272
+   },
+   "tsb": {
+    "mae": 10.104,
+    "wape": 0.602,
+    "bias": -0.1319
+   },
+   "category_borrowed": {
+    "mae": 11.687,
+    "wape": 0.6963,
+    "bias": -0.0022
+   },
+   "combo_ew": {
+    "mae": 9.928,
+    "wape": 0.5915,
+    "bias": -0.129
+   }
+  },
+  "3<=n<13": {
+   "n_cells": 53,
+   "n_skus": 26,
+   "denominator": 373.0,
+   "naive": {
+    "mae": 7.868,
+    "wape": 1.118,
+    "bias": 0.3351
+   },
+   "ses": {
+    "mae": 6.625,
+    "wape": 0.9414,
+    "bias": 0.2949
+   },
+   "tsb": {
+    "mae": 6.33,
+    "wape": 0.8994,
+    "bias": 0.2146
+   },
+   "category_borrowed": {
+    "mae": 7.649,
+    "wape": 1.0868,
+    "bias": 0.2774
+   },
+   "combo_ew": {
+    "mae": 6.726,
+    "wape": 0.9557,
+    "bias": 0.2816
+   }
+  },
+  "13<=n<24": {
+   "n_cells": 632,
+   "n_skus": 125,
+   "denominator": 11124.0,
+   "naive": {
+    "mae": 11.022,
+    "wape": 0.6262,
+    "bias": -0.1435
+   },
+   "ses": {
+    "mae": 10.386,
+    "wape": 0.5901,
+    "bias": -0.1414
+   },
+   "tsb": {
+    "mae": 10.421,
+    "wape": 0.592,
+    "bias": -0.1435
+   },
+   "category_borrowed": {
+    "mae": 12.026,
+    "wape": 0.6832,
+    "bias": -0.0116
+   },
+   "combo_ew": {
+    "mae": 10.196,
+    "wape": 0.5793,
+    "bias": -0.1428
+   }
+  }
+ },
+ "fallback_reliability": {
+  "current_rule": "AutoETS 成功则用 AutoETS，失败（KeyError / tiny_datasets）则用 MA3",
+  "autoets_failures": {
+   "fallback_MA3(3<=len<7)": 289
+  },
+  "autoets_failures_all_cells": {
+   "fallback_MA3(3<=len<7)": 763
+  },
+  "n_fallback_cells": 289,
+  "n_fallback_sku": 147,
+  "by_tr": {
+   "tr<7": {
+    "n_cells": 289,
+    "n_skus": 147,
+    "denominator": 4167.0,
+    "rule_current": {
+     "mae": 10.567,
+     "wape": 0.7329,
+     "bias": -0.1704
+    },
+    "rule_tsb": {
+     "mae": 11.014,
+     "wape": 0.7639,
+     "bias": -0.1789
+    },
+    "rule_ses": {
+     "mae": 10.529,
+     "wape": 0.7302,
+     "bias": -0.184
+    },
+    "rule_naive": {
+     "mae": 10.606,
+     "wape": 0.7355,
+     "bias": -0.2268
+    }
+   },
+   "tr>=7": {
+    "n_cells": 0,
+    "n_skus": 0,
+    "denominator": 0,
+    "rule_current": {
+     "mae": null,
+     "wape": null,
+     "bias": null
+    },
+    "rule_tsb": {
+     "mae": null,
+     "wape": null,
+     "bias": null
+    },
+    "rule_ses": {
+     "mae": null,
+     "wape": null,
+     "bias": null
+    },
+    "rule_naive": {
+     "mae": null,
+     "wape": null,
+     "bias": null
+    }
+   }
+  },
+  "all_aligned": {
+   "n_cells": 685,
+   "n_skus": 151,
+   "denominator": 11497.0,
+   "rule_current": {
+    "mae": 10.295,
+    "wape": 0.6134,
+    "bias": -0.1258
+   },
+   "rule_tsb": {
+    "mae": 10.104,
+    "wape": 0.602,
+    "bias": -0.1319
+   },
+   "rule_ses": {
+    "mae": 10.095,
+    "wape": 0.6015,
+    "bias": -0.1272
+   },
+   "rule_naive": {
+    "mae": 10.778,
+    "wape": 0.6422,
+    "bias": -0.1279
+   }
+  },
+  "deltas": {
+   "rule_tsb_minus_current_mae": 0.447,
+   "rule_ses_minus_current_mae": -0.038,
+   "rule_naive_minus_current_mae": 0.039
+  },
+  "bootstrap_deltas": {
+   "rule_tsb": {
+    "iterations": 300,
+    "mean": 0.459,
+    "p5": -0.697,
+    "p95": 1.98
+   },
+   "rule_ses": {
+    "iterations": 300,
+    "mean": -0.026,
+    "p5": -0.71,
+    "p95": 0.613
+   },
+   "rule_naive": {
+    "iterations": 300,
+    "mean": 0.064,
+    "p5": -1.68,
+    "p95": 1.51
+   }
+  }
+ },
+ "keyerror_guard": {
+  "guard_rule": "len(y) < 7 → 不尝试 AutoETS，直接 fallback（len<3→naive，3<=len<7→MA3）；len>=7 才尝试 AutoETS",
+  "threshold_basis": "statsforecast 2.1.1 实测：len=1 抛 KeyError('fitted')；len=2..6 抛 NotImplementedError('tiny datasets')；len=7 起可拟合。阈值 7 由此预先注册，未按评估效果调参。",
+  "before": {
+   "n<3": {
+    "n": 15,
+    "status": {
+     "NotImplementedError": 10,
+     "KeyError": 5
+    }
+   },
+   "3<=n<13": {
+    "n": 203,
+    "status": {
+     "ok": 147,
+     "NotImplementedError": 56
+    }
+   },
+   "13<=n<24": {
+    "n": 245,
+    "status": {
+     "ok": 245
+    }
+   }
+  },
+  "after": {
+   "n<3": {
+    "n": 15,
+    "status": {
+     "fallback_naive(len<3)": 15
+    }
+   },
+   "3<=n<13": {
+    "n": 203,
+    "status": {
+     "ok": 147,
+     "fallback_MA3(3<=len<7)": 56
+    }
+   },
+   "13<=n<24": {
+    "n": 245,
+    "status": {
+     "ok": 245
+    }
+   }
+  },
+  "notes": [
+   "len<7 全部走 fallback：len=1–2 用 naive，len=3–6 用 MA3；不再尝试 AutoETS，因此不再触发 tiny_datasets/KeyError",
+   "len=1–2 的序列首单在 2026-08/09，当前没有完整 3 个月目标窗，故不进入计分；guard 只保证不再抛错，不伪造评分",
+   "阈值 7 来自库的实测行为（见 threshold_basis），不是按效果挑选；len>=7 的行为与扩展前完全一致"
+  ],
+  "by_length": {
+   "1": {
+    "n": 4,
+    "before": {
+     "KeyError": 4
+    },
+    "after": {
+     "fallback_naive(len<3)": 4
+    }
+   },
+   "2": {
+    "n": 11,
+    "before": {
+     "NotImplementedError": 10,
+     "KeyError": 1
+    },
+    "after": {
+     "fallback_naive(len<3)": 11
+    }
+   },
+   "3": {
+    "n": 16,
+    "before": {
+     "NotImplementedError": 16
+    },
+    "after": {
+     "fallback_MA3(3<=len<7)": 16
+    }
+   },
+   "4": {
+    "n": 16,
+    "before": {
+     "NotImplementedError": 16
+    },
+    "after": {
+     "fallback_MA3(3<=len<7)": 16
+    }
+   },
+   "5": {
+    "n": 13,
+    "before": {
+     "NotImplementedError": 13
+    },
+    "after": {
+     "fallback_MA3(3<=len<7)": 13
+    }
+   },
+   "6": {
+    "n": 11,
+    "before": {
+     "NotImplementedError": 11
+    },
+    "after": {
+     "fallback_MA3(3<=len<7)": 11
+    }
+   },
+   "7": {
+    "n": 11,
+    "before": {
+     "ok": 11
+    },
+    "after": {
+     "ok": 11
+    }
+   }
+  },
+  "assertions": {
+   "n_short": 463,
+   "n_lt7": 71,
+   "all_lt7_fallback": true,
+   "uncaught_exceptions": 0,
+   "note": "len<7 全部走 fallback 且预测有限；guard 内无未捕获异常"
+  }
+ },
+ "anomalies": {
+  "single_point": {
+   "n": 4,
+   "handling": "naive 常数预测；无完整目标窗，本轮不计分",
+   "skus": [
+    "TT0312568K0064135",
+    "TT0312635K0064265",
+    "TT0312673K0064329",
+    "TT0312674K0064330"
+   ]
+  },
+  "two_points": {
+   "n": 11,
+   "handling": "naive 末值；无完整目标窗，本轮不计分",
+   "skus": [
+    "CEN003-DPBLUE-100-old",
+    "CENPTQiRuoJinLan-138",
+    "TT0031159K0063865-Foam",
+    "TT0031190K0063925-Cover",
+    "TT0312576K0064148",
+    "TT0312587K0064174-Foam",
+    "TT0312588K0064180-Foam",
+    "TT0312588K0064185-Foam",
+    "TT0312633K0064261",
+    "TT0312634K0064263-Cover",
+    "TT0312681K0064363"
+   ]
+  },
+  "all_zero_series": {
+   "n": 0,
+   "handling": "全零序列：所有方法预测 0；若出现在可评分子集则保留（分子 0）",
+   "skus": []
+  },
+  "constant_series": {
+   "n": 1,
+   "handling": "常数序列：正常评分，不做特殊剔除",
+   "skus": [
+    "TT0312634K0064263-Cover"
+   ]
+  },
+  "zero_actual_cells": {
+   "n": 102,
+   "handling": "零需求单元格保留在 WAPE 分子，对分母贡献 0"
+  },
+  "autoets_non_ok_cells": {
+   "n": 289,
+   "by_reason": {
+    "fallback_MA3(3<=len<7)": 289
+   }
+  }
+ },
+ "low_confidence": {
+  "criteria": "历史 <12 个月，或共同可评分子集内窗口数 <3",
+  "n_low": 337,
+  "n_short": 463,
+  "n_low_in_aligned": 25,
+  "skus": [
+   "C/Cord-Camel-194-711-wow-Cover",
+   "C/Linen-Black-60-659-WOW",
+   "C/Linen-Coffee-194-661-WOW-Cover",
+   "C/Linen-DKBlue-60-660-WOW",
+   "C/Linen-Natural-183-688-wow-Cover",
+   "C/Velvet-Camel-100-704-wow-Cover",
+   "C/Velvet-Grey-60-705-wow",
+   "C/Velvet-White-100-664-wow-Cover",
+   "C/Velvet-White-194-664-wow-Cover",
+   "C/Velvet-White-60-664-wow",
+   "CEN003-DPBLUE-100-old",
+   "CEN1608NLinen-Purple-153",
+   "CENPTQiRuoJinLan-100",
+   "CENPTQiRuoJinLan-138",
+   "CENPTQiRuoJinLan-153",
+   "CENPTQiRuoJinLan-194",
+   "Curve-Pillow-50-Foam",
+   "Curve-Pillow-50-PPCotton",
+   "SXQC-CEN003-RED-150",
+   "SXQC-CEN003-SKYBLUE-150",
+   "SXQC-CEN1609NLinen-Coffee-153",
+   "SXQC-CEN964NLinen-GrayLilac-153",
+   "SXQC-CENCord996-RustyOrange-153",
+   "SXQC-CENKZ15319416-Hblue-150",
+   "TT0000669K0063791",
+   "TT0000718K0063439",
+   "TT0000750K0063009-Cover",
+   "TT0000779K0054313",
+   "TT0020030K0063032",
+   "TT0020031K0063033",
+   "TT0031004K0064223",
+   "TT0031035K0062924",
+   "TT0031038K0064291",
+   "TT0031038K0064292",
+   "TT0031073K0064138",
+   "TT0031073K0064139",
+   "TT0031104K0063681",
+   "TT0031111K0063736",
+   "TT0031111K0063737",
+   "TT0031113K0063743",
+   "TT0031120K0063751",
+   "TT0031121K0063766",
+   "TT0031121K0063767",
+   "TT0031122K0063764",
+   "TT0031122K0063765",
+   "TT0031123K0063768",
+   "TT0031123K0063769",
+   "TT0031124K0063771",
+   "TT0031125K0063772",
+   "TT0031125K0063773",
+   "TT0031126K0063774",
+   "TT0031126K0063775",
+   "TT0031127K0063818",
+   "TT0031128K0063817-Foam",
+   "TT0031128K00638171-Cover",
+   "TT0031128K00638172-Cover",
+   "TT0031128K00638173-Cover",
+   "TT0031129K0063819",
+   "TT0031131K0063816-Foam",
+   "TT0031131K00638161-Cover",
+   "TT0031131K00638162-Cover",
+   "TT0031131K00638163-Cover",
+   "TT0031136K0063825",
+   "TT0031143K0063834",
+   "TT0031143K0063835",
+   "TT0031143K0063836",
+   "TT0031143K0063837",
+   "TT0031144K0063838",
+   "TT0031144K0063839",
+   "TT0031144K0063840",
+   "TT0031144K0063841",
+   "TT0031145K0063842",
+   "TT0031145K0063843",
+   "TT0031145K0063844",
+   "TT0031145K0063845",
+   "TT0031147K0063849",
+   "TT0031148K0063850",
+   "TT0031149K0063851",
+   "TT0031151K0063853",
+   "TT0031151K0063854",
+   "TT0031152K0063855",
+   "TT0031152K0063856",
+   "TT0031153K0063857",
+   "TT0031154K0063859",
+   "TT0031157K0063862",
+   "TT0031158K0063863",
+   "TT0031158K0063864",
+   "TT0031159K0063865-Cover",
+   "TT0031159K0063865-Foam",
+   "TT0031159K0063866-Cover",
+   "TT0031161K0063869",
+   "TT0031162K0063870",
+   "TT0031177K0063899-Cover",
+   "TT0031177K0063900-Cover",
+   "TT0031178K0063902-Cover",
+   "TT0031179K0063904-Cover",
+   "TT0031180K0063910-Cover",
+   "TT0031181K0063906-Cover",
+   "TT0031182K0063908-Cover",
+   "TT0031183K0063912-Cover",
+   "TT0031184K0063914-Cover",
+   "TT0031185K0063916-Cover",
+   "TT0031186K0063918-Cover",
+   "TT0031187K0063919-Cover",
+   "TT0031187K0063920-Cover",
+   "TT0031188K0063922-Cover",
+   "TT0031189K0063924-Cover",
+   "TT0031190K0063925-Cover",
+   "TT0031190K0063926-Cover",
+   "TT0031191K0063929",
+   "TT0031191K0063930",
+   "TT0031193K0063933",
+   "TT0031193K0063934",
+   "TT0031196K0063937",
+   "TT0031197K0063938",
+   "TT0031198K0063939",
+   "TT0031199K0064009",
+   "TT0031200K0064010",
+   "TT0031202K0064012",
+   "TT0031205K0064015",
+   "TT0031206K0064016",
+   "TT0031208K0064019",
+   "TT0031208K0064019-2",
+   "TT0031209K0064020",
+   "TT0031209K0064021",
+   "TT0031210K0064022",
+   "TT0031211K0064023",
+   "TT0031212K0064024-Cover",
+   "TT0031214K0064027",
+   "TT0031216K0064030",
+   "TT0031216K0064031",
+   "TT0031217K0064032",
+   "TT0031217K0064032-2",
+   "TT0031218K0064033",
+   "TT0031219K0064034",
+   "TT0031222K0064037",
+   "TT0031223K0064038",
+   "TT0031225K0064040",
+   "TT0031226K0064041",
+   "TT0031227K0064042",
+   "TT0031227K0064043",
+   "TT0031227K0064044",
+   "TT0031230K0064047-Cover",
+   "TT0031230K0064050-Cover",
+   "TT0031230K0064053-Cover",
+   "TT0031230K0064056-Foam",
+   "TT0031230K0064057-Foam",
+   "TT0031230K0064058-Foam",
+   "TT0031231K0064059",
+   "TT0031232K0064060",
+   "TT0031232K0064061",
+   "TT0031233K0064062",
+   "TT0031234K0064064",
+   "TT0031235K0064067",
+   "TT0031236K0064069",
+   "TT0031236K0064070",
+   "TT0031237K0064071",
+   "TT0031237K0064072",
+   "TT0031238K0064073",
+   "TT0031240K0064075",
+   "TT0031242K0064082",
+   "TT0031243K0064083",
+   "TT0031244K0064084-Cover",
+   "TT0031244K0064084-Foam",
+   "TT0031245K0064086-Cover",
+   "TT0031245K0064087-Cover",
+   "TT0031245K0064088-Foam",
+   "TT0031246K0064094-Cover",
+   "TT0031246K0064094-Foam",
+   "TT0031247K0064095-Cover1",
+   "TT0031247K0064095-Foam",
+   "TT0031248K0064096-Cover",
+   "TT0031248K0064097-Cover",
+   "TT0031248K0064098-Cover",
+   "TT0031248K0064099-Cover",
+   "TT0031248K0064100-Cover",
+   "TT0031248K0064102-Cover",
+   "TT0031248K0064103-Cover",
+   "TT0031249K0064104-Cover",
+   "TT0031249K0064105-Cover",
+   "TT0031249K0064106-Cover",
+   "TT0031249K0064108-Cover",
+   "TT0031249K0064109-Cover",
+   "TT0031249K0064110-Cover",
+   "TT0031249K0064111-Cover",
+   "TT0031250K0064112-Cover",
+   "TT0031250K0064113-Cover",
+   "TT0031250K0064114-Cover",
+   "TT0031250K0064115-Cover",
+   "TT0031250K0064116-Cover",
+   "TT0031250K0064117-Cover",
+   "TT0031250K0064118-Cover",
+   "TT0031250K0064119-Cover",
+   "TT0031251K0064120-Cover",
+   "TT0031251K0064121-Cover",
+   "TT0031251K0064122-Cover",
+   "TT0031251K0064123-Cover",
+   "TT0031251K0064124-Cover",
+   "TT0031251K0064125-Cover",
+   "TT0031251K0064126-Cover",
+   "TT0031251K0064127-Cover",
+   "TT0031252K0064128",
+   "TT0031253K0064129",
+   "TT0031254K0064130",
+   "TT0031255K0064131",
+   "TT0312566K0064133",
+   "TT0312567K0064134",
+   "TT0312568K0064135",
+   "TT0312569K0064140",
+   "TT0312571K0064142",
+   "TT0312572K0064143",
+   "TT0312573K0064144",
+   "TT0312573K0064145",
+   "TT0312574K0064146",
+   "TT0312575K0064147",
+   "TT0312575K0064147-2",
+   "TT0312576K0064148",
+   "TT0312576K0064149",
+   "TT0312576K0064150",
+   "TT0312576K0064152",
+   "TT0312577K0064154",
+   "TT0312577K0064155",
+   "TT0312577K0064157",
+   "TT0312578K0064159",
+   "TT0312578K0064160",
+   "TT0312578K0064162",
+   "TT0312583K0064167",
+   "TT0312584K0064168",
+   "TT0312585K0064169",
+   "TT0312587K0064171-Foam",
+   "TT0312587K0064173-Foam",
+   "TT0312587K0064174-Foam",
+   "TT0312587K0064175-Foam",
+   "TT0312587K0064176-Foam",
+   "TT0312587K0064177-Foam",
+   "TT0312587K0064178-Foam",
+   "TT0312588K0064179-Foam",
+   "TT0312588K0064180-Foam",
+   "TT0312588K0064181-Foam",
+   "TT0312588K0064182-Foam",
+   "TT0312588K0064183-Foam",
+   "TT0312588K0064184-Foam",
+   "TT0312588K0064185-Foam",
+   "TT0312588K0064186-Foam",
+   "TT0312589K0064187-Foam",
+   "TT0312599K0064196",
+   "TT0312600K0064198",
+   "TT0312601K0064199",
+   "TT0312602K0064200",
+   "TT0312603K0064201",
+   "TT0312604K0064202",
+   "TT0312605K0064203",
+   "TT0312606K0064204",
+   "TT0312606K0064205",
+   "TT0312606K0064206",
+   "TT0312606K0064207",
+   "TT0312607K0064208",
+   "TT0312607K0064209",
+   "TT0312607K0064210",
+   "TT0312608K0064211",
+   "TT0312609K0064212",
+   "TT0312610K0064213",
+   "TT0312612K0064235",
+   "TT0312612K0064236",
+   "TT0312613K0064237-Cover",
+   "TT0312613K0064242-Cover",
+   "TT0312613K0064243-Cover",
+   "TT0312613K0064243-Foam",
+   "TT0312614K0064238",
+   "TT0312614K0064239",
+   "TT0312615K0064241",
+   "TT0312616K0064244",
+   "TT0312617K0064245",
+   "TT0312618K0064246",
+   "TT0312619K0064247",
+   "TT0312620K0064248",
+   "TT0312621K0064249",
+   "TT0312623K0064251",
+   "TT0312624K0064252",
+   "TT0312625K0064253",
+   "TT0312627K0064255",
+   "TT0312628K0064256",
+   "TT0312630K0064258",
+   "TT0312632K0064260",
+   "TT0312633K0064261",
+   "TT0312634K0064263-Cover",
+   "TT0312635K0064265",
+   "TT0312635K0064268",
+   "TT0312635K0064271",
+   "TT0312635K0064277",
+   "TT0312635K0064280",
+   "TT0312636K0064266",
+   "TT0312636K0064269",
+   "TT0312636K0064272",
+   "TT0312636K0064275",
+   "TT0312636K0064278",
+   "TT0312636K0064281",
+   "TT0312637K0064264",
+   "TT0312637K0064267",
+   "TT0312637K0064270",
+   "TT0312637K0064273",
+   "TT0312637K0064276",
+   "TT0312637K0064279",
+   "TT0312638K0064282",
+   "TT0312638K0064282-1",
+   "TT0312638K0064282-2",
+   "TT0312639K0064283",
+   "TT0312640K0064285",
+   "TT0312640K0064286",
+   "TT0312673K0064329",
+   "TT0312674K0064330",
+   "TT0312676K0064342",
+   "TT0312676K0064343",
+   "TT0312678K0064345",
+   "TT0312678K0064346",
+   "TT0312681K0064361",
+   "TT0312681K0064362",
+   "TT0312681K0064363",
+   "TT0312682K0064364",
+   "TT0312682K0064365",
+   "TT0312683K0064369",
+   "TT0312685K0064373",
+   "TT0312687K0064377",
+   "TT0312701K0064561",
+   "TT0312705K0064582",
+   "TT0312705K0064584",
+   "TT0312705K0064585",
+   "TT0312706K0064590",
+   "TT0312706K0064591",
+   "TT0312706K0064592",
+   "TT0312708K0064594",
+   "TT0312708K0064595",
+   "TT0312708K0064596",
+   "TT0312708K0064597",
+   "TT0312708K0064598",
+   "TT0312708K0064599",
+   "TT0312708K0064600"
+  ]
+ },
+ "runtime": {
+  "seconds": 5.9,
+  "cells": 1457,
+  "aligned_cells": 685,
+  "origins_rule": "step 3, h=3"
+ },
+ "wording": "开发期验证：全部数据均已见过，**不是独立留出**，不得把任何差值称为“改进已证实”；是否换用 TSB/SES 须经前向影子与业务复核。"
+}

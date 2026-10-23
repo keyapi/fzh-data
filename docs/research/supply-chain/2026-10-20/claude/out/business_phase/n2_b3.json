@@ -1,0 +1,1090 @@
+{
+ "schema_version": "n2_b3_chain/1",
+ "generated_at": "2026-10-22T16:55:35+08:00",
+ "batch": "N2 B3（2 个零库存 SKU；冻结名单 909635da；沿用 B1/B2 结构与口径）",
+ "layers_policy": {
+  "facts": "proven，带证据指针；不得混入假设",
+  "scenarios": "显式假设，逐条写 assumption / purpose / if_overturned",
+  "blockers": "缺证，写准确阻塞码与责任人",
+  "computable_now": "只用 proven 数量算缺口下界/结余；零库存必须标清是“已证为 0”还是“未取到”",
+  "zero_kind_rule": "已证为 0 = SKU 出现在已发布且完整的盘点快照中且每行 available=0；未取到 = 无行或运行不完整，此时不能把 0 当事实",
+  "history_rule": "历史销量是需求记录，不得当作当前在库"
+ },
+ "columns": [
+  "商品×仓库",
+  "未来需求",
+  "当前库存",
+  "分阶段供应",
+  "时间情景",
+  "缺口",
+  "建议/成立条件"
+ ],
+ "inputs": {
+  "freeze": {
+   "path": "out/business_phase/ten_sample_freeze.json",
+   "sha256": "55f602ba557cf163a2d2674816eeab96b0e0d8041d663bda634695d09a72124e",
+   "commit": "909635da"
+  },
+  "plan": {
+   "path": "out/business_phase/plan.json",
+   "sha256": "8bae9082d86390def7dcac9e01545d260a98e53b11038f8a10e17e39b12df719",
+   "commit": "d04e943c"
+  },
+  "ranking": {
+   "path": "out/business_phase/ranking.json",
+   "sha256": "bb042cc881817a7b99565b739e6802eb1d2a22dcd85547ce1d18b9ad2b894db8"
+  },
+  "destinations": {
+   "path": "out/business_phase/destinations.json",
+   "sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
+  },
+  "b1": {
+   "path": "out/business_phase/n2_b1.json",
+   "sha256": "27522e6ebae25a6284db1b3852ecd9cb4c29ef83ce392e05161da2b87442fe46",
+   "commit": "4626a779",
+   "role": "结构参照（未修改）"
+  },
+  "b2": {
+   "path": "out/business_phase/n2_b2.json",
+   "sha256": "0255cf8632582c45f5fe3b759745e51059dfe1451bd5e7e21ec670f6306a0fe0",
+   "commit": "406e3d95",
+   "role": "结构参照（未修改）"
+  },
+  "db": {
+   "path": "D:/Work/fzh-order-store/order_store.duckdb",
+   "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9"
+  },
+  "stock_run": {
+   "run_id": "20261022T070625",
+   "snapshot_date": "2026-10-22",
+   "run_complete": true,
+   "scope_complete": true,
+   "integrity_ok": true,
+   "warehouses_complete": "14/14"
+  }
+ },
+ "rules": {
+  "unknown_rule": "未知一律 null + blocker_codes，不填 0",
+  "no_estimate_rule": "不给区间估算冒充结论；unresolved_gap 保持 null",
+  "recommendation_domain": [
+   "补",
+   "不补",
+   "待核实"
+  ],
+  "cell_status_domain": [
+   "proven",
+   "unproven",
+   "blocker"
+  ],
+  "no_quantities": true,
+  "counts_rule": "每个统计量都必须与实际条目数相加相等（含断言）"
+ },
+ "counts": {
+  "skus": 2,
+  "cells_per_sku": 7,
+  "recommendations": {
+   "待核实": 2
+  },
+  "recommendations_sum": 2,
+  "facts_total": 16,
+  "facts_sum": 16,
+  "scenarios_total": 10,
+  "scenarios_sum": 10,
+  "blockers_total": 8,
+  "blockers_sum": 8
+ },
+ "assertions": [
+  {
+   "id": "A1_skus_match_freeze",
+   "expected": [
+    "C/Velvet-White-100-664-wow",
+    "TT0031010K0062880"
+   ],
+   "actual": [
+    "C/Velvet-White-100-664-wow",
+    "TT0031010K0062880"
+   ],
+   "ok": true
+  },
+  {
+   "id": "A2_columns_7",
+   "expected": 7,
+   "actual": 7,
+   "ok": true
+  },
+  {
+   "id": "A3_recommendation_sum",
+   "expected": 2,
+   "actual": 2,
+   "ok": true
+  },
+  {
+   "id": "A4_facts_sum",
+   "expected": 16,
+   "actual": 16,
+   "ok": true
+  },
+  {
+   "id": "A5_scenarios_sum",
+   "expected": 10,
+   "actual": 10,
+   "ok": true
+  },
+  {
+   "id": "A6_blockers_sum",
+   "expected": 8,
+   "actual": 8,
+   "ok": true
+  },
+  {
+   "id": "A7_zero_kind_stated",
+   "expected": "both proven_zero_available",
+   "actual": [
+    "proven_zero_available",
+    "proven_zero_available"
+   ],
+   "ok": true
+  },
+  {
+   "id": "A8_no_quantity_fields",
+   "expected": "no replenishment quantity",
+   "actual": "none",
+   "ok": true
+  }
+ ],
+ "chains": [
+  {
+   "sku": "C/Velvet-White-100-664-wow",
+   "slot": "S6_zero_stock_1",
+   "top50_rank": 26,
+   "mapped_item_code": "KS0001-PR-100-WHITE",
+   "item_name": "三角靠枕-平绒-100-白色",
+   "item_group": "三角靠枕",
+   "destination": "mapped_eligible",
+   "layers": {
+    "facts": [
+     {
+      "id": "F1_mapping",
+      "statement": "SKU 唯一映射到 KS0001-PR-100-WHITE（三角靠枕-平绒-100-白色，三角靠枕）",
+      "value": "KS0001-PR-100-WHITE",
+      "status": "proven",
+      "evidence_pointer": "sku_map[tongtool_sku='C/Velvet-White-100-664-wow'].item_code='KS0001-PR-100-WHITE'; item_attr[item='KS0001-PR-100-WHITE']"
+     },
+     {
+      "id": "F2_uom",
+      "statement": "物料 BOM 单位为 个",
+      "value": "个",
+      "status": "proven",
+      "evidence_pointer": "bom[item='KS0001-PR-100-WHITE'].uom"
+     },
+     {
+      "id": "F3_zero_kind",
+      "statement": "在库可用量 = 0 且这是**已证为 0**（不是未取到）：SKU 出现在已发布的完整盘点快照里，每一行 available 都是 0",
+      "value": {
+       "kind": "proven_zero_available",
+       "rows": 2,
+       "all_zero": true,
+       "run_id": "20261022T070625",
+       "snapshot_date": "2026-10-22",
+       "run_complete": true,
+       "scope_complete": true,
+       "integrity_ok": true,
+       "warehouses_complete": "14/14"
+      },
+      "status": "proven",
+      "evidence_pointer": "stock_publish[snapshot=2026-10-22] → stock_run → stock_latest[sku='C/Velvet-White-100-664-wow'] rows=2",
+      "note": "零库存的两种含义结论不同：已证为 0 时才可把“当前无货”当事实；未取到则连“有没有货”都不知道"
+     },
+     {
+      "id": "F4_shipped_history_not_stock",
+      "statement": "历史销量是**需求记录**，不是当前在库；不得用 6 个月销量推断现在有货",
+      "value": {
+       "monthly": [
+        {
+         "month": "2026-04",
+         "qty": 15
+        },
+        {
+         "month": "2026-05",
+         "qty": 31
+        },
+        {
+         "month": "2026-06",
+         "qty": 169
+        },
+        {
+         "month": "2026-07",
+         "qty": 9
+        },
+        {
+         "month": "2026-08",
+         "qty": 159
+        },
+        {
+         "month": "2026-09",
+         "qty": 12
+        }
+       ],
+       "net_6m": 395
+      },
+      "status": "proven",
+      "evidence_pointer": "ranking.json top50[sku='C/Velvet-White-100-664-wow'].net_qty_6m; plan.json demand.training"
+     },
+     {
+      "id": "F5_committed_demand",
+      "statement": "已承诺且等待发货的订单量（可验证需求下界）",
+      "value": 0,
+      "status": "proven",
+      "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow'].waiting_shipment"
+     },
+     {
+      "id": "F6_balance",
+      "statement": "可算结余 = 在手 − 已承诺需求（仅此两项均 proven）",
+      "value": 0,
+      "status": "proven",
+      "evidence_pointer": "由 F3、F5 直接相减，无假设"
+     },
+     {
+      "id": "F7_gap_lower_bound",
+      "statement": "已证缺口下界 = max(0, 已承诺需求 − 在手)",
+      "value": 0.0,
+      "status": "proven",
+      "evidence_pointer": "由 F3、F5 直接计算，无假设",
+      "note": "0 是**已证下界**（没有已承诺订单），不是“未知填 0”，也不代表没有未来需求"
+     },
+     {
+      "id": "F8_defects",
+      "statement": "次品数量（不等于可用，但会影响可售上限）",
+      "value": 3,
+      "status": "proven",
+      "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow'].defects"
+     }
+    ],
+    "scenarios": [
+     {
+      "id": "S_demand_p50",
+      "assumption": "未来 90 天需求等于 P50 点估计（conformal-style），把它当真实需求",
+      "purpose": "给出“若需求取中位”时的缺口情景",
+      "value": {
+       "demand": 176.129,
+       "balance": -176.13,
+       "gap": 176.13
+      },
+      "if_overturned": "P50 低估则缺口更大；高估则更小；该情景不得当结论",
+      "status": "scenario",
+      "evidence_pointer": "plan.json rows[sku='C/Velvet-White-100-664-wow'].demand.p50"
+     },
+     {
+      "id": "S_demand_p90",
+      "assumption": "未来 90 天需求等于 P90 估计（上分位，非已证上界）",
+      "purpose": "压力情景",
+      "value": {
+       "demand": 433.2043,
+       "balance": -433.2,
+       "gap": 433.2
+      },
+      "if_overturned": "P90 不是上界，真实需求可能更高",
+      "status": "scenario",
+      "evidence_pointer": "plan.json rows[sku='C/Velvet-White-100-664-wow'].demand.interval.p90_like"
+     },
+     {
+      "id": "S_zero_not_retrieved",
+      "assumption": "若这个 0 其实是“未取到”（盘点缺该 SKU 或运行不完整）",
+      "purpose": "把零库存的另一种含义显式摆出来，避免把“没取到”当“没货”",
+      "value": {
+       "current_kind": "proven_zero_available"
+      },
+      "if_overturned": "结论会反转：从“当前无货”变成“库存未知”，任何基于 0 的缺口推理都要作废；本行证据显示是 proven_zero_available",
+      "status": "scenario",
+      "evidence_pointer": "stock_publish/stock_run + stock_latest[sku='C/Velvet-White-100-664-wow']"
+     },
+     {
+      "id": "S_defects_sellable",
+      "assumption": "3 件次品经翻新/特批后可计入可售",
+      "purpose": "量化次品对供给上限的潜在影响",
+      "value": {
+       "adds": 3,
+       "supply_if_sellable": 3
+      },
+      "if_overturned": "若次品不可售（通常如此），可用量仍为 0；不改变已证可用",
+      "status": "scenario",
+      "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow'].defects"
+     },
+     {
+      "id": "S_production_present",
+      "assumption": "存在未纳入快照的在产 WO，且能在窗口内完工",
+      "purpose": "提示供给上界可能被低估",
+      "value": {
+       "adds": null
+      },
+      "if_overturned": "无在产或不能按期完工 → 供给上界 = 0（当前无法证实）",
+      "status": "scenario",
+      "evidence_pointer": "order_store.duckdb 无工单/生产表"
+     }
+    ],
+    "blockers": [
+     {
+      "code": "demand_bounds_missing_G8",
+      "statement": "需求上/下界（分位或业务人工界）未提供",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "plan.json rows[].decision.refs.demand_upper.status=unproven"
+     },
+     {
+      "code": "no_order_level_need_date",
+      "statement": "没有订单级需要日；历史销量不等于需要日",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow'].waiting_shipment=0"
+     },
+     {
+      "code": "work_order_not_in_snapshot",
+      "statement": "在产 WO 剩余量与完工日不在本快照（决定供给上界能否为 0）",
+      "owner_role": "生产/PMC",
+      "evidence_pointer": "order_store.duckdb 无工单/生产表"
+     },
+     {
+      "code": "warehouse_level_demand_split_not_attempted",
+      "statement": "需求为 SKU 级；按仓拆分需要未证假设",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "plan.json demand 为 SKU 级"
+     }
+    ]
+   },
+   "computable_now": {
+    "available_proven": 0,
+    "verifiable_demand_committed": 0,
+    "balance_available_minus_committed": 0,
+    "gap_lower_bound": 0.0,
+    "zero_kind": "proven_zero_available",
+    "note": "只用两项 proven 数量（在手=已证 0、已承诺待发=0）计算；0 是已证缺口下界，不是未知填 0，也不代表未来需求为 0"
+   },
+   "controls": {
+    "uom_status": {
+     "value": "proven_piece_unit",
+     "status": "proven",
+     "detail": "bom[item='KS0001-PR-100-WHITE'].uom='个'",
+     "evidence_pointer": "bom[item='KS0001-PR-100-WHITE']"
+    },
+    "dedup_status": {
+     "value": "not_applicable",
+     "status": "proven",
+     "detail": "无在途、无未结 PO → 无可去重对象（已核）",
+     "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow'].intransit=0; tongtool_po 无未结行",
+     "blocker_codes": []
+    },
+    "need_date": {
+     "value": null,
+     "status": "blocker",
+     "detail": "无订单级需要日；历史销量不是需要日",
+     "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow'].waiting_shipment",
+     "blocker_codes": [
+      "no_order_level_need_date"
+     ]
+    },
+    "supply_available_date": {
+     "value": null,
+     "status": "blocker",
+     "detail": "无在手、无在途、无未结 PO；在产不在快照 → 不存在已证可用日",
+     "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow']; tongtool_po[goods_sku='C/Velvet-White-100-664-wow']",
+     "blocker_codes": [
+      "no_supply_record",
+      "work_order_not_in_snapshot"
+     ]
+    }
+   },
+   "cells": {
+    "商品×仓库": {
+     "value": {
+      "sku": "C/Velvet-White-100-664-wow",
+      "item_code": "KS0001-PR-100-WHITE",
+      "item_name": "三角靠枕-平绒-100-白色",
+      "item_group": "三角靠枕",
+      "warehouses": [
+       {
+        "warehouse": "WayfairCG-Cranbury仓",
+        "available": 0,
+        "intransit": 0,
+        "waiting_shipment": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "美东-CENTRADE",
+        "available": 0,
+        "intransit": 0,
+        "waiting_shipment": 0,
+        "defects": 3
+       }
+      ]
+     },
+     "status": "proven",
+     "layer": [
+      "facts(F1,F3)"
+     ],
+     "evidence_pointer": "sku_map[tongtool_sku='C/Velvet-White-100-664-wow']; item_attr[item='KS0001-PR-100-WHITE']; stock_latest[sku='C/Velvet-White-100-664-wow']",
+     "blocker_codes": []
+    },
+    "未来需求": {
+     "value": {
+      "p50": 176.129,
+      "p90_like": 433.2043,
+      "interval_status": "conformal_empirical",
+      "demand_is_sku_level": true,
+      "warehouse_split": null
+     },
+     "status": "unproven",
+     "layer": [
+      "scenarios(S_demand_p50,S_demand_p90)",
+      "blockers(G8)"
+     ],
+     "evidence_pointer": "plan.json rows[sku='C/Velvet-White-100-664-wow'].demand",
+     "blocker_codes": [
+      "demand_bounds_missing_G8",
+      "p50_p90_are_estimates",
+      "warehouse_level_demand_split_not_attempted"
+     ]
+    },
+    "当前库存": {
+     "value": {
+      "available_total": 0,
+      "defects_total": 3,
+      "zero_kind": "proven_zero_available",
+      "by_warehouse": [
+       {
+        "warehouse": "WayfairCG-Cranbury仓",
+        "available": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "美东-CENTRADE",
+        "available": 0,
+        "defects": 3
+       }
+      ]
+     },
+     "status": "proven",
+     "layer": [
+      "facts(F3,F8)"
+     ],
+     "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow']（快照 run 20261022T070625，完整盘点）",
+     "blocker_codes": [],
+     "note": "available=0 为已证为 0；defects 单列，不并入可用"
+    },
+    "分阶段供应": {
+     "value": {
+      "stages": [
+       {
+        "stage": "on_hand",
+        "qty": 0,
+        "status": "proven",
+        "available_date": "2026-10-22",
+        "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow'].available"
+       },
+       {
+        "stage": "intransit",
+        "qty": 0,
+        "status": "proven",
+        "available_date": null,
+        "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow'].intransit",
+        "note": "无在途记录（=0）"
+       },
+       {
+        "stage": "open_po",
+        "qty": 0,
+        "status": "proven",
+        "lines": [],
+        "available_date": null,
+        "evidence_pointer": "tongtool_po[goods_sku='C/Velvet-White-100-664-wow']（无未结行）",
+        "note": "无未结 PO（=0）"
+       },
+       {
+        "stage": "production_wo",
+        "qty": null,
+        "status": "blocker",
+        "available_date": null,
+        "evidence_pointer": "order_store.duckdb 无工单/生产表",
+        "blocker_codes": [
+         "work_order_not_in_snapshot"
+        ]
+       }
+      ]
+     },
+     "status": "unproven",
+     "layer": [
+      "facts(on_hand/intransit/PO)",
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "stock_latest[sku='C/Velvet-White-100-664-wow']; tongtool_po[goods_sku='C/Velvet-White-100-664-wow']",
+     "blocker_codes": [
+      "work_order_not_in_snapshot"
+     ]
+    },
+    "时间情景": {
+     "value": {
+      "buckets": [
+       {
+        "bucket": "A_0_40d",
+        "start": "2026-10-22",
+        "end": "2026-11-30",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "arrivals without ETA are excluded from the lower bound and cannot close a near-term gap; the upper bound counts them as a stress scenario at the earliest bucket"
+       },
+       {
+        "bucket": "B_41_71d",
+        "start": "2026-12-01",
+        "end": "2026-12-31",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "no proven arrival in this bucket"
+       },
+       {
+        "bucket": "C_72_91d",
+        "start": "2027-01-01",
+        "end": "2027-01-20",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "no proven arrival in this bucket"
+       },
+       {
+        "bucket": "D_beyond_91d",
+        "start": "2027-01-21",
+        "end": null,
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "ok",
+        "note": "no proven arrival in this bucket"
+       }
+      ],
+      "rule": "late/no-ETA supply never closes a near-term gap"
+     },
+     "status": "unproven",
+     "layer": [
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "plan.json rows[sku='C/Velvet-White-100-664-wow'].supply.buckets",
+     "blocker_codes": [
+      "arrival_dates_missing",
+      "supply_upper_not_a_proof"
+     ]
+    },
+    "缺口": {
+     "value": {
+      "proven_gap_lower_bound": 0.0,
+      "proven_balance": 0,
+      "scenario_gap_p50": 176.13,
+      "scenario_gap_p90": 433.2,
+      "unresolved_gap": null
+     },
+     "status": "unproven",
+     "layer": [
+      "facts(F6,F7)",
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "F6/F7 为已证；scenario_gap_* 为情景；unresolved_gap 需 G8+生产上界",
+     "blocker_codes": [
+      "demand_bounds_missing_G8",
+      "work_order_not_in_snapshot"
+     ],
+     "note": "proven_gap_lower_bound=0 是**已证下界**（当前无已承诺订单），不是“未知填 0”，也不代表未来不缺；未决缺口 unresolved_gap=null"
+    },
+    "建议/成立条件": {
+     "value": "待核实",
+     "status": "unproven",
+     "layer": [
+      "conclusion-blocked"
+     ],
+     "evidence_pointer": "依据 facts/scenarios/blockers 三层；不含任何补货数量",
+     "blocker_codes": [],
+     "conditions": [
+      "零库存已证为 0，但“是否需要补”取决于未来需求，而不是历史销量",
+      "业务给出需求下界（如人工下限或订单级需要日）——当前 demand_lower 只有已承诺订单=0",
+      "确认在产 WO 是否存在（决定供给上界能否为 0）；当前上界 unproven",
+      "满足后可判：供给上界(0 或已证值) < 需求下界 → 补；已证供给下界 ≥ 需求上界 → 不补；否则继续待核实"
+     ]
+    }
+   }
+  },
+  {
+   "sku": "TT0031010K0062880",
+   "slot": "S6_zero_stock_2",
+   "top50_rank": 47,
+   "mapped_item_code": "KS0121-KQC-194-WHITE",
+   "item_name": "床楔形枕头-空气层-194*25*15cm-白色",
+   "item_group": "床楔形枕头",
+   "destination": "mapped_eligible",
+   "layers": {
+    "facts": [
+     {
+      "id": "F1_mapping",
+      "statement": "SKU 唯一映射到 KS0121-KQC-194-WHITE（床楔形枕头-空气层-194*25*15cm-白色，床楔形枕头）",
+      "value": "KS0121-KQC-194-WHITE",
+      "status": "proven",
+      "evidence_pointer": "sku_map[tongtool_sku='TT0031010K0062880'].item_code='KS0121-KQC-194-WHITE'; item_attr[item='KS0121-KQC-194-WHITE']"
+     },
+     {
+      "id": "F2_uom",
+      "statement": "物料 BOM 单位为 个",
+      "value": "个",
+      "status": "proven",
+      "evidence_pointer": "bom[item='KS0121-KQC-194-WHITE'].uom"
+     },
+     {
+      "id": "F3_zero_kind",
+      "statement": "在库可用量 = 0 且这是**已证为 0**（不是未取到）：SKU 出现在已发布的完整盘点快照里，每一行 available 都是 0",
+      "value": {
+       "kind": "proven_zero_available",
+       "rows": 3,
+       "all_zero": true,
+       "run_id": "20261022T070625",
+       "snapshot_date": "2026-10-22",
+       "run_complete": true,
+       "scope_complete": true,
+       "integrity_ok": true,
+       "warehouses_complete": "14/14"
+      },
+      "status": "proven",
+      "evidence_pointer": "stock_publish[snapshot=2026-10-22] → stock_run → stock_latest[sku='TT0031010K0062880'] rows=3",
+      "note": "零库存的两种含义结论不同：已证为 0 时才可把“当前无货”当事实；未取到则连“有没有货”都不知道"
+     },
+     {
+      "id": "F4_shipped_history_not_stock",
+      "statement": "历史销量是**需求记录**，不是当前在库；不得用 6 个月销量推断现在有货",
+      "value": {
+       "monthly": [
+        {
+         "month": "2026-04",
+         "qty": 0
+        },
+        {
+         "month": "2026-05",
+         "qty": 31
+        },
+        {
+         "month": "2026-06",
+         "qty": 12
+        },
+        {
+         "month": "2026-07",
+         "qty": 25
+        },
+        {
+         "month": "2026-08",
+         "qty": 20
+        },
+        {
+         "month": "2026-09",
+         "qty": 16
+        }
+       ],
+       "net_6m": 104
+      },
+      "status": "proven",
+      "evidence_pointer": "ranking.json top50[sku='TT0031010K0062880'].net_qty_6m; plan.json demand.training"
+     },
+     {
+      "id": "F5_committed_demand",
+      "statement": "已承诺且等待发货的订单量（可验证需求下界）",
+      "value": 0,
+      "status": "proven",
+      "evidence_pointer": "stock_latest[sku='TT0031010K0062880'].waiting_shipment"
+     },
+     {
+      "id": "F6_balance",
+      "statement": "可算结余 = 在手 − 已承诺需求（仅此两项均 proven）",
+      "value": 0,
+      "status": "proven",
+      "evidence_pointer": "由 F3、F5 直接相减，无假设"
+     },
+     {
+      "id": "F7_gap_lower_bound",
+      "statement": "已证缺口下界 = max(0, 已承诺需求 − 在手)",
+      "value": 0.0,
+      "status": "proven",
+      "evidence_pointer": "由 F3、F5 直接计算，无假设",
+      "note": "0 是**已证下界**（没有已承诺订单），不是“未知填 0”，也不代表没有未来需求"
+     },
+     {
+      "id": "F8_defects",
+      "statement": "次品数量（不等于可用，但会影响可售上限）",
+      "value": 0,
+      "status": "proven",
+      "evidence_pointer": "stock_latest[sku='TT0031010K0062880'].defects"
+     }
+    ],
+    "scenarios": [
+     {
+      "id": "S_demand_p50",
+      "assumption": "未来 90 天需求等于 P50 点估计（conformal-style），把它当真实需求",
+      "purpose": "给出“若需求取中位”时的缺口情景",
+      "value": {
+       "demand": 59.6882,
+       "balance": -59.69,
+       "gap": 59.69
+      },
+      "if_overturned": "P50 低估则缺口更大；高估则更小；该情景不得当结论",
+      "status": "scenario",
+      "evidence_pointer": "plan.json rows[sku='TT0031010K0062880'].demand.p50"
+     },
+     {
+      "id": "S_demand_p90",
+      "assumption": "未来 90 天需求等于 P90 估计（上分位，非已证上界）",
+      "purpose": "压力情景",
+      "value": {
+       "demand": 89.3656,
+       "balance": -89.37,
+       "gap": 89.37
+      },
+      "if_overturned": "P90 不是上界，真实需求可能更高",
+      "status": "scenario",
+      "evidence_pointer": "plan.json rows[sku='TT0031010K0062880'].demand.interval.p90_like"
+     },
+     {
+      "id": "S_zero_not_retrieved",
+      "assumption": "若这个 0 其实是“未取到”（盘点缺该 SKU 或运行不完整）",
+      "purpose": "把零库存的另一种含义显式摆出来，避免把“没取到”当“没货”",
+      "value": {
+       "current_kind": "proven_zero_available"
+      },
+      "if_overturned": "结论会反转：从“当前无货”变成“库存未知”，任何基于 0 的缺口推理都要作废；本行证据显示是 proven_zero_available",
+      "status": "scenario",
+      "evidence_pointer": "stock_publish/stock_run + stock_latest[sku='TT0031010K0062880']"
+     },
+     {
+      "id": "S_defects_sellable",
+      "assumption": "0 件次品经翻新/特批后可计入可售",
+      "purpose": "量化次品对供给上限的潜在影响",
+      "value": {
+       "adds": 0,
+       "supply_if_sellable": 0
+      },
+      "if_overturned": "若次品不可售（通常如此），可用量仍为 0；不改变已证可用",
+      "status": "scenario",
+      "evidence_pointer": "stock_latest[sku='TT0031010K0062880'].defects"
+     },
+     {
+      "id": "S_production_present",
+      "assumption": "存在未纳入快照的在产 WO，且能在窗口内完工",
+      "purpose": "提示供给上界可能被低估",
+      "value": {
+       "adds": null
+      },
+      "if_overturned": "无在产或不能按期完工 → 供给上界 = 0（当前无法证实）",
+      "status": "scenario",
+      "evidence_pointer": "order_store.duckdb 无工单/生产表"
+     }
+    ],
+    "blockers": [
+     {
+      "code": "demand_bounds_missing_G8",
+      "statement": "需求上/下界（分位或业务人工界）未提供",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "plan.json rows[].decision.refs.demand_upper.status=unproven"
+     },
+     {
+      "code": "no_order_level_need_date",
+      "statement": "没有订单级需要日；历史销量不等于需要日",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "stock_latest[sku='TT0031010K0062880'].waiting_shipment=0"
+     },
+     {
+      "code": "work_order_not_in_snapshot",
+      "statement": "在产 WO 剩余量与完工日不在本快照（决定供给上界能否为 0）",
+      "owner_role": "生产/PMC",
+      "evidence_pointer": "order_store.duckdb 无工单/生产表"
+     },
+     {
+      "code": "warehouse_level_demand_split_not_attempted",
+      "statement": "需求为 SKU 级；按仓拆分需要未证假设",
+      "owner_role": "业务/运营",
+      "evidence_pointer": "plan.json demand 为 SKU 级"
+     }
+    ]
+   },
+   "computable_now": {
+    "available_proven": 0,
+    "verifiable_demand_committed": 0,
+    "balance_available_minus_committed": 0,
+    "gap_lower_bound": 0.0,
+    "zero_kind": "proven_zero_available",
+    "note": "只用两项 proven 数量（在手=已证 0、已承诺待发=0）计算；0 是已证缺口下界，不是未知填 0，也不代表未来需求为 0"
+   },
+   "controls": {
+    "uom_status": {
+     "value": "proven_piece_unit",
+     "status": "proven",
+     "detail": "bom[item='KS0121-KQC-194-WHITE'].uom='个'",
+     "evidence_pointer": "bom[item='KS0121-KQC-194-WHITE']"
+    },
+    "dedup_status": {
+     "value": "not_applicable",
+     "status": "proven",
+     "detail": "无在途、无未结 PO → 无可去重对象（已核）",
+     "evidence_pointer": "stock_latest[sku='TT0031010K0062880'].intransit=0; tongtool_po 无未结行",
+     "blocker_codes": []
+    },
+    "need_date": {
+     "value": null,
+     "status": "blocker",
+     "detail": "无订单级需要日；历史销量不是需要日",
+     "evidence_pointer": "stock_latest[sku='TT0031010K0062880'].waiting_shipment",
+     "blocker_codes": [
+      "no_order_level_need_date"
+     ]
+    },
+    "supply_available_date": {
+     "value": null,
+     "status": "blocker",
+     "detail": "无在手、无在途、无未结 PO；在产不在快照 → 不存在已证可用日",
+     "evidence_pointer": "stock_latest[sku='TT0031010K0062880']; tongtool_po[goods_sku='TT0031010K0062880']",
+     "blocker_codes": [
+      "no_supply_record",
+      "work_order_not_in_snapshot"
+     ]
+    }
+   },
+   "cells": {
+    "商品×仓库": {
+     "value": {
+      "sku": "TT0031010K0062880",
+      "item_code": "KS0121-KQC-194-WHITE",
+      "item_name": "床楔形枕头-空气层-194*25*15cm-白色",
+      "item_group": "床楔形枕头",
+      "warehouses": [
+       {
+        "warehouse": "FZH-DANEEY-半成品仓",
+        "available": 0,
+        "intransit": 0,
+        "waiting_shipment": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "FZH-DANEEY-成品仓",
+        "available": 0,
+        "intransit": 0,
+        "waiting_shipment": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "美中-FZH-DANEEY",
+        "available": 0,
+        "intransit": 0,
+        "waiting_shipment": 0,
+        "defects": 0
+       }
+      ]
+     },
+     "status": "proven",
+     "layer": [
+      "facts(F1,F3)"
+     ],
+     "evidence_pointer": "sku_map[tongtool_sku='TT0031010K0062880']; item_attr[item='KS0121-KQC-194-WHITE']; stock_latest[sku='TT0031010K0062880']",
+     "blocker_codes": []
+    },
+    "未来需求": {
+     "value": {
+      "p50": 59.6882,
+      "p90_like": 89.3656,
+      "interval_status": "conformal_empirical",
+      "demand_is_sku_level": true,
+      "warehouse_split": null
+     },
+     "status": "unproven",
+     "layer": [
+      "scenarios(S_demand_p50,S_demand_p90)",
+      "blockers(G8)"
+     ],
+     "evidence_pointer": "plan.json rows[sku='TT0031010K0062880'].demand",
+     "blocker_codes": [
+      "demand_bounds_missing_G8",
+      "p50_p90_are_estimates",
+      "warehouse_level_demand_split_not_attempted"
+     ]
+    },
+    "当前库存": {
+     "value": {
+      "available_total": 0,
+      "defects_total": 0,
+      "zero_kind": "proven_zero_available",
+      "by_warehouse": [
+       {
+        "warehouse": "FZH-DANEEY-半成品仓",
+        "available": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "FZH-DANEEY-成品仓",
+        "available": 0,
+        "defects": 0
+       },
+       {
+        "warehouse": "美中-FZH-DANEEY",
+        "available": 0,
+        "defects": 0
+       }
+      ]
+     },
+     "status": "proven",
+     "layer": [
+      "facts(F3,F8)"
+     ],
+     "evidence_pointer": "stock_latest[sku='TT0031010K0062880']（快照 run 20261022T070625，完整盘点）",
+     "blocker_codes": [],
+     "note": "available=0 为已证为 0；defects 单列，不并入可用"
+    },
+    "分阶段供应": {
+     "value": {
+      "stages": [
+       {
+        "stage": "on_hand",
+        "qty": 0,
+        "status": "proven",
+        "available_date": "2026-10-22",
+        "evidence_pointer": "stock_latest[sku='TT0031010K0062880'].available"
+       },
+       {
+        "stage": "intransit",
+        "qty": 0,
+        "status": "proven",
+        "available_date": null,
+        "evidence_pointer": "stock_latest[sku='TT0031010K0062880'].intransit",
+        "note": "无在途记录（=0）"
+       },
+       {
+        "stage": "open_po",
+        "qty": 0,
+        "status": "proven",
+        "lines": [],
+        "available_date": null,
+        "evidence_pointer": "tongtool_po[goods_sku='TT0031010K0062880']（无未结行）",
+        "note": "无未结 PO（=0）"
+       },
+       {
+        "stage": "production_wo",
+        "qty": null,
+        "status": "blocker",
+        "available_date": null,
+        "evidence_pointer": "order_store.duckdb 无工单/生产表",
+        "blocker_codes": [
+         "work_order_not_in_snapshot"
+        ]
+       }
+      ]
+     },
+     "status": "unproven",
+     "layer": [
+      "facts(on_hand/intransit/PO)",
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "stock_latest[sku='TT0031010K0062880']; tongtool_po[goods_sku='TT0031010K0062880']",
+     "blocker_codes": [
+      "work_order_not_in_snapshot"
+     ]
+    },
+    "时间情景": {
+     "value": {
+      "buckets": [
+       {
+        "bucket": "A_0_40d",
+        "start": "2026-10-22",
+        "end": "2026-11-30",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "arrivals without ETA are excluded from the lower bound and cannot close a near-term gap; the upper bound counts them as a stress scenario at the earliest bucket"
+       },
+       {
+        "bucket": "B_41_71d",
+        "start": "2026-12-01",
+        "end": "2026-12-31",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "no proven arrival in this bucket"
+       },
+       {
+        "bucket": "C_72_91d",
+        "start": "2027-01-01",
+        "end": "2027-01-20",
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "unproven",
+        "note": "no proven arrival in this bucket"
+       },
+       {
+        "bucket": "D_beyond_91d",
+        "start": "2027-01-21",
+        "end": null,
+        "supply_lower": 0,
+        "supply_lower_status": "ok",
+        "supply_upper": 0,
+        "supply_upper_status": "ok",
+        "note": "no proven arrival in this bucket"
+       }
+      ],
+      "rule": "late/no-ETA supply never closes a near-term gap"
+     },
+     "status": "unproven",
+     "layer": [
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "plan.json rows[sku='TT0031010K0062880'].supply.buckets",
+     "blocker_codes": [
+      "arrival_dates_missing",
+      "supply_upper_not_a_proof"
+     ]
+    },
+    "缺口": {
+     "value": {
+      "proven_gap_lower_bound": 0.0,
+      "proven_balance": 0,
+      "scenario_gap_p50": 59.69,
+      "scenario_gap_p90": 89.37,
+      "unresolved_gap": null
+     },
+     "status": "unproven",
+     "layer": [
+      "facts(F6,F7)",
+      "scenarios",
+      "blockers"
+     ],
+     "evidence_pointer": "F6/F7 为已证；scenario_gap_* 为情景；unresolved_gap 需 G8+生产上界",
+     "blocker_codes": [
+      "demand_bounds_missing_G8",
+      "work_order_not_in_snapshot"
+     ],
+     "note": "proven_gap_lower_bound=0 是**已证下界**（当前无已承诺订单），不是“未知填 0”，也不代表未来不缺；未决缺口 unresolved_gap=null"
+    },
+    "建议/成立条件": {
+     "value": "待核实",
+     "status": "unproven",
+     "layer": [
+      "conclusion-blocked"
+     ],
+     "evidence_pointer": "依据 facts/scenarios/blockers 三层；不含任何补货数量",
+     "blocker_codes": [],
+     "conditions": [
+      "零库存已证为 0，但“是否需要补”取决于未来需求，而不是历史销量",
+      "业务给出需求下界（如人工下限或订单级需要日）——当前 demand_lower 只有已承诺订单=0",
+      "确认在产 WO 是否存在（决定供给上界能否为 0）；当前上界 unproven",
+      "满足后可判：供给上界(0 或已证值) < 需求下界 → 补；已证供给下界 ≥ 需求上界 → 不补；否则继续待核实"
+     ]
+    }
+   }
+  }
+ ],
+ "note": "只做链条表；不含任何补货数量或补/不补结论（当前全部待核实）"
+}

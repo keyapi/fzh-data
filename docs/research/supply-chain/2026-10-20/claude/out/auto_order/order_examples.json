@@ -1,0 +1,178 @@
+{
+ "schema_version": "en_order_examples/1",
+ "generated_at": "2026-10-22T22:52:53+08:00",
+ "budget": {
+  "requests": 103,
+  "cap": 120,
+  "interval_s": 0.2,
+  "page_length_max": 100,
+  "elapsed_s": 20.6,
+  "by_path": {
+   "/api/resource/Sales Order": 2,
+   "/api/resource/Delivery Plan": 2,
+   "/api/resource/Sales Order/<doc>": 60,
+   "/api/resource/Purchase Order": 13,
+   "/api/resource/Work Order": 13,
+   "/api/resource/Bin": 13
+  },
+  "stop_reason": null,
+  "errors": []
+ },
+ "selected": [
+  {
+   "example_id": "E01",
+   "segment": "C",
+   "so_hash": "a6e449757d72",
+   "so_status": "Closed",
+   "docstatus": 1,
+   "transaction_date": "2026-01-09",
+   "lines": 38,
+   "coverage": [
+    "both",
+    "dp"
+   ]
+  },
+  {
+   "example_id": "E02",
+   "segment": "C",
+   "so_hash": "ac9e69927885",
+   "so_status": "Cancelled",
+   "docstatus": 2,
+   "transaction_date": "2026-01-09",
+   "lines": 63,
+   "coverage": [
+    "both",
+    "cancelled",
+    "lines50",
+    "no_dp"
+   ]
+  },
+  {
+   "example_id": "E03",
+   "segment": "C",
+   "so_hash": "d182cee2c35c",
+   "so_status": "Cancelled",
+   "docstatus": 2,
+   "transaction_date": "2026-01-09",
+   "lines": 63,
+   "coverage": [
+    "both",
+    "cancelled",
+    "lines50",
+    "no_dp"
+   ]
+  },
+  {
+   "example_id": "E04",
+   "segment": "C",
+   "so_hash": "e13d0511c978",
+   "so_status": "Closed",
+   "docstatus": 1,
+   "transaction_date": "2026-01-09",
+   "lines": 103,
+   "coverage": [
+    "both",
+    "lines50",
+    "dp"
+   ]
+  },
+  {
+   "example_id": "E05",
+   "segment": "C",
+   "so_hash": "1ebdba331439",
+   "so_status": "Cancelled",
+   "docstatus": 2,
+   "transaction_date": "2026-01-09",
+   "lines": 8,
+   "coverage": [
+    "neither",
+    "cancelled",
+    "no_dp"
+   ]
+  },
+  {
+   "example_id": "E06",
+   "segment": "D",
+   "so_hash": "3becec95ca76",
+   "so_status": "To Deliver and Bill",
+   "docstatus": 1,
+   "transaction_date": "2026-07-01",
+   "lines": 1,
+   "coverage": [
+    "cover_only",
+    "no_dp"
+   ]
+  },
+  {
+   "example_id": "E07",
+   "segment": "D",
+   "so_hash": "b3d4b7c94d52",
+   "so_status": "Closed",
+   "docstatus": 1,
+   "transaction_date": "2026-08-13",
+   "lines": 77,
+   "coverage": [
+    "cover_only",
+    "lines50",
+    "no_dp"
+   ]
+  },
+  {
+   "example_id": "E08",
+   "segment": "D",
+   "so_hash": "1e7e40e6c28e",
+   "so_status": "To Deliver and Bill",
+   "docstatus": 1,
+   "transaction_date": "2026-07-13",
+   "lines": 24,
+   "coverage": [
+    "cover_only",
+    "dp"
+   ]
+  },
+  {
+   "example_id": "E09",
+   "segment": "D",
+   "so_hash": "0007e8b40a1b",
+   "so_status": "To Deliver and Bill",
+   "docstatus": 1,
+   "transaction_date": "2026-07-03",
+   "lines": 1,
+   "coverage": [
+    "neither",
+    "no_dp"
+   ]
+  },
+  {
+   "example_id": "E10",
+   "segment": "D",
+   "so_hash": "eb92b6e44ddb",
+   "so_status": "To Bill",
+   "docstatus": 1,
+   "transaction_date": "2026-07-13",
+   "lines": 19,
+   "coverage": [
+    "neither",
+    "no_dp"
+   ]
+  }
+ ],
+ "notes": [
+  "D: 未找到覆盖 cancelled 的候选"
+ ],
+ "horizon_today": "2026-10-22",
+ "queries": {
+  "po_ok": true,
+  "wo_ok": true,
+  "stock_source": "EN Bin actual_qty",
+  "po_note": "有记录",
+  "wo_note": "有记录"
+ },
+ "assumptions": [
+  "库存=EN Bin actual_qty（只读）；无记录=未取得、不按 0；fallback 本地 stock_latest",
+  "净需求 = 未履约且交期≤horizon − 同仓库存 − 同仓/同物料的已知未结 PO/在产（按日期可得者）",
+  "PO/WO 日期缺失时计入所有 horizon 并标注；查询失败记“未取得”",
+  "配套规则仅当本地 BOM 唯一且含 PK#+ND# 时成立，否则记“规则未证”；直接物料不拆",
+  "样本算例之间不共享库存预留；不是下单指令"
+ ]
+}

@@ -1,0 +1,20 @@
+# G1b row-level / raw outputs: keep local, do not commit to the repo.
+stock_snapshot_*.json
+g1b_en_*.json
+g1b_en_extract.log
+en_*.txt
+g1b_coverage_*.json
+
+rr*_test.json
+t0*_*.json
+family_poc/
+family_poc_manifest.json
+family_poc*.log
+dn_wo_jc_se/
+dn_wo_jc_se_r2/
+dn_wo_jc_se_evidence_*.zip
+dn_wo_jc_se_dry/
+dn_wo_jc_se_expand10/
+dn_wo_jc_se_expand10_r2/
+dn_wo_jc_se_expand10_phase1/
+dn_wo_jc_se_expand10_phase1_r2/

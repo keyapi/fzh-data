@@ -1,0 +1,217 @@
+{
+  "updated": "2026-10-22T14:41:00+08:00",
+  "accepted": [
+    "G1 SO evidence gate v5: 9a04741e / d027f981; 66 tests; current_structure_only boundary; historical pending",
+    "R1/R2 no-evidence audit gate: d8c473fe",
+    "BOM historical boundary report: d3fc4c8d",
+    "G1B DN/WO/JC/SE narrow sample: 4b7ec55f PASS cross-review (84 tests; v4 evidence 6cec02bd; scope narrow sample only; P3 doc count corrected post-acceptance)",
+    "Stock history local ingest: 3 days, 15,820 rows, code 53291689 PASS; 10-20 incomplete batch preserved, 10-21/22 complete; tongtool_stock untouched",
+    "Stock daily archiver 1.3 PASS; 3 days sealed under D:/Work/库存备份/runs; new cmd uses run_id dirs from 2026-10-23 05:17",
+    "Production gate PASS ca27163c (redirect pre-read, absolute deadline, partial-read accounting, atomic stop)",
+    "Phase 1 SE enrichment: 10 SKUs, 3,416 rows, 663/663 SE resolved; budget 239/300 req, 0.24/32 MiB, 241/900s; two-round stable 1732d590",
+    "true_missing Top10 v2 93229954 dual-review PASS: 12 SKU/2,109 rows/2,025 qty; 7 conflicting/2 pending insufficient/3 pending business; 28 decision items",
+    "B ETA/Cover/UOM v2.1 3741882c dual-review PASS; ETA remains blocked (will_arrive_date 0/524 non-null)"
+  ],
+  "tasks": [
+    {
+      "id": "G1B-DN-WO-JC-SE",
+      "owner": "claude",
+      "status": "completed",
+      "scope": "Narrow DN/WO/JC/SE association and quantity conservation; reuse existing snapshots; bounded EN read-only; no full family; commit + evidence pack + row dispositions",
+      "artifacts": [
+        "commit 22ae9a1e (branch docs/supply-chain-integration-handoff, PR #300)",
+        "docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/g1b_dn_wo_jc_se.md",
+        "evidence: docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/out/dn_wo_jc_se/",
+        "evidence zip: out/dn_wo_jc_se_evidence_v1.zip sha256 e557e0ae8f3b88d45634ec0dee0f4ad914c8b65546cb2165b94fb5d77a9d1ef5",
+        "manifest payload_sha256 cca9dc857ec3101bccbe66394e623147fe634f19f76ad3c5e8dee0a9b026a51a; stable_sha256 680c0c54d6cd4011533c861e3544296d2494540d4f85cb68c1f7e6bd58506c5c",
+        "row dispositions: out/dn_wo_jc_se/line_dispositions.jsonl sha256 436bfa9774e2598e95cc3cc9f8c3687da3c41bd498daf34114fc6ccee80e0f24 (2,040 rows)",
+        "35 offline tests: test_g1b_dn_wo_jc_se.py"
+      ],
+      "timeout_minutes": 180,
+      "priority": 1,
+      "completed_at": "2026-10-21T18:12:20+08:00",
+      "summary": "5 top-SKU snapshots (120 SO / 293 DN / 128 WO / 425 SE); C1 SO<->DN 8,467=8,467 all pass; C2 115 pass + 2 produced_qty anomalies + 11 open; C3 425/425 pass; WO.produced_qty found unreliable; JC progress-only; bounded EN read-only 362 SE detail GETs + 4 probe requests, 0 failures; audit_ok=true evidence_complete=true; <=0.0 tests 35/35",
+      "updated_at": "2026-10-21T19:26:28+0800",
+      "note": "v4 rework delivered: commit 4b7ec55f (branch docs/supply-chain-integration-handoff, PR #300); 84/84 module offline tests (test_g1b_dn_wo_jc_se.py; 2 new methods/4 sub-cases in CrossReviewV4Tests covering null, string, empty object and invalid sum_qty nested operation payloads, plus partially-valid group sealing); full g1_contract offline suite 150/150; evidence v4 out/dn_wo_jc_se_evidence_v4.zip sha256 6cec02bd1623253da20a3d4244171cb4e1af8d8c1c44d6df3ec48e9d89db7e35; manifest 3b381d4d2c84300b5e1e5e29a33c3059643344c6b76d3d25a0b8f9322333fa63, payload_sha256 8a3765575b32a82b4fc3869c37258ae940dd97f256e06118188fa8cea9f5b6d2, stable_sha256 6f12333c688d736e861278a4e2c31ee3191aa945750712753a5548b5cb878636; line_dispositions 95197f0665ffd2046d51ea12f41c6029e30b1f141ab803ce761397468513c39c (2040 rows, byte-identical to v3); replay R1/R2 stable+dispositions identical; audit_ok=true evidence_complete=true; 0 HTTP; JC groups 105 matched / 0 invalid / 0 orphan; no family expansion, no production writes, no merge."
+    },
+    {
+      "id": "R290-RECON",
+      "owner": "codex",
+      "status": "completed",
+      "scope": "Reconcile #290 frozen package 5 examples: supply overlap, arrival timing, Cover pool, demand units; output accept/scenario/blocker + evidence; no reimplementation; read-only",
+      "artifacts": [],
+      "timeout_minutes": 90,
+      "priority": 2,
+      "updated_at": "2026-10-21T21:53:13+0800",
+      "note": "Package located at D:/Work/fzh-order-store; 5/5 received. accept=3 (KS0001, KS0230, KS0153 frozen numbers match), scenario=1 (KS0316 cover-only pool), blocker=1 (KS0249 export warehouse name mismatch; correct 美东-CENTRADE matches). Valid freeze 67f73c5 (ae6a6793 old). Remaining blockers: global MAX(intransit,PO) unproven, all PO ETA null/no field, cover co-pool unproven, demand/inventory UOM absent. Report: control/reviews/2026-10-21-r290-reconciliation.md"
+    },
+    {
+      "id": "G1B-CROSS-REVIEW",
+      "owner": "codex",
+      "status": "completed",
+      "depends_on": "G1B-DN-WO-JC-SE",
+      "scope": "Review Claude's fixed commit + evidence pack; key review on gpt-6.1-sol; no re-review of accepted SO evidence gate",
+      "artifacts": [],
+      "timeout_minutes": 90,
+      "priority": 3,
+      "on_failure": "set G1B-DN-WO-JC-SE.status=ready and G1B-CROSS-REVIEW.status=waiting with review notes",
+      "unblocked_at": "2026-10-21T18:12:20+08:00",
+      "note": "PASS with nonblocking P3 documentation count correction: reviewed fixed 4b7ec55f code/tests/report against actual files; v4 zip 6cec02bd1623253da20a3d4244171cb4e1af8d8c1c44d6df3ec48e9d89db7e35 and all 6 members plus 5 snapshot hashes verified; payload/stable hashes valid; two memory-only replays reproduce stable 6f12333c688d736e861278a4e2c31ee3191aa945750712753a5548b5cb878636 and all 2040 disposition bytes; 79 read-only module tests and 8 independent malformed/mixed JC probes passed, 5 disk-writing tests excluded; report g1b_dn_wo_jc_se.md:153,172 confuses 516 operations with 105 matched JC groups (manifest scope matched 19+18+16+32+20). No blocking code/evidence findings. Narrow sample contract only, not G1/business acceptance; accepted SO gate untouched; no production queries or source/evidence edits.",
+      "updated_at": "2026-10-21T19:29:59+0800"
+    },
+    {
+      "id": "G1B-ADAPTER-REVIEW",
+      "owner": "codex",
+      "status": "completed",
+      "scope": "Read-only review of current DN/WO/JC/SE extractor/spec at fixed commit; identify gaps, conservation, query/coverage risks; no production; output file:line findings",
+      "artifacts": [],
+      "timeout_minutes": 60,
+      "priority": 2.5,
+      "updated_at": "2026-10-21T18:13:05+0800",
+      "note": "Read-only review of fixed commit 22ae9a1e completed: 6 P1 and 3 P2 findings covering C1 false greens, joins/UOM, SE provenance/coverage, row accounting, signed returns, HTTP budget and payload hash; no production queries or source edits; adapter requires fixes before acceptance."
+    }
+  ],
+  "blocked": [
+    "historical_verified anchors/effective dates missing; historical relations remain pending",
+    "full family / 100-SKU expansion not authorized",
+    "business decisions: service level/budget, 3PL supply ownership, return restock share (do not block the narrow pilot; use explicit assumptions)"
+  ],
+  "quota": {
+    "codex_5h_remaining_pct": null,
+    "reset": "18:51:55",
+    "reserve_pct": 10,
+    "codex_pause": false,
+    "updated": "2026-10-21T19:32:18+0800",
+    "fresh": true,
+    "source": "probe:codex-exec",
+    "last_read_at": "2026-10-21T19:28:46.906779+08:00",
+    "raw_line": "no quota footer marker; tiny codex exec probe completed",
+    "resets_at": "18:51"
+  },
+  "control_page": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\control\\CONTROL.md",
+  "automations": {
+    "G1b-Claude-DN-WO-JC-SE": {
+      "id": "dea2b7b3-c021-458d-88c9-181e4713f003",
+      "trigger": "17,47 * * * *",
+      "provider": "claude",
+      "enabled": true
+    },
+    "G1b-Codex-R290-Recon": {
+      "id": "e6c658fd-d01a-4237-b781-c6d9224d34b9",
+      "trigger": "52 17 * * *",
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "enabled": true
+    },
+    "G1b-Codex-Cross-Review": {
+      "id": "6bb57b9a-c924-4eaa-9c22-601cc9ab55fe",
+      "trigger": "27 19-23 * * *",
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "enabled": true
+    },
+    "G1b-Automation-Heartbeat": {
+      "id": "6d8c54f6-e27b-4673-9c88-c38212c33354",
+      "trigger": "32 17 * * *",
+      "provider": "claude",
+      "enabled": false,
+      "temporary": true,
+      "last_status": "completed"
+    },
+    "G1b-Handoff-Check": {
+      "id": "f604eb6a-f416-4409-a363-0887c467e455",
+      "trigger": "41 17 * * *",
+      "provider": "claude",
+      "enabled": true,
+      "temporary": true
+    },
+    "G1b-Codex-Adapter-Review": {
+      "id": "fec0fb9a-f026-4027-97f7-3788f4af5874",
+      "trigger": "10 18 * * *",
+      "provider": "codex",
+      "model": "gpt-6.1-sol",
+      "enabled": true
+    }
+  },
+  "schedule_end": "2026-10-22T02:00:00+08:00",
+  "scheduler": {
+    "claim_lock": "locks/<task>.lock",
+    "stale_after_minutes": "task.timeout_minutes",
+    "end": "2026-10-22T02:00:00+08:00",
+    "new_session_handoff": [
+      "CONTROL.md",
+      "state.json"
+    ],
+    "verified": true,
+    "verified_run": "2eab6670-729e-4646-b216-0852b0470693",
+    "verified_at": "2026-10-21T17:37:45+08:00"
+  },
+  "state_file": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\control\\state.json",
+  "waiting_on": {
+    "note": "Jack in-transit, long daily stock history, and 28 SKU identity decisions are isolated as unknown/scenario; they do NOT block the narrow G2+G3 pilot",
+    "external_optional": [
+      "Jack tracking data for better ETA/in-transit later",
+      "business answers for unresolved SKU identity later",
+      "2026-10-23 05:17 stock run validation later"
+    ],
+    "next_phase_trigger": "narrow V0 report + codex1 review; expansion/G2-G3 scale-up needs explicit user decision"
+  },
+  "heartbeat": {
+    "id": "f2b0d212",
+    "cron": "*/20",
+    "durable": false,
+    "verified": false,
+    "note": "unverified session backstop; background task completion notifications are the verified mechanism"
+  },
+  "active": [
+    {
+      "task": "V1 model race",
+      "owner": "claude",
+      "status": "running",
+      "pid": 46980,
+      "started_at": "2026-10-22T14:32:25+08:00",
+      "outputs_pending": true
+    },
+    {
+      "task": "P90-free action list",
+      "owner": "claude",
+      "status": "running",
+      "background_id": "b9mn39b2c",
+      "scope": "10 SKU layered actions",
+      "outputs_pending": true
+    },
+    {
+      "task": "V0.1 review",
+      "owner": "codex301",
+      "status": "completed",
+      "verdict": "FAIL 2 major + 1 minor, no blocking",
+      "completed_at": "2026-10-22T14:34:00+08:00"
+    }
+  ],
+  "supervisor": {
+    "role": "codex2",
+    "protocol": "control/SUPERVISOR.md",
+    "triggers": [
+      "stage_complete",
+      "declared_blocker",
+      "overdue",
+      "ready_idle_10m",
+      "scope_change"
+    ],
+    "patrol": "coordinator every 15 min",
+    "today": [
+      "completion-driven: worker done -> commit -> codex1 review -> codex2 acceptance -> next task; time is only an escalation cap, not a gate"
+    ],
+    "latest_decision": {
+      "id": "D10",
+      "verdict": "freeze V0.1; P90 to V1; P90-free action list allowed",
+      "deadlines": "16:00 action list; 18:00 V1 evidence"
+    }
+  },
+  "control_rules": {
+    "fixed_responsibility": "Claude coordinator; Claude worker; Codex1/#301 main reviewer; Codex2 supervisor",
+    "status_requires_evidence": true,
+    "completion_triggers_next": true,
+    "no_silent_restart_or_global_pause": true
+  }
+}

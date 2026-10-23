@@ -38,6 +38,29 @@ POLL_INTERVAL_SECS = 5
 POLL_TIMEOUT_SECS = 600
 
 
+def load_env():
+    """Load TONGTU_USER/PASSWORD from web_automation, repo root, or fzh-web-automation."""
+    here = Path(__file__).resolve().parent
+    for env_path in [
+        here.parent / ".env",
+        here.parent.parent / ".env",
+        here.parent.parent / "fzh-web-automation" / ".env",
+    ]:
+        if not env_path.exists():
+            continue
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key, val = key.strip(), val.strip().strip("\"'")
+            if key not in os.environ:
+                os.environ[key] = val
+
+
+load_env()
+
+
 def is_logged_in(page):
     try:
         body_text = page.locator("body").inner_text(timeout=5000)

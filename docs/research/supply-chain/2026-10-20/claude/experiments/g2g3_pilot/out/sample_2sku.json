@@ -1,0 +1,1908 @@
+{
+  "schema_version": "supply_replenishment_v0_1_sample/1",
+  "report_version": "V0.1",
+  "generated_at": "2026-10-22T14:24:09+08:00",
+  "note": "2-SKU end-to-end sample; full 10-SKU evidence in out/replenishment_v0/evidence.json",
+  "sources": {
+    "db": {
+      "path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+      "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+      "read_only": true,
+      "sha256_after": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+      "unchanged": true
+    },
+    "en_manifest": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\dn_wo_jc_se_expand10_phase1\\association_manifest.json",
+      "sha256": "92318843559a8611415eb549729039f3c757027df9bc9e38bef2882d3aa0f97f",
+      "stable_sha256": "1732d5900c8a9ecf8d9b8a9773447912eaa86b5fd5fb09117ca24876be15aa4e",
+      "payload_sha256": "a408d34e661eba09a49ec5d4063fe6cfaa52b97d062746032e7af971b6918b0e",
+      "run_id": "expand10_phase1_20261022",
+      "as_of": "2026-10-22T00:51:01+00:00"
+    },
+    "en_snapshots": [
+      {
+        "customer_code": "CENCord995-DKGrey-97",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_1.json",
+        "sha256": "e72c0e8a30c81f4105104b6f0ecff377c4eb88fd6570d0f53ba7035ee03515ee",
+        "generated_at": "2026-10-20T18:12:16",
+        "as_of": "2026-10-20"
+      },
+      {
+        "customer_code": "CEN003-DPBLUE-100",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_2.json",
+        "sha256": "e3855cc03ca00d13e548cbe515a5efb9a6a1b965f89174478fae2c9c38a60b17",
+        "generated_at": "2026-10-20T18:13:13",
+        "as_of": "2026-10-20"
+      },
+      {
+        "customer_code": "C/Linen-Natural-100-688-wow",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_3.json",
+        "sha256": "71d0150d67dede9e70c1b3b217c7cec73b8edd4e6414846d7680a5c63f10a343",
+        "generated_at": "2026-10-20T18:13:57",
+        "as_of": "2026-10-20"
+      },
+      {
+        "customer_code": "C/Cord-DKBlue-100-713-wow",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_4.json",
+        "sha256": "c03399ec398fa2f334f28ffae6f2125be9a5a948a4c02dc59ae14012e265bd52",
+        "generated_at": "2026-10-20T18:14:39",
+        "as_of": "2026-10-20"
+      },
+      {
+        "customer_code": "C/Linen-Natural-153-688-wow",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_5.json",
+        "sha256": "67a3e00213e04eefcbfc2b2b4911ea089edde39e20ca99ddc022fecb6508e311",
+        "generated_at": "2026-10-20T18:15:42",
+        "as_of": "2026-10-20"
+      },
+      {
+        "customer_code": "C/Velvet-Grey-100-705-wow",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_6.json",
+        "sha256": "09b0791aac8314c968f6cb5974cc9f3d09efaecfe86cacb837d44bf8f96dae53",
+        "generated_at": "2026-10-20T18:16:17",
+        "as_of": "2026-10-20"
+      },
+      {
+        "customer_code": "C/Cord-Grey-100-710-wow",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_7.json",
+        "sha256": "afaa289dd9d3add0cf341316926d6ac58b6903fc340641c30da88717beb12201",
+        "generated_at": "2026-10-20T18:17:05",
+        "as_of": "2026-10-20"
+      },
+      {
+        "customer_code": "C/Linen-White-100-662-WOW",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_8.json",
+        "sha256": "c7608ef50ba7ae23cbc3d8055d327180f008857c4ef03e0759b19399c7cd22b0",
+        "generated_at": "2026-10-20T18:17:47",
+        "as_of": "2026-10-20"
+      },
+      {
+        "customer_code": "TT0000671K0063721",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_9.json",
+        "sha256": "8605c067c888b17e40e02a779ceab5aa9bea9e7d19c48c2a8bf78be92feab32e",
+        "generated_at": "2026-10-20T18:19:35",
+        "as_of": "2026-10-20"
+      },
+      {
+        "customer_code": "C/Linen-Natural-194-688-wow",
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_rr2.json",
+        "sha256": "e01e79520077d3fdcec893ed8e7961b17a5e80b8c633bd46a09d9e2d887818c7",
+        "generated_at": "2026-10-21T11:08:46",
+        "as_of": "2026-10-21"
+      }
+    ],
+    "cover_evidence": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\eta_cover_uom\\evidence.json",
+      "sha256": "a8b8361824ebf8be569b3edd26982b45d01cda041b1c5389b62cff3b9dfb0ab0",
+      "note": "B v2.1 cover/ETA/UOM evidence; cover is scenario only, not added to supply"
+    },
+    "tables": [
+      "gs_orders",
+      "sku_map",
+      "stock_history",
+      "stock_latest",
+      "tongtool_po",
+      "tongtool_po_open",
+      "replenishment_v3",
+      "three_pl_stock",
+      "bom",
+      "bom_item",
+      "item_attr",
+      "item_ship_type"
+    ]
+  },
+  "time_alignment": {
+    "decision_time": "2026-10-22T00:00:00+08:00",
+    "stock_as_of": "2026-10-22",
+    "document_as_of": [
+      "2026-10-20",
+      "2026-10-21"
+    ],
+    "gap_days": "1-2",
+    "aligned": false,
+    "treatment": "SO/WO balances are 2026-10-20/21 and inventory is 2026-10-22. The intervening movements cannot be reconciled without production access, so balances are treated as unchanged through the decision time; this is an unquantified time-point scenario, not a bridge."
+  },
+  "method": {
+    "demand": "monthly sum(qty) by despatch_date month; cutoff 2026-09-30; gs_orders has no order-status column, so cancellation/return exclusion is not possible at this layer and is unproven",
+    "forecast_primary": "seasonal_naive (lag 12) when history >= 24 months; otherwise mean of last 3 months; low confidence <24 months",
+    "forecast_candidate": "Holt-Winters additive (level+trend+seasonal, grid-search alpha/beta/gamma); reported, not selected",
+    "p50": "point forecast, clamped at 0",
+    "p90": "month h: p50_h + z_sig*sqrt(h); cumulative 3m: sum(p50) + z_sig*sqrt(1+2+3)=sqrt(6); consistent random-walk error model; z_sig=1.2816*sigma_used; sigma_used=max(in-sample effective sigma, rolling-origin h1 std) calibrated over all eligible origins, not only the 6 reporting origins; rolling bias is reported but not corrected",
+    "backtest": "last 6 origins with known h=3; zero-actual cells retained (all-zero denominator -> WAPE/bias null); P90 coverage = share actual<=P90; target 0.90 recorded separately from achieved coverage; achieved coverage below 0.90 -> P90 labelled estimate",
+    "supply_A": "bounds: A_low=available (no production); A_high=available+open production remaining (no PO); no intransit",
+    "supply_B": "bounds: B_min=available+max(raw PO, production remaining, intransit) (maximum overlap: union is at least the largest component); B_max=available+raw PO+all production+intransit (no overlap, all components added). PO duplicate-candidate sensitivity: B_min_po_dedup / B_max_po_dedup. B_mid treats intransit as already inside the open PO (observed intransit==deduped PO) and production as partially overlapping; it is an assumption, not a verified link. PO arrival within lead time is an assumption (ETA all null)",
+    "open_so": "positive remaining per live SO line; over-delivery on other lines is NOT netted against it (kept separate)",
+    "production": "open WO = docstatus=1 and status in (Not Started, In Process); remaining = max(0, qty - produced_qty); Draft/Stopped excluded and shown separately",
+    "production_uom_assumption": "WO production_item is PK#皮壳; counted 1:1 against the KS finished item (not proven)",
+    "po_dedup": "identical (sku, warehouse, quantity) open lines across different POs: later purchase_date treated as duplicate candidate; not document-proven",
+    "recommendation": "max(0, P90(lead+30d calendar window) - supply bound); unrounded; no MOQ/pack multiple; not order-ready",
+    "lead_time": "calendar window from 2026-10-22; partial-month weights (Oct 22-31 = 10/31); monthly h has variance h*sigma^2; Jan+ uses the 3-month average rate (extrapolation, not an independent forecast); document balances are 10-20/21 and are not rolled forward to 10-22",
+    "censoring": "NOT corrected: only 3 days of stock history, cannot reconstruct lost sales"
+  },
+  "skus": [
+    {
+      "sku": "KS0001-CMM-100-WHITE",
+      "customer_code": "C/Linen-White-100-662-WOW",
+      "identity": {
+        "sku_map_rows": [
+          [
+            "KS0001-CMM-100-WHITE",
+            "C/Linen-White-100-662-WOW"
+          ],
+          [
+            "KS0001-CMM-100-WHITE",
+            "CENLinen688-natural-twin-FBA"
+          ]
+        ],
+        "ship_type": "皮壳",
+        "item_name": "三角靠枕-纯棉麻-100-白色",
+        "bom": [
+          {
+            "component": "ND#KS0001-100-CYF-WHITE",
+            "qty": 1,
+            "uom": "个"
+          },
+          {
+            "component": "PK#KS0001-CMM-100-WHITE",
+            "qty": 1,
+            "uom": "个"
+          }
+        ],
+        "identity_status": "confirmed",
+        "alias_count": 2,
+        "identity_note": "customer_code -> single KS item; the KS item has multiple platform aliases (normal, not cross-item ambiguity)"
+      },
+      "cover": {
+        "verdict": "scenario",
+        "cover_observed": false,
+        "alias_mapping_present": false,
+        "alias_rows": [],
+        "alias_available_sum": null,
+        "alias_intransit_sum": null,
+        "item_cover_stock_present": false,
+        "item_cover_stock_rows": [],
+        "item_cover_stock_available_sum": null,
+        "observed_zero": false,
+        "pool_cover_available_raw": [
+          {
+            "warehouse": "美东-CENTRADE",
+            "cover_available": 0,
+            "cover_on_order": 0.0
+          }
+        ],
+        "pool_note_source": "replenishment_pool has no pool_note column; trace_examples.json.pool_note is recorded at trace_anchor.pool_note for the 5 trace SKUs",
+        "pool_cover_available_semantics": "raw replenishment_pool output; for SKUs without an alias mapping the 0 is derived from absence and is NOT evidence that alias=0",
+        "absence_proven": false,
+        "counted_in_supply": false,
+        "counted_via": null,
+        "allocation_rule_status": "not_documented",
+        "note": "No alias/item_cover_stock row -> alias_available_sum=null and cover_observed=false; absence is not zero."
+      },
+      "snapshot": {
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_top_8.json",
+        "sha256": "c7608ef50ba7ae23cbc3d8055d327180f008857c4ef03e0759b19399c7cd22b0",
+        "generated_at": "2026-10-20T18:17:47",
+        "as_of": "2026-10-20",
+        "counts": {},
+        "open_breakdown": {
+          "voided_qty": 50.0,
+          "dead_qty": 70.0,
+          "in_progress_qty": 26.0,
+          "no_plan_qty": 0.0,
+          "over_delivered_qty": -6.0,
+          "reconciled_open_qty": 90.0,
+          "reported_open_qty": 90.0,
+          "difference": 0.0,
+          "buckets": {
+            "dead": [
+              {
+                "so": "SO-26-00098",
+                "open_qty": 70.0
+              }
+            ],
+            "in_progress": [
+              {
+                "so": "SO-26-00042",
+                "open_qty": 7.0
+              },
+              {
+                "so": "SO-26-00061",
+                "open_qty": 2.0
+              },
+              {
+                "so": "SO-26-00109",
+                "open_qty": 17.0
+              }
+            ],
+            "no_plan": [],
+            "over_delivered": [
+              {
+                "so": "SO-26-00057",
+                "open_qty": -6.0
+              }
+            ]
+          },
+          "note": "有效单未发 = 死单 + 在产 + 无计划 + 超发(负)；作废单不计入 open"
+        }
+      },
+      "history": {
+        "first_month": "2025-08",
+        "last_month": "2026-09",
+        "n_months": 14,
+        "total_qty": 811,
+        "zero_filled_months": 0,
+        "recent3_mean": 107.7,
+        "launch_truncated": false,
+        "series": [
+          {
+            "month": "2025-08",
+            "qty": 240
+          },
+          {
+            "month": "2025-09",
+            "qty": 15
+          },
+          {
+            "month": "2025-10",
+            "qty": 2
+          },
+          {
+            "month": "2025-11",
+            "qty": 5
+          },
+          {
+            "month": "2025-12",
+            "qty": 15
+          },
+          {
+            "month": "2026-01",
+            "qty": 16
+          },
+          {
+            "month": "2026-02",
+            "qty": 11
+          },
+          {
+            "month": "2026-03",
+            "qty": 11
+          },
+          {
+            "month": "2026-04",
+            "qty": 8
+          },
+          {
+            "month": "2026-05",
+            "qty": 24
+          },
+          {
+            "month": "2026-06",
+            "qty": 141
+          },
+          {
+            "month": "2026-07",
+            "qty": 27
+          },
+          {
+            "month": "2026-08",
+            "qty": 280
+          },
+          {
+            "month": "2026-09",
+            "qty": 16
+          }
+        ]
+      },
+      "forecast": {
+        "primary_model": "mean3",
+        "confidence": "low",
+        "history_months": 14,
+        "months": [
+          {
+            "month": "2026-10",
+            "p50": 107.7,
+            "p90": 234.3
+          },
+          {
+            "month": "2026-11",
+            "p50": 107.7,
+            "p90": 286.8
+          },
+          {
+            "month": "2026-12",
+            "p50": 107.7,
+            "p90": 327.1
+          }
+        ],
+        "p50_3m": 323,
+        "p90_3m": 633.3,
+        "sigma_train": 98.839,
+        "q90": 126.667,
+        "sigma_roll": 92.956,
+        "sigma_roll_rms": 90.432,
+        "sigma_used": 98.839,
+        "roll_bias": 20.033,
+        "z_sig": 126.667,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 10,
+          "sigma_train_eff": 98.839,
+          "sigma_roll_std": 92.956,
+          "sigma_roll_rms": 90.432,
+          "sigma_used": 98.839,
+          "roll_bias": 20.033,
+          "applied": true,
+          "h1_q90_normalized_error": 1.677,
+          "h3_q90_normalized_error": 2.738,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "estimate_coverage_below_target",
+        "recent3_mean": 107.7,
+        "run_rate_ratio": 1.0,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 0.8333,
+        "achieved_coverage_h3": 0.5,
+        "ets_candidate": {
+          "available": false,
+          "reason": "history_lt_24m"
+        }
+      },
+      "backtest": {
+        "h1": {
+          "n": 6,
+          "zero_actual_cells": 0,
+          "wape": 0.8109,
+          "bias": -0.4564,
+          "coverage": 0.8333
+        },
+        "h3": {
+          "n": 6,
+          "zero_actual_cells": 0,
+          "wape": 0.7105,
+          "bias": -0.7006,
+          "coverage": 0.5
+        },
+        "ets_h1": null,
+        "ets_h3": null,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 10,
+          "sigma_train_eff": 98.839,
+          "sigma_roll_std": 92.956,
+          "sigma_roll_rms": 90.432,
+          "sigma_used": 98.839,
+          "roll_bias": 20.033,
+          "applied": true,
+          "h1_q90_normalized_error": 1.677,
+          "h3_q90_normalized_error": 2.738,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "origins": [
+          {
+            "origin": "2026-01",
+            "n_train": 6,
+            "model": "mean3",
+            "actual": [
+              11.0,
+              11.0,
+              8.0
+            ],
+            "forecast": [
+              12.0,
+              12.0,
+              12.0
+            ],
+            "p90_1": 77.73,
+            "p90_3": 197.01,
+            "ets": null
+          },
+          {
+            "origin": "2026-02",
+            "n_train": 7,
+            "model": "mean3",
+            "actual": [
+              11.0,
+              8.0,
+              24.0
+            ],
+            "forecast": [
+              14.0,
+              14.0,
+              14.0
+            ],
+            "p90_1": 69.25,
+            "p90_3": 177.32,
+            "ets": null
+          },
+          {
+            "origin": "2026-03",
+            "n_train": 8,
+            "model": "mean3",
+            "actual": [
+              8.0,
+              24.0,
+              141.0
+            ],
+            "forecast": [
+              12.67,
+              12.67,
+              12.67
+            ],
+            "p90_1": 61.12,
+            "p90_3": 156.68,
+            "ets": null
+          },
+          {
+            "origin": "2026-04",
+            "n_train": 9,
+            "model": "mean3",
+            "actual": [
+              24.0,
+              141.0,
+              27.0
+            ],
+            "forecast": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "p90_1": 53.59,
+            "p90_3": 136.77,
+            "ets": null
+          },
+          {
+            "origin": "2026-05",
+            "n_train": 10,
+            "model": "mean3",
+            "actual": [
+              141.0,
+              27.0,
+              280.0
+            ],
+            "forecast": [
+              14.33,
+              14.33,
+              14.33
+            ],
+            "p90_1": 56.1,
+            "p90_3": 145.3,
+            "ets": null
+          },
+          {
+            "origin": "2026-06",
+            "n_train": 11,
+            "model": "mean3",
+            "actual": [
+              27.0,
+              280.0,
+              16.0
+            ],
+            "forecast": [
+              57.67,
+              57.67,
+              57.67
+            ],
+            "p90_1": 130.07,
+            "p90_3": 350.34,
+            "ets": null
+          }
+        ],
+        "leakage_check": {
+          "structural_pass": true,
+          "train_rule": "fit uses y[month <= origin]; targets are origin+1..origin+3",
+          "target_months": [
+            "2026-01+1..+3",
+            "2026-02+1..+3",
+            "2026-03+1..+3",
+            "2026-04+1..+3",
+            "2026-05+1..+3",
+            "2026-06+1..+3"
+          ]
+        },
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
+      },
+      "inventory": {
+        "as_of": "2026-10-22",
+        "available": 55,
+        "intransit": 73,
+        "defects": 0,
+        "waiting_shipment": 3,
+        "by_warehouse": [
+          {
+            "warehouse": "WayfairCG-Cranbury仓",
+            "available": 0,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 0,
+            "batch_complete": true,
+            "is_test": false,
+            "uom_basis": "unknown"
+          },
+          {
+            "warehouse": "美东-CENTRADE",
+            "available": 54,
+            "intransit": 73,
+            "waiting_shipment": 3,
+            "defects": 0,
+            "batch_complete": true,
+            "is_test": false,
+            "uom_basis": "unknown"
+          },
+          {
+            "warehouse": "美中-FZH-DANEEY",
+            "available": 1,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 0,
+            "batch_complete": true,
+            "is_test": false,
+            "uom_basis": "unknown"
+          },
+          {
+            "warehouse": "美中-FZH-DANEEY-退货产品仓",
+            "available": 0,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 0,
+            "batch_complete": true,
+            "is_test": false,
+            "uom_basis": "unknown"
+          }
+        ],
+        "stock_latest_crosscheck": [
+          {
+            "warehouse": "WayfairCG-Cranbury仓",
+            "sku": "C/Linen-White-100-662-WOW",
+            "available": 0,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 0
+          },
+          {
+            "warehouse": "美东-CENTRADE",
+            "sku": "C/Linen-White-100-662-WOW",
+            "available": 57,
+            "intransit": 73,
+            "waiting_shipment": 0,
+            "defects": 0
+          },
+          {
+            "warehouse": "美中-FZH-DANEEY",
+            "sku": "C/Linen-White-100-662-WOW",
+            "available": 1,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 0
+          }
+        ],
+        "stock_latest_available_total": 58,
+        "replenishment_v3_crosscheck": [
+          {
+            "warehouse": "美东-CENTRADE",
+            "available": 57,
+            "intransit": 73,
+            "on_order": 73,
+            "daily_forecast": 3.505,
+            "rop_days": 75,
+            "rop_qty": 263,
+            "suggested_qty": 133,
+            "supply_note": "intransit 与 PO 未入库重叠，按 max 计一次"
+          },
+          {
+            "warehouse": "美中-FZH-DANEEY",
+            "available": 1,
+            "intransit": 0,
+            "on_order": 0,
+            "daily_forecast": 0,
+            "rop_days": 75,
+            "rop_qty": null,
+            "suggested_qty": null,
+            "supply_note": ""
+          }
+        ],
+        "three_pl_crosscheck": [
+          {
+            "warehouse": "WayfairCG-Cranbury仓",
+            "sku": "C/Linen-White-100-662-WOW",
+            "available": 0,
+            "intransit": 0
+          }
+        ],
+        "uom_status": "unknown_conditional"
+      },
+      "po": {
+        "rows_total": 5,
+        "open_lines": [
+          {
+            "ponum": "PO021717",
+            "goods_sku": "C/Linen-White-100-662-WOW",
+            "warehouse": "美东-CENTRADE",
+            "quantity": 20,
+            "in_quantity": 0,
+            "open_qty": 20,
+            "status": "0",
+            "purchase_date": "2026-09-09 09:22",
+            "will_arrive_date": null,
+            "row_key": "PO021717|C/Linen-White-100-662-WOW|美东-CENTRADE",
+            "duplicate_candidate": false
+          },
+          {
+            "ponum": "PO021726",
+            "goods_sku": "C/Linen-White-100-662-WOW",
+            "warehouse": "美东-CENTRADE",
+            "quantity": 53,
+            "in_quantity": 0,
+            "open_qty": 53,
+            "status": "0",
+            "purchase_date": "2026-09-29 10:54",
+            "will_arrive_date": null,
+            "row_key": "PO021726|C/Linen-White-100-662-WOW|美东-CENTRADE",
+            "duplicate_candidate": false
+          }
+        ],
+        "open_line_count": 2,
+        "open_qty_raw": 73,
+        "duplicate_candidate_qty": 0,
+        "open_qty_dedup": 73,
+        "eta_missing_lines": 2,
+        "row_key": "(ponum, goods_sku, warehouse)",
+        "dedup_rule": "identical (goods_sku, warehouse, quantity) with different PO; later purchase_date excluded as duplicate candidate; not document-proven",
+        "dedup_equals_intransit": false,
+        "po_open_table": [
+          [
+            "C/Linen-White-100-662-WOW",
+            "美东-CENTRADE",
+            73
+          ]
+        ]
+      },
+      "production": {
+        "open_wo": [
+          {
+            "name": "WO-26-03156",
+            "status": "Not Started",
+            "docstatus": 1,
+            "sales_order": "SO-26-00109",
+            "production_item": "PK#KS0001-CMM-100-WHITE",
+            "qty": 20,
+            "produced_qty": 0,
+            "planned_start_date": "2026-09-02 08:09:16.705972",
+            "planned_end_date": null,
+            "remaining_qty": 20.0
+          }
+        ],
+        "stopped_wo": [],
+        "draft_wo": [],
+        "open_wo_count": 1,
+        "gross_qty": 20,
+        "remaining_qty": 20,
+        "stopped_qty": 0,
+        "stopped_remaining_qty": 0,
+        "production_item_kinds": [
+          "PK#"
+        ],
+        "eta_missing_count": 1,
+        "eta_status": "planned_end_date_all_null"
+      },
+      "open_so": {
+        "reconciled_open": 90,
+        "dead": 70,
+        "live_open": 26,
+        "live_open_net": 20,
+        "positive_open": 26,
+        "negative_over_delivery": -6,
+        "in_progress": 26,
+        "no_plan": 0,
+        "over_delivered": -6,
+        "voided": 50,
+        "bucket_check": 0.0,
+        "live_lines": 15,
+        "dead_so": [
+          {
+            "so": "SO-26-00098",
+            "open_qty": 70.0
+          }
+        ],
+        "in_progress_so": [
+          {
+            "so": "SO-26-00042",
+            "open_qty": 7.0
+          },
+          {
+            "so": "SO-26-00061",
+            "open_qty": 2.0
+          },
+          {
+            "so": "SO-26-00109",
+            "open_qty": 17.0
+          }
+        ],
+        "no_plan_so": [],
+        "over_delivered_so": [
+          {
+            "so": "SO-26-00057",
+            "open_qty": -6.0
+          }
+        ]
+      },
+      "supply": {
+        "available": 55,
+        "intransit": 73,
+        "open_po_raw": 73,
+        "open_po_dedup": 73,
+        "production_gross": 20,
+        "production_remaining": 20,
+        "A_low": 55,
+        "A_high": 75,
+        "B_min": 128,
+        "B_max": 221,
+        "B_min_po_dedup": 128,
+        "B_max_po_dedup": 221,
+        "B_mid_intransit_in_po": 128,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+        "independent_intransit_by_warehouse": {
+          "WayfairCG-Cranbury仓": 0,
+          "美东-CENTRADE": 0,
+          "美中-FZH-DANEEY": 0,
+          "美中-FZH-DANEEY-退货产品仓": 0
+        }
+      },
+      "demand": {
+        "forecast_p50_3m": 323,
+        "forecast_p90_3m": 633.3,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 250.1,
+          "forecast_p90": 536.2,
+          "open_so": 26.0,
+          "p50": 276.1,
+          "p90": 562.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 107.67,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 26,
+        "total_p50": 349,
+        "total_p90": 659.3,
+        "dead_so_excluded": 70,
+        "over_delivery_not_netted": -6
+      },
+      "lead_time": {
+        "L60": {
+          "days": 60,
+          "months": 1.971,
+          "forecast_p50": 211.9,
+          "forecast_p90": 443.8,
+          "open_so": 26.0,
+          "p50": 237.9,
+          "p90": 469.8,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 107.67,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 107.67,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "L90": {
+          "days": 90,
+          "months": 2.957,
+          "forecast_p50": 316.1,
+          "forecast_p90": 641.6,
+          "open_so": 26.0,
+          "p50": 342.1,
+          "p90": 667.6,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 107.67,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 107.67,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "L120": {
+          "days": 120,
+          "months": 3.943,
+          "forecast_p50": 426.9,
+          "forecast_p90": 850.3,
+          "open_so": 26.0,
+          "p50": 452.9,
+          "p90": 876.3,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 107.67,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 107.67,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 107.67,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        }
+      },
+      "recommendation": {
+        "values": {
+          "A_L60_lo": 592.6,
+          "A_L60_hi": 612.6,
+          "B_L60_lo": 446.6,
+          "B_L60_hi": 539.6,
+          "B_mid_L60": 539.6,
+          "B_po_dedup_L60_lo": 446.6,
+          "B_po_dedup_L60_hi": 539.6,
+          "AVAIL_L60": 612.6,
+          "A_L90_lo": 801.3,
+          "A_L90_hi": 821.3,
+          "B_L90_lo": 655.3,
+          "B_L90_hi": 748.3,
+          "B_mid_L90": 748.3,
+          "B_po_dedup_L90_lo": 655.3,
+          "B_po_dedup_L90_hi": 748.3,
+          "AVAIL_L90": 821.3,
+          "A_L120_lo": 1002.0,
+          "A_L120_hi": 1022.0,
+          "B_L120_lo": 856.0,
+          "B_L120_hi": 949.0,
+          "B_mid_L120": 949.0,
+          "B_po_dedup_L120_lo": 856.0,
+          "B_po_dedup_L120_hi": 949.0,
+          "AVAIL_L120": 1022.0
+        },
+        "note": "unrounded; no MOQ/pack multiple; not an order quantity"
+      },
+      "unknowns": [
+        "PO ETA 全空：2 条未结行，2/2 无 will_arrive_date",
+        "在产无 ETA：1/1 张 WO 的 planned_end_date 为空",
+        "死单 SO：70 件（Closed 未发）未计入需求；若业务确认补发需另加",
+        "历史仅 14 月（<24），按规则退化近 3 月均值；若近 3 月含峰值，预测会明显高于去年同月，属低置信退化代价，不声称季节性",
+        "库存 UOM=unknown；按件计数、未做换算（条件假设，不是已证 1:1）",
+        "在产 WO 的生产物是 PK# 皮壳，本轮按 1:1 对应 KS 成品计入；未检查 ND# 内胆可用性，也未证 PK#+ND# 装配是否即时；该 1:1 关系未证",
+        "断货删失未校正：stock_history 仅 3 天，无法还原历史可售天数",
+        "Cover 可替代未证：cover 库存不并入供给",
+        "Cover 无映射：alias/item_cover_stock 均无行，属 scenario，不写 0"
+      ]
+    },
+    {
+      "sku": "KS0001-XMMBS-194-HEMPNATURAL",
+      "customer_code": "C/Linen-Natural-194-688-wow",
+      "identity": {
+        "sku_map_rows": [
+          [
+            "KS0001-XMMBS-194-HEMPNATURAL",
+            "C/Linen-Natural-194-688-wow"
+          ]
+        ],
+        "ship_type": "皮壳",
+        "item_name": "三角靠枕-新棉麻本色-194-麻本色",
+        "bom": [
+          {
+            "component": "ND#KS0001-194-CYF-WHITE",
+            "qty": 1,
+            "uom": "个"
+          },
+          {
+            "component": "PK#KS0001-XMMBS-194-HEMPNATURAL",
+            "qty": 1,
+            "uom": "个"
+          }
+        ],
+        "identity_status": "confirmed",
+        "alias_count": 1,
+        "identity_note": "customer_code -> single KS item; the KS item has multiple platform aliases (normal, not cross-item ambiguity)"
+      },
+      "cover": {
+        "verdict": "scenario",
+        "cover_observed": false,
+        "alias_mapping_present": false,
+        "alias_rows": [],
+        "alias_available_sum": null,
+        "alias_intransit_sum": null,
+        "item_cover_stock_present": false,
+        "item_cover_stock_rows": [],
+        "item_cover_stock_available_sum": null,
+        "observed_zero": false,
+        "pool_cover_available_raw": [
+          {
+            "warehouse": "美东-CENTRADE",
+            "cover_available": 0,
+            "cover_on_order": 0.0
+          }
+        ],
+        "pool_note_source": "replenishment_pool has no pool_note column; trace_examples.json.pool_note is recorded at trace_anchor.pool_note for the 5 trace SKUs",
+        "pool_cover_available_semantics": "raw replenishment_pool output; for SKUs without an alias mapping the 0 is derived from absence and is NOT evidence that alias=0",
+        "absence_proven": false,
+        "counted_in_supply": false,
+        "counted_via": null,
+        "allocation_rule_status": "not_documented",
+        "note": "No alias/item_cover_stock row -> alias_available_sum=null and cover_observed=false; absence is not zero."
+      },
+      "snapshot": {
+        "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\experiments\\g1_contract\\out\\g1b_en_rr2.json",
+        "sha256": "e01e79520077d3fdcec893ed8e7961b17a5e80b8c633bd46a09d9e2d887818c7",
+        "generated_at": "2026-10-21T11:08:46",
+        "as_of": "2026-10-21",
+        "counts": {},
+        "open_breakdown": {
+          "voided_qty": 100.0,
+          "dead_qty": 421.0,
+          "in_progress_qty": 622.0,
+          "no_plan_qty": 9.0,
+          "over_delivered_qty": -16.0,
+          "reconciled_open_qty": 1036.0,
+          "reported_open_qty": 1036.0,
+          "difference": 0.0,
+          "buckets": {
+            "dead": [
+              {
+                "so": "SO-24-00033-1",
+                "open_qty": 100.0
+              },
+              {
+                "so": "SO-25-00021",
+                "open_qty": 1.0
+              },
+              {
+                "so": "SO-26-00098",
+                "open_qty": 320.0
+              }
+            ],
+            "in_progress": [
+              {
+                "so": "SO-26-00042",
+                "open_qty": 2.0
+              },
+              {
+                "so": "SO-26-00103",
+                "open_qty": 320.0
+              },
+              {
+                "so": "SO-26-00109",
+                "open_qty": 300.0
+              }
+            ],
+            "no_plan": [
+              {
+                "so": "SO-26-00036",
+                "open_qty": 9.0
+              }
+            ],
+            "over_delivered": [
+              {
+                "so": "SO-26-00057",
+                "open_qty": -13.0
+              },
+              {
+                "so": "SO-26-00074",
+                "open_qty": -3.0
+              }
+            ]
+          },
+          "note": "有效单未发 = 死单 + 在产 + 无计划 + 超发(负)；作废单不计入 open"
+        }
+      },
+      "history": {
+        "first_month": "2024-05",
+        "last_month": "2026-09",
+        "n_months": 29,
+        "total_qty": 2239,
+        "zero_filled_months": 0,
+        "recent3_mean": 108,
+        "launch_truncated": false,
+        "series": [
+          {
+            "month": "2024-05",
+            "qty": 31
+          },
+          {
+            "month": "2024-06",
+            "qty": 30
+          },
+          {
+            "month": "2024-07",
+            "qty": 46
+          },
+          {
+            "month": "2024-08",
+            "qty": 47
+          },
+          {
+            "month": "2024-09",
+            "qty": 1
+          },
+          {
+            "month": "2024-10",
+            "qty": 2
+          },
+          {
+            "month": "2024-11",
+            "qty": 55
+          },
+          {
+            "month": "2024-12",
+            "qty": 81
+          },
+          {
+            "month": "2025-01",
+            "qty": 104
+          },
+          {
+            "month": "2025-02",
+            "qty": 61
+          },
+          {
+            "month": "2025-03",
+            "qty": 64
+          },
+          {
+            "month": "2025-04",
+            "qty": 58
+          },
+          {
+            "month": "2025-05",
+            "qty": 55
+          },
+          {
+            "month": "2025-06",
+            "qty": 39
+          },
+          {
+            "month": "2025-07",
+            "qty": 85
+          },
+          {
+            "month": "2025-08",
+            "qty": 63
+          },
+          {
+            "month": "2025-09",
+            "qty": 70
+          },
+          {
+            "month": "2025-10",
+            "qty": 108
+          },
+          {
+            "month": "2025-11",
+            "qty": 48
+          },
+          {
+            "month": "2025-12",
+            "qty": 146
+          },
+          {
+            "month": "2026-01",
+            "qty": 173
+          },
+          {
+            "month": "2026-02",
+            "qty": 95
+          },
+          {
+            "month": "2026-03",
+            "qty": 134
+          },
+          {
+            "month": "2026-04",
+            "qty": 92
+          },
+          {
+            "month": "2026-05",
+            "qty": 99
+          },
+          {
+            "month": "2026-06",
+            "qty": 128
+          },
+          {
+            "month": "2026-07",
+            "qty": 143
+          },
+          {
+            "month": "2026-08",
+            "qty": 52
+          },
+          {
+            "month": "2026-09",
+            "qty": 129
+          }
+        ]
+      },
+      "forecast": {
+        "primary_model": "seasonal_naive",
+        "confidence": "medium-low",
+        "history_months": 29,
+        "months": [
+          {
+            "month": "2026-10",
+            "p50": 108,
+            "p90": 185.6
+          },
+          {
+            "month": "2026-11",
+            "p50": 48,
+            "p90": 157.7
+          },
+          {
+            "month": "2026-12",
+            "p50": 146,
+            "p90": 280.4
+          }
+        ],
+        "p50_3m": 302,
+        "p90_3m": 492.1,
+        "sigma_train": 60.552,
+        "q90": 77.6,
+        "sigma_roll": 41.01,
+        "sigma_roll_rms": 42.742,
+        "sigma_used": 60.552,
+        "roll_bias": 14.573,
+        "z_sig": 77.6,
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 60.552,
+          "sigma_roll_std": 41.01,
+          "sigma_roll_rms": 42.742,
+          "sigma_used": 60.552,
+          "roll_bias": 14.573,
+          "applied": true,
+          "h1_q90_normalized_error": 0.986,
+          "h3_q90_normalized_error": 0.955,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "p90_status": "estimate_coverage_below_target",
+        "recent3_mean": 108,
+        "run_rate_ratio": 0.932,
+        "target_service_level": 0.9,
+        "achieved_coverage_h1": 0.8333,
+        "achieved_coverage_h3": 0.8333,
+        "ets_candidate": {
+          "available": true,
+          "alpha": 0.1,
+          "beta": 0.3,
+          "gamma": 0.1,
+          "months": [
+            109.9,
+            103.0,
+            170.6
+          ],
+          "p50_3m": 383.5,
+          "sigma": 22.094,
+          "q90": 19.207,
+          "used": false,
+          "unstable": false,
+          "note": "candidate only; not selected; additive HW can collapse to 0 on spiky series"
+        }
+      },
+      "backtest": {
+        "h1": {
+          "n": 6,
+          "zero_actual_cells": 0,
+          "wape": 0.3825,
+          "bias": -0.1703,
+          "coverage": 0.8333
+        },
+        "h3": {
+          "n": 6,
+          "zero_actual_cells": 0,
+          "wape": 0.3285,
+          "bias": -0.1085,
+          "coverage": 0.8333
+        },
+        "ets_h1": {
+          "n": 3,
+          "zero_actual_cells": 0,
+          "wape": 0.2288,
+          "bias": -0.2288,
+          "coverage": 0.3333
+        },
+        "ets_h3": {
+          "n": 3,
+          "zero_actual_cells": 0,
+          "wape": 0.1031,
+          "bias": -0.1031,
+          "coverage": 0.6667
+        },
+        "calibration": {
+          "method": "rolling_origin_h1_out_of_sample",
+          "n_origins": 25,
+          "sigma_train_eff": 60.552,
+          "sigma_roll_std": 41.01,
+          "sigma_roll_rms": 42.742,
+          "sigma_used": 60.552,
+          "roll_bias": 14.573,
+          "applied": true,
+          "h1_q90_normalized_error": 0.986,
+          "h3_q90_normalized_error": 0.955,
+          "note": "sigma_used=max(in-sample effective sigma, rolling-origin h1 std); the normalized-error diagnostic is not applied; achieved coverage is reported separately from target_service_level=0.90"
+        },
+        "origins": [
+          {
+            "origin": "2026-01",
+            "n_train": 21,
+            "model": "mean3",
+            "actual": [
+              95.0,
+              134.0,
+              92.0
+            ],
+            "forecast": [
+              122.33,
+              122.33,
+              122.33
+            ],
+            "p90_1": 186.7,
+            "p90_3": 524.67,
+            "ets": null
+          },
+          {
+            "origin": "2026-02",
+            "n_train": 22,
+            "model": "mean3",
+            "actual": [
+              134.0,
+              92.0,
+              99.0
+            ],
+            "forecast": [
+              138.0,
+              138.0,
+              138.0
+            ],
+            "p90_1": 201.47,
+            "p90_3": 569.46,
+            "ets": null
+          },
+          {
+            "origin": "2026-03",
+            "n_train": 23,
+            "model": "mean3",
+            "actual": [
+              92.0,
+              99.0,
+              128.0
+            ],
+            "forecast": [
+              134.0,
+              134.0,
+              134.0
+            ],
+            "p90_1": 196.57,
+            "p90_3": 555.26,
+            "ets": null
+          },
+          {
+            "origin": "2026-04",
+            "n_train": 24,
+            "model": "seasonal_naive",
+            "actual": [
+              99.0,
+              128.0,
+              143.0
+            ],
+            "forecast": [
+              55.0,
+              39.0,
+              85.0
+            ],
+            "p90_1": 124.9,
+            "p90_3": 350.22,
+            "ets": {
+              "f": [
+                87.96,
+                81.62,
+                116.92
+              ],
+              "p90_1": 111.09,
+              "p90_3": 343.17
+            }
+          },
+          {
+            "origin": "2026-05",
+            "n_train": 25,
+            "model": "seasonal_naive",
+            "actual": [
+              128.0,
+              143.0,
+              52.0
+            ],
+            "forecast": [
+              39.0,
+              85.0,
+              63.0
+            ],
+            "p90_1": 108.8,
+            "p90_3": 357.97,
+            "ets": {
+              "f": [
+                81.21,
+                122.78,
+                105.38
+              ],
+              "p90_1": 103.38,
+              "p90_3": 363.67
+            }
+          },
+          {
+            "origin": "2026-06",
+            "n_train": 26,
+            "model": "seasonal_naive",
+            "actual": [
+              143.0,
+              52.0,
+              129.0
+            ],
+            "forecast": [
+              85.0,
+              63.0,
+              70.0
+            ],
+            "p90_1": 168.3,
+            "p90_3": 422.04,
+            "ets": {
+              "f": [
+                116.18,
+                107.23,
+                92.86
+              ],
+              "p90_1": 142.14,
+              "p90_3": 379.86
+            }
+          }
+        ],
+        "leakage_check": {
+          "structural_pass": true,
+          "train_rule": "fit uses y[month <= origin]; targets are origin+1..origin+3",
+          "target_months": [
+            "2026-01+1..+3",
+            "2026-02+1..+3",
+            "2026-03+1..+3",
+            "2026-04+1..+3",
+            "2026-05+1..+3",
+            "2026-06+1..+3"
+          ]
+        },
+        "rule": "last 6 origins with known h=3; zero-actual cells retained; residual sigma from training only; no future data in fit"
+      },
+      "inventory": {
+        "as_of": "2026-10-22",
+        "available": 360,
+        "intransit": 0,
+        "defects": 2,
+        "waiting_shipment": 6,
+        "by_warehouse": [
+          {
+            "warehouse": "WayfairCG-Cranbury仓",
+            "available": 46,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 0,
+            "batch_complete": true,
+            "is_test": false,
+            "uom_basis": "unknown"
+          },
+          {
+            "warehouse": "美东-CENTRADE",
+            "available": 313,
+            "intransit": 0,
+            "waiting_shipment": 6,
+            "defects": 1,
+            "batch_complete": true,
+            "is_test": false,
+            "uom_basis": "unknown"
+          },
+          {
+            "warehouse": "美中-FZH-DANEEY",
+            "available": 1,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 0,
+            "batch_complete": true,
+            "is_test": false,
+            "uom_basis": "unknown"
+          },
+          {
+            "warehouse": "美中-FZH-DANEEY-退货产品仓",
+            "available": 0,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 1,
+            "batch_complete": true,
+            "is_test": false,
+            "uom_basis": "unknown"
+          }
+        ],
+        "stock_latest_crosscheck": [
+          {
+            "warehouse": "WayfairCG-Cranbury仓",
+            "sku": "C/Linen-Natural-194-688-wow",
+            "available": 46,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 0
+          },
+          {
+            "warehouse": "美东-CENTRADE",
+            "sku": "C/Linen-Natural-194-688-wow",
+            "available": 319,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 1
+          },
+          {
+            "warehouse": "美中-FZH-DANEEY",
+            "sku": "C/Linen-Natural-194-688-wow",
+            "available": 1,
+            "intransit": 0,
+            "waiting_shipment": 0,
+            "defects": 0
+          }
+        ],
+        "stock_latest_available_total": 366,
+        "replenishment_v3_crosscheck": [
+          {
+            "warehouse": "美东-CENTRADE",
+            "available": 319,
+            "intransit": 0,
+            "on_order": 0,
+            "daily_forecast": 3.444,
+            "rop_days": 75,
+            "rop_qty": 258,
+            "suggested_qty": 0,
+            "supply_note": ""
+          },
+          {
+            "warehouse": "美中-FZH-DANEEY",
+            "available": 1,
+            "intransit": 0,
+            "on_order": 0,
+            "daily_forecast": 0,
+            "rop_days": 75,
+            "rop_qty": null,
+            "suggested_qty": null,
+            "supply_note": ""
+          }
+        ],
+        "three_pl_crosscheck": [
+          {
+            "warehouse": "WayfairCG-Cranbury仓",
+            "sku": "C/Linen-Natural-194-688-wow",
+            "available": 46,
+            "intransit": 0
+          }
+        ],
+        "uom_status": "unknown_conditional"
+      },
+      "po": {
+        "rows_total": 4,
+        "open_lines": [],
+        "open_line_count": 0,
+        "open_qty_raw": 0,
+        "duplicate_candidate_qty": 0,
+        "open_qty_dedup": 0,
+        "eta_missing_lines": 0,
+        "row_key": "(ponum, goods_sku, warehouse)",
+        "dedup_rule": "identical (goods_sku, warehouse, quantity) with different PO; later purchase_date excluded as duplicate candidate; not document-proven",
+        "dedup_equals_intransit": false,
+        "po_open_table": []
+      },
+      "production": {
+        "open_wo": [
+          {
+            "name": "WO-26-02663",
+            "status": "Not Started",
+            "docstatus": 1,
+            "sales_order": "SO-26-00103",
+            "production_item": "PK#KS0001-XMMBS-194-HEMPNATURAL",
+            "qty": 320,
+            "produced_qty": 0,
+            "planned_start_date": "2026-08-17 13:07:50.504973",
+            "planned_end_date": null,
+            "remaining_qty": 320.0
+          },
+          {
+            "name": "WO-26-03128",
+            "status": "Not Started",
+            "docstatus": 1,
+            "sales_order": "SO-26-00109",
+            "production_item": "PK#KS0001-XMMBS-194-HEMPNATURAL",
+            "qty": 300,
+            "produced_qty": 0,
+            "planned_start_date": "2026-09-02 08:09:16.469702",
+            "planned_end_date": null,
+            "remaining_qty": 300.0
+          }
+        ],
+        "stopped_wo": [
+          {
+            "name": "WO-25-07754",
+            "status": "Stopped",
+            "docstatus": 1,
+            "sales_order": "SO-25-00202",
+            "production_item": "PK#KS0001-XMMBS-194-HEMPNATURAL",
+            "qty": 300,
+            "produced_qty": 201,
+            "planned_start_date": "2025-11-18 09:30:37.893774",
+            "planned_end_date": null,
+            "remaining_qty": 99.0
+          }
+        ],
+        "draft_wo": [],
+        "open_wo_count": 2,
+        "gross_qty": 620,
+        "remaining_qty": 620,
+        "stopped_qty": 300,
+        "stopped_remaining_qty": 99,
+        "production_item_kinds": [
+          "PK#"
+        ],
+        "eta_missing_count": 2,
+        "eta_status": "planned_end_date_all_null"
+      },
+      "open_so": {
+        "reconciled_open": 1036,
+        "dead": 421,
+        "live_open": 631,
+        "live_open_net": 615,
+        "positive_open": 631,
+        "negative_over_delivery": -16,
+        "in_progress": 622,
+        "no_plan": 9,
+        "over_delivered": -16,
+        "voided": 100,
+        "bucket_check": 0.0,
+        "live_lines": 22,
+        "dead_so": [
+          {
+            "so": "SO-24-00033-1",
+            "open_qty": 100.0
+          },
+          {
+            "so": "SO-25-00021",
+            "open_qty": 1.0
+          },
+          {
+            "so": "SO-26-00098",
+            "open_qty": 320.0
+          }
+        ],
+        "in_progress_so": [
+          {
+            "so": "SO-26-00042",
+            "open_qty": 2.0
+          },
+          {
+            "so": "SO-26-00103",
+            "open_qty": 320.0
+          },
+          {
+            "so": "SO-26-00109",
+            "open_qty": 300.0
+          }
+        ],
+        "no_plan_so": [
+          {
+            "so": "SO-26-00036",
+            "open_qty": 9.0
+          }
+        ],
+        "over_delivered_so": [
+          {
+            "so": "SO-26-00057",
+            "open_qty": -13.0
+          },
+          {
+            "so": "SO-26-00074",
+            "open_qty": -3.0
+          }
+        ]
+      },
+      "supply": {
+        "available": 360,
+        "intransit": 0,
+        "open_po_raw": 0,
+        "open_po_dedup": 0,
+        "production_gross": 620,
+        "production_remaining": 620,
+        "A_low": 360,
+        "A_high": 980,
+        "B_min": 980,
+        "B_max": 980,
+        "B_min_po_dedup": 980,
+        "B_max_po_dedup": 980,
+        "B_mid_intransit_in_po": 980,
+        "intransit_equals_po_dedup": true,
+        "overlap_status": "not_proven; B_min=max-overlap bound, B_max=no-overlap bound; PO duplicate candidates are a separate sensitivity",
+        "independent_intransit_by_warehouse": {
+          "WayfairCG-Cranbury仓": 0,
+          "美东-CENTRADE": 0,
+          "美中-FZH-DANEEY": 0,
+          "美中-FZH-DANEEY-退货产品仓": 0
+        }
+      },
+      "demand": {
+        "forecast_p50_3m": 302,
+        "forecast_p90_3m": 492.1,
+        "remaining_3m": {
+          "days": 71,
+          "months": 2.333,
+          "forecast_p50": 228.8,
+          "forecast_p90": 404.2,
+          "open_so": 631.0,
+          "p50": 859.8,
+          "p90": 1035.2,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 108.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 48.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 146.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "open_so_live": 631,
+        "total_p50": 933,
+        "total_p90": 1123.1,
+        "dead_so_excluded": 421,
+        "over_delivery_not_netted": -16
+      },
+      "lead_time": {
+        "L60": {
+          "days": 60,
+          "months": 1.971,
+          "forecast_p50": 177.0,
+          "forecast_p90": 319.1,
+          "open_so": 631.0,
+          "p50": 808.0,
+          "p90": 950.1,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 108.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 48.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 0.6452,
+              "p50": 146.0,
+              "h": 3
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "L90": {
+          "days": 90,
+          "months": 2.957,
+          "forecast_p50": 290.5,
+          "forecast_p90": 490.0,
+          "open_so": 631.0,
+          "p50": 921.5,
+          "p90": 1121.0,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 108.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 48.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 146.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 0.6129,
+              "p50": 100.67,
+              "h": 4
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        },
+        "L120": {
+          "days": 120,
+          "months": 3.943,
+          "forecast_p50": 394.2,
+          "forecast_p90": 653.6,
+          "open_so": 631.0,
+          "p50": 1025.2,
+          "p90": 1284.6,
+          "buckets": [
+            {
+              "month": "2026-10",
+              "weight": 0.3226,
+              "p50": 108.0,
+              "h": 1
+            },
+            {
+              "month": "2026-11",
+              "weight": 1.0,
+              "p50": 48.0,
+              "h": 2
+            },
+            {
+              "month": "2026-12",
+              "weight": 1.0,
+              "p50": 146.0,
+              "h": 3
+            },
+            {
+              "month": "2027-01",
+              "weight": 1.0,
+              "p50": 100.67,
+              "h": 4
+            },
+            {
+              "month": "2027-02",
+              "weight": 0.6429,
+              "p50": 100.67,
+              "h": 5
+            }
+          ],
+          "assumption": "Oct 22 decision date; partial-month weights; Jan+ uses the 3-month average rate (extrapolation)"
+        }
+      },
+      "recommendation": {
+        "values": {
+          "A_L60_lo": 141.0,
+          "A_L60_hi": 761.0,
+          "B_L60_lo": 141.0,
+          "B_L60_hi": 141.0,
+          "B_mid_L60": 141.0,
+          "B_po_dedup_L60_lo": 141.0,
+          "B_po_dedup_L60_hi": 141.0,
+          "AVAIL_L60": 761.0,
+          "A_L90_lo": 304.6,
+          "A_L90_hi": 924.6,
+          "B_L90_lo": 304.6,
+          "B_L90_hi": 304.6,
+          "B_mid_L90": 304.6,
+          "B_po_dedup_L90_lo": 304.6,
+          "B_po_dedup_L90_hi": 304.6,
+          "AVAIL_L90": 924.6,
+          "A_L120_lo": 462.3,
+          "A_L120_hi": 1082.3,
+          "B_L120_lo": 462.3,
+          "B_L120_hi": 462.3,
+          "B_mid_L120": 462.3,
+          "B_po_dedup_L120_lo": 462.3,
+          "B_po_dedup_L120_hi": 462.3,
+          "AVAIL_L120": 1082.3
+        },
+        "note": "unrounded; no MOQ/pack multiple; not an order quantity"
+      },
+      "unknowns": [
+        "Stopped WO：300 件未计入在产（1 张）",
+        "在产无 ETA：2/2 张 WO 的 planned_end_date 为空",
+        "死单 SO：421 件（Closed 未发）未计入需求；若业务确认补发需另加",
+        "库存 UOM=unknown；按件计数、未做换算（条件假设，不是已证 1:1）",
+        "在产 WO 的生产物是 PK# 皮壳，本轮按 1:1 对应 KS 成品计入；未检查 ND# 内胆可用性，也未证 PK#+ND# 装配是否即时；该 1:1 关系未证",
+        "断货删失未校正：stock_history 仅 3 天，无法还原历史可售天数",
+        "Cover 可替代未证：cover 库存不并入供给",
+        "Cover 无映射：alias/item_cover_stock 均无行，属 scenario，不写 0"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,101 @@
+{
+  "source": {
+    "document": "楔形枕 补货决策信息包 20261016",
+    "date": "2026-10-16",
+    "note": "仅提取 8 个 SKU 的月需求率、可用库存、在途与业务建议下单量；未复制原始文件中的任何个人信息、邮箱或凭证。原始文件为本地 Markdown，不纳入仓库。"
+  },
+  "business_rule": "下单量 = ceil(月需求率 × 6 − 通途可用 − 在途)，下限 0；覆盖期 6 个月；下单到到货约 3 个月。",
+  "assumptions": {
+    "horizon_months": 12,
+    "lead_time_months": 3,
+    "unit_cost": 1,
+    "holding_cost_per_unit_month": 1,
+    "shortage_penalty_per_unit_month": 20,
+    "fixed_order_cost_per_sku_opened": 5,
+    "moq_rule": "月需求率 < 10 件的 SKU：MOQ 8；月需求率 >= 10 件的 SKU：MOQ 16。",
+    "cap_rule": "单 SKU 上限 = ceil(月需求率 × 12)，即不超过 12 个月需求。",
+    "demand_precision": "需求按 0.1 件/月精度离散化（模型内部以 1/10 件为整数单位）。"
+  },
+  "skus": [
+    {
+      "sku": "2870",
+      "tt_sku": "TT0031010K0062870",
+      "en_item": "KS0121-KQC-138-WHITE",
+      "rate": 2.6,
+      "available": 37,
+      "in_transit": 0,
+      "heuristic_qty": 0,
+      "moq": 8
+    },
+    {
+      "sku": "2871",
+      "tt_sku": "TT0031010K0062871",
+      "en_item": "KS0121-KQC-138-GREY",
+      "rate": 2.6,
+      "available": 28,
+      "in_transit": 0,
+      "heuristic_qty": 0,
+      "moq": 8
+    },
+    {
+      "sku": "2876",
+      "tt_sku": "TT0031010K0062876",
+      "en_item": "KS0121-KQC-100-WHITE",
+      "rate": 5.2,
+      "available": 19,
+      "in_transit": 6,
+      "heuristic_qty": 7,
+      "moq": 8
+    },
+    {
+      "sku": "2877",
+      "tt_sku": "TT0031010K0062877",
+      "en_item": "KS0121-KQC-100-GREY",
+      "rate": 2.0,
+      "available": 52,
+      "in_transit": 0,
+      "heuristic_qty": 0,
+      "moq": 8
+    },
+    {
+      "sku": "2878",
+      "tt_sku": "TT0031010K0062878",
+      "en_item": "KS0121-KQC-153-WHITE",
+      "rate": 15.2,
+      "available": 4,
+      "in_transit": 0,
+      "heuristic_qty": 88,
+      "moq": 16
+    },
+    {
+      "sku": "2879",
+      "tt_sku": "TT0031010K0062879",
+      "en_item": "KS0121-KQC-153-GREY",
+      "rate": 5.0,
+      "available": 11,
+      "in_transit": 0,
+      "heuristic_qty": 19,
+      "moq": 8
+    },
+    {
+      "sku": "2880",
+      "tt_sku": "TT0031010K0062880",
+      "en_item": "KS0121-KQC-194-WHITE",
+      "rate": 18.3,
+      "available": 0,
+      "in_transit": 0,
+      "heuristic_qty": 110,
+      "moq": 16
+    },
+    {
+      "sku": "2881",
+      "tt_sku": "TT0031010K0062881",
+      "en_item": "KS0121-KQC-194-GREY",
+      "rate": 9.1,
+      "available": 22,
+      "in_transit": 0,
+      "heuristic_qty": 33,
+      "moq": 8
+    }
+  ]
+}

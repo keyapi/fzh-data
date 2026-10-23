@@ -1,0 +1,112 @@
+{
+ "schema_version": "t6_usability_audit/1",
+ "inputs": {
+  "main": {
+   "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\replenishment_v2.csv",
+   "sha256": "e0f4d205825d0bfeadce6b0e37ad5f947af02b9646eceec5b9b8bb4449c46b5d"
+  },
+  "decision_sha256": "4b9efecc892342bfb2f463a814b53fed91b0b91750e112dd57e5f63f9899b30e",
+  "db": {
+   "path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+   "sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9"
+  }
+ },
+ "counts": {
+  "rows": 2309,
+  "eligible_rows": 2218,
+  "skus": 1328
+ },
+ "conclusions": {
+  "inventory": {
+   "verdict": "主表“可用”是逐仓库存快照值，不是 SKU 跨仓汇总摊派",
+   "rows_checked": 2218,
+   "rows_same_warehouse_fact": 2058,
+   "rows_unknown_no_stock_row": 160,
+   "rows_allocated": 0,
+   "mismatches": [],
+   "note": "有库存记录的仓数 < 主表仓数 的 SKU，是“有销售但无库存行”的仓，其库存未知（null），不是摊派值"
+  },
+  "demand": {
+   "allocated_rows": 1415,
+   "note": "需求是 SKU 级 AutoETS/MA3 预测按该仓近 3 月销量占比分配（比例见每行），这部分是**假设**，不是同仓实测需求"
+  },
+  "lead_days": {
+   "item_attr_rows_with_lead_days": 3344,
+   "items_with_positive_lead_days": 3344,
+   "all_skus": 1328,
+   "all_skus_with_lead_days": 518,
+   "eligible_skus": 1237,
+   "eligible_skus_with_lead_days": 501,
+   "eligible_rows": 2218,
+   "eligible_rows_with_lead_days": 824,
+   "value_range": [
+    3,
+    30
+   ],
+   "relation_to_scenarios": "主表 L60/L90/L120 是固定的日历窗口情景（提前期+复核），不是由 lead_days 推导；lead_days 最大 30 天 < 60 天，不能当端到端提前期实测",
+   "rows_without_lead_days": 1394,
+   "handling": "不填默认值；这些行仍给三情景，但只能读作情景，不能当实测提前期"
+  },
+  "missing_categories": [
+   {
+    "category": "PO ETA",
+    "owner": "采购/供应链",
+    "rows": 169,
+    "skus": 161
+   },
+   {
+    "category": "在产 WO",
+    "owner": "生产/PMC",
+    "rows": 2218,
+    "skus": 1237
+   },
+   {
+    "category": "UOM/映射",
+    "owner": "主数据/EN",
+    "rows": 91,
+    "skus": 91
+   },
+   {
+    "category": "MOQ/包装/成本",
+    "owner": "采购/财务",
+    "rows": 2218,
+    "skus": 1237
+   },
+   {
+    "category": "需求上下界",
+    "owner": "业务",
+    "rows": 2218,
+    "skus": 1237
+   },
+   {
+    "category": "共享池/跨仓",
+    "owner": "供应链管理",
+    "rows": 2218,
+    "skus": 1237
+   },
+   {
+    "category": "去重/关单键",
+    "owner": "数据/系统",
+    "rows": 267,
+    "skus": 259
+   }
+  ],
+  "facts_vs_assumptions": {
+   "facts": [
+    "可用（同仓 stock_latest 快照）",
+    "在途（同仓快照）",
+    "PO未结（tongtool_po 按行汇总，去重状态另列）",
+    "状态/仓/SKU 键",
+    "lead_days（主数据字段，但那只是配置，不是实测到货）"
+   ],
+   "assumptions": [
+    "月需求率 = SKU 预测 × 仓销量占比（分配假设）",
+    "需求 P50 = 窗口权重 × 该率",
+    "压力情景上限 = P50 × (1+MA3 残差系数)，截顶 3×，未验证覆盖",
+    "去重情景批：重复 PO 一笔 / 在途=PO 同批 / 否则两批",
+    "PR297 基线 = 新率 × 覆盖期 − 可用 − 在途",
+    "L60/L90/L120 = 固定日历窗口，不是实测提前期"
+   ]
+  }
+ }
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": "forward_net_frozen/1",
+  "inputs": {
+    "decision_v2": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\decision_v2.csv",
+      "sha256": "4b9efecc892342bfb2f463a814b53fed91b0b91750e112dd57e5f63f9899b30e"
+    },
+    "replenishment_v2": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\replenishment_v2.csv",
+      "sha256": "6b30e751ecda86301bc73831ffb21705574a0a57b0fbb62c7f43aaba9716c9b7"
+    }
+  },
+  "outputs": {
+    "rows": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\forward_net_rows.csv",
+      "sha256": "fe74fcc8afef037ccab3ae93756cd54c03685cdca876e5131d5d1230531b7232"
+    },
+    "buckets": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\forward_net_buckets.csv",
+      "sha256": "d8df603dfb8aebafad9f64e5cee3463f469a9a4af7f38ef3c5a9ad5f0a9a232a"
+    }
+  },
+  "generated_for": "逐行复核：用 inputs + 脚本即可复算 outputs 的 sha256"
+}

@@ -1,0 +1,140 @@
+{
+  "schema_version": "sku538_facts/1",
+  "scope": {
+    "mother_set_source": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\destinations.json",
+    "classification_source": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\full_sku_classification.csv",
+    "eval_source": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\full_sku_eval.json",
+    "db": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+    "db_read_only": true,
+    "origins": [
+      "2025-03",
+      "2025-06",
+      "2025-09",
+      "2025-12",
+      "2026-03"
+    ],
+    "min_train": 18,
+    "as_of": "2026-09"
+  },
+  "identities": {
+    "mother_set": 1328,
+    "with_monthly_series": 1328,
+    "without_series": 0,
+    "scored_skus_reported": 790,
+    "scored_skus_reproduced": 790,
+    "never_scored_reproduced": 538,
+    "never_scored_units": 2690,
+    "missing_cells_from_scored_reproduced": 1130,
+    "missing_cells_reported": 3820,
+    "common_cells_reported": 2820,
+    "check_mother": true,
+    "check_scored": true,
+    "check_never": true,
+    "check_units": true,
+    "check_missing": true,
+    "check_common": true
+  },
+  "legacy": {
+    "reported": {
+      "input_skus": 1328,
+      "with_monthly_series": 1328,
+      "scored_skus": 790,
+      "unscored_skips": 3820,
+      "common_cells": 2820
+    }
+  },
+  "aggregates": {
+    "n": 538,
+    "history_len_buckets": {
+      "1-5": 94,
+      "12-17": 105,
+      "18-23": 157,
+      "6-11": 182
+    },
+    "history_len_existing_split": {
+      "新品短史 12–23 月": 262,
+      "证据不足 <12 月": 276
+    },
+    "zero_share_buckets": {
+      "(0,25%]": 93,
+      "(25,50%]": 156,
+      "(50,75%]": 160,
+      "(75,100%)": 42,
+      "0%": 87
+    },
+    "mapping_states": {
+      "已映射": 481,
+      "未映射": 57
+    },
+    "destinations_states": {
+      "mapped_eligible": 463,
+      "mapped_ineligible": 18,
+      "unmapped": 57
+    },
+    "observation_buckets": {
+      "有观测的非零": 538
+    },
+    "has_any_sales": {
+      "yes": 538
+    },
+    "classification_types": {
+      "新品短史": 262,
+      "证据不足": 276
+    },
+    "candidate_short_history": {
+      "no": 276,
+      "yes": 262
+    },
+    "validation_status": {
+      "本批未验证": 538
+    },
+    "warehouse_count": {
+      "1": 345,
+      "2": 146,
+      "3": 45,
+      "4": 2
+    },
+    "series_rows": {
+      "n_min": 1,
+      "n_median": 6.0,
+      "n_max": 57
+    },
+    "history_len_months": {
+      "n_min": 1,
+      "n_median": 11.0,
+      "n_max": 23
+    },
+    "zero_share_median": 0.4286,
+    "all_zero_skus": 0,
+    "no_history_skus": 0,
+    "skus_with_zero_months": 451,
+    "skus_without_zero_months": 87,
+    "total_qty_stats": {
+      "n_min": 1.0,
+      "n_median": 12.0,
+      "n_max": 994.0
+    },
+    "dest_state_crosscheck": {
+      "unmapped_in_538": 57,
+      "mapped_in_538": 481,
+      "mother_unmapped": 62,
+      "mother_mapped_total": 1266,
+      "mother_mapping_error_codes": {
+        "duplicate_mapping": 0,
+        "one_code_multi_material": 0,
+        "alias_deleted": 0,
+        "uom_unknown": 29,
+        "discontinued": 0
+      }
+    },
+    "ambiguity_examples": []
+  },
+  "boundaries": [
+    "只做事实与标签：无预测、无数量、未填 0、未删 SKU。",
+    "本批未验证 ≠ 不可预测；历史短 ≠ 需求为零。",
+    "母集来自 destinations.json（1,328 个有订单记录的 SKU），因此「无历史（无观测）」在本母集里结构性地不可能出现——不是业务上没有。",
+    "candidate_short_history 只用既有分类字段 type=新品短史（12–23 月），未新增门槛；证据不足（<12 月）是否纳入候选需 Codex2 裁决。",
+    "790 个已评分 SKU 的表现不得外推到这 538 个。"
+  ],
+  "elapsed_s": 0.21
+}

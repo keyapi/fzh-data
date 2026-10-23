@@ -1,0 +1,165 @@
+{
+  "bom": {
+    "all_rows": 3700,
+    "family_rows": 1739,
+    "active_codes": 1489,
+    "deleted_codes": 108,
+    "en_items": 762,
+    "ambiguous_codes": 0,
+    "ambiguous_sample": {}
+  },
+  "orders": {
+    "total_rows": 45129,
+    "tri_rows": 33651,
+    "tri_qty": 34650.0,
+    "mapped_rows": 32888,
+    "mapped_qty": 33719.0,
+    "mapped_row_rate": 0.9773,
+    "mapped_qty_rate": 0.9731,
+    "ambiguous_rows": 0,
+    "missing_rows": 763,
+    "missing_qty": 931.0,
+    "deleted_only_rows": 0,
+    "g1_scope": {
+      "warehouses": [
+        "美东-CENTRADE",
+        "美中-FZH-DANEEY"
+      ],
+      "rows": 18863,
+      "qty": 19267.0,
+      "mapped_rows": 18708,
+      "mapped_qty": 19043.0,
+      "mapped_row_rate": 0.9918,
+      "mapped_qty_rate": 0.9884,
+      "ambiguous_rows": 0,
+      "missing_rows": 155,
+      "missing_qty": 224.0,
+      "deleted_only_rows": 0,
+      "by_warehouse_qty": {
+        "美东-CENTRADE": 14751.0,
+        "美中-FZH-DANEEY": 4516.0
+      }
+    },
+    "by_month": [
+      {
+        "month": "2026-04",
+        "file": "2026年4月订单_order_cost_2026-06-01_13-52-53.xlsx",
+        "tri_rows": 3386,
+        "tri_qty": 3505.0,
+        "mapped_rows": 3266,
+        "mapped_qty": 3372.0,
+        "ambiguous_rows": 0,
+        "missing_rows": 120,
+        "deleted_only_rows": 0
+      },
+      {
+        "month": "2026-05",
+        "file": "2026年5月订单_order_cost_2026-07-08_15-45-40.xlsx",
+        "tri_rows": 3913,
+        "tri_qty": 4043.0,
+        "mapped_rows": 3802,
+        "mapped_qty": 3911.0,
+        "ambiguous_rows": 0,
+        "missing_rows": 111,
+        "deleted_only_rows": 0
+      },
+      {
+        "month": "2026-06",
+        "file": "2026年6月订单_order_cost_2026-08-06_14-55-45.xlsx",
+        "tri_rows": 6146,
+        "tri_qty": 6310.0,
+        "mapped_rows": 6017,
+        "mapped_qty": 6159.0,
+        "ambiguous_rows": 0,
+        "missing_rows": 129,
+        "deleted_only_rows": 0
+      },
+      {
+        "month": "2026-07",
+        "file": "2026年7月订单_order_cost_2026-10-09_11-23-27.xlsx",
+        "tri_rows": 7653,
+        "tri_qty": 7852.0,
+        "mapped_rows": 7525,
+        "mapped_qty": 7699.0,
+        "ambiguous_rows": 0,
+        "missing_rows": 128,
+        "deleted_only_rows": 0
+      },
+      {
+        "month": "2026-08",
+        "file": "2026年8月订单_order_cost_2026-09-03_13-37-47.xlsx",
+        "tri_rows": 8582,
+        "tri_qty": 8818.0,
+        "mapped_rows": 8471,
+        "mapped_qty": 8670.0,
+        "ambiguous_rows": 0,
+        "missing_rows": 111,
+        "deleted_only_rows": 0
+      },
+      {
+        "month": "2026-09",
+        "file": "2026年9月订单_order_cost_2026-10-14_16-09-47.xlsx",
+        "tri_rows": 3971,
+        "tri_qty": 4122.0,
+        "mapped_rows": 3807,
+        "mapped_qty": 3908.0,
+        "ambiguous_rows": 0,
+        "missing_rows": 164,
+        "deleted_only_rows": 0
+      }
+    ],
+    "by_warehouse_qty": {
+      "美东-CENTRADE": 14751.0,
+      "DANEEY-皮壳/半成品": 10972.0,
+      "美中-FZH-DANEEY": 4516.0,
+      "波兰": 3012.0,
+      "其他": 1228.0,
+      "DANEEY-退货仓": 171.0
+    },
+    "by_channel_qty": {
+      "亚马逊": 23283.0,
+      "Wayfair": 5990.0,
+      "OSTK": 2500.0,
+      "PotteryBarn": 1232.0,
+      "Mirakl": 746.0,
+      "allegro": 186.0,
+      "HOME24": 122.0,
+      "Shopify": 104.0,
+      "tiktok": 98.0,
+      "Walmart": 85.0,
+      "manomano": 68.0,
+      "kaufland.de": 67.0,
+      "Cdiscount": 62.0,
+      "XXXL": 54.0,
+      "DLZ": 24.0,
+      "Check24": 18.0,
+      "FSHNDSUS": 6.0,
+      "BESTBUY": 5.0
+    },
+    "by_family_rows": {
+      "KS0001": 29771,
+      "KS0248": 3117
+    },
+    "by_family_qty": {
+      "KS0001": 30452.0,
+      "KS0248": 3267.0
+    },
+    "missing_top_prefix": {
+      "TT0000933K0011516": 113,
+      "TT0000930K0011510": 103,
+      "TT0000932K0011514": 100,
+      "TT0000931K0011512": 91,
+      "TT0031236K0064069": 80,
+      "TT0031073K0063251": 62,
+      "TT0031073K0063250": 55,
+      "TT0031237K0064071": 24,
+      "TT0031124K0063771": 13,
+      "TT0031236K0064070": 11,
+      "C/Linen": 11,
+      "TT0000897K0011773": 10,
+      "C/Cord": 10,
+      "TT0031123K0063769": 10,
+      "TT0312572K0064143": 10
+    }
+  }
+}

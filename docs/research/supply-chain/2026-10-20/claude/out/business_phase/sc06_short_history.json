@@ -1,0 +1,121 @@
+{
+  "schema_version": "sc06_short_history/1",
+  "scope": {
+    "shadow_skus": 155,
+    "shadow_units": 257,
+    "insufficient_skus": 140,
+    "insufficient_mapped": 87,
+    "unmapped_untouched": 57
+  },
+  "cuts": [
+    6,
+    7
+  ],
+  "horizon": 3,
+  "common_cells": 387,
+  "sku_clusters": 151,
+  "methods": {
+    "naive": "见脚本；category 只用同品类 peer 的前 k 月水平",
+    "ma3": "见脚本；category 只用同品类 peer 的前 k 月水平",
+    "tsb": "见脚本；category 只用同品类 peer 的前 k 月水平",
+    "category": "见脚本；category 只用同品类 peer 的前 k 月水平",
+    "tree": "见脚本；category 只用同品类 peer 的前 k 月水平"
+  },
+  "wape": {
+    "naive": {
+      "wape": 0.4036,
+      "cells": 387
+    },
+    "ma3": {
+      "wape": 0.4213,
+      "cells": 387
+    },
+    "tsb": {
+      "wape": 0.4302,
+      "cells": 387
+    },
+    "category": {
+      "wape": 0.4,
+      "cells": 387
+    },
+    "tree": {
+      "wape": 0.4441,
+      "cells": 387
+    }
+  },
+  "beta_ci": {
+    "naive": [
+      0.2787,
+      0.5634
+    ],
+    "ma3": [
+      0.3041,
+      0.5539
+    ],
+    "tsb": [
+      0.3232,
+      0.5646
+    ],
+    "category": [
+      0.2934,
+      0.5516
+    ],
+    "tree": [
+      0.3563,
+      0.558
+    ]
+  },
+  "delta_wape_vs_naive": {
+    "ma3": {
+      "ci95": [
+        -0.0305,
+        0.0667
+      ],
+      "significant": false
+    },
+    "tsb": {
+      "ci95": [
+        -0.0574,
+        0.1463
+      ],
+      "significant": false
+    },
+    "category": {
+      "ci95": [
+        -0.1071,
+        0.1563
+      ],
+      "significant": false
+    },
+    "tree": {
+      "ci95": [
+        -0.0885,
+        0.1317
+      ],
+      "significant": false
+    }
+  },
+  "bootstrap": {
+    "resamples": 2000,
+    "seed": 20261023,
+    "unit": "SKU 整簇",
+    "includes_retrain_variance": false,
+    "note": "每个切点独立重训（只用切点前信息），CI 仍只覆盖固定预测下的重采样"
+  },
+  "gap_tier": {
+    "rows": 140,
+    "months_short_distribution": {
+      "3": 19,
+      "5": 62,
+      "1": 21,
+      "4": 15,
+      "2": 23
+    },
+    "unmapped_rows": 53
+  },
+  "boundaries": [
+    "239 只用于可验证档结论，不外推到 155/87",
+    "品类借力只用训练窗内品类数据",
+    "不替换默认、不出量"
+  ]
+}

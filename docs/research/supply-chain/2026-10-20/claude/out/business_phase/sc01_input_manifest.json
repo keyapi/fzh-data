@@ -1,0 +1,143 @@
+{
+  "schema_version": "sc01_input_manifest/1",
+  "generated_at": "2026-10-23 16:52:27",
+  "generated_by": "claude-worker-2",
+  "purpose": "SC01 输入基线清册：只登记路径/hash/行数/时间窗/口径，不做分析、不出量",
+  "inputs": {
+    "destinations.json": {
+      "path": "out\\business_phase\\destinations.json",
+      "sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60",
+      "size_bytes": 1813093,
+      "file_mtime": "2026-10-22 16:29:39",
+      "rows": 1328,
+      "generated_at": "2026-10-22T16:29:39+08:00",
+      "commit": "44def7f5",
+      "coverage_window": "gs_orders.despatch_date 2026-04-01..2026-09-30（近 6 个完整月）",
+      "note": "母集：distinct sku_tongtool；JSON 行数 49,028 是缩进行，rows 指 rows[] 元素数"
+    },
+    "final_bundle.csv": {
+      "path": "out\\business_phase\\final_bundle.csv",
+      "sha256": "3bb860a67f2be72e64d369cb1d463203d57f7277c602fa872d2d0f4ca228bdd2",
+      "size_bytes": 964719,
+      "file_mtime": "2026-10-23 09:39:12",
+      "rows": 2309,
+      "commit": "b02fd083",
+      "coverage_window": "SKU×仓（继承母集 2026-04..09）",
+      "note": "C 包成品表；1,328 SKU × 1–6 仓"
+    },
+    "decision_v2.csv": {
+      "path": "out\\business_phase\\decision_v2.csv",
+      "sha256": "4b9efecc892342bfb2f463a814b53fed91b0b91750e112dd57e5f63f9899b30e",
+      "size_bytes": 1533362,
+      "file_mtime": "2026-10-22 17:17:54",
+      "rows": 2309,
+      "commit": "ab808652",
+      "coverage_window": "同母集",
+      "note": "T3 SKU×仓供需决；forward_net 的直接输入"
+    },
+    "replenishment_v2.csv": {
+      "path": "out\\business_phase\\replenishment_v2.csv",
+      "sha256": "6b30e751ecda86301bc73831ffb21705574a0a57b0fbb62c7f43aaba9716c9b7",
+      "size_bytes": 4340108,
+      "file_mtime": "2026-10-22 17:53:52",
+      "rows": 2309,
+      "commit": "7e0f6fc4",
+      "coverage_window": "同母集",
+      "note": "T5 预测；forward_net 的直接输入"
+    }
+  },
+  "database": {
+    "path": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+    "sha256": "0919dd8c852df51ee085f1e9019c59c156bd3d3fb9d9465a798e7ac15fc53ca6",
+    "size_bytes": 232009728,
+    "file_mtime": "2026-10-23 09:38:39",
+    "tables": {
+      "gs_orders": 407898,
+      "monthly_series": 43955,
+      "stock_history": 15820,
+      "stock_latest": 4973,
+      "tongtool_stock": 5065,
+      "sku_item": 3482,
+      "sku_map": 3482,
+      "bom": 5575,
+      "bom_exploded": 22510,
+      "item_attr": 15230
+    },
+    "coverage": {
+      "gs_orders": "month 202301..202609",
+      "monthly_series": "2023-01..2026-09",
+      "stock_history": "2026-10-20..2026-10-22（3 个快照日）"
+    },
+    "recorded_db_sha256_at_c_package_generation": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+    "drift_note": "当前 DB sha256 与 destinations.json/其它 C 包产物内记录的 25579c5d… **不一致**：DB 在 2026-10-23 09:38 被更新过。CSV 类产物绑定的是生成时的 DB 状态，复现需注意数据漂移。"
+  },
+  "stock_snapshot": {
+    "table": "stock_history",
+    "dates": [
+      "2026-10-20",
+      "2026-10-21",
+      "2026-10-22"
+    ],
+    "rows": 15820,
+    "warehouses": [
+      "WayfairCG-Cranbury仓",
+      "WayfairCG-Perris仓",
+      "WayfairCG-Romeoville仓",
+      "多渠道仓库",
+      "大件云仓",
+      "星链海外仓",
+      "波兰-FZHPoland-covers",
+      "美东-CENTRADE",
+      "美中-FZH-DANEEY",
+      "美中-FZH-DANEEY-退货产品仓"
+    ]
+  },
+  "mother_reconciliation": {
+    "sku_level": 1328,
+    "sku_warehouse_level": 2309,
+    "distinct_warehouses": 11,
+    "rows_per_sku": {
+      "1": 779,
+      "2": 240,
+      "3": 209,
+      "4": 80,
+      "5": 17,
+      "6": 3
+    },
+    "equation": "1,328 个 SKU 各占 1–6 个仓 -> 合计 2,309 个 SKU×仓；779+240+209+80+17+3 = 1,328",
+    "full_history_skus": 2553,
+    "outside_mother": 1225,
+    "outside_reason": "母集只取 despatch 2026-04..09；1,225 个 SKU 有更早历史但近 6 月无发货（SC10 口径）",
+    "check": "1,328 + 1,225 = 2,553"
+  },
+  "caliber": {
+    "proven": [
+      "母集窗口（despatch 2026-04-01..09-30，来自 destinations.scope）",
+      "仓名清单（stock_history 10 仓 / bundle 11 个含 out_of_scope 哨兵）",
+      "库存快照日 3 天（2026-10-20/21/22）",
+      "SKU↔EN 物料映射 3,482 对（sku_item，与 sku_map 一致）",
+      "BOM 组件关系 22,510 行（bom_exploded）"
+    ],
+    "unproven": [
+      "**库存单位口径：stock_history.uom_basis 15,820 行全部 unknown**",
+      "仓与实物对应（未盘点核对）",
+      "快照日之间的出入库（无台账）",
+      "EN Item.stock_uom（未查）",
+      "承运商 ETA / 到货时间（仅 ETA 字段，未证）"
+    ],
+    "uom_note": "任何跨 UOM 合计都不成立（个/套混存，见 2026-10-23-map-evidence.md）"
+  },
+  "out_of_scope": [
+    "EN 生产实时数据：DN/Shipment 是 2026-10-23 当场只读 REST 拉取，**没有冻结快照**；仅结果留在 out/business_phase/dn_*.csv 与 sc04/，重跑会得到当时的实时值",
+    "承运商 API（FedEx/UPS/GLS）：本批从未调用",
+    "EN Item.stock_uom / Stock Ledger Entry / 盘点单：未查",
+    "通途商品档案单位字段：本地表无该列，未查",
+    "钉钉头程/发货信息表、PO/WO 明细：未接入",
+    "2026-08-01 之前的 803 张 DN：未覆盖",
+    "外部 FBA 仓库存：不在任何本地口径"
+  ],
+  "reproduce": {
+    "command": "uv run python docs/research/supply-chain/2026-10-20/claude/experiments/sc01/sc01_input_manifest.py",
+    "expected": "所有 sha256 与本节一致；1,328 / 2,309 / 2,553 / 1,225 四个数与 rows_per_sku 分布一致；stock_history 恰 3 个快照日；uom_basis 全部 unknown"
+  }
+}

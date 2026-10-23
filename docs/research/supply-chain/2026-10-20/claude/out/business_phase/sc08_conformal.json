@@ -1,0 +1,1257 @@
+{
+  "schema_version": "sc08_conformal/1",
+  "protocol": "乘数只用内层校准窗 2025-10..12 的『实际/预测』比值（池化到 tier×universe）；内层评分 2026-01..03、外层评分 2026-07..09，外层只评不调",
+  "policy": {
+    "lead": 2,
+    "review": 1,
+    "semantics": "lost_sales",
+    "warmup": 3
+  },
+  "universes": {
+    "scored790": {
+      "units": 1354,
+      "calibration": [
+        "2025-10",
+        "2025-11",
+        "2025-12"
+      ],
+      "inner_eval": [
+        "2026-01",
+        "2026-02",
+        "2026-03"
+      ],
+      "outer_eval": [
+        "2026-07",
+        "2026-08",
+        "2026-09"
+      ],
+      "tiers": {
+        "T5_star": {
+          "ratio_n": 2673,
+          "by_tau": {
+            "0.90": {
+              "multiplier": {
+                "conformal_raw": 3.0765,
+                "conformal_capped3": 3.0,
+                "cv_z": 1.2816
+              },
+              "inner": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.884,
+                  "alpha": 0.7985,
+                  "avg_inventory": 21.2126,
+                  "excess": 48229.67
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9452,
+                  "alpha": 0.8619,
+                  "avg_inventory": 45.621,
+                  "excess": 112409.48
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.944,
+                  "alpha": 0.8606,
+                  "avg_inventory": 44.2847,
+                  "excess": 108820.24
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.7735,
+                  "alpha": 0.781,
+                  "avg_inventory": 13.7025,
+                  "excess": 27897.73
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.8334,
+                  "alpha": 0.8285,
+                  "avg_inventory": 32.6821,
+                  "excess": 77241.22
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.8298,
+                  "alpha": 0.8272,
+                  "avg_inventory": 31.6817,
+                  "excess": 74602.24
+                }
+              }
+            },
+            "0.95": {
+              "multiplier": {
+                "conformal_raw": 4.941,
+                "conformal_capped3": 3.0,
+                "cv_z": 1.6449
+              },
+              "inner": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.8983,
+                  "alpha": 0.8149,
+                  "avg_inventory": 24.3973,
+                  "excess": 56535.44
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9609,
+                  "alpha": 0.8885,
+                  "avg_inventory": 78.3081,
+                  "excess": 200551.06
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.944,
+                  "alpha": 0.8606,
+                  "avg_inventory": 44.2847,
+                  "excess": 108820.24
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.8004,
+                  "alpha": 0.7939,
+                  "avg_inventory": 15.8704,
+                  "excess": 32978.4
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.8877,
+                  "alpha": 0.8555,
+                  "avg_inventory": 57.441,
+                  "excess": 143052.24
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.8298,
+                  "alpha": 0.8272,
+                  "avg_inventory": 31.6817,
+                  "excess": 74602.24
+                }
+              }
+            },
+            "0.99": {
+              "multiplier": {
+                "conformal_raw": 13.8298,
+                "conformal_capped3": 3.0,
+                "cv_z": 2.3263
+              },
+              "inner": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9182,
+                  "alpha": 0.8405,
+                  "avg_inventory": 30.4308,
+                  "excess": 72345.07
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9676,
+                  "alpha": 0.9034,
+                  "avg_inventory": 234.6481,
+                  "excess": 623687.37
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.944,
+                  "alpha": 0.8606,
+                  "avg_inventory": 44.2847,
+                  "excess": 108820.24
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.8338,
+                  "alpha": 0.8171,
+                  "avg_inventory": 20.1171,
+                  "excess": 43497.39
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.9614,
+                  "alpha": 0.8757,
+                  "avg_inventory": 177.5698,
+                  "excess": 466872.56
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.8298,
+                  "alpha": 0.8272,
+                  "avg_inventory": 31.6817,
+                  "excess": 74602.24
+                }
+              }
+            }
+          }
+        },
+        "combo": {
+          "ratio_n": 4062,
+          "by_tau": {
+            "0.90": {
+              "multiplier": {
+                "conformal_raw": 2.5376,
+                "conformal_capped3": 2.5376,
+                "cv_z": 1.2816
+              },
+              "inner": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9222,
+                  "alpha": 0.8508,
+                  "avg_inventory": 28.194,
+                  "excess": 66551.09
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9646,
+                  "alpha": 0.8915,
+                  "avg_inventory": 44.0434,
+                  "excess": 107958.83
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9646,
+                  "alpha": 0.8915,
+                  "avg_inventory": 44.0434,
+                  "excess": 107958.83
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.6913,
+                  "alpha": 0.7511,
+                  "avg_inventory": 11.6132,
+                  "excess": 23624.94
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.7349,
+                  "alpha": 0.8068,
+                  "avg_inventory": 22.4294,
+                  "excess": 51386.29
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.7349,
+                  "alpha": 0.8068,
+                  "avg_inventory": 22.4294,
+                  "excess": 51386.29
+                }
+              }
+            },
+            "0.95": {
+              "multiplier": {
+                "conformal_raw": 4.6283,
+                "conformal_capped3": 3.0,
+                "cv_z": 1.6449
+              },
+              "inner": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9343,
+                  "alpha": 0.8669,
+                  "avg_inventory": 32.5654,
+                  "excess": 78042.73
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9831,
+                  "alpha": 0.9343,
+                  "avg_inventory": 87.3328,
+                  "excess": 224705.05
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9714,
+                  "alpha": 0.9076,
+                  "avg_inventory": 53.5943,
+                  "excess": 133604.96
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.7197,
+                  "alpha": 0.77,
+                  "avg_inventory": 13.3776,
+                  "excess": 27883.56
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.8411,
+                  "alpha": 0.8755,
+                  "avg_inventory": 46.5424,
+                  "excess": 114889.23
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.761,
+                  "alpha": 0.8253,
+                  "avg_inventory": 27.7236,
+                  "excess": 65225.09
+                }
+              }
+            },
+            "0.99": {
+              "multiplier": {
+                "conformal_raw": 57.0431,
+                "conformal_capped3": 3.0,
+                "cv_z": 2.3263
+              },
+              "inner": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9486,
+                  "alpha": 0.8875,
+                  "avg_inventory": 40.8322,
+                  "excess": 99885.32
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9991,
+                  "alpha": 0.987,
+                  "avg_inventory": 1176.2559,
+                  "excess": 3173165.99
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9714,
+                  "alpha": 0.9076,
+                  "avg_inventory": 53.5943,
+                  "excess": 133604.96
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.7648,
+                  "alpha": 0.8084,
+                  "avg_inventory": 16.7841,
+                  "excess": 36155.22
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.9991,
+                  "alpha": 0.9831,
+                  "avg_inventory": 677.1192,
+                  "excess": 1818856.58
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.761,
+                  "alpha": 0.8253,
+                  "avg_inventory": 27.7236,
+                  "excess": 65225.09
+                }
+              }
+            }
+          }
+        },
+        "tree": {
+          "ratio_n": 4059,
+          "by_tau": {
+            "0.90": {
+              "multiplier": {
+                "conformal_raw": 1.5983,
+                "conformal_capped3": 1.5983,
+                "cv_z": 1.2816
+              },
+              "inner": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9364,
+                  "alpha": 0.9702,
+                  "avg_inventory": 26.3706,
+                  "excess": 61165.46
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9409,
+                  "alpha": 0.9658,
+                  "avg_inventory": 23.6609,
+                  "excess": 53594.13
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9409,
+                  "alpha": 0.9658,
+                  "avg_inventory": 23.6609,
+                  "excess": 53594.13
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.6301,
+                  "alpha": 0.8692,
+                  "avg_inventory": 9.8744,
+                  "excess": 20557.76
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.6096,
+                  "alpha": 0.8517,
+                  "avg_inventory": 9.0956,
+                  "excess": 18203.34
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.6096,
+                  "alpha": 0.8517,
+                  "avg_inventory": 9.0956,
+                  "excess": 18203.34
+                }
+              }
+            },
+            "0.95": {
+              "multiplier": {
+                "conformal_raw": 2.2152,
+                "conformal_capped3": 2.2152,
+                "cv_z": 1.6449
+              },
+              "inner": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9429,
+                  "alpha": 0.9767,
+                  "avg_inventory": 30.486,
+                  "excess": 72017.89
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9661,
+                  "alpha": 0.9828,
+                  "avg_inventory": 35.8631,
+                  "excess": 85933.85
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9661,
+                  "alpha": 0.9828,
+                  "avg_inventory": 35.8631,
+                  "excess": 85933.85
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.6578,
+                  "alpha": 0.8911,
+                  "avg_inventory": 11.5693,
+                  "excess": 24548.46
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.6711,
+                  "alpha": 0.9131,
+                  "avg_inventory": 14.587,
+                  "excess": 31589.54
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.6711,
+                  "alpha": 0.9131,
+                  "avg_inventory": 14.587,
+                  "excess": 31589.54
+                }
+              }
+            },
+            "0.99": {
+              "multiplier": {
+                "conformal_raw": 4.3222,
+                "conformal_capped3": 3.0,
+                "cv_z": 2.3263
+              },
+              "inner": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9529,
+                  "alpha": 0.9809,
+                  "avg_inventory": 38.2246,
+                  "excess": 92566.49
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9883,
+                  "alpha": 0.9966,
+                  "avg_inventory": 78.0429,
+                  "excess": 199515.64
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 794,
+                  "demand_covered_pct": 58.6,
+                  "beta": 0.9792,
+                  "alpha": 0.9931,
+                  "avg_inventory": 51.5319,
+                  "excess": 127941.07
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.7008,
+                  "alpha": 0.9194,
+                  "avg_inventory": 14.8359,
+                  "excess": 32432.22
+                },
+                "conformal": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.7764,
+                  "alpha": 0.962,
+                  "avg_inventory": 34.4295,
+                  "excess": 83226.75
+                },
+                "conformal_capped3": {
+                  "units": 1354,
+                  "units_with_demand": 790,
+                  "demand_covered_pct": 58.3,
+                  "beta": 0.718,
+                  "alpha": 0.9443,
+                  "avg_inventory": 21.8842,
+                  "excess": 50250.81
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "verifiable239": {
+      "units": 178,
+      "calibration": [
+        "2025-10",
+        "2025-11",
+        "2025-12"
+      ],
+      "inner_eval": [
+        "2026-01",
+        "2026-02",
+        "2026-03"
+      ],
+      "outer_eval": [
+        "2026-07",
+        "2026-08",
+        "2026-09"
+      ],
+      "tiers": {
+        "T5_star": {
+          "ratio_n": 441,
+          "by_tau": {
+            "0.90": {
+              "multiplier": {
+                "conformal_raw": 3.0,
+                "conformal_capped3": 3.0,
+                "cv_z": 1.2816
+              },
+              "inner": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9125,
+                  "alpha": 0.7638,
+                  "avg_inventory": 17.3665,
+                  "excess": 5045.85
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9482,
+                  "alpha": 0.8201,
+                  "avg_inventory": 38.1842,
+                  "excess": 12246.18
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9482,
+                  "alpha": 0.8201,
+                  "avg_inventory": 38.1842,
+                  "excess": 12246.18
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.76,
+                  "alpha": 0.7746,
+                  "avg_inventory": 9.6897,
+                  "excess": 2436.24
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8433,
+                  "alpha": 0.8404,
+                  "avg_inventory": 25.5062,
+                  "excess": 7540.85
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8433,
+                  "alpha": 0.8404,
+                  "avg_inventory": 25.5062,
+                  "excess": 7540.85
+                }
+              }
+            },
+            "0.95": {
+              "multiplier": {
+                "conformal_raw": 4.5313,
+                "conformal_capped3": 3.0,
+                "cv_z": 1.6449
+              },
+              "inner": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9219,
+                  "alpha": 0.7759,
+                  "avg_inventory": 20.0069,
+                  "excess": 5929.9
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9572,
+                  "alpha": 0.8389,
+                  "avg_inventory": 61.5687,
+                  "excess": 20536.42
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9482,
+                  "alpha": 0.8201,
+                  "avg_inventory": 38.1842,
+                  "excess": 12246.18
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.7944,
+                  "alpha": 0.7981,
+                  "avg_inventory": 11.3287,
+                  "excess": 2883.75
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.9077,
+                  "alpha": 0.8603,
+                  "avg_inventory": 42.9949,
+                  "excess": 13550.14
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8433,
+                  "alpha": 0.8404,
+                  "avg_inventory": 25.5062,
+                  "excess": 7540.86
+                }
+              }
+            },
+            "0.99": {
+              "multiplier": {
+                "conformal_raw": 19.8851,
+                "conformal_capped3": 3.0,
+                "cv_z": 2.3263
+              },
+              "inner": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9351,
+                  "alpha": 0.8046,
+                  "avg_inventory": 24.9907,
+                  "excess": 7625.99
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9649,
+                  "alpha": 0.8477,
+                  "avg_inventory": 296.8056,
+                  "excess": 104253.91
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9482,
+                  "alpha": 0.8201,
+                  "avg_inventory": 38.1842,
+                  "excess": 12246.18
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8397,
+                  "alpha": 0.8263,
+                  "avg_inventory": 14.589,
+                  "excess": 3834.19
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.9701,
+                  "alpha": 0.9038,
+                  "avg_inventory": 224.7626,
+                  "excess": 78044.82
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8433,
+                  "alpha": 0.8404,
+                  "avg_inventory": 25.5062,
+                  "excess": 7540.86
+                }
+              }
+            }
+          }
+        },
+        "combo": {
+          "ratio_n": 534,
+          "by_tau": {
+            "0.90": {
+              "multiplier": {
+                "conformal_raw": 4.5276,
+                "conformal_capped3": 3.0,
+                "cv_z": 1.2816
+              },
+              "inner": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9203,
+                  "alpha": 0.7528,
+                  "avg_inventory": 20.5071,
+                  "excess": 6142.84
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9715,
+                  "alpha": 0.862,
+                  "avg_inventory": 68.8004,
+                  "excess": 23117.29
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9562,
+                  "alpha": 0.8157,
+                  "avg_inventory": 43.0238,
+                  "excess": 13970.69
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.7462,
+                  "alpha": 0.7735,
+                  "avg_inventory": 8.9129,
+                  "excess": 2106.02
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8959,
+                  "alpha": 0.8955,
+                  "avg_inventory": 41.3367,
+                  "excess": 13130.63
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8143,
+                  "alpha": 0.8592,
+                  "avg_inventory": 24.7019,
+                  "excess": 7387.06
+                }
+              }
+            },
+            "0.95": {
+              "multiplier": {
+                "conformal_raw": 13.8426,
+                "conformal_capped3": 3.0,
+                "cv_z": 1.6449
+              },
+              "inner": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9306,
+                  "alpha": 0.7726,
+                  "avg_inventory": 23.5836,
+                  "excess": 7193.6
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9857,
+                  "alpha": 0.9547,
+                  "avg_inventory": 226.5343,
+                  "excess": 79215.54
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9562,
+                  "alpha": 0.8157,
+                  "avg_inventory": 43.0238,
+                  "excess": 13970.69
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.7782,
+                  "alpha": 0.8134,
+                  "avg_inventory": 10.44,
+                  "excess": 2544.24
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.9941,
+                  "alpha": 0.9495,
+                  "avg_inventory": 147.677,
+                  "excess": 50422.3
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8143,
+                  "alpha": 0.8592,
+                  "avg_inventory": 24.7019,
+                  "excess": 7387.06
+                }
+              }
+            },
+            "0.99": {
+              "multiplier": {
+                "conformal_raw": 49.1441,
+                "conformal_capped3": 3.0,
+                "cv_z": 2.3263
+              },
+              "inner": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9433,
+                  "alpha": 0.8002,
+                  "avg_inventory": 29.389,
+                  "excess": 9186.05
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9997,
+                  "alpha": 0.9967,
+                  "avg_inventory": 824.7871,
+                  "excess": 292160.75
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9562,
+                  "alpha": 0.8157,
+                  "avg_inventory": 43.0238,
+                  "excess": 13970.69
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8221,
+                  "alpha": 0.8486,
+                  "avg_inventory": 13.4205,
+                  "excess": 3439.92
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.9979,
+                  "alpha": 0.9871,
+                  "avg_inventory": 555.1226,
+                  "excess": 195466.55
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8143,
+                  "alpha": 0.8592,
+                  "avg_inventory": 24.7019,
+                  "excess": 7387.06
+                }
+              }
+            }
+          }
+        },
+        "tree": {
+          "ratio_n": 534,
+          "by_tau": {
+            "0.90": {
+              "multiplier": {
+                "conformal_raw": 2.8719,
+                "conformal_capped3": 2.8719,
+                "cv_z": 1.2816
+              },
+              "inner": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9261,
+                  "alpha": 0.8841,
+                  "avg_inventory": 16.1344,
+                  "excess": 4692.18
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9735,
+                  "alpha": 0.9459,
+                  "avg_inventory": 33.9367,
+                  "excess": 10718.61
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9735,
+                  "alpha": 0.9459,
+                  "avg_inventory": 33.9367,
+                  "excess": 10718.61
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.6868,
+                  "alpha": 0.7887,
+                  "avg_inventory": 6.8896,
+                  "excess": 1695.34
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.7814,
+                  "alpha": 0.8768,
+                  "avg_inventory": 18.2408,
+                  "excess": 5180.82
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.7814,
+                  "alpha": 0.8768,
+                  "avg_inventory": 18.2408,
+                  "excess": 5180.82
+                }
+              }
+            },
+            "0.95": {
+              "multiplier": {
+                "conformal_raw": 4.2159,
+                "conformal_capped3": 3.0,
+                "cv_z": 1.6449
+              },
+              "inner": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9399,
+                  "alpha": 0.9062,
+                  "avg_inventory": 18.6515,
+                  "excess": 5539.62
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9874,
+                  "alpha": 0.9691,
+                  "avg_inventory": 53.4576,
+                  "excess": 17627.87
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9759,
+                  "alpha": 0.9492,
+                  "avg_inventory": 35.7905,
+                  "excess": 11374.08
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.7219,
+                  "alpha": 0.8157,
+                  "avg_inventory": 8.1446,
+                  "excess": 2039.47
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.8568,
+                  "alpha": 0.9319,
+                  "avg_inventory": 30.4326,
+                  "excess": 9369.09
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.7905,
+                  "alpha": 0.8838,
+                  "avg_inventory": 19.386,
+                  "excess": 5565.65
+                }
+              }
+            },
+            "0.99": {
+              "multiplier": {
+                "conformal_raw": 7.5151,
+                "conformal_capped3": 3.0,
+                "cv_z": 2.3263
+              },
+              "inner": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9562,
+                  "alpha": 0.9349,
+                  "avg_inventory": 23.4334,
+                  "excess": 7151.59
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9927,
+                  "alpha": 0.9978,
+                  "avg_inventory": 101.5711,
+                  "excess": 34720.7
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 151,
+                  "demand_covered_pct": 84.8,
+                  "beta": 0.9759,
+                  "alpha": 0.9492,
+                  "avg_inventory": 35.7905,
+                  "excess": 11374.08
+                }
+              },
+              "outer": {
+                "cv": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.7804,
+                  "alpha": 0.8592,
+                  "avg_inventory": 10.5844,
+                  "excess": 2729.37
+                },
+                "conformal": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.962,
+                  "alpha": 0.9777,
+                  "avg_inventory": 61.2987,
+                  "excess": 20041.08
+                },
+                "conformal_capped3": {
+                  "units": 178,
+                  "units_with_demand": 142,
+                  "demand_covered_pct": 79.8,
+                  "beta": 0.7905,
+                  "alpha": 0.8838,
+                  "avg_inventory": 19.386,
+                  "excess": 5565.65
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "limitations": [
+    "比值在近零预测上会放大：raw 分位可能给出夸张乘数，capped3 只是敏感性",
+    "共形迁移假设误差分布平稳：换模型/重训、促销、断货删失、短史都会破坏",
+    "不含重训/选模方差；不替换默认、不出补货量"
+  ]
+}

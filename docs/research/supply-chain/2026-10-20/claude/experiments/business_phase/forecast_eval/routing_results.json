@@ -1,0 +1,196 @@
+{
+  "schema_version": "a_routing/1",
+  "generated_at": "2026-10-23T09:32:38",
+  "inputs": {
+    "db": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+    "db_sha256": "25579c5dcd802c7e67f610432a19d08f8e6952696bd50d43bdfa47d6b9241ae9",
+    "destinations_sha256": "720b478809128156cc1609cd10720cb926a98382a7c2f8a8179c55cadbf7bf60"
+  },
+  "settings": {
+    "origins": [
+      "2025-03",
+      "2025-06",
+      "2025-09",
+      "2025-12",
+      "2026-03",
+      "2026-06"
+    ],
+    "origins_used": [
+      "2025-03",
+      "2025-06",
+      "2025-09",
+      "2025-12",
+      "2026-03"
+    ],
+    "window_days": 90,
+    "min_train": 18,
+    "base_methods": [
+      "naive",
+      "ma3",
+      "tsb",
+      "croston",
+      "seasonal_naive",
+      "seasonal_yoy"
+    ],
+    "routing_rules": {
+      "short": [
+        "tsb",
+        "naive"
+      ],
+      "intermittent": [
+        "tsb",
+        "croston"
+      ],
+      "seasonal": [
+        "seasonal_naive",
+        "seasonal_yoy"
+      ],
+      "simple": [
+        "naive",
+        "ma3"
+      ]
+    },
+    "inner_offsets": [
+      3,
+      6
+    ],
+    "common_subset": 2763,
+    "elapsed_s": 11.5
+  },
+  "library_versions": {
+    "mlforecast": "1.1.0",
+    "lightgbm": "4.7.0",
+    "pandas": "3.0.2"
+  },
+  "tree_model": {
+    "available": true,
+    "note": "",
+    "predictions": 11052
+  },
+  "results": {
+    "naive": {
+      "n": 2763,
+      "wape": 0.6058701366374446,
+      "bias": 0.008417957150625236,
+      "mae": 16.37107398456563
+    },
+    "ma3": {
+      "n": 2763,
+      "wape": 0.6310721302057105,
+      "bias": 0.08484476637921393,
+      "mae": 17.05205110542927
+    },
+    "tsb": {
+      "n": 2763,
+      "wape": 0.5897642207535506,
+      "bias": 0.11751369521426104,
+      "mae": 15.935879832254734
+    },
+    "croston": {
+      "n": 2763,
+      "wape": 0.5965193917348975,
+      "bias": 0.15987827626420625,
+      "mae": 16.118409713208745
+    },
+    "seasonal_naive": {
+      "n": 2763,
+      "wape": 0.5981777209262233,
+      "bias": 0.1733255070029742,
+      "mae": 16.16321903494332
+    },
+    "seasonal_yoy": {
+      "n": 2763,
+      "wape": 0.6014456540322641,
+      "bias": 0.052056198198260746,
+      "mae": 16.25152108421171
+    },
+    "combo": {
+      "n": 2763,
+      "wape": 0.5192216970279167,
+      "bias": 0.09933940003492354,
+      "mae": 14.029766945787445
+    },
+    "routed": {
+      "n": 2763,
+      "wape": 0.5514281318225608,
+      "bias": 0.09942113009024356,
+      "mae": 14.900009420071534
+    },
+    "global_tree": {
+      "n": 2763,
+      "wape": 0.49354508379541745,
+      "bias": -0.048605117516252294,
+      "mae": 13.335965238980657
+    }
+  },
+  "coverage": {
+    "naive": {
+      "cells": 2358,
+      "hits": 1878,
+      "rate": 0.7964376590330788
+    },
+    "ma3": {
+      "cells": 2358,
+      "hits": 1880,
+      "rate": 0.7972858354537744
+    },
+    "tsb": {
+      "cells": 2358,
+      "hits": 1872,
+      "rate": 0.7938931297709924
+    },
+    "croston": {
+      "cells": 2358,
+      "hits": 1872,
+      "rate": 0.7938931297709924
+    },
+    "seasonal_naive": {
+      "cells": 2358,
+      "hits": 1902,
+      "rate": 0.806615776081425
+    },
+    "seasonal_yoy": {
+      "cells": 2358,
+      "hits": 1863,
+      "rate": 0.7900763358778626
+    },
+    "combo": {
+      "cells": 2358,
+      "hits": 1882,
+      "rate": 0.7981340118744699
+    },
+    "routed": {
+      "cells": 2358,
+      "hits": 1870,
+      "rate": 0.7930449533502969
+    },
+    "global_tree": {
+      "cells": 2358,
+      "hits": 1872,
+      "rate": 0.7938931297709924
+    }
+  },
+  "evaluated_skus": 774,
+  "scored_skus": 774,
+  "unscored": {
+    "history_lt_min_train": 463
+  },
+  "unavailable_features": [
+    "促销/折扣标记（DB 无字段）",
+    "价格与价格变动（DB 无字段）",
+    "上新/停产日历（DB 无字段）",
+    "竞品与市场活动（无数据源）"
+  ],
+  "caliber_correction": {
+    "source": "forecast_eval/attribution_report.md",
+    "common_skus": 151,
+    "common_windows": 446,
+    "mae": {
+      "tsb": 12.063,
+      "ses": 12.694,
+      "category_borrowed": 13.118,
+      "naive": 14.299
+    },
+    "note": "此前「类目最差」结论失效：在共同 151 SKU / 446 窗口上 TSB 最好、类目借力处于 SES 与 naive 之间。本轮仅作对照，不宣称最优。"
+  }
+}

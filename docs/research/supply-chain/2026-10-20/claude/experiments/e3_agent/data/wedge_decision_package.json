@@ -1,0 +1,328 @@
+{
+  "meta": {
+    "dataset_id": "wedge_pillow_20261016",
+    "title": "楔形枕补货决策信息包（本地内嵌，已匿名化）",
+    "as_of": "2026-10-16",
+    "anonymized": true,
+    "anonymization_note": "客户名、人员名、邮箱已移除；原客户渠道统一记为 channel_a（零售客户渠道），非该客户渠道合并为 other。SKU 与仓库编码保留，便于与业务报表回查。",
+    "scope": {
+      "warehouse": "美中-FZH-DANEEY",
+      "months": ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"],
+      "sku_count": 8
+    },
+    "sources": {
+      "sales": "通途订单 Google Sheet（通途订单202603–202609，发货数量 / 渠道 / 发货仓库）",
+      "stockout": "Notion 任务页 + 客户邮件（已匿名） + 逐批 check0stock 差分，三方交叉",
+      "inventory": "通途 ERP2 API erp2_stocks_stocksquery（逐仓可用库存）",
+      "in_transit": "通途采购单（未到货数量）",
+      "recommendation_rule": "月需求率 × 覆盖月数 − 通途可用 − 通途在途，向上取整且不低于 0"
+    },
+    "caveats": [
+      "10 月通途订单表缺失，销量数据仅覆盖 2026-03 至 2026-09。",
+      "EN Bin 数量不能当作可用库存：EN 不扣减通途库存，实测差异 351 件。",
+      "SO 未交量不是在途：货已出境，属目的仓账面预留。",
+      "通途为标记发货可能先报溢，可用 0 是常态，但仍是唯一可用库存口径。"
+    ]
+  },
+  "warehouses": {
+    "美中-FZH-DANEEY": {
+      "label": "美中-Daneey 仓",
+      "covered": true,
+      "aliases": ["美中", "Daneey", "DANEEY", "美中-FZH-DANEEY", "FZH-DANEEY"]
+    },
+    "FZHPoland": {
+      "label": "波兰仓",
+      "covered": false,
+      "aliases": ["波兰", "Poland", "FZHPoland"]
+    },
+    "ALL": {
+      "label": "全部仓",
+      "covered": true,
+      "aliases": ["全部仓", "所有仓", "全仓"]
+    }
+  },
+  "channels": {
+    "all": "全部渠道",
+    "channel_a": "零售客户渠道（匿名）",
+    "other": "其他渠道"
+  },
+  "skus": {
+    "2870": {
+      "tongtool_sku": "TT0031010K0062870",
+      "en_item": "KS0121-KQC-138-WHITE",
+      "name": "床楔形枕头 空气层 白色 138x25x15CM",
+      "size": "138x25x15CM",
+      "color": "白色",
+      "buyer_sku": "7404634",
+      "monthly_sales": {
+        "2026-03": {"total": 4, "channel_a": 2},
+        "2026-04": {"total": 4, "channel_a": 2},
+        "2026-05": {"total": 2, "channel_a": 0},
+        "2026-06": {"total": 0, "channel_a": 0},
+        "2026-07": {"total": 4, "channel_a": 1},
+        "2026-08": {"total": 2, "channel_a": 0},
+        "2026-09": {"total": 2, "channel_a": 2}
+      },
+      "stockout_windows": [],
+      "clean_demand": {
+        "excluded_months": [],
+        "included_months": ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"],
+        "shipped": 18,
+        "rate": 2.6
+      },
+      "inventory": {
+        "available": 37,
+        "in_transit": 0,
+        "purchase_orders": []
+      }
+    },
+    "2871": {
+      "tongtool_sku": "TT0031010K0062871",
+      "en_item": "KS0121-KQC-138-GREY",
+      "name": "床楔形枕头 空气层 灰色 138x25x15CM",
+      "size": "138x25x15CM",
+      "color": "灰色",
+      "buyer_sku": "5249506",
+      "monthly_sales": {
+        "2026-03": {"total": 5, "channel_a": 4},
+        "2026-04": {"total": 2, "channel_a": 0},
+        "2026-05": {"total": 1, "channel_a": 1},
+        "2026-06": {"total": 2, "channel_a": 0},
+        "2026-07": {"total": 0, "channel_a": 0},
+        "2026-08": {"total": 4, "channel_a": 2},
+        "2026-09": {"total": 4, "channel_a": 0}
+      },
+      "stockout_windows": [],
+      "clean_demand": {
+        "excluded_months": [],
+        "included_months": ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"],
+        "shipped": 18,
+        "rate": 2.6
+      },
+      "inventory": {
+        "available": 28,
+        "in_transit": 0,
+        "purchase_orders": []
+      }
+    },
+    "2876": {
+      "tongtool_sku": "TT0031010K0062876",
+      "en_item": "KS0121-KQC-100-WHITE",
+      "name": "床楔形枕头 空气层 白色 100x25x15CM",
+      "size": "100x25x15CM",
+      "color": "白色",
+      "buyer_sku": "9497498",
+      "monthly_sales": {
+        "2026-03": {"total": 3, "channel_a": 3},
+        "2026-04": {"total": 3, "channel_a": 3},
+        "2026-05": {"total": 10, "channel_a": 5},
+        "2026-06": {"total": 4, "channel_a": 0},
+        "2026-07": {"total": 8, "channel_a": 7},
+        "2026-08": {"total": 6, "channel_a": 3},
+        "2026-09": {"total": 7, "channel_a": 3}
+      },
+      "stockout_windows": [
+        {
+          "start": "2026-05-01",
+          "end": "2026-05-31",
+          "end_type": "month_level",
+          "evidence": ["check0stock 差分", "采购单 PO 137011589"]
+        }
+      ],
+      "clean_demand": {
+        "excluded_months": ["2026-05"],
+        "included_months": ["2026-03", "2026-04", "2026-06", "2026-07", "2026-08", "2026-09"],
+        "shipped": 31,
+        "rate": 5.2
+      },
+      "inventory": {
+        "available": 19,
+        "in_transit": 6,
+        "purchase_orders": [
+          {
+            "po": "PO021724",
+            "order_date": "2026-09-23",
+            "qty": 6,
+            "warehouse": "美中-FZH-DANEEY",
+            "arrival_date": null,
+            "status": "未到货（到货日未填）"
+          }
+        ]
+      }
+    },
+    "2877": {
+      "tongtool_sku": "TT0031010K0062877",
+      "en_item": "KS0121-KQC-100-GREY",
+      "name": "床楔形枕头 空气层 灰色 100x25x15CM",
+      "size": "100x25x15CM",
+      "color": "灰色",
+      "buyer_sku": "4767728",
+      "monthly_sales": {
+        "2026-03": {"total": 3, "channel_a": 3},
+        "2026-04": {"total": 3, "channel_a": 2},
+        "2026-05": {"total": 3, "channel_a": 2},
+        "2026-06": {"total": 1, "channel_a": 1},
+        "2026-07": {"total": 1, "channel_a": 0},
+        "2026-08": {"total": 3, "channel_a": 1},
+        "2026-09": {"total": 0, "channel_a": 0}
+      },
+      "stockout_windows": [],
+      "clean_demand": {
+        "excluded_months": [],
+        "included_months": ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"],
+        "shipped": 14,
+        "rate": 2.0
+      },
+      "inventory": {
+        "available": 52,
+        "in_transit": 0,
+        "purchase_orders": []
+      }
+    },
+    "2878": {
+      "tongtool_sku": "TT0031010K0062878",
+      "en_item": "KS0121-KQC-153-WHITE",
+      "name": "床楔形枕头 空气层 白色 153x25x15CM",
+      "size": "153x25x15CM",
+      "color": "白色",
+      "buyer_sku": "2017724",
+      "monthly_sales": {
+        "2026-03": {"total": 25, "channel_a": 18},
+        "2026-04": {"total": 6, "channel_a": 4},
+        "2026-05": {"total": 23, "channel_a": 15},
+        "2026-06": {"total": 8, "channel_a": 5},
+        "2026-07": {"total": 13, "channel_a": 11},
+        "2026-08": {"total": 7, "channel_a": 3},
+        "2026-09": {"total": 15, "channel_a": 9}
+      },
+      "stockout_windows": [
+        {
+          "start": "2026-06-11",
+          "end": "2026-07-20",
+          "end_type": "resumed_shipping",
+          "evidence": ["Notion 任务页", "客户邮件（已匿名）", "check0stock 差分"]
+        }
+      ],
+      "clean_demand": {
+        "excluded_months": ["2026-06", "2026-07"],
+        "included_months": ["2026-03", "2026-04", "2026-05", "2026-08", "2026-09"],
+        "shipped": 76,
+        "rate": 15.2
+      },
+      "inventory": {
+        "available": 4,
+        "in_transit": 0,
+        "purchase_orders": []
+      }
+    },
+    "2879": {
+      "tongtool_sku": "TT0031010K0062879",
+      "en_item": "KS0121-KQC-153-GREY",
+      "name": "床楔形枕头 空气层 灰色 153x25x15CM",
+      "size": "153x25x15CM",
+      "color": "灰色",
+      "buyer_sku": "5673378",
+      "monthly_sales": {
+        "2026-03": {"total": 6, "channel_a": 3},
+        "2026-04": {"total": 3, "channel_a": 3},
+        "2026-05": {"total": 4, "channel_a": 1},
+        "2026-06": {"total": 7, "channel_a": 3},
+        "2026-07": {"total": 6, "channel_a": 2},
+        "2026-08": {"total": 3, "channel_a": 3},
+        "2026-09": {"total": 6, "channel_a": 6}
+      },
+      "stockout_windows": [],
+      "clean_demand": {
+        "excluded_months": [],
+        "included_months": ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"],
+        "shipped": 35,
+        "rate": 5.0
+      },
+      "inventory": {
+        "available": 11,
+        "in_transit": 0,
+        "purchase_orders": []
+      }
+    },
+    "2880": {
+      "tongtool_sku": "TT0031010K0062880",
+      "en_item": "KS0121-KQC-194-WHITE",
+      "name": "床楔形枕头 空气层 白色 194x25x15CM",
+      "size": "194x25x15CM",
+      "color": "白色",
+      "buyer_sku": "9869246",
+      "monthly_sales": {
+        "2026-03": {"total": 13, "channel_a": 13},
+        "2026-04": {"total": 0, "channel_a": 0},
+        "2026-05": {"total": 31, "channel_a": 31},
+        "2026-06": {"total": 12, "channel_a": 8},
+        "2026-07": {"total": 25, "channel_a": 14},
+        "2026-08": {"total": 20, "channel_a": 16},
+        "2026-09": {"total": 16, "channel_a": 16}
+      },
+      "stockout_windows": [
+        {
+          "start": "2026-03-12",
+          "end": "2026-05-08",
+          "end_type": "arrival",
+          "evidence": ["Notion 任务页", "客户邮件（已匿名）", "check0stock 差分"]
+        }
+      ],
+      "clean_demand": {
+        "excluded_months": ["2026-03", "2026-04", "2026-05"],
+        "included_months": ["2026-06", "2026-07", "2026-08", "2026-09"],
+        "shipped": 73,
+        "rate": 18.3
+      },
+      "inventory": {
+        "available": 0,
+        "in_transit": 0,
+        "purchase_orders": []
+      }
+    },
+    "2881": {
+      "tongtool_sku": "TT0031010K0062881",
+      "en_item": "KS0121-KQC-194-GREY",
+      "name": "床楔形枕头 空气层 灰色 194x25x15CM",
+      "size": "194x25x15CM",
+      "color": "灰色",
+      "buyer_sku": "6441383",
+      "monthly_sales": {
+        "2026-03": {"total": 13, "channel_a": 6},
+        "2026-04": {"total": 17, "channel_a": 10},
+        "2026-05": {"total": 12, "channel_a": 6},
+        "2026-06": {"total": 2, "channel_a": 0},
+        "2026-07": {"total": 6, "channel_a": 5},
+        "2026-08": {"total": 4, "channel_a": 1},
+        "2026-09": {"total": 10, "channel_a": 8}
+      },
+      "stockout_windows": [],
+      "clean_demand": {
+        "excluded_months": [],
+        "included_months": ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"],
+        "shipped": 64,
+        "rate": 9.1
+      },
+      "inventory": {
+        "available": 22,
+        "in_transit": 0,
+        "purchase_orders": []
+      }
+    }
+  },
+  "decision_package": {
+    "coverage_months": 6,
+    "recommended_total": 257,
+    "per_sku": {
+      "2870": 0,
+      "2871": 0,
+      "2876": 7,
+      "2877": 0,
+      "2878": 88,
+      "2879": 19,
+      "2880": 110,
+      "2881": 33
+    },
+    "note": "建议值为决策包口径：月需求率保留 1 位小数（HALF_UP），再乘覆盖月数并扣减可用与在途。"
+  }
+}

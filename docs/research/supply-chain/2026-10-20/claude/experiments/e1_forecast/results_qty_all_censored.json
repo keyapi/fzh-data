@@ -1,0 +1,2890 @@
+{
+  "design": {
+    "measure": "qty_all",
+    "mode": "censored",
+    "h": 3,
+    "label_lag_months": 1,
+    "data_end_month": "2026-07",
+    "pull_as_of_month": "2026-08",
+    "labels_available_through": "2026-07",
+    "min_train_months": 18,
+    "alpha_tsb": 0.3,
+    "alpha_croston": 0.3,
+    "origins": [
+      "2024-06",
+      "2024-07",
+      "2024-08",
+      "2024-09",
+      "2024-10",
+      "2024-11",
+      "2024-12",
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "validation_origins": [
+      "2024-12",
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04"
+    ],
+    "test_origins": [
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "split_rule": "val_end <= test_start - H; at run time val_end is clamped to test_start - H if needed",
+    "split_adjustment": null,
+    "selection": "fixed split: choose by validation WAPE, report on test",
+    "scoring": "h=3 forecast window; only target months with m+label_lag <= pull_as_of are scored",
+    "tsb_init": "z0=nonzero fraction, d0=mean of nonzero demands over full training history, then smooth; d unchanged on zeros",
+    "dropped": {
+      "origin_no_sku": [
+        "2024-06",
+        "2024-07",
+        "2024-08",
+        "2024-09",
+        "2024-10",
+        "2024-11"
+      ],
+      "sku_origin_insufficient_history": [
+        {
+          "origin": "2024-06",
+          "sku": "2870",
+          "n_hist": 12
+        },
+        {
+          "origin": "2024-06",
+          "sku": "2871",
+          "n_hist": 11
+        },
+        {
+          "origin": "2024-06",
+          "sku": "2876",
+          "n_hist": 12
+        },
+        {
+          "origin": "2024-06",
+          "sku": "2877",
+          "n_hist": 12
+        },
+        {
+          "origin": "2024-06",
+          "sku": "2878",
+          "n_hist": 10
+        },
+        {
+          "origin": "2024-06",
+          "sku": "2879",
+          "n_hist": 11
+        },
+        {
+          "origin": "2024-06",
+          "sku": "2880",
+          "n_hist": 11
+        },
+        {
+          "origin": "2024-06",
+          "sku": "2881",
+          "n_hist": 11
+        },
+        {
+          "origin": "2024-07",
+          "sku": "2870",
+          "n_hist": 13
+        },
+        {
+          "origin": "2024-07",
+          "sku": "2871",
+          "n_hist": 12
+        },
+        {
+          "origin": "2024-07",
+          "sku": "2876",
+          "n_hist": 13
+        },
+        {
+          "origin": "2024-07",
+          "sku": "2877",
+          "n_hist": 13
+        },
+        {
+          "origin": "2024-07",
+          "sku": "2878",
+          "n_hist": 11
+        },
+        {
+          "origin": "2024-07",
+          "sku": "2879",
+          "n_hist": 12
+        },
+        {
+          "origin": "2024-07",
+          "sku": "2880",
+          "n_hist": 12
+        },
+        {
+          "origin": "2024-07",
+          "sku": "2881",
+          "n_hist": 12
+        },
+        {
+          "origin": "2024-08",
+          "sku": "2870",
+          "n_hist": 14
+        },
+        {
+          "origin": "2024-08",
+          "sku": "2871",
+          "n_hist": 13
+        },
+        {
+          "origin": "2024-08",
+          "sku": "2876",
+          "n_hist": 14
+        },
+        {
+          "origin": "2024-08",
+          "sku": "2877",
+          "n_hist": 14
+        },
+        {
+          "origin": "2024-08",
+          "sku": "2878",
+          "n_hist": 12
+        },
+        {
+          "origin": "2024-08",
+          "sku": "2879",
+          "n_hist": 13
+        },
+        {
+          "origin": "2024-08",
+          "sku": "2880",
+          "n_hist": 13
+        },
+        {
+          "origin": "2024-08",
+          "sku": "2881",
+          "n_hist": 13
+        },
+        {
+          "origin": "2024-09",
+          "sku": "2870",
+          "n_hist": 15
+        },
+        {
+          "origin": "2024-09",
+          "sku": "2871",
+          "n_hist": 14
+        },
+        {
+          "origin": "2024-09",
+          "sku": "2876",
+          "n_hist": 15
+        },
+        {
+          "origin": "2024-09",
+          "sku": "2877",
+          "n_hist": 15
+        },
+        {
+          "origin": "2024-09",
+          "sku": "2878",
+          "n_hist": 13
+        },
+        {
+          "origin": "2024-09",
+          "sku": "2879",
+          "n_hist": 14
+        },
+        {
+          "origin": "2024-09",
+          "sku": "2880",
+          "n_hist": 14
+        },
+        {
+          "origin": "2024-09",
+          "sku": "2881",
+          "n_hist": 14
+        },
+        {
+          "origin": "2024-10",
+          "sku": "2870",
+          "n_hist": 16
+        },
+        {
+          "origin": "2024-10",
+          "sku": "2871",
+          "n_hist": 15
+        },
+        {
+          "origin": "2024-10",
+          "sku": "2876",
+          "n_hist": 16
+        },
+        {
+          "origin": "2024-10",
+          "sku": "2877",
+          "n_hist": 16
+        },
+        {
+          "origin": "2024-10",
+          "sku": "2878",
+          "n_hist": 14
+        },
+        {
+          "origin": "2024-10",
+          "sku": "2879",
+          "n_hist": 15
+        },
+        {
+          "origin": "2024-10",
+          "sku": "2880",
+          "n_hist": 15
+        },
+        {
+          "origin": "2024-10",
+          "sku": "2881",
+          "n_hist": 15
+        },
+        {
+          "origin": "2024-11",
+          "sku": "2870",
+          "n_hist": 17
+        },
+        {
+          "origin": "2024-11",
+          "sku": "2871",
+          "n_hist": 16
+        },
+        {
+          "origin": "2024-11",
+          "sku": "2876",
+          "n_hist": 17
+        },
+        {
+          "origin": "2024-11",
+          "sku": "2877",
+          "n_hist": 17
+        },
+        {
+          "origin": "2024-11",
+          "sku": "2878",
+          "n_hist": 15
+        },
+        {
+          "origin": "2024-11",
+          "sku": "2879",
+          "n_hist": 16
+        },
+        {
+          "origin": "2024-11",
+          "sku": "2880",
+          "n_hist": 16
+        },
+        {
+          "origin": "2024-11",
+          "sku": "2881",
+          "n_hist": 16
+        },
+        {
+          "origin": "2024-12",
+          "sku": "2871",
+          "n_hist": 17
+        },
+        {
+          "origin": "2024-12",
+          "sku": "2878",
+          "n_hist": 16
+        },
+        {
+          "origin": "2024-12",
+          "sku": "2879",
+          "n_hist": 17
+        },
+        {
+          "origin": "2024-12",
+          "sku": "2880",
+          "n_hist": 17
+        },
+        {
+          "origin": "2024-12",
+          "sku": "2881",
+          "n_hist": 17
+        },
+        {
+          "origin": "2025-01",
+          "sku": "2878",
+          "n_hist": 17
+        }
+      ],
+      "sku_origin_missing_target": [],
+      "sku_origin_bad_target": [],
+      "sku_origin_no_available_label": [],
+      "sku_origin_censored": [
+        {
+          "origin": "2025-12",
+          "sku": "2880"
+        },
+        {
+          "origin": "2026-01",
+          "sku": "2880"
+        },
+        {
+          "origin": "2026-02",
+          "sku": "2876"
+        },
+        {
+          "origin": "2026-02",
+          "sku": "2880"
+        }
+      ]
+    },
+    "origins_with_cells": {
+      "2024-12": 3,
+      "2025-01": 7,
+      "2025-02": 8,
+      "2025-03": 8,
+      "2025-04": 8,
+      "2025-05": 8,
+      "2025-06": 8,
+      "2025-07": 8,
+      "2025-08": 8,
+      "2025-09": 8,
+      "2025-10": 8,
+      "2025-11": 8,
+      "2025-12": 7,
+      "2026-01": 7,
+      "2026-02": 6
+    }
+  },
+  "label_overlap_check": {
+    "label_lag_months": 1,
+    "data_end_month": "2026-07",
+    "pull_as_of_month": "2026-08",
+    "labels_available_through": "2026-07",
+    "validation_origins": [
+      "2024-12",
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04"
+    ],
+    "validation_target_months": [
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07"
+    ],
+    "test_origins": [
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "test_target_months": [
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05"
+    ],
+    "target_month_intersection": [],
+    "max_validation_target": "2025-07",
+    "max_validation_available_at": "2025-08",
+    "min_test_decision_at": "2025-08",
+    "definition": "label for month m available at m+label_lag (first day); decision for origin t at t+label_lag (first day)",
+    "pass": true
+  },
+  "self_test": {
+    "passed": true,
+    "cases": [
+      {
+        "case": "tsb [0,5,0,10]",
+        "got": 4.38046125,
+        "expected": 4.38046125,
+        "pass": true
+      },
+      {
+        "case": "tsb [3]",
+        "got": 2.9999999999999996,
+        "expected": 3.0,
+        "pass": true
+      },
+      {
+        "case": "tsb [0,0]",
+        "got": 0.0,
+        "expected": 0.0,
+        "pass": true
+      },
+      {
+        "case": "croston [0,5,0,10]",
+        "got": 3.25,
+        "expected": 3.25,
+        "pass": true
+      }
+    ]
+  },
+  "data_quality": {
+    "bad_rows_count": 0,
+    "bad_sku_month_count": 0,
+    "bad_sku_months": [],
+    "bad_rows_sample": [],
+    "gate_exercised": false,
+    "gate": "row kept in raw with qty blank + qty_status=bad; any bad row marks the SKU-month bad_data and excludes it from training/evaluation; never converted to 0",
+    "sheet_counts": {
+      "2023-01": {
+        "source_rows": 11124,
+        "extracted_rows": 11123,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-02": {
+        "source_rows": 8853,
+        "extracted_rows": 8852,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-03": {
+        "source_rows": 9848,
+        "extracted_rows": 9847,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-04": {
+        "source_rows": 8188,
+        "extracted_rows": 8185,
+        "blank_tail": 2,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-05": {
+        "source_rows": 8995,
+        "extracted_rows": 8994,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-06": {
+        "source_rows": 7467,
+        "extracted_rows": 7466,
+        "blank_tail": 0,
+        "hits": 0,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-07": {
+        "source_rows": 10411,
+        "extracted_rows": 10410,
+        "blank_tail": 0,
+        "hits": 5,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-08": {
+        "source_rows": 12273,
+        "extracted_rows": 12272,
+        "blank_tail": 0,
+        "hits": 30,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-09": {
+        "source_rows": 8124,
+        "extracted_rows": 8123,
+        "blank_tail": 0,
+        "hits": 16,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-10": {
+        "source_rows": 8251,
+        "extracted_rows": 8250,
+        "blank_tail": 0,
+        "hits": 5,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-11": {
+        "source_rows": 9893,
+        "extracted_rows": 9892,
+        "blank_tail": 0,
+        "hits": 18,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2023-12": {
+        "source_rows": 11832,
+        "extracted_rows": 11831,
+        "blank_tail": 0,
+        "hits": 23,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-01": {
+        "source_rows": 9904,
+        "extracted_rows": 9903,
+        "blank_tail": 0,
+        "hits": 28,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-02": {
+        "source_rows": 8370,
+        "extracted_rows": 8369,
+        "blank_tail": 0,
+        "hits": 28,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-03": {
+        "source_rows": 7768,
+        "extracted_rows": 7767,
+        "blank_tail": 0,
+        "hits": 33,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-04": {
+        "source_rows": 7612,
+        "extracted_rows": 7611,
+        "blank_tail": 0,
+        "hits": 35,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-05": {
+        "source_rows": 8114,
+        "extracted_rows": 8113,
+        "blank_tail": 0,
+        "hits": 18,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-06": {
+        "source_rows": 7351,
+        "extracted_rows": 7350,
+        "blank_tail": 0,
+        "hits": 33,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-07": {
+        "source_rows": 11491,
+        "extracted_rows": 11490,
+        "blank_tail": 0,
+        "hits": 19,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-08": {
+        "source_rows": 13943,
+        "extracted_rows": 13942,
+        "blank_tail": 0,
+        "hits": 31,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-09": {
+        "source_rows": 8383,
+        "extracted_rows": 8382,
+        "blank_tail": 0,
+        "hits": 26,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-10": {
+        "source_rows": 8312,
+        "extracted_rows": 8311,
+        "blank_tail": 0,
+        "hits": 23,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-11": {
+        "source_rows": 9345,
+        "extracted_rows": 9344,
+        "blank_tail": 0,
+        "hits": 26,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2024-12": {
+        "source_rows": 13480,
+        "extracted_rows": 13479,
+        "blank_tail": 0,
+        "hits": 26,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-01": {
+        "source_rows": 10613,
+        "extracted_rows": 10612,
+        "blank_tail": 0,
+        "hits": 24,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-02": {
+        "source_rows": 7380,
+        "extracted_rows": 7379,
+        "blank_tail": 0,
+        "hits": 30,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-03": {
+        "source_rows": 6980,
+        "extracted_rows": 6979,
+        "blank_tail": 0,
+        "hits": 66,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-04": {
+        "source_rows": 6444,
+        "extracted_rows": 6443,
+        "blank_tail": 0,
+        "hits": 40,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-05": {
+        "source_rows": 6509,
+        "extracted_rows": 6508,
+        "blank_tail": 0,
+        "hits": 39,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-06": {
+        "source_rows": 7334,
+        "extracted_rows": 7333,
+        "blank_tail": 0,
+        "hits": 50,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-07": {
+        "source_rows": 16663,
+        "extracted_rows": 16662,
+        "blank_tail": 0,
+        "hits": 41,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-08": {
+        "source_rows": 14564,
+        "extracted_rows": 14563,
+        "blank_tail": 0,
+        "hits": 60,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-09": {
+        "source_rows": 8511,
+        "extracted_rows": 8510,
+        "blank_tail": 0,
+        "hits": 60,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-10": {
+        "source_rows": 8469,
+        "extracted_rows": 8468,
+        "blank_tail": 0,
+        "hits": 49,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-11": {
+        "source_rows": 8894,
+        "extracted_rows": 8893,
+        "blank_tail": 0,
+        "hits": 38,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2025-12": {
+        "source_rows": 11083,
+        "extracted_rows": 11082,
+        "blank_tail": 0,
+        "hits": 39,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-01": {
+        "source_rows": 7671,
+        "extracted_rows": 7670,
+        "blank_tail": 0,
+        "hits": 42,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-02": {
+        "source_rows": 6189,
+        "extracted_rows": 6188,
+        "blank_tail": 0,
+        "hits": 31,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-03": {
+        "source_rows": 5977,
+        "extracted_rows": 5976,
+        "blank_tail": 0,
+        "hits": 81,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-04": {
+        "source_rows": 5203,
+        "extracted_rows": 5202,
+        "blank_tail": 0,
+        "hits": 54,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-05": {
+        "source_rows": 5452,
+        "extracted_rows": 5451,
+        "blank_tail": 0,
+        "hits": 95,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-06": {
+        "source_rows": 7890,
+        "extracted_rows": 7889,
+        "blank_tail": 0,
+        "hits": 42,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      },
+      "2026-07": {
+        "source_rows": 9605,
+        "extracted_rows": 9604,
+        "blank_tail": 0,
+        "hits": 66,
+        "empty_date": 0,
+        "bad_qty": 0,
+        "bad_date": 0,
+        "bad_reasons": "-",
+        "column_length_mismatch": false
+      }
+    },
+    "source_rows_note": "source_rows = sheet row_count including header; extracted_rows = aligned data rows read (row 2..N). A successful sheet read does not prove all cross-month shipment rows exist; counts are logged per month for audit.",
+    "completeness_caveat": "月表读取成功 ≠ 跨月发货行完整；本实验不声称数据完整，仅逐月记录 source_rows/extracted_rows/blank_tail 供核对。"
+  },
+  "data_status_summary": {
+    "qty_all": {
+      "pre_launch": 54,
+      "observed": 264,
+      "zero_confirmed": 26
+    },
+    "qty_daneey": {
+      "pre_launch": 54,
+      "zero_confirmed": 51,
+      "observed": 239
+    }
+  },
+  "launch_month": {
+    "2876": "2023-07",
+    "2877": "2023-07",
+    "2870": "2023-07",
+    "2880": "2023-08",
+    "2871": "2023-08",
+    "2881": "2023-08",
+    "2879": "2023-08",
+    "2878": "2023-09"
+  },
+  "cells": 1430,
+  "validation": {
+    "n_cells": 442,
+    "n_origins": 5,
+    "scored_h_hist": {
+      "3": 442
+    },
+    "summary": {
+      "naive": {
+        "wape": 0.5800344234079173,
+        "bias": -0.14285714285714285,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.2,
+        "top3": 0.2,
+        "rank_std": 4.715930449020639,
+        "per_sku": {
+          "2870": {
+            "wape": 0.6,
+            "bias": -0.52
+          },
+          "2871": {
+            "wape": 0.6351351351351351,
+            "bias": -0.3918918918918919
+          },
+          "2876": {
+            "wape": 0.5686274509803921,
+            "bias": -0.23529411764705882
+          },
+          "2877": {
+            "wape": 0.42105263157894735,
+            "bias": -0.4
+          },
+          "2878": {
+            "wape": 1.2608695652173914,
+            "bias": 0.30434782608695654
+          },
+          "2879": {
+            "wape": 0.4222222222222222,
+            "bias": 0.0
+          },
+          "2880": {
+            "wape": 0.52,
+            "bias": 0.32
+          },
+          "2881": {
+            "wape": 0.5405405405405406,
+            "bias": 0.05405405405405406
+          }
+        }
+      },
+      "seasonal_naive": {
+        "wape": 0.5611015490533563,
+        "bias": -0.4268502581755594,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.2,
+        "top3": 0.4,
+        "rank_std": 4.586937976471886,
+        "per_sku": {
+          "2870": {
+            "wape": 0.4,
+            "bias": -0.24
+          },
+          "2871": {
+            "wape": 0.6891891891891891,
+            "bias": -0.6891891891891891
+          },
+          "2876": {
+            "wape": 0.8137254901960784,
+            "bias": -0.8137254901960784
+          },
+          "2877": {
+            "wape": 0.7789473684210526,
+            "bias": -0.7789473684210526
+          },
+          "2878": {
+            "wape": 0.1956521739130435,
+            "bias": 0.06521739130434782
+          },
+          "2879": {
+            "wape": 0.34444444444444444,
+            "bias": -0.34444444444444444
+          },
+          "2880": {
+            "wape": 0.58,
+            "bias": 0.58
+          },
+          "2881": {
+            "wape": 0.3918918918918919,
+            "bias": -0.3918918918918919
+          }
+        }
+      },
+      "ma3": {
+        "wape": 0.45438898450946646,
+        "bias": -0.25817555938037867,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.2,
+        "top3": 0.4,
+        "rank_std": 1.8973665961010275,
+        "per_sku": {
+          "2870": {
+            "wape": 0.64,
+            "bias": -0.6
+          },
+          "2871": {
+            "wape": 0.5945945945945946,
+            "bias": -0.5945945945945946
+          },
+          "2876": {
+            "wape": 0.5392156862745098,
+            "bias": -0.4019607843137255
+          },
+          "2877": {
+            "wape": 0.5578947368421052,
+            "bias": -0.5578947368421052
+          },
+          "2878": {
+            "wape": 0.6086956521739131,
+            "bias": -0.043478260869565216
+          },
+          "2879": {
+            "wape": 0.1111111111111111,
+            "bias": 0.022222222222222223
+          },
+          "2880": {
+            "wape": 0.34,
+            "bias": 0.34
+          },
+          "2881": {
+            "wape": 0.33783783783783783,
+            "bias": 0.013513513513513514
+          }
+        }
+      },
+      "ma6": {
+        "wape": 0.49483648881239245,
+        "bias": -0.3623063683304647,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.2,
+        "top3": 0.2,
+        "rank_std": 3.9698866482558417,
+        "per_sku": {
+          "2870": {
+            "wape": 0.64,
+            "bias": -0.64
+          },
+          "2871": {
+            "wape": 0.7027027027027027,
+            "bias": -0.7027027027027027
+          },
+          "2876": {
+            "wape": 0.553921568627451,
+            "bias": -0.553921568627451
+          },
+          "2877": {
+            "wape": 0.6578947368421053,
+            "bias": -0.6578947368421053
+          },
+          "2878": {
+            "wape": 0.43478260869565216,
+            "bias": -0.15217391304347827
+          },
+          "2879": {
+            "wape": 0.18888888888888888,
+            "bias": -0.18888888888888888
+          },
+          "2880": {
+            "wape": 0.58,
+            "bias": 0.58
+          },
+          "2881": {
+            "wape": 0.25,
+            "bias": -0.16891891891891891
+          }
+        }
+      },
+      "ma12": {
+        "wape": 0.5425989672977625,
+        "bias": -0.4040447504302926,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.0,
+        "top3": 0.0,
+        "rank_std": 1.3266499161421599,
+        "per_sku": {
+          "2870": {
+            "wape": 0.565,
+            "bias": -0.495
+          },
+          "2871": {
+            "wape": 0.7128378378378378,
+            "bias": -0.7128378378378378
+          },
+          "2876": {
+            "wape": 0.6642156862745098,
+            "bias": -0.6642156862745098
+          },
+          "2877": {
+            "wape": 0.7052631578947368,
+            "bias": -0.7052631578947368
+          },
+          "2878": {
+            "wape": 0.30978260869565216,
+            "bias": -0.02717391304347826
+          },
+          "2879": {
+            "wape": 0.34444444444444444,
+            "bias": -0.34444444444444444
+          },
+          "2880": {
+            "wape": 0.64,
+            "bias": 0.64
+          },
+          "2881": {
+            "wape": 0.30067567567567566,
+            "bias": -0.30067567567567566
+          }
+        }
+      },
+      "M1": {
+        "wape": 0.5425989672977625,
+        "bias": -0.4040447504302926,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.0,
+        "top3": 0.0,
+        "rank_std": 1.3266499161421599,
+        "per_sku": {
+          "2870": {
+            "wape": 0.565,
+            "bias": -0.495
+          },
+          "2871": {
+            "wape": 0.7128378378378378,
+            "bias": -0.7128378378378378
+          },
+          "2876": {
+            "wape": 0.6642156862745098,
+            "bias": -0.6642156862745098
+          },
+          "2877": {
+            "wape": 0.7052631578947368,
+            "bias": -0.7052631578947368
+          },
+          "2878": {
+            "wape": 0.30978260869565216,
+            "bias": -0.02717391304347826
+          },
+          "2879": {
+            "wape": 0.34444444444444444,
+            "bias": -0.34444444444444444
+          },
+          "2880": {
+            "wape": 0.64,
+            "bias": 0.64
+          },
+          "2881": {
+            "wape": 0.30067567567567566,
+            "bias": -0.30067567567567566
+          }
+        }
+      },
+      "M2": {
+        "wape": 0.6506104163636149,
+        "bias": -0.27075940864230247,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.0,
+        "top3": 0.0,
+        "rank_std": 0.7483314773547883,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5578088578088578,
+            "bias": -0.5455011655011655
+          },
+          "2871": {
+            "wape": 0.7445257445257445,
+            "bias": -0.7445257445257445
+          },
+          "2876": {
+            "wape": 0.749211672973283,
+            "bias": -0.749211672973283
+          },
+          "2877": {
+            "wape": 0.8092913278671793,
+            "bias": -0.8092913278671793
+          },
+          "2878": {
+            "wape": 0.15362551096246752,
+            "bias": 0.11497816796729843
+          },
+          "2879": {
+            "wape": 0.2432730816941343,
+            "bias": -0.1881889066099592
+          },
+          "2880": {
+            "wape": 1.91,
+            "bias": 1.91
+          },
+          "2881": {
+            "wape": 0.2331849496555379,
+            "bias": -0.0742024377318496
+          }
+        }
+      },
+      "M3": {
+        "wape": 0.5082688395941408,
+        "bias": -0.2741054126596295,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.0,
+        "top3": 0.4,
+        "rank_std": 3.7202150475476548,
+        "per_sku": {
+          "2870": {
+            "wape": 0.7788111888111888,
+            "bias": -0.7788111888111888
+          },
+          "2871": {
+            "wape": 0.647987147987148,
+            "bias": -0.647987147987148
+          },
+          "2876": {
+            "wape": 0.5093240093240092,
+            "bias": -0.354929384341149
+          },
+          "2877": {
+            "wape": 0.5429517850570483,
+            "bias": -0.5429517850570482
+          },
+          "2878": {
+            "wape": 0.6432806324110671,
+            "bias": -0.18280632411067188
+          },
+          "2879": {
+            "wape": 0.2294483294483295,
+            "bias": -0.01926961926961926
+          },
+          "2880": {
+            "wape": 0.4795104895104896,
+            "bias": 0.4795104895104896
+          },
+          "2881": {
+            "wape": 0.41438291438291436,
+            "bias": 0.02145152145152144
+          }
+        }
+      },
+      "M3b": {
+        "wape": 0.5602409638554217,
+        "bias": -0.4259896729776248,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.0,
+        "top3": 0.2,
+        "rank_std": 3.9698866482558417,
+        "per_sku": {
+          "2870": {
+            "wape": 0.42,
+            "bias": -0.26
+          },
+          "2871": {
+            "wape": 0.6891891891891891,
+            "bias": -0.6891891891891891
+          },
+          "2876": {
+            "wape": 0.7990196078431373,
+            "bias": -0.7990196078431373
+          },
+          "2877": {
+            "wape": 0.7789473684210526,
+            "bias": -0.7789473684210526
+          },
+          "2878": {
+            "wape": 0.1956521739130435,
+            "bias": 0.06521739130434782
+          },
+          "2879": {
+            "wape": 0.34444444444444444,
+            "bias": -0.34444444444444444
+          },
+          "2880": {
+            "wape": 0.58,
+            "bias": 0.58
+          },
+          "2881": {
+            "wape": 0.3918918918918919,
+            "bias": -0.3918918918918919
+          }
+        }
+      },
+      "croston": {
+        "wape": 0.46308573099766287,
+        "bias": -0.3167193975913622,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.0,
+        "top3": 0.4,
+        "rank_std": 1.6,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5671116012829461,
+            "bias": -0.5406658076971088
+          },
+          "2871": {
+            "wape": 0.6455833745108998,
+            "bias": -0.6455833745108998
+          },
+          "2876": {
+            "wape": 0.5252008065083746,
+            "bias": -0.5252008065083746
+          },
+          "2877": {
+            "wape": 0.61574939085876,
+            "bias": -0.61574939085876
+          },
+          "2878": {
+            "wape": 0.39728489090057023,
+            "bias": -0.021249616077179026
+          },
+          "2879": {
+            "wape": 0.18902668159291147,
+            "bias": -0.13056029622047668
+          },
+          "2880": {
+            "wape": 0.47869276677684813,
+            "bias": 0.4786927667768481
+          },
+          "2881": {
+            "wape": 0.2923681199002856,
+            "bias": -0.11280493035043568
+          }
+        }
+      },
+      "tsb": {
+        "wape": 0.47690979156497143,
+        "bias": -0.32526345954338715,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.2,
+        "top3": 0.4,
+        "rank_std": 3.0724582991474434,
+        "per_sku": {
+          "2870": {
+            "wape": 0.626654473766496,
+            "bias": -0.587229828844061
+          },
+          "2871": {
+            "wape": 0.6561039664505939,
+            "bias": -0.6561039664505939
+          },
+          "2876": {
+            "wape": 0.5268688655338025,
+            "bias": -0.5268688655338025
+          },
+          "2877": {
+            "wape": 0.6091118696325173,
+            "bias": -0.6091118696325173
+          },
+          "2878": {
+            "wape": 0.4992382758236725,
+            "bias": -0.08001649989821803
+          },
+          "2879": {
+            "wape": 0.18874589309347733,
+            "bias": -0.13006938808645888
+          },
+          "2880": {
+            "wape": 0.4810009588991114,
+            "bias": 0.4810009588991113
+          },
+          "2881": {
+            "wape": 0.29178082138898886,
+            "bias": -0.10975239402000221
+          }
+        }
+      },
+      "ens3": {
+        "wape": 0.47543760460378764,
+        "bias": -0.32872568108160727,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.0,
+        "top3": 0.2,
+        "rank_std": 1.3564659966250536,
+        "per_sku": {
+          "2870": {
+            "wape": 0.6303978989652508,
+            "bias": -0.6039521053794136
+          },
+          "2871": {
+            "wape": 0.6597335650977758,
+            "bias": -0.6597335650977758
+          },
+          "2876": {
+            "wape": 0.5242314959582025,
+            "bias": -0.5242314959582025
+          },
+          "2877": {
+            "wape": 0.6227858392054437,
+            "bias": -0.6227858392054437
+          },
+          "2878": {
+            "wape": 0.44888720262908693,
+            "bias": -0.07285192780569577
+          },
+          "2879": {
+            "wape": 0.18895575513398025,
+            "bias": -0.13048936976154552
+          },
+          "2880": {
+            "wape": 0.480700645350109,
+            "bias": 0.48070064535010887
+          },
+          "2881": {
+            "wape": 0.2913910898182053,
+            "bias": -0.11182790026835528
+          }
+        }
+      },
+      "ens5": {
+        "wape": 0.4776760829458519,
+        "bias": -0.33001163302754916,
+        "n_cells": 34,
+        "n_origins": 5,
+        "top1": 0.0,
+        "top3": 0.2,
+        "rank_std": 1.8547236990991407,
+        "per_sku": {
+          "2870": {
+            "wape": 0.6349201430295945,
+            "bias": -0.5954954981071596
+          },
+          "2871": {
+            "wape": 0.6597335650977758,
+            "bias": -0.6597335650977758
+          },
+          "2876": {
+            "wape": 0.5344516414368338,
+            "bias": -0.5344516414368338
+          },
+          "2877": {
+            "wape": 0.6236253259427399,
+            "bias": -0.6236253259427399
+          },
+          "2878": {
+            "wape": 0.44888720262908693,
+            "bias": -0.07285192780569577
+          },
+          "2879": {
+            "wape": 0.18895575513398025,
+            "bias": -0.13048936976154552
+          },
+          "2880": {
+            "wape": 0.47974539804328103,
+            "bias": 0.47974539804328115
+          },
+          "2881": {
+            "wape": 0.2913910898182053,
+            "bias": -0.11182790026835528
+          }
+        }
+      }
+    }
+  },
+  "test": {
+    "n_cells": 780,
+    "n_origins": 8,
+    "scored_h_hist": {
+      "3": 780
+    },
+    "summary": {
+      "naive": {
+        "wape": 0.4973309608540925,
+        "bias": -0.08451957295373666,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.125,
+        "top3": 0.25,
+        "rank_std": 4.342738191510052,
+        "per_sku": {
+          "2870": {
+            "wape": 1.0,
+            "bias": 0.25806451612903225
+          },
+          "2871": {
+            "wape": 0.7391304347826086,
+            "bias": 0.043478260869565216
+          },
+          "2876": {
+            "wape": 0.40437158469945356,
+            "bias": 0.13114754098360656
+          },
+          "2877": {
+            "wape": 0.6352201257861635,
+            "bias": 0.1320754716981132
+          },
+          "2878": {
+            "wape": 0.4691358024691358,
+            "bias": -0.32098765432098764
+          },
+          "2879": {
+            "wape": 0.5959595959595959,
+            "bias": 0.030303030303030304
+          },
+          "2880": {
+            "wape": 0.16216216216216217,
+            "bias": -0.16216216216216217
+          },
+          "2881": {
+            "wape": 0.43891402714932126,
+            "bias": -0.29411764705882354
+          }
+        }
+      },
+      "seasonal_naive": {
+        "wape": 0.5088967971530249,
+        "bias": -0.3398576512455516,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.0,
+        "top3": 0.125,
+        "rank_std": 2.947456530637899,
+        "per_sku": {
+          "2870": {
+            "wape": 0.45161290322580644,
+            "bias": -0.41935483870967744
+          },
+          "2871": {
+            "wape": 0.6086956521739131,
+            "bias": 0.30434782608695654
+          },
+          "2876": {
+            "wape": 0.5956284153005464,
+            "bias": -0.5956284153005464
+          },
+          "2877": {
+            "wape": 0.5534591194968553,
+            "bias": -0.5534591194968553
+          },
+          "2878": {
+            "wape": 0.522633744855967,
+            "bias": -0.522633744855967
+          },
+          "2879": {
+            "wape": 0.7575757575757576,
+            "bias": 0.494949494949495
+          },
+          "2880": {
+            "wape": 0.22522522522522523,
+            "bias": -0.02702702702702703
+          },
+          "2881": {
+            "wape": 0.416289592760181,
+            "bias": -0.416289592760181
+          }
+        }
+      },
+      "ma3": {
+        "wape": 0.4884341637010676,
+        "bias": -0.04893238434163701,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.0,
+        "top3": 0.125,
+        "rank_std": 3.0,
+        "per_sku": {
+          "2870": {
+            "wape": 0.7258064516129032,
+            "bias": 0.46774193548387094
+          },
+          "2871": {
+            "wape": 0.9565217391304348,
+            "bias": 0.34782608695652173
+          },
+          "2876": {
+            "wape": 0.5683060109289617,
+            "bias": 0.1092896174863388
+          },
+          "2877": {
+            "wape": 0.6918238993710691,
+            "bias": 0.2138364779874214
+          },
+          "2878": {
+            "wape": 0.38271604938271603,
+            "bias": -0.3333333333333333
+          },
+          "2879": {
+            "wape": 0.5656565656565656,
+            "bias": 0.2222222222222222
+          },
+          "2880": {
+            "wape": 0.27927927927927926,
+            "bias": -0.27927927927927926
+          },
+          "2881": {
+            "wape": 0.2986425339366516,
+            "bias": -0.2895927601809955
+          }
+        }
+      },
+      "ma6": {
+        "wape": 0.4621886120996441,
+        "bias": -0.02179715302491103,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.25,
+        "top3": 0.25,
+        "rank_std": 4.121210380458634,
+        "per_sku": {
+          "2870": {
+            "wape": 0.6693548387096774,
+            "bias": 0.5564516129032258
+          },
+          "2871": {
+            "wape": 1.2173913043478262,
+            "bias": 0.8478260869565217
+          },
+          "2876": {
+            "wape": 0.44808743169398907,
+            "bias": 0.060109289617486336
+          },
+          "2877": {
+            "wape": 0.5691823899371069,
+            "bias": 0.2861635220125786
+          },
+          "2878": {
+            "wape": 0.3559670781893004,
+            "bias": -0.3559670781893004
+          },
+          "2879": {
+            "wape": 0.5252525252525253,
+            "bias": 0.43434343434343436
+          },
+          "2880": {
+            "wape": 0.35585585585585583,
+            "bias": -0.35585585585585583
+          },
+          "2881": {
+            "wape": 0.3235294117647059,
+            "bias": -0.3235294117647059
+          }
+        }
+      },
+      "ma12": {
+        "wape": 0.4181494661921708,
+        "bias": -0.1347864768683274,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.25,
+        "top3": 0.375,
+        "rank_std": 2.6427968139832467,
+        "per_sku": {
+          "2870": {
+            "wape": 0.3629032258064516,
+            "bias": 0.21774193548387097
+          },
+          "2871": {
+            "wape": 0.8043478260869565,
+            "bias": 0.8043478260869565
+          },
+          "2876": {
+            "wape": 0.430327868852459,
+            "bias": -0.21174863387978143
+          },
+          "2877": {
+            "wape": 0.4025157232704403,
+            "bias": -0.02830188679245283
+          },
+          "2878": {
+            "wape": 0.43621399176954734,
+            "bias": -0.43621399176954734
+          },
+          "2879": {
+            "wape": 0.5505050505050505,
+            "bias": 0.5505050505050505
+          },
+          "2880": {
+            "wape": 0.25225225225225223,
+            "bias": -0.25225225225225223
+          },
+          "2881": {
+            "wape": 0.3585972850678733,
+            "bias": -0.3585972850678733
+          }
+        }
+      },
+      "M1": {
+        "wape": 0.4181494661921708,
+        "bias": -0.1347864768683274,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.0,
+        "top3": 0.375,
+        "rank_std": 2.6427968139832467,
+        "per_sku": {
+          "2870": {
+            "wape": 0.3629032258064516,
+            "bias": 0.21774193548387097
+          },
+          "2871": {
+            "wape": 0.8043478260869565,
+            "bias": 0.8043478260869565
+          },
+          "2876": {
+            "wape": 0.430327868852459,
+            "bias": -0.21174863387978143
+          },
+          "2877": {
+            "wape": 0.4025157232704403,
+            "bias": -0.02830188679245283
+          },
+          "2878": {
+            "wape": 0.43621399176954734,
+            "bias": -0.43621399176954734
+          },
+          "2879": {
+            "wape": 0.5505050505050505,
+            "bias": 0.5505050505050505
+          },
+          "2880": {
+            "wape": 0.25225225225225223,
+            "bias": -0.25225225225225223
+          },
+          "2881": {
+            "wape": 0.3585972850678733,
+            "bias": -0.3585972850678733
+          }
+        }
+      },
+      "M2": {
+        "wape": 0.5194289521255374,
+        "bias": -0.010624454335661304,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.125,
+        "top3": 0.125,
+        "rank_std": 3.6550478793033614,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5311827956989248,
+            "bias": 0.1462365591397849
+          },
+          "2871": {
+            "wape": 0.8909592822636302,
+            "bias": 0.8909592822636302
+          },
+          "2876": {
+            "wape": 0.6721311475409836,
+            "bias": -0.1912568306010929
+          },
+          "2877": {
+            "wape": 0.559748427672956,
+            "bias": -0.1069182389937107
+          },
+          "2878": {
+            "wape": 0.32008544927700644,
+            "bias": -0.32008544927700644
+          },
+          "2879": {
+            "wape": 1.25100846678997,
+            "bias": 1.1318862097366784
+          },
+          "2880": {
+            "wape": 0.36213236261414594,
+            "bias": -0.36213236261414594
+          },
+          "2881": {
+            "wape": 0.25381623183237084,
+            "bias": -0.01842515232364425
+          }
+        }
+      },
+      "M3": {
+        "wape": 0.6047406034060838,
+        "bias": 0.11762955312777383,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.0,
+        "top3": 0.0,
+        "rank_std": 1.8540496217739157,
+        "per_sku": {
+          "2870": {
+            "wape": 1.2068576584705617,
+            "bias": 0.9765395894428153
+          },
+          "2871": {
+            "wape": 1.7821019560149995,
+            "bias": 0.9520117563595825
+          },
+          "2876": {
+            "wape": 0.5930108143222896,
+            "bias": 0.40343536245175576
+          },
+          "2877": {
+            "wape": 0.8824163258125522,
+            "bias": 0.6505475656419052
+          },
+          "2878": {
+            "wape": 0.3283547727992172,
+            "bias": -0.267863823419379
+          },
+          "2879": {
+            "wape": 0.8230204139295049,
+            "bias": 0.27396341032704674
+          },
+          "2880": {
+            "wape": 0.46771246771246766,
+            "bias": -0.46771246771246766
+          },
+          "2881": {
+            "wape": 0.27563838876056074,
+            "bias": -0.26924659051355887
+          }
+        }
+      },
+      "M3b": {
+        "wape": 0.5529359430604982,
+        "bias": -0.44261565836298933,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.0,
+        "top3": 0.0,
+        "rank_std": 1.479019945774904,
+        "per_sku": {
+          "2870": {
+            "wape": 0.31451612903225806,
+            "bias": -0.29838709677419356
+          },
+          "2871": {
+            "wape": 0.3804347826086957,
+            "bias": 0.18478260869565216
+          },
+          "2876": {
+            "wape": 0.7049180327868853,
+            "bias": -0.7049180327868853
+          },
+          "2877": {
+            "wape": 0.6132075471698113,
+            "bias": -0.6132075471698113
+          },
+          "2878": {
+            "wape": 0.5473251028806584,
+            "bias": -0.5473251028806584
+          },
+          "2879": {
+            "wape": 0.6464646464646465,
+            "bias": 0.3333333333333333
+          },
+          "2880": {
+            "wape": 0.4099099099099099,
+            "bias": -0.4099099099099099
+          },
+          "2881": {
+            "wape": 0.5226244343891403,
+            "bias": -0.5226244343891403
+          }
+        }
+      },
+      "croston": {
+        "wape": 0.41737985708680553,
+        "bias": -0.06413757520841461,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.125,
+        "top3": 0.375,
+        "rank_std": 2.0,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5665842752071197,
+            "bias": 0.45707035786118183
+          },
+          "2871": {
+            "wape": 0.8542002748717679,
+            "bias": 0.6080770677159727
+          },
+          "2876": {
+            "wape": 0.42983482599373163,
+            "bias": 0.007052610413088674
+          },
+          "2877": {
+            "wape": 0.5049325503708644,
+            "bias": 0.1552805634607603
+          },
+          "2878": {
+            "wape": 0.37100259508899464,
+            "bias": -0.36965331782882427
+          },
+          "2879": {
+            "wape": 0.43952485660472007,
+            "bias": 0.37927129982096425
+          },
+          "2880": {
+            "wape": 0.2856688925864174,
+            "bias": -0.28566889258641737
+          },
+          "2881": {
+            "wape": 0.3185232330552988,
+            "bias": -0.3185232330552988
+          }
+        }
+      },
+      "tsb": {
+        "wape": 0.4200647403376563,
+        "bias": -0.06795814238330503,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.0,
+        "top3": 0.25,
+        "rank_std": 1.0897247358851685,
+        "per_sku": {
+          "2870": {
+            "wape": 0.560109134060052,
+            "bias": 0.4102788646991873
+          },
+          "2871": {
+            "wape": 0.9077647866905676,
+            "bias": 0.5749516097167107
+          },
+          "2876": {
+            "wape": 0.42727365358789887,
+            "bias": 0.014418856440652253
+          },
+          "2877": {
+            "wape": 0.5098119590151982,
+            "bias": 0.16700534811912002
+          },
+          "2878": {
+            "wape": 0.3678730856260234,
+            "bias": -0.3652940157537551
+          },
+          "2879": {
+            "wape": 0.45426788308935423,
+            "bias": 0.33692818554034937
+          },
+          "2880": {
+            "wape": 0.28554798120498365,
+            "bias": -0.28554798120498365
+          },
+          "2881": {
+            "wape": 0.31835355386113756,
+            "bias": -0.3183535538611376
+          }
+        }
+      },
+      "ens3": {
+        "wape": 0.41959747753209836,
+        "bias": -0.06479689212831369,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.125,
+        "top3": 0.25,
+        "rank_std": 2.0615528128088303,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5865417716561767,
+            "bias": 0.4770278543102389
+          },
+          "2871": {
+            "wape": 0.8924830201275411,
+            "bias": 0.5902333762797372
+          },
+          "2876": {
+            "wape": 0.4267214631743566,
+            "bias": 0.011095509018777257
+          },
+          "2877": {
+            "wape": 0.5043443237981093,
+            "bias": 0.16153771290203114
+          },
+          "2878": {
+            "wape": 0.36835999493925486,
+            "bias": -0.3670107176790846
+          },
+          "2879": {
+            "wape": 0.4478022096560358,
+            "bias": 0.34336913204410713
+          },
+          "2880": {
+            "wape": 0.2856688925864174,
+            "bias": -0.28566889258641737
+          },
+          "2881": {
+            "wape": 0.31843364764453963,
+            "bias": -0.3184336476445397
+          }
+        }
+      },
+      "ens5": {
+        "wape": 0.41643485633444954,
+        "bias": -0.07005086412990737,
+        "n_cells": 60,
+        "n_origins": 8,
+        "top1": 0.0,
+        "top3": 0.5,
+        "rank_std": 1.1110243021644486,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5263505443055914,
+            "bias": 0.4168366269596536
+          },
+          "2871": {
+            "wape": 0.8897216511049766,
+            "bias": 0.5874720072571725
+          },
+          "2876": {
+            "wape": 0.42811822356930124,
+            "bias": 0.009698748623832732
+          },
+          "2877": {
+            "wape": 0.5043443237981093,
+            "bias": 0.16153771290203114
+          },
+          "2878": {
+            "wape": 0.3658433570062639,
+            "bias": -0.36449407974609355
+          },
+          "2879": {
+            "wape": 0.4390017419065402,
+            "bias": 0.33456866429461146
+          },
+          "2880": {
+            "wape": 0.2856474380295557,
+            "bias": -0.2856474380295557
+          },
+          "2881": {
+            "wape": 0.325373269694633,
+            "bias": -0.325373269694633
+          }
+        }
+      }
+    }
+  },
+  "combined_reported": {
+    "n_cells": 1222,
+    "n_origins": 13,
+    "summary": {
+      "naive": {
+        "wape": 0.5255131964809384,
+        "bias": -0.10439882697947214,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.15384615384615385,
+        "top3": 0.23076923076923078,
+        "rank_std": 4.503778821016753,
+        "per_sku": {
+          "2870": {
+            "wape": 0.8214285714285714,
+            "bias": -0.08928571428571429
+          },
+          "2871": {
+            "wape": 0.675,
+            "bias": -0.225
+          },
+          "2876": {
+            "wape": 0.4631578947368421,
+            "bias": 0.0
+          },
+          "2877": {
+            "wape": 0.5551181102362205,
+            "bias": -0.06692913385826772
+          },
+          "2878": {
+            "wape": 0.5951557093425606,
+            "bias": -0.22145328719723184
+          },
+          "2879": {
+            "wape": 0.5132275132275133,
+            "bias": 0.015873015873015872
+          },
+          "2880": {
+            "wape": 0.2732919254658385,
+            "bias": -0.012422360248447204
+          },
+          "2881": {
+            "wape": 0.46440677966101696,
+            "bias": -0.20677966101694914
+          }
+        }
+      },
+      "seasonal_naive": {
+        "wape": 0.5266862170087977,
+        "bias": -0.36950146627565983,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.23076923076923078,
+        "rank_std": 3.724221057510832,
+        "per_sku": {
+          "2870": {
+            "wape": 0.42857142857142855,
+            "bias": -0.3392857142857143
+          },
+          "2871": {
+            "wape": 0.6583333333333333,
+            "bias": -0.30833333333333335
+          },
+          "2876": {
+            "wape": 0.6736842105263158,
+            "bias": -0.6736842105263158
+          },
+          "2877": {
+            "wape": 0.6377952755905512,
+            "bias": -0.6377952755905512
+          },
+          "2878": {
+            "wape": 0.47058823529411764,
+            "bias": -0.4290657439446367
+          },
+          "2879": {
+            "wape": 0.5608465608465608,
+            "bias": 0.09523809523809523
+          },
+          "2880": {
+            "wape": 0.33540372670807456,
+            "bias": 0.16149068322981366
+          },
+          "2881": {
+            "wape": 0.4101694915254237,
+            "bias": -0.4101694915254237
+          }
+        }
+      },
+      "ma3": {
+        "wape": 0.47683284457478003,
+        "bias": -0.12023460410557185,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.23076923076923078,
+        "rank_std": 3.4228608401979983,
+        "per_sku": {
+          "2870": {
+            "wape": 0.6875,
+            "bias": -0.008928571428571428
+          },
+          "2871": {
+            "wape": 0.7333333333333333,
+            "bias": -0.23333333333333334
+          },
+          "2876": {
+            "wape": 0.5578947368421052,
+            "bias": -0.07368421052631578
+          },
+          "2877": {
+            "wape": 0.6417322834645669,
+            "bias": -0.07480314960629922
+          },
+          "2878": {
+            "wape": 0.4186851211072664,
+            "bias": -0.28719723183391005
+          },
+          "2879": {
+            "wape": 0.3492063492063492,
+            "bias": 0.12698412698412698
+          },
+          "2880": {
+            "wape": 0.2981366459627329,
+            "bias": -0.08695652173913043
+          },
+          "2881": {
+            "wape": 0.30847457627118646,
+            "bias": -0.2135593220338983
+          }
+        }
+      },
+      "ma6": {
+        "wape": 0.47331378299120236,
+        "bias": -0.1378299120234604,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.23076923076923078,
+        "top3": 0.23076923076923078,
+        "rank_std": 4.064567634960894,
+        "per_sku": {
+          "2870": {
+            "wape": 0.65625,
+            "bias": 0.022321428571428572
+          },
+          "2871": {
+            "wape": 0.9,
+            "bias": -0.10833333333333334
+          },
+          "2876": {
+            "wape": 0.48596491228070177,
+            "bias": -0.15964912280701754
+          },
+          "2877": {
+            "wape": 0.6023622047244095,
+            "bias": -0.06692913385826772
+          },
+          "2878": {
+            "wape": 0.3685121107266436,
+            "bias": -0.3235294117647059
+          },
+          "2879": {
+            "wape": 0.36507936507936506,
+            "bias": 0.13756613756613756
+          },
+          "2880": {
+            "wape": 0.4254658385093168,
+            "bias": -0.06521739130434782
+          },
+          "2881": {
+            "wape": 0.3050847457627119,
+            "bias": -0.2847457627118644
+          }
+        }
+      },
+      "ma12": {
+        "wape": 0.46055718475073315,
+        "bias": -0.22653958944281524,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.15384615384615385,
+        "top3": 0.23076923076923078,
+        "rank_std": 2.8284271247461903,
+        "per_sku": {
+          "2870": {
+            "wape": 0.453125,
+            "bias": -0.10044642857142858
+          },
+          "2871": {
+            "wape": 0.7479166666666667,
+            "bias": -0.13125
+          },
+          "2876": {
+            "wape": 0.5140350877192983,
+            "bias": -0.3736842105263158
+          },
+          "2877": {
+            "wape": 0.515748031496063,
+            "bias": -0.281496062992126
+          },
+          "2878": {
+            "wape": 0.41608996539792387,
+            "bias": -0.3711072664359862
+          },
+          "2879": {
+            "wape": 0.4523809523809524,
+            "bias": 0.12433862433862433
+          },
+          "2880": {
+            "wape": 0.37267080745341613,
+            "bias": 0.024844720496894408
+          },
+          "2881": {
+            "wape": 0.3440677966101695,
+            "bias": -0.3440677966101695
+          }
+        }
+      },
+      "M1": {
+        "wape": 0.46055718475073315,
+        "bias": -0.22653958944281524,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.0,
+        "top3": 0.23076923076923078,
+        "rank_std": 2.8284271247461903,
+        "per_sku": {
+          "2870": {
+            "wape": 0.453125,
+            "bias": -0.10044642857142858
+          },
+          "2871": {
+            "wape": 0.7479166666666667,
+            "bias": -0.13125
+          },
+          "2876": {
+            "wape": 0.5140350877192983,
+            "bias": -0.3736842105263158
+          },
+          "2877": {
+            "wape": 0.515748031496063,
+            "bias": -0.281496062992126
+          },
+          "2878": {
+            "wape": 0.41608996539792387,
+            "bias": -0.3711072664359862
+          },
+          "2879": {
+            "wape": 0.4523809523809524,
+            "bias": 0.12433862433862433
+          },
+          "2880": {
+            "wape": 0.37267080745341613,
+            "bias": 0.024844720496894408
+          },
+          "2881": {
+            "wape": 0.3440677966101695,
+            "bias": -0.3440677966101695
+          }
+        }
+      },
+      "M2": {
+        "wape": 0.5641306710242606,
+        "bias": -0.09926868216683932,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.07692307692307693,
+        "rank_std": 3.182793979319569,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5430694305694306,
+            "bias": -0.16257492507492508
+          },
+          "2871": {
+            "wape": 0.8006586006586006,
+            "bias": -0.11758981758981761
+          },
+          "2876": {
+            "wape": 0.6997178619062275,
+            "bias": -0.39094593208166617
+          },
+          "2877": {
+            "wape": 0.6530814021550474,
+            "bias": -0.3696168352259135
+          },
+          "2878": {
+            "wape": 0.2935900957736542,
+            "bias": -0.2508365690235877
+          },
+          "2879": {
+            "wape": 0.7711344738871911,
+            "bias": 0.5032790114763747
+          },
+          "2880": {
+            "wape": 0.8428365978271442,
+            "bias": 0.34349880589956394
+          },
+          "2881": {
+            "wape": 0.2486409271507246,
+            "bias": -0.032416742561634744
+          }
+        }
+      },
+      "M3": {
+        "wape": 0.5718666475264715,
+        "bias": -0.0158590187915701,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.0,
+        "top3": 0.15384615384615385,
+        "rank_std": 3.5434747096249297,
+        "per_sku": {
+          "2870": {
+            "wape": 1.0157654845154844,
+            "bias": 0.1929008491508493
+          },
+          "2871": {
+            "wape": 1.0827311577311576,
+            "bias": -0.03465423465423463
+          },
+          "2876": {
+            "wape": 0.5630597472702735,
+            "bias": 0.13202061096797943
+          },
+          "2877": {
+            "wape": 0.7554512416717141,
+            "bias": 0.20416001321513133
+          },
+          "2878": {
+            "wape": 0.37848138021148403,
+            "bias": -0.25432525951557095
+          },
+          "2879": {
+            "wape": 0.5403670403670404,
+            "bias": 0.13432863432863434
+          },
+          "2880": {
+            "wape": 0.4713764496373193,
+            "bias": -0.17354384745689094
+          },
+          "2881": {
+            "wape": 0.31044210027260877,
+            "bias": -0.196325708190115
+          }
+        }
+      },
+      "M3b": {
+        "wape": 0.555425219941349,
+        "bias": -0.436950146627566,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.0,
+        "top3": 0.07692307692307693,
+        "rank_std": 2.9911110915728587,
+        "per_sku": {
+          "2870": {
+            "wape": 0.36160714285714285,
+            "bias": -0.28125
+          },
+          "2871": {
+            "wape": 0.5708333333333333,
+            "bias": -0.3541666666666667
+          },
+          "2876": {
+            "wape": 0.7385964912280701,
+            "bias": -0.7385964912280701
+          },
+          "2877": {
+            "wape": 0.6751968503937008,
+            "bias": -0.6751968503937008
+          },
+          "2878": {
+            "wape": 0.4913494809688581,
+            "bias": -0.44982698961937717
+          },
+          "2879": {
+            "wape": 0.5026455026455027,
+            "bias": 0.010582010582010581
+          },
+          "2880": {
+            "wape": 0.46273291925465837,
+            "bias": -0.10248447204968944
+          },
+          "2881": {
+            "wape": 0.48983050847457626,
+            "bias": -0.48983050847457626
+          }
+        }
+      },
+      "croston": {
+        "wape": 0.43295470326991875,
+        "bias": -0.15020797919931927,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.38461538461538464,
+        "rank_std": 1.8589301497837802,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5668196886338279,
+            "bias": 0.011652426808373433
+          },
+          "2871": {
+            "wape": 0.7255531863158993,
+            "bias": -0.16501353832393212
+          },
+          "2876": {
+            "wape": 0.4639658084937091,
+            "bias": -0.1834380861693298
+          },
+          "2877": {
+            "wape": 0.5463797938604317,
+            "bias": -0.13309678165874536
+          },
+          "2878": {
+            "wape": 0.3751859362908371,
+            "bias": -0.3141980573424032
+          },
+          "2879": {
+            "wape": 0.32024001136100166,
+            "bias": 0.13649434932504
+          },
+          "2880": {
+            "wape": 0.34561419513002944,
+            "bias": -0.04828949526863307
+          },
+          "2881": {
+            "wape": 0.3119622894164141,
+            "bias": -0.2669193198344178
+          }
+        }
+      },
+      "tsb": {
+        "wape": 0.43943540002274134,
+        "bias": -0.15563813609005434,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.3076923076923077,
+        "rank_std": 2.1289773081689303,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5898168750004287,
+            "bias": -0.03503751634690566
+          },
+          "2871": {
+            "wape": 0.7525739475425838,
+            "bias": -0.18419932891979382
+          },
+          "2876": {
+            "wape": 0.46291825575801177,
+            "bias": -0.17930517037125793
+          },
+          "2877": {
+            "wape": 0.5469516893641955,
+            "bias": -0.12327471363838217
+          },
+          "2878": {
+            "wape": 0.38878242385817513,
+            "bias": -0.31988652188055544
+          },
+          "2879": {
+            "wape": 0.3278288402341748,
+            "bias": 0.1145483885752025
+          },
+          "2880": {
+            "wape": 0.3462476637186879,
+            "bias": -0.04748930415402238
+          },
+          "2881": {
+            "wape": 0.3116878514782935,
+            "bias": -0.2660264832569206
+          }
+        }
+      },
+      "ens3": {
+        "wape": 0.43862569678643937,
+        "bias": -0.15473391639920145,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.07692307692307693,
+        "top3": 0.23076923076923078,
+        "rank_std": 1.8235799370968766,
+        "per_sku": {
+          "2870": {
+            "wape": 0.6061203999191562,
+            "bias": -0.005552484836927337
+          },
+          "2871": {
+            "wape": 0.7489541895258525,
+            "bias": -0.18057957090306248
+          },
+          "2876": {
+            "wape": 0.4616197906969962,
+            "bias": -0.18049520855193124
+          },
+          "2877": {
+            "wape": 0.5486433157811674,
+            "bias": -0.1318116471381662
+          },
+          "2878": {
+            "wape": 0.381177474363934,
+            "bias": -0.32018959541550024
+          },
+          "2879": {
+            "wape": 0.32454199321696175,
+            "bias": 0.11772222642236777
+          },
+          "2880": {
+            "wape": 0.3462377599043341,
+            "bias": -0.04766593049432848
+          },
+          "2881": {
+            "wape": 0.3116500907660693,
+            "bias": -0.2666071211840731
+          }
+        }
+      },
+      "ens5": {
+        "wape": 0.4373035675727045,
+        "bias": -0.1586357361120364,
+        "n_cells": 94,
+        "n_origins": 13,
+        "top1": 0.0,
+        "top3": 0.38461538461538464,
+        "rank_std": 1.6817854699288806,
+        "per_sku": {
+          "2870": {
+            "wape": 0.5748191151645213,
+            "bias": -0.035097357445173775
+          },
+          "2871": {
+            "wape": 0.7478956647338695,
+            "bias": -0.1816380956950456
+          },
+          "2876": {
+            "wape": 0.4661743941745234,
+            "bias": -0.1850498120294585
+          },
+          "2877": {
+            "wape": 0.5489572970411799,
+            "bias": -0.13212562839817849
+          },
+          "2878": {
+            "wape": 0.37906140855868553,
+            "bias": -0.3180735296102517
+          },
+          "2879": {
+            "wape": 0.3199322243957973,
+            "bias": 0.11311245760120339
+          },
+          "2880": {
+            "wape": 0.34592630759903564,
+            "bias": -0.04794779949761879
+          },
+          "2881": {
+            "wape": 0.31684892626800365,
+            "bias": -0.2718059566860074
+          }
+        }
+      }
+    }
+  },
+  "selection": {
+    "selected_by_validation": "ma3",
+    "validation_wape": 0.45438898450946646,
+    "oracle_best_single_on_test": "croston",
+    "oracle_test_wape": 0.41737985708680553
+  },
+  "test_report": {
+    "ma3": {
+      "wape": 0.4884341637010676,
+      "bias": -0.04893238434163701,
+      "n_cells": 60,
+      "n_origins": 8,
+      "top1": 0.0,
+      "top3": 0.125,
+      "rank_std": 3.0,
+      "per_sku": {
+        "2870": {
+          "wape": 0.7258064516129032,
+          "bias": 0.46774193548387094
+        },
+        "2871": {
+          "wape": 0.9565217391304348,
+          "bias": 0.34782608695652173
+        },
+        "2876": {
+          "wape": 0.5683060109289617,
+          "bias": 0.1092896174863388
+        },
+        "2877": {
+          "wape": 0.6918238993710691,
+          "bias": 0.2138364779874214
+        },
+        "2878": {
+          "wape": 0.38271604938271603,
+          "bias": -0.3333333333333333
+        },
+        "2879": {
+          "wape": 0.5656565656565656,
+          "bias": 0.2222222222222222
+        },
+        "2880": {
+          "wape": 0.27927927927927926,
+          "bias": -0.27927927927927926
+        },
+        "2881": {
+          "wape": 0.2986425339366516,
+          "bias": -0.2895927601809955
+        }
+      }
+    },
+    "ens5": {
+      "wape": 0.41643485633444954,
+      "bias": -0.07005086412990737,
+      "n_cells": 60,
+      "n_origins": 8,
+      "top1": 0.0,
+      "top3": 0.5,
+      "rank_std": 1.1110243021644486,
+      "per_sku": {
+        "2870": {
+          "wape": 0.5263505443055914,
+          "bias": 0.4168366269596536
+        },
+        "2871": {
+          "wape": 0.8897216511049766,
+          "bias": 0.5874720072571725
+        },
+        "2876": {
+          "wape": 0.42811822356930124,
+          "bias": 0.009698748623832732
+        },
+        "2877": {
+          "wape": 0.5043443237981093,
+          "bias": 0.16153771290203114
+        },
+        "2878": {
+          "wape": 0.3658433570062639,
+          "bias": -0.36449407974609355
+        },
+        "2879": {
+          "wape": 0.4390017419065402,
+          "bias": 0.33456866429461146
+        },
+        "2880": {
+          "wape": 0.2856474380295557,
+          "bias": -0.2856474380295557
+        },
+        "2881": {
+          "wape": 0.325373269694633,
+          "bias": -0.325373269694633
+        }
+      }
+    },
+    "naive": {
+      "wape": 0.4973309608540925,
+      "bias": -0.08451957295373666,
+      "n_cells": 60,
+      "n_origins": 8,
+      "top1": 0.125,
+      "top3": 0.25,
+      "rank_std": 4.342738191510052,
+      "per_sku": {
+        "2870": {
+          "wape": 1.0,
+          "bias": 0.25806451612903225
+        },
+        "2871": {
+          "wape": 0.7391304347826086,
+          "bias": 0.043478260869565216
+        },
+        "2876": {
+          "wape": 0.40437158469945356,
+          "bias": 0.13114754098360656
+        },
+        "2877": {
+          "wape": 0.6352201257861635,
+          "bias": 0.1320754716981132
+        },
+        "2878": {
+          "wape": 0.4691358024691358,
+          "bias": -0.32098765432098764
+        },
+        "2879": {
+          "wape": 0.5959595959595959,
+          "bias": 0.030303030303030304
+        },
+        "2880": {
+          "wape": 0.16216216216216217,
+          "bias": -0.16216216216216217
+        },
+        "2881": {
+          "wape": 0.43891402714932126,
+          "bias": -0.29411764705882354
+        }
+      }
+    },
+    "croston": {
+      "wape": 0.41737985708680553,
+      "bias": -0.06413757520841461,
+      "n_cells": 60,
+      "n_origins": 8,
+      "top1": 0.125,
+      "top3": 0.375,
+      "rank_std": 2.0,
+      "per_sku": {
+        "2870": {
+          "wape": 0.5665842752071197,
+          "bias": 0.45707035786118183
+        },
+        "2871": {
+          "wape": 0.8542002748717679,
+          "bias": 0.6080770677159727
+        },
+        "2876": {
+          "wape": 0.42983482599373163,
+          "bias": 0.007052610413088674
+        },
+        "2877": {
+          "wape": 0.5049325503708644,
+          "bias": 0.1552805634607603
+        },
+        "2878": {
+          "wape": 0.37100259508899464,
+          "bias": -0.36965331782882427
+        },
+        "2879": {
+          "wape": 0.43952485660472007,
+          "bias": 0.37927129982096425
+        },
+        "2880": {
+          "wape": 0.2856688925864174,
+          "bias": -0.28566889258641737
+        },
+        "2881": {
+          "wape": 0.3185232330552988,
+          "bias": -0.3185232330552988
+        }
+      }
+    },
+    "tsb": {
+      "wape": 0.4200647403376563,
+      "bias": -0.06795814238330503,
+      "n_cells": 60,
+      "n_origins": 8,
+      "top1": 0.0,
+      "top3": 0.25,
+      "rank_std": 1.0897247358851685,
+      "per_sku": {
+        "2870": {
+          "wape": 0.560109134060052,
+          "bias": 0.4102788646991873
+        },
+        "2871": {
+          "wape": 0.9077647866905676,
+          "bias": 0.5749516097167107
+        },
+        "2876": {
+          "wape": 0.42727365358789887,
+          "bias": 0.014418856440652253
+        },
+        "2877": {
+          "wape": 0.5098119590151982,
+          "bias": 0.16700534811912002
+        },
+        "2878": {
+          "wape": 0.3678730856260234,
+          "bias": -0.3652940157537551
+        },
+        "2879": {
+          "wape": 0.45426788308935423,
+          "bias": 0.33692818554034937
+        },
+        "2880": {
+          "wape": 0.28554798120498365,
+          "bias": -0.28554798120498365
+        },
+        "2881": {
+          "wape": 0.31835355386113756,
+          "bias": -0.3183535538611376
+        }
+      }
+    }
+  }
+}

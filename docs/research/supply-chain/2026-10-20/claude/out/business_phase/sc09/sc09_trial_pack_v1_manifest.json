@@ -1,0 +1,77 @@
+{
+  "schema_version": "sc09_trial_pack_frozen/1",
+  "version": "M1-TRIAL-v1",
+  "frozen_at": "2026-10-23",
+  "frozen_by": "claude-worker-2",
+  "review_status": "301 已判 SC09-R2 无 blocking / major；本版直接冻结，未做新分析、未重算",
+  "source_commits": {
+    "sc09_r2": "34d07685",
+    "forward_net_r3": "19fb2c6e",
+    "dn_split_r2": "59c4e5ec"
+  },
+  "inputs": {
+    "forward_net_rows.csv": "fe74fcc8afef037ccab3ae93756cd54c03685cdca876e5131d5d1230531b7232",
+    "forward_net_buckets.csv": "d8df603dfb8aebafad9f64e5cee3463f469a9a4af7f38ef3c5a9ad5f0a9a232a",
+    "decision_v2.csv": "4b9efecc892342bfb2f463a814b53fed91b0b91750e112dd57e5f63f9899b30e",
+    "replenishment_v2.csv": "6b30e751ecda86301bc73831ffb21705574a0a57b0fbb62c7f43aaba9716c9b7",
+    "sc10_catalog_rows.csv": "d24efb1e2320ff7afc41fd92dc9ed364cf226719a9af105c05d3a5d214878f74"
+  },
+  "artifacts": {
+    "rows": {
+      "path": "out/business_phase/sc09/sc09_trial_rows.csv",
+      "sha256": "0a9371dc7b09257641e954125ddae34551bb38eb80af86c449830e3601f9ae5d",
+      "rows": 2309,
+      "cols": 23
+    },
+    "extension": {
+      "path": "out/business_phase/sc09/sc09_extension_candidates.csv",
+      "sha256": "96fb48d396e88d7de7116f75a5d7ae70af967eaa6fff981220d858823e78f7d6",
+      "rows": 271
+    },
+    "pack_json": {
+      "path": "out/business_phase/sc09/sc09_trial_pack.json",
+      "sha256": "15fe272708e6362745fb52bcaa5d1887c1bfbbd270b0d74c5fb38ddb85ffcab1"
+    }
+  },
+  "counts": {
+    "rows_total": 2309,
+    "conditional": 2058,
+    "hold": 251,
+    "hold_by_reason": {
+      "库存": 160,
+      "需求": 91
+    },
+    "gap_rows": 397,
+    "gap_need_time": {
+      "2026-10 剩余": 258,
+      "2026-11": 64,
+      "2026-12": 75
+    },
+    "no_gap_rows": 1661,
+    "not_computable_rows": 251,
+    "qty_range": {
+      "true_ranges": 14,
+      "equal_ends": 2044,
+      "not_computable": 251
+    },
+    "forecast_rate": {
+      "ok": 2058,
+      "null_inventory_evidence": 160,
+      "null_demand_evidence": 91,
+      "true_zero": 829
+    },
+    "extension_271": {
+      "mapping_pass": 271,
+      "uom_pass": 258,
+      "stock_pass": 0,
+      "all_pass": 0
+    }
+  },
+  "boundaries": [
+    "本 manifest 只放 hash 与元数据，不含任何行级数据。",
+    "任一产物被修改，上面的 sha256 即失效，必须重新冻结并升版。",
+    "B 情景 ≠ 采购批准；qty_min/qty_max 是条件区间，不是可下单量。",
+    "禁止跨 UOM 合计；271 个扩展候选未并入任何数量。"
+  ],
+  "reproduce": "uv run python docs/research/supply-chain/2026-10-20/claude/experiments/sc09/sc09_trial_pack.py，再比对 artifacts.sha256"
+}

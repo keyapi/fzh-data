@@ -1,0 +1,102 @@
+{
+  "schema_version": "dn_split/2",
+  "cutoff": "2026-10-20",
+  "cutoff_note": "唯一 cutoff = stock_history 第一个快照日；签收日 ≤ CUTOFF 只产生「候选」，不产生「已入账」",
+  "counts": {
+    "dns": 39,
+    "single": 37,
+    "multi": 2,
+    "numbers": 47
+  },
+  "linkage": {
+    "single_route": {
+      "n": 37,
+      "by_confidence": {
+        "A 四项全过": {
+          "n": 21
+        },
+        "B 关联成立·SO校验未过": {
+          "n": 16
+        }
+      },
+      "so_check": {
+        "over_delivery": 14,
+        "ok": 21,
+        "no_so_link": 2
+      },
+      "state": {
+        "已签收/已入仓": 6,
+        "在途": 30,
+        "未知": 1
+      }
+    },
+    "multi_route": {
+      "n": 2,
+      "dns": [
+        {
+          "dn": "DN-26-00062",
+          "numbers": 5,
+          "lines": 220,
+          "state": "已签收/已入仓",
+          "statuses": "已上传POD"
+        },
+        {
+          "dn": "DN-26-00069",
+          "numbers": 5,
+          "lines": 452,
+          "state": "部分签收",
+          "statuses": "已上传POD|已清关|已离港"
+        }
+      ]
+    }
+  },
+  "stock_inclusion": {
+    "states": {
+      "received_before_snapshot_candidate": 5,
+      "stock_inclusion_unknown": 34
+    },
+    "reasons": {
+      "candidate_only": 5,
+      "dest_not_tracked": 17,
+      "in_transit": 15,
+      "no_receipt_date": 1,
+      "status_unknown": 1
+    },
+    "credited_qty": "null（全部 39 张；本轮不做数量入账）",
+    "note": "received_before_snapshot_candidate 仅表示「签收日 ≤ CUTOFF，值得去账面核」，不等于该批货已在库存中；其余一律 stock_inclusion_unknown"
+  },
+  "quantities": {
+    "rule": "按 (item_code, UOM, role) 输出原始向量；跨 UOM 不合计",
+    "by_uom": {
+      "个": 77336.0,
+      "套": 49435.0
+    },
+    "by_role_uom": {
+      "component_via_bom|个": 68300.0,
+      "component_via_bom|套": 49435.0,
+      "mapped_sku|个": 7831.0,
+      "unmapped|个": 1205.0
+    },
+    "target_sku_qty": "not computed：套→个 无换算依据（KZKP1010 无 BOM 头、库存 uom_basis=unknown）",
+    "n_vector_rows": 604
+  },
+  "status_split": {
+    "by_dn": {
+      "已签收/已入仓": 7,
+      "在途": 30,
+      "部分签收": 1,
+      "未知": 1
+    },
+    "by_number": {
+      "已签收/已入仓": 12,
+      "在途": 34,
+      "未知": 1
+    }
+  },
+  "destination": {
+    "DANEEY": 11,
+    "美国FBA仓": 17,
+    "CENTRADE": 6,
+    "波兰公司": 5
+  }
+}

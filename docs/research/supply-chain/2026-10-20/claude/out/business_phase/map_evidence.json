@@ -1,0 +1,80 @@
+{
+  "schema_version": "map_evidence/1",
+  "assets": {
+    "sku_item": {
+      "rows": 3482,
+      "distinct_tongtool": 3482,
+      "distinct_item_code": 2118,
+      "ship_type": {
+        "皮壳": 2665,
+        "成品": 480,
+        "": 171,
+        "半成品": 166
+      }
+    },
+    "sku_map": {
+      "rows": 3482,
+      "distinct_tongtool": 3482,
+      "distinct_item_code": 2118
+    },
+    "bom": {
+      "rows": 5575,
+      "boms": 5575,
+      "items": 5575
+    },
+    "bom_exploded": {
+      "rows": 22510,
+      "roots": 5405,
+      "nodes": 3781
+    },
+    "item_attr_rows": 15230,
+    "destinations_json": "out/business_phase/destinations.json：母集 1,328，mapped 1,266 / unmapped 62",
+    "stock_side": {
+      "stock_history_skus": 3862,
+      "uom_basis": {
+        "unknown": 15820
+      }
+    }
+  },
+  "dn_coverage": {
+    "n_distinct_codes": 282,
+    "by_state": {
+      "已映射": 58,
+      "可推导": 217,
+      "未映射": 7
+    },
+    "direct_mapped_codes": 58,
+    "direct_mapped_with_stock_hit": 41
+  },
+  "evidence": {
+    "n_dns": 39,
+    "doc_level_all": true,
+    "qty_level_ok": 0,
+    "qty_level_would_hold": 20,
+    "blockers": {
+      "有行未直接映射;库存 UOM 未证": 15,
+      "": 20,
+      "有行未直接映射;跨 UOM;库存 UOM 未证": 4
+    }
+  },
+  "uom": {
+    "qty_by_uom": {
+      "个": 77336.0,
+      "套": 49435.0
+    },
+    "note": "跨 UOM 不合计（个与套不同单位）",
+    "non_piece_codes": 1,
+    "need_convert": [
+      {
+        "item_code": "KZKP1010-5#-IRONBOTTOMSURFACE-SILVERY",
+        "uoms": "个|套",
+        "qty_by_uom": "个:34370.0|套:49435.0",
+        "bom_uom": "",
+        "state": "可推导"
+      }
+    ],
+    "stock_uom_basis": {
+      "unknown": 15820
+    }
+  }
+}

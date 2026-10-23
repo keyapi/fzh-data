@@ -1,0 +1,403 @@
+{
+  "schema_version": "sc05_equal_investment/2",
+  "protocol": "D40：MODEL_ONLY 与 FULL_FLOW 分表，不混成一张",
+  "universes": {
+    "scored790": {
+      "units": 1354,
+      "sku_clusters": 790,
+      "frozen_hash": "e977e8311a69c428",
+      "as_of": "2026-03",
+      "warmup_months": 3,
+      "scored_months": 3,
+      "tiers_note": "三档均在 as_of=2026-03 重建；生产 T5 产物（as_of 2026-09）不可比，已排除",
+      "MODEL_ONLY": {
+        "results": {
+          "T5_star": {
+            "units": 1354,
+            "beta": 0.7929027855054026,
+            "alpha": 0.7706751054852321,
+            "avg_inventory": 15.6469,
+            "excess": 32404.07
+          },
+          "combo": {
+            "units": 1354,
+            "beta": 0.719729641842239,
+            "alpha": 0.770042194092827,
+            "avg_inventory": 13.3776,
+            "excess": 27883.56
+          },
+          "tree": {
+            "units": 1354,
+            "beta": 0.6577890274140836,
+            "alpha": 0.8911392405063291,
+            "avg_inventory": 11.5693,
+            "excess": 24548.46
+          }
+        },
+        "method": "固定 S 规则，只换预测（D40 MODEL_ONLY）"
+      },
+      "FULL_FLOW": {
+        "results": {
+          "T5_star": {
+            "units": 1354,
+            "beta": 0.69796496742226,
+            "alpha": 0.6867088607594937,
+            "avg_inventory": 8.6816,
+            "excess": 16324.85
+          },
+          "combo": {
+            "units": 1354,
+            "beta": 0.6289572146719263,
+            "alpha": 0.6841772151898734,
+            "avg_inventory": 7.2917,
+            "excess": 13737.35
+          },
+          "tree": {
+            "units": 1354,
+            "beta": 0.5439114919333399,
+            "alpha": 0.7780590717299578,
+            "avg_inventory": 6.6376,
+            "excess": 13842.06
+          }
+        },
+        "method": "政策在档内标定到 β=95%，外层评整个流程（D40 FULL_FLOW）"
+      },
+      "ex_ante_equal_inventory": {
+        "results": {
+          "T5_star": {
+            "units": 1354,
+            "beta": 0.69796496742226,
+            "alpha": 0.6867088607594937,
+            "avg_inventory": 8.6816,
+            "excess": 16324.85
+          },
+          "combo": {
+            "units": 1354,
+            "beta": 0.6487438683721082,
+            "alpha": 0.7075949367088608,
+            "avg_inventory": 8.2513,
+            "excess": 15803.66
+          },
+          "tree": {
+            "units": 1354,
+            "beta": 0.5819508740843609,
+            "alpha": 0.8162447257383967,
+            "avg_inventory": 7.7838,
+            "excess": 16272.19
+          }
+        },
+        "k": {
+          "T5_star": 1.0,
+          "combo": 1.0805,
+          "tree": 1.1171
+        },
+        "target_implied": 7.152,
+        "note": "按预测隐含库存对齐（事前），不使用实际需求"
+      },
+      "ex_post_diagnostic": {
+        "results": {
+          "T5_star": {
+            "units": 1354,
+            "beta": 0.69796496742226,
+            "alpha": 0.6867088607594937,
+            "avg_inventory": 8.6816,
+            "excess": 16324.85
+          },
+          "combo": {
+            "units": 1354,
+            "beta": 0.6569092249668163,
+            "alpha": 0.7141350210970464,
+            "avg_inventory": 8.6818,
+            "excess": 16748.01
+          },
+          "tree": {
+            "units": 1354,
+            "beta": 0.605700382068118,
+            "alpha": 0.8413502109704641,
+            "avg_inventory": 8.6817,
+            "excess": 18232.58
+          }
+        },
+        "k": {
+          "T5_star": 1.0,
+          "combo": 1.1161,
+          "tree": 1.205
+        },
+        "target_actual": 8.6816,
+        "note": "按实际平均库存对齐——仅事后诊断，不作选模证据"
+      },
+      "bootstrap": {
+        "ci_full_flow": [
+          {
+            "T5_star": [
+              0.637,
+              0.7611
+            ],
+            "combo": [
+              0.5644,
+              0.7064
+            ],
+            "tree": [
+              0.4815,
+              0.6204
+            ]
+          },
+          {
+            "combo": {
+              "ci95": [
+                -0.1153,
+                -0.0254
+              ],
+              "significant": true
+            },
+            "tree": {
+              "ci95": [
+                -0.2007,
+                -0.1052
+              ],
+              "significant": true
+            }
+          }
+        ],
+        "ci_model_only": [
+          {
+            "T5_star": [
+              0.7302,
+              0.8558
+            ],
+            "combo": [
+              0.6507,
+              0.7952
+            ],
+            "tree": [
+              0.5851,
+              0.7411
+            ]
+          },
+          {
+            "combo": {
+              "ci95": [
+                -0.1317,
+                -0.0177
+              ],
+              "significant": true
+            },
+            "tree": {
+              "ci95": [
+                -0.1977,
+                -0.0715
+              ],
+              "significant": true
+            }
+          }
+        ],
+        "resamples": 2000,
+        "seed": 20261023,
+        "unit": "SKU 整簇（同 SKU 跨仓共享抽样权重）",
+        "includes_retrain_variance": false
+      }
+    },
+    "verifiable239": {
+      "units": 178,
+      "sku_clusters": 156,
+      "frozen_hash": "066150d3bf4fb22d",
+      "as_of": "2026-03",
+      "warmup_months": 3,
+      "scored_months": 3,
+      "tiers_note": "三档均在 as_of=2026-03 重建；生产 T5 产物（as_of 2026-09）不可比，已排除",
+      "MODEL_ONLY": {
+        "results": {
+          "T5_star": {
+            "units": 178,
+            "beta": 0.8061822417893071,
+            "alpha": 0.8204225352112676,
+            "avg_inventory": 11.0834,
+            "excess": 2769.31
+          },
+          "combo": {
+            "units": 178,
+            "beta": 0.7782133607478987,
+            "alpha": 0.8133802816901409,
+            "avg_inventory": 10.44,
+            "excess": 2544.24
+          },
+          "tree": {
+            "units": 178,
+            "beta": 0.7219091966485376,
+            "alpha": 0.8157276995305164,
+            "avg_inventory": 8.1446,
+            "excess": 2039.47
+          }
+        },
+        "method": "固定 S 规则，只换预测（D40 MODEL_ONLY）"
+      },
+      "FULL_FLOW": {
+        "results": {
+          "T5_star": {
+            "units": 178,
+            "beta": 0.6679438435942282,
+            "alpha": 0.6924882629107981,
+            "avg_inventory": 5.6917,
+            "excess": 1396.41
+          },
+          "combo": {
+            "units": 178,
+            "beta": 0.6587676631153393,
+            "alpha": 0.6924882629107981,
+            "avg_inventory": 5.0274,
+            "excess": 1147.67
+          },
+          "tree": {
+            "units": 178,
+            "beta": 0.5659762932425628,
+            "alpha": 0.6631455399061034,
+            "avg_inventory": 4.2247,
+            "excess": 1008.95
+          }
+        },
+        "method": "政策在档内标定到 β=95%，外层评整个流程（D40 FULL_FLOW）"
+      },
+      "ex_ante_equal_inventory": {
+        "results": {
+          "T5_star": {
+            "units": 178,
+            "beta": 0.6679438435942282,
+            "alpha": 0.6924882629107981,
+            "avg_inventory": 5.6917,
+            "excess": 1396.41
+          },
+          "combo": {
+            "units": 178,
+            "beta": 0.6724297246508375,
+            "alpha": 0.7089201877934272,
+            "avg_inventory": 5.3529,
+            "excess": 1222.43
+          },
+          "tree": {
+            "units": 178,
+            "beta": 0.6068560568969916,
+            "alpha": 0.7112676056338029,
+            "avg_inventory": 4.9209,
+            "excess": 1194.38
+          }
+        },
+        "k": {
+          "T5_star": 1.0,
+          "combo": 1.0353,
+          "tree": 1.0996
+        },
+        "target_implied": 5.948,
+        "note": "按预测隐含库存对齐（事前），不使用实际需求"
+      },
+      "ex_post_diagnostic": {
+        "results": {
+          "T5_star": {
+            "units": 178,
+            "beta": 0.6679438435942282,
+            "alpha": 0.6924882629107981,
+            "avg_inventory": 5.6917,
+            "excess": 1396.41
+          },
+          "combo": {
+            "units": 178,
+            "beta": 0.6848805036136906,
+            "alpha": 0.721830985915493,
+            "avg_inventory": 5.692,
+            "excess": 1296.64
+          },
+          "tree": {
+            "units": 178,
+            "beta": 0.6468494749526827,
+            "alpha": 0.7429577464788732,
+            "avg_inventory": 5.6914,
+            "excess": 1408.45
+          }
+        },
+        "k": {
+          "T5_star": 1.0,
+          "combo": 1.0702,
+          "tree": 1.2045
+        },
+        "target_actual": 5.6917,
+        "note": "按实际平均库存对齐——仅事后诊断，不作选模证据"
+      },
+      "bootstrap": {
+        "ci_full_flow": [
+          {
+            "T5_star": [
+              0.5797,
+              0.7684
+            ],
+            "combo": [
+              0.5493,
+              0.7827
+            ],
+            "tree": [
+              0.475,
+              0.6757
+            ]
+          },
+          {
+            "combo": {
+              "ci95": [
+                -0.0782,
+                0.0611
+              ],
+              "significant": false
+            },
+            "tree": {
+              "ci95": [
+                -0.1836,
+                -0.0207
+              ],
+              "significant": true
+            }
+          }
+        ],
+        "ci_model_only": [
+          {
+            "T5_star": [
+              0.7057,
+              0.903
+            ],
+            "combo": [
+              0.6777,
+              0.888
+            ],
+            "tree": [
+              0.6215,
+              0.8402
+            ]
+          },
+          {
+            "combo": {
+              "ci95": [
+                -0.0966,
+                0.0426
+              ],
+              "significant": false
+            },
+            "tree": {
+              "ci95": [
+                -0.1744,
+                0.0144
+              ],
+              "significant": false
+            }
+          }
+        ],
+        "resamples": 2000,
+        "seed": 20261023,
+        "unit": "SKU 整簇（同 SKU 跨仓共享抽样权重）",
+        "includes_retrain_variance": false
+      }
+    }
+  },
+  "retraction": "撤回上一轮『T5 显著最好』的结论：旧比较中 T5 用了 2026-09 信息（评分月进入输入），combo/tree 只到 2026-03；本轮按同 as_of 重建后，任何跨档差异都只能作为固定单元上的观测，不能当选模结论",
+  "boundaries": [
+    "不替换默认",
+    "不出补货量",
+    "790 与 239 分别报、不外推",
+    "不含重训/选模方差"
+  ]
+}

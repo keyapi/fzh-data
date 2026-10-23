@@ -1,0 +1,1272 @@
+{
+ "schema_version": "t19_wo_dn_coverage/1",
+ "inputs": {
+  "decision_sha256": "4b9efecc892342bfb2f463a814b53fed91b0b91750e112dd57e5f63f9899b30e",
+  "main_sha256": "6b30e751ecda86301bc73831ffb21705574a0a57b0fbb62c7f43aaba9716c9b7",
+  "v0_evidence_sha256": "7eea7c6f41d444bb69728646fb8cb90a174bbc71f5124c3876f5bd13508175b1",
+  "primary_manifest": "dn_wo_jc_se_expand10_phase1_r2",
+  "primary_manifest_sha256": "210091d1e500cd027ac635a04f2045ea86987e9145b431580297c55ae5cfc8df"
+ },
+ "rules": {
+  "covered_validated": "有材料且可用于供给：关联通过自审（audit_ok、evidence_complete、C2 mismatch=0/unverified=0）且开放 WO 有剩余量、UOM 单一已知、ETA 已知（可放入 L60/L90/L120 窗口）",
+  "covered_unvalidated": "有材料但任一校验失败；**不得计入供给**",
+  "no_material_found": "本地任何 WO/DN 来源都未覆盖；逐行列出查过的来源",
+  "linkage": "WO↔SO / DN↔WO / WO↔PO 分别按有键/缺键计数，不猜测补全"
+ },
+ "sources_checked": {
+  "db": {
+   "n_tables": 53,
+   "tables": [
+    "backtest_summary",
+    "bom",
+    "bom_exploded",
+    "bom_item",
+    "bom_nd",
+    "button_overadd_candidates",
+    "component_ship_plan",
+    "component_ship_summary",
+    "demand_forecast_90",
+    "demand_sku_wh",
+    "en_orders",
+    "fba_demand",
+    "finished_demand",
+    "forecast_sku_wh",
+    "gs_orders",
+    "input_health",
+    "item_attr",
+    "item_cover_stock",
+    "item_group_ship",
+    "item_ship_type",
+    "level1_components",
+    "monthly_series",
+    "nd_status",
+    "need_rows",
+    "orders_unified",
+    "pk_nd_button",
+    "po_open_latest",
+    "replenishment_pool",
+    "replenishment_pool_ship",
+    "replenishment_v2",
+    "replenishment_v3",
+    "schema_migrations",
+    "sku_item",
+    "sku_map",
+    "stock_history",
+    "stock_history_run",
+    "stock_id_history",
+    "stock_id_observation",
+    "stock_ingest_event",
+    "stock_latest",
+    "stock_publish",
+    "stock_run",
+    "stock_run_warehouse",
+    "three_pl_stock",
+    "tongtool_po",
+    "tongtool_po_open",
+    "tongtool_stock",
+    "v_stock_by_sku",
+    "v_stock_history_analysis",
+    "v_stock_run_status",
+    "v_stockout_observed",
+    "warehouse_dim",
+    "warehouse_map"
+   ],
+   "wo_dn_columns": [],
+   "production_adjacent_tables": [
+    "bom",
+    "bom_exploded",
+    "bom_item",
+    "bom_nd",
+    "component_ship_plan",
+    "component_ship_summary",
+    "input_health",
+    "item_attr",
+    "item_cover_stock",
+    "po_open_latest",
+    "replenishment_pool",
+    "replenishment_pool_ship",
+    "stock_history",
+    "stock_history_run",
+    "stock_id_history",
+    "stock_id_observation",
+    "stock_ingest_event",
+    "stock_latest",
+    "stock_publish",
+    "stock_run",
+    "stock_run_warehouse",
+    "three_pl_stock",
+    "tongtool_po",
+    "tongtool_po_open",
+    "tongtool_stock",
+    "v_stock_by_sku",
+    "v_stock_history_analysis",
+    "v_stock_run_status",
+    "v_stockout_observed"
+   ],
+   "note": "库里没有 Work Order / Delivery Note 实体，也没有任何 WO/DN 外键列；只有订单、库存、PO、BOM 与组件发运计划。"
+  },
+  "association_runs": [
+   {
+    "dir": "dn_wo_jc_se_dry",
+    "as_of": "2026-10-21T09:57:49+00:00",
+    "audit_ok": true,
+    "evidence_complete": true,
+    "scopes": [
+     "C/Linen-Natural-194-688-wow"
+    ],
+    "row_accounting": {
+     "so_line": {
+      "read": 26,
+      "emitted": 26,
+      "match": true
+     },
+     "dn_line": {
+      "read": 100,
+      "emitted": 100,
+      "match": true
+     },
+     "wo": {
+      "read": 22,
+      "emitted": 22,
+      "match": true
+     },
+     "se": {
+      "read": 63,
+      "emitted": 63,
+      "match": true
+     },
+     "jc_operation": {
+      "derived": 102
+     },
+     "se_line": {
+      "derived": 87
+     }
+    },
+    "c2_wo_se": {
+     "C/Linen-Natural-194-688-wow": {
+      "pass_": 20,
+      "mismatch": 0,
+      "unverified": 2,
+      "complete": null,
+      "open": null
+     }
+    },
+    "note": "通过自审"
+   },
+   {
+    "dir": "dn_wo_jc_se_r2",
+    "as_of": "2026-10-21T10:03:13+00:00",
+    "audit_ok": true,
+    "evidence_complete": true,
+    "scopes": [
+     "CENCord995-DKGrey-97",
+     "CEN003-DPBLUE-100",
+     "C/Cord-Grey-100-710-wow",
+     "TT0000671K0063721",
+     "C/Linen-Natural-194-688-wow"
+    ],
+    "row_accounting": {
+     "so_line": {
+      "read": 120,
+      "emitted": 120,
+      "match": true
+     },
+     "dn_line": {
+      "read": 293,
+      "emitted": 293,
+      "match": true
+     },
+     "wo": {
+      "read": 128,
+      "emitted": 128,
+      "match": true
+     },
+     "se": {
+      "read": 425,
+      "emitted": 425,
+      "match": true
+     },
+     "jc_operation": {
+      "derived": 516
+     },
+     "se_line": {
+      "derived": 558
+     }
+    },
+    "c2_wo_se": {
+     "CENCord995-DKGrey-97": {
+      "pass_": 22,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": null,
+      "open": 1
+     },
+     "CEN003-DPBLUE-100": {
+      "pass_": 19,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": null,
+      "open": 1
+     },
+     "C/Cord-Grey-100-710-wow": {
+      "pass_": 15,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": null,
+      "open": 1
+     },
+     "TT0000671K0063721": {
+      "pass_": 39,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": null,
+      "open": 6
+     },
+     "C/Linen-Natural-194-688-wow": {
+      "pass_": 20,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": null,
+      "open": 2
+     }
+    },
+    "note": "通过自审"
+   },
+   {
+    "dir": "dn_wo_jc_se",
+    "as_of": "2026-10-21T11:23:59+00:00",
+    "audit_ok": true,
+    "evidence_complete": true,
+    "scopes": [
+     "CENCord995-DKGrey-97",
+     "CEN003-DPBLUE-100",
+     "C/Cord-Grey-100-710-wow",
+     "TT0000671K0063721",
+     "C/Linen-Natural-194-688-wow"
+    ],
+    "row_accounting": {
+     "so_line": {
+      "read": 120,
+      "emitted": 120,
+      "match": true
+     },
+     "dn_line": {
+      "read": 293,
+      "emitted": 293,
+      "match": true
+     },
+     "wo": {
+      "read": 128,
+      "emitted": 128,
+      "match": true
+     },
+     "se": {
+      "read": 425,
+      "emitted": 425,
+      "match": true
+     },
+     "jc_operation": {
+      "derived": 516
+     },
+     "se_line": {
+      "derived": 558
+     }
+    },
+    "c2_wo_se": {
+     "CENCord995-DKGrey-97": {
+      "pass_": 22,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "CEN003-DPBLUE-100": {
+      "pass_": 19,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Cord-Grey-100-710-wow": {
+      "pass_": 15,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "TT0000671K0063721": {
+      "pass_": 39,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 6
+     },
+     "C/Linen-Natural-194-688-wow": {
+      "pass_": 20,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 2
+     }
+    },
+    "note": "通过自审"
+   },
+   {
+    "dir": "dn_wo_jc_se_expand10",
+    "as_of": "2026-10-21T13:20:25+00:00",
+    "audit_ok": false,
+    "evidence_complete": false,
+    "scopes": [
+     "CENCord995-DKGrey-97",
+     "CEN003-DPBLUE-100",
+     "C/Linen-Natural-100-688-wow",
+     "C/Cord-DKBlue-100-713-wow",
+     "C/Linen-Natural-153-688-wow",
+     "C/Velvet-Grey-100-705-wow",
+     "C/Cord-Grey-100-710-wow",
+     "C/Linen-White-100-662-WOW",
+     "TT0000671K0063721",
+     "C/Linen-Natural-194-688-wow"
+    ],
+    "row_accounting": {
+     "so_line": {
+      "read": 215,
+      "emitted": 215,
+      "match": true
+     },
+     "dn_line": {
+      "read": 507,
+      "emitted": 507,
+      "match": true
+     },
+     "wo": {
+      "read": 214,
+      "emitted": 214,
+      "match": true
+     },
+     "se": {
+      "read": 663,
+      "emitted": 663,
+      "match": true
+     },
+     "jc_operation": {
+      "derived": 941
+     },
+     "se_line": {
+      "derived": 558
+     }
+    },
+    "c2_wo_se": {
+     "CENCord995-DKGrey-97": {
+      "pass_": 22,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "CEN003-DPBLUE-100": {
+      "pass_": 19,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Linen-Natural-100-688-wow": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 17,
+      "complete": false,
+      "open": 1
+     },
+     "C/Cord-DKBlue-100-713-wow": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 13,
+      "complete": false,
+      "open": 2
+     },
+     "C/Linen-Natural-153-688-wow": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 23,
+      "complete": false,
+      "open": 2
+     },
+     "C/Velvet-Grey-100-705-wow": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 13,
+      "complete": false,
+      "open": 1
+     },
+     "C/Cord-Grey-100-710-wow": {
+      "pass_": 15,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Linen-White-100-662-WOW": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 13,
+      "complete": false,
+      "open": 1
+     },
+     "TT0000671K0063721": {
+      "pass_": 39,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 6
+     },
+     "C/Linen-Natural-194-688-wow": {
+      "pass_": 20,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 2
+     }
+    },
+    "note": "未通过自审（audit/evidence 非 true）"
+   },
+   {
+    "dir": "dn_wo_jc_se_expand10_r2",
+    "as_of": "2026-10-21T13:24:54+00:00",
+    "audit_ok": false,
+    "evidence_complete": false,
+    "scopes": [
+     "CENCord995-DKGrey-97",
+     "CEN003-DPBLUE-100",
+     "C/Linen-Natural-100-688-wow",
+     "C/Cord-DKBlue-100-713-wow",
+     "C/Linen-Natural-153-688-wow",
+     "C/Velvet-Grey-100-705-wow",
+     "C/Cord-Grey-100-710-wow",
+     "C/Linen-White-100-662-WOW",
+     "TT0000671K0063721",
+     "C/Linen-Natural-194-688-wow"
+    ],
+    "row_accounting": {
+     "so_line": {
+      "read": 215,
+      "emitted": 215,
+      "match": true
+     },
+     "dn_line": {
+      "read": 507,
+      "emitted": 507,
+      "match": true
+     },
+     "wo": {
+      "read": 214,
+      "emitted": 214,
+      "match": true
+     },
+     "se": {
+      "read": 663,
+      "emitted": 663,
+      "match": true
+     },
+     "jc_operation": {
+      "derived": 941
+     },
+     "se_line": {
+      "derived": 558
+     }
+    },
+    "c2_wo_se": {
+     "CENCord995-DKGrey-97": {
+      "pass_": 22,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "CEN003-DPBLUE-100": {
+      "pass_": 19,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Linen-Natural-100-688-wow": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 17,
+      "complete": false,
+      "open": 1
+     },
+     "C/Cord-DKBlue-100-713-wow": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 13,
+      "complete": false,
+      "open": 2
+     },
+     "C/Linen-Natural-153-688-wow": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 23,
+      "complete": false,
+      "open": 2
+     },
+     "C/Velvet-Grey-100-705-wow": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 13,
+      "complete": false,
+      "open": 1
+     },
+     "C/Cord-Grey-100-710-wow": {
+      "pass_": 15,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Linen-White-100-662-WOW": {
+      "pass_": 0,
+      "mismatch": 0,
+      "unverified": 13,
+      "complete": false,
+      "open": 1
+     },
+     "TT0000671K0063721": {
+      "pass_": 39,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 6
+     },
+     "C/Linen-Natural-194-688-wow": {
+      "pass_": 20,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 2
+     }
+    },
+    "note": "未通过自审（audit/evidence 非 true）"
+   },
+   {
+    "dir": "dn_wo_jc_se_expand10_phase1",
+    "as_of": "2026-10-22T00:51:01+00:00",
+    "audit_ok": true,
+    "evidence_complete": true,
+    "scopes": [
+     "CENCord995-DKGrey-97",
+     "CEN003-DPBLUE-100",
+     "C/Linen-Natural-100-688-wow",
+     "C/Cord-DKBlue-100-713-wow",
+     "C/Linen-Natural-153-688-wow",
+     "C/Velvet-Grey-100-705-wow",
+     "C/Cord-Grey-100-710-wow",
+     "C/Linen-White-100-662-WOW",
+     "TT0000671K0063721",
+     "C/Linen-Natural-194-688-wow"
+    ],
+    "row_accounting": {
+     "so_line": {
+      "read": 215,
+      "emitted": 215,
+      "match": true
+     },
+     "dn_line": {
+      "read": 507,
+      "emitted": 507,
+      "match": true
+     },
+     "wo": {
+      "read": 214,
+      "emitted": 214,
+      "match": true
+     },
+     "se": {
+      "read": 663,
+      "emitted": 663,
+      "match": true
+     },
+     "jc_operation": {
+      "derived": 941
+     },
+     "se_line": {
+      "derived": 876
+     }
+    },
+    "c2_wo_se": {
+     "CENCord995-DKGrey-97": {
+      "pass_": 22,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "CEN003-DPBLUE-100": {
+      "pass_": 19,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Linen-Natural-100-688-wow": {
+      "pass_": 17,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Cord-DKBlue-100-713-wow": {
+      "pass_": 13,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 2
+     },
+     "C/Linen-Natural-153-688-wow": {
+      "pass_": 22,
+      "mismatch": 0,
+      "unverified": 1,
+      "complete": true,
+      "open": 2
+     },
+     "C/Velvet-Grey-100-705-wow": {
+      "pass_": 13,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Cord-Grey-100-710-wow": {
+      "pass_": 15,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Linen-White-100-662-WOW": {
+      "pass_": 13,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "TT0000671K0063721": {
+      "pass_": 39,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 6
+     },
+     "C/Linen-Natural-194-688-wow": {
+      "pass_": 20,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 2
+     }
+    },
+    "note": "通过自审"
+   },
+   {
+    "dir": "dn_wo_jc_se_expand10_phase1_r2",
+    "as_of": "2026-10-22T00:51:20+00:00",
+    "audit_ok": true,
+    "evidence_complete": true,
+    "scopes": [
+     "CENCord995-DKGrey-97",
+     "CEN003-DPBLUE-100",
+     "C/Linen-Natural-100-688-wow",
+     "C/Cord-DKBlue-100-713-wow",
+     "C/Linen-Natural-153-688-wow",
+     "C/Velvet-Grey-100-705-wow",
+     "C/Cord-Grey-100-710-wow",
+     "C/Linen-White-100-662-WOW",
+     "TT0000671K0063721",
+     "C/Linen-Natural-194-688-wow"
+    ],
+    "row_accounting": {
+     "so_line": {
+      "read": 215,
+      "emitted": 215,
+      "match": true
+     },
+     "dn_line": {
+      "read": 507,
+      "emitted": 507,
+      "match": true
+     },
+     "wo": {
+      "read": 214,
+      "emitted": 214,
+      "match": true
+     },
+     "se": {
+      "read": 663,
+      "emitted": 663,
+      "match": true
+     },
+     "jc_operation": {
+      "derived": 941
+     },
+     "se_line": {
+      "derived": 876
+     }
+    },
+    "c2_wo_se": {
+     "CENCord995-DKGrey-97": {
+      "pass_": 22,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "CEN003-DPBLUE-100": {
+      "pass_": 19,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Linen-Natural-100-688-wow": {
+      "pass_": 17,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Cord-DKBlue-100-713-wow": {
+      "pass_": 13,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 2
+     },
+     "C/Linen-Natural-153-688-wow": {
+      "pass_": 22,
+      "mismatch": 0,
+      "unverified": 1,
+      "complete": true,
+      "open": 2
+     },
+     "C/Velvet-Grey-100-705-wow": {
+      "pass_": 13,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Cord-Grey-100-710-wow": {
+      "pass_": 15,
+      "mismatch": 1,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "C/Linen-White-100-662-WOW": {
+      "pass_": 13,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 1
+     },
+     "TT0000671K0063721": {
+      "pass_": 39,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 6
+     },
+     "C/Linen-Natural-194-688-wow": {
+      "pass_": 20,
+      "mismatch": 0,
+      "unverified": 0,
+      "complete": true,
+      "open": 2
+     }
+    },
+    "note": "通过自审"
+   }
+  ],
+  "primary_run": {
+   "dir": "dn_wo_jc_se_expand10_phase1_r2",
+   "as_of": "2026-10-22T00:51:20+00:00",
+   "audit_ok": true,
+   "evidence_complete": true,
+   "scopes": [
+    "CENCord995-DKGrey-97",
+    "CEN003-DPBLUE-100",
+    "C/Linen-Natural-100-688-wow",
+    "C/Cord-DKBlue-100-713-wow",
+    "C/Linen-Natural-153-688-wow",
+    "C/Velvet-Grey-100-705-wow",
+    "C/Cord-Grey-100-710-wow",
+    "C/Linen-White-100-662-WOW",
+    "TT0000671K0063721",
+    "C/Linen-Natural-194-688-wow"
+   ],
+   "row_accounting": {
+    "so_line": {
+     "read": 215,
+     "emitted": 215,
+     "match": true
+    },
+    "dn_line": {
+     "read": 507,
+     "emitted": 507,
+     "match": true
+    },
+    "wo": {
+     "read": 214,
+     "emitted": 214,
+     "match": true
+    },
+    "se": {
+     "read": 663,
+     "emitted": 663,
+     "match": true
+    },
+    "jc_operation": {
+     "derived": 941
+    },
+    "se_line": {
+     "derived": 876
+    }
+   },
+   "c2_wo_se": {
+    "CENCord995-DKGrey-97": {
+     "pass_": 22,
+     "mismatch": 0,
+     "unverified": 0,
+     "complete": true,
+     "open": 1
+    },
+    "CEN003-DPBLUE-100": {
+     "pass_": 19,
+     "mismatch": 1,
+     "unverified": 0,
+     "complete": true,
+     "open": 1
+    },
+    "C/Linen-Natural-100-688-wow": {
+     "pass_": 17,
+     "mismatch": 0,
+     "unverified": 0,
+     "complete": true,
+     "open": 1
+    },
+    "C/Cord-DKBlue-100-713-wow": {
+     "pass_": 13,
+     "mismatch": 0,
+     "unverified": 0,
+     "complete": true,
+     "open": 2
+    },
+    "C/Linen-Natural-153-688-wow": {
+     "pass_": 22,
+     "mismatch": 0,
+     "unverified": 1,
+     "complete": true,
+     "open": 2
+    },
+    "C/Velvet-Grey-100-705-wow": {
+     "pass_": 13,
+     "mismatch": 0,
+     "unverified": 0,
+     "complete": true,
+     "open": 1
+    },
+    "C/Cord-Grey-100-710-wow": {
+     "pass_": 15,
+     "mismatch": 1,
+     "unverified": 0,
+     "complete": true,
+     "open": 1
+    },
+    "C/Linen-White-100-662-WOW": {
+     "pass_": 13,
+     "mismatch": 0,
+     "unverified": 0,
+     "complete": true,
+     "open": 1
+    },
+    "TT0000671K0063721": {
+     "pass_": 39,
+     "mismatch": 0,
+     "unverified": 0,
+     "complete": true,
+     "open": 6
+    },
+    "C/Linen-Natural-194-688-wow": {
+     "pass_": 20,
+     "mismatch": 0,
+     "unverified": 0,
+     "complete": true,
+     "open": 2
+    }
+   },
+   "note": "通过自审"
+  },
+  "raw_en_extracts": [
+   {
+    "file": "g1b_en_C_Linen_Natural_194_688_wow.json",
+    "scope": "C/Linen-Natural-194-688-wow",
+    "generated_at": "2026-10-20T17:27:01",
+    "wos": 22,
+    "production_four_way": 0
+   },
+   {
+    "file": "g1b_en_fixed.json",
+    "scope": "C/Linen-Natural-194-688-wow",
+    "generated_at": "2026-10-20T17:57:31",
+    "wos": 22,
+    "production_four_way": 20
+   },
+   {
+    "file": "g1b_en_fixed2.json",
+    "scope": "C/Linen-Natural-194-688-wow",
+    "generated_at": "2026-10-20T18:00:09",
+    "wos": 22,
+    "production_four_way": 22
+   },
+   {
+    "file": "g1b_en_fixed3.json",
+    "scope": "C/Linen-Natural-194-688-wow",
+    "generated_at": "2026-10-20T18:03:47",
+    "wos": 22,
+    "production_four_way": 22
+   },
+   {
+    "file": "g1b_en_rr.json",
+    "scope": "C/Linen-Natural-194-688-wow",
+    "generated_at": "2026-10-21T11:01:20",
+    "wos": 22,
+    "production_four_way": 22
+   },
+   {
+    "file": "g1b_en_rr2.json",
+    "scope": "C/Linen-Natural-194-688-wow",
+    "generated_at": "2026-10-21T11:08:46",
+    "wos": 22,
+    "production_four_way": 22
+   },
+   {
+    "file": "g1b_en_top_1.json",
+    "scope": "CENCord995-DKGrey-97",
+    "generated_at": "2026-10-20T18:12:16",
+    "wos": 23,
+    "production_four_way": 23
+   },
+   {
+    "file": "g1b_en_top_2.json",
+    "scope": "CEN003-DPBLUE-100",
+    "generated_at": "2026-10-20T18:13:13",
+    "wos": 21,
+    "production_four_way": 21
+   },
+   {
+    "file": "g1b_en_top_3.json",
+    "scope": "C/Linen-Natural-100-688-wow",
+    "generated_at": "2026-10-20T18:13:57",
+    "wos": 18,
+    "production_four_way": 18
+   },
+   {
+    "file": "g1b_en_top_4.json",
+    "scope": "C/Cord-DKBlue-100-713-wow",
+    "generated_at": "2026-10-20T18:14:39",
+    "wos": 15,
+    "production_four_way": 15
+   },
+   {
+    "file": "g1b_en_top_5.json",
+    "scope": "C/Linen-Natural-153-688-wow",
+    "generated_at": "2026-10-20T18:15:42",
+    "wos": 25,
+    "production_four_way": 25
+   },
+   {
+    "file": "g1b_en_top_6.json",
+    "scope": "C/Velvet-Grey-100-705-wow",
+    "generated_at": "2026-10-20T18:16:17",
+    "wos": 14,
+    "production_four_way": 14
+   },
+   {
+    "file": "g1b_en_top_7.json",
+    "scope": "C/Cord-Grey-100-710-wow",
+    "generated_at": "2026-10-20T18:17:05",
+    "wos": 17,
+    "production_four_way": 17
+   },
+   {
+    "file": "g1b_en_top_8.json",
+    "scope": "C/Linen-White-100-662-WOW",
+    "generated_at": "2026-10-20T18:17:47",
+    "wos": 14,
+    "production_four_way": 14
+   },
+   {
+    "file": "g1b_en_top_9.json",
+    "scope": "TT0000671K0063721",
+    "generated_at": "2026-10-20T18:19:35",
+    "wos": 45,
+    "production_four_way": 45
+   }
+  ],
+  "v0_evidence": {
+   "path": "out/replenishment_v0/evidence.json",
+   "skus": [
+    "C/Cord-DKBlue-100-713-wow",
+    "C/Cord-Grey-100-710-wow",
+    "C/Linen-Natural-100-688-wow",
+    "C/Linen-Natural-153-688-wow",
+    "C/Linen-Natural-194-688-wow",
+    "C/Linen-White-100-662-WOW",
+    "C/Velvet-Grey-100-705-wow",
+    "CEN003-DPBLUE-100",
+    "CENCord995-DKGrey-97",
+    "TT0000671K0063721"
+   ]
+  },
+  "n2_explicit_absence": [
+   "C/Cord-DKBlue-100-713-wow",
+   "C/Linen-Natural-100-688-wow",
+   "C/Velvet-White-100-664-wow",
+   "TT0031010K0062880",
+   "TT0031038K0062927",
+   "TT0312701K0064561"
+  ],
+  "g1b_coverage": [
+   "out/g1b_coverage_20261020.json",
+   "out/g1b_coverage_centrade_only.json",
+   "out/g1b_coverage_complete.json"
+  ],
+  "g1b_coverage_note": "BOM/库存/订单覆盖，无 WO/DN 字段"
+ },
+ "coverage": {
+  "rows": {
+   "covered_validated": 0,
+   "covered_unvalidated": 32,
+   "no_material_found": 2277
+  },
+  "skus": {
+   "covered_validated": 0,
+   "covered_unvalidated": 10,
+   "no_material_found": 1318
+  },
+  "sum_rows": 2309,
+  "sum_skus": 1328
+ },
+ "material_skus": [
+  {
+   "sku": "C/Cord-DKBlue-100-713-wow",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "eta_missing"
+   ],
+   "assoc_valid": true,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": true,
+   "open_wo_count": 1,
+   "remaining_qty": 35,
+   "eta_missing_count": 1,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "PK#"
+   ]
+  },
+  {
+   "sku": "C/Cord-Grey-100-710-wow",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "association_not_validated",
+    "eta_missing"
+   ],
+   "assoc_valid": false,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": true,
+   "open_wo_count": 2,
+   "remaining_qty": 28,
+   "eta_missing_count": 2,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "PK#"
+   ]
+  },
+  {
+   "sku": "C/Linen-Natural-100-688-wow",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "eta_missing"
+   ],
+   "assoc_valid": true,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": true,
+   "open_wo_count": 3,
+   "remaining_qty": 101,
+   "eta_missing_count": 3,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "PK#"
+   ]
+  },
+  {
+   "sku": "C/Linen-Natural-153-688-wow",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "association_not_validated",
+    "eta_missing"
+   ],
+   "assoc_valid": false,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": true,
+   "open_wo_count": 3,
+   "remaining_qty": 612,
+   "eta_missing_count": 3,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "PK#"
+   ]
+  },
+  {
+   "sku": "C/Linen-Natural-194-688-wow",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "eta_missing"
+   ],
+   "assoc_valid": true,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": true,
+   "open_wo_count": 2,
+   "remaining_qty": 620,
+   "eta_missing_count": 2,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "PK#"
+   ]
+  },
+  {
+   "sku": "C/Linen-White-100-662-WOW",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "eta_missing"
+   ],
+   "assoc_valid": true,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": true,
+   "open_wo_count": 1,
+   "remaining_qty": 20,
+   "eta_missing_count": 1,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "PK#"
+   ]
+  },
+  {
+   "sku": "C/Velvet-Grey-100-705-wow",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "eta_missing"
+   ],
+   "assoc_valid": true,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": true,
+   "open_wo_count": 2,
+   "remaining_qty": 52,
+   "eta_missing_count": 2,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "PK#"
+   ]
+  },
+  {
+   "sku": "CEN003-DPBLUE-100",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "association_not_validated",
+    "eta_missing"
+   ],
+   "assoc_valid": false,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": true,
+   "open_wo_count": 1,
+   "remaining_qty": 260,
+   "eta_missing_count": 1,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "PK#"
+   ]
+  },
+  {
+   "sku": "CENCord995-DKGrey-97",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "eta_missing"
+   ],
+   "assoc_valid": true,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": true,
+   "open_wo_count": 2,
+   "remaining_qty": 152,
+   "eta_missing_count": 2,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "PK#"
+   ]
+  },
+  {
+   "sku": "TT0000671K0063721",
+   "state": "covered_unvalidated",
+   "reasons": [
+    "eta_missing",
+    "uom_kind_mixed_or_unknown"
+   ],
+   "assoc_valid": true,
+   "eta_ok": false,
+   "remaining_ok": true,
+   "uom_ok": false,
+   "open_wo_count": 7,
+   "remaining_qty": 310,
+   "eta_missing_count": 7,
+   "eta_status": "planned_end_date_all_null",
+   "production_item_kinds": [
+    "KS",
+    "PK#"
+   ]
+  }
+ ],
+ "linkage": {
+  "WO_SO": {
+   "total": 214,
+   "linked": 173,
+   "missing": 41,
+   "reasons": {
+    "wo_no_sales_order": 41
+   },
+   "note": "缺失来自工单本身无 SO 或 SO 不在快照；按原样记录，不猜测补全"
+  },
+  "DN_WO": {
+   "total": 507,
+   "linked": 0,
+   "missing": 507,
+   "note": "DN 行只带 SO 行键，未暴露 WO 键；DN→WO 只能经 SO 间接关联"
+  },
+  "WO_PO": {
+   "total": 214,
+   "linked": 0,
+   "missing": 214,
+   "note": "任何本地来源都没有 WO→PO 键；库里只有 SKU×仓的 PO 聚合"
+  }
+ },
+ "wording": "只报告覆盖程度与缺口；covered_unvalidated 不计供给；不新增查询、不扩样、不外推。"
+}

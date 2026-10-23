@@ -1,0 +1,5141 @@
+{
+  "schema_version": "pb_censored_compare/1",
+  "inputs": {
+    "intervals": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\pb_stockout\\stockout_intervals.csv",
+    "db": "D:\\Work\\fzh-order-store\\order_store.duckdb",
+    "origins": [
+      "2026-05",
+      "2026-06",
+      "2026-07"
+    ],
+    "horizon": 3,
+    "min_train": 12,
+    "ridge": 1.0,
+    "over_ratio": 1.2
+  },
+  "labels": {
+    "rule": "月份与保守区间 [start,end] 有重叠即受限；宽松区间 [start,loose_until] 作敏感性；受限月销量是下限观测",
+    "skus": 26,
+    "restricted_month_counts": {
+      "CEN1607NLinen-Ivory-138": 2,
+      "CEN1607NLinen-Ivory-153": 2,
+      "CEN1607NLinen-Ivory-194": 2,
+      "CEN1607NLinen-Ivory-97": 2,
+      "CEN803NLinen-Black-100": 2,
+      "CEN803NLinen-Black-153": 2,
+      "CEN803NLinen-Black-194": 2,
+      "CEN961NLinen-SageGreen-100": 1,
+      "CEN961NLinen-SageGreen-138": 2,
+      "CEN961NLinen-SageGreen-153": 2,
+      "CEN961NLinen-SageGreen-194": 2,
+      "CENC/Linen-Grey-60CM": 2,
+      "CENC/Linen-Ivory-60": 2,
+      "CENC/Linen-Yellow-60": 2,
+      "CENKZ1323-LTGrey-138": 2,
+      "CENKZ1323-LTGrey-153": 2,
+      "CENKZ1323-LTGrey-194": 2,
+      "CENKZ1323-LTGrey-97": 1,
+      "CENKZ1324-SkyBlue-138": 2,
+      "CENKZ1324-SkyBlue-153": 2,
+      "CENKZ1324-SkyBlue-194": 2,
+      "CENKZ1324-SkyBlue-97": 2,
+      "CENKZ1325-Yellow-138": 2,
+      "CENKZ1325-Yellow-153": 2,
+      "CENKZ1325-Yellow-194": 2,
+      "CENKZ1325-Yellow-97": 2
+    },
+    "loose_month_counts": {
+      "CEN1607NLinen-Ivory-138": 2,
+      "CEN1607NLinen-Ivory-153": 2,
+      "CEN1607NLinen-Ivory-194": 2,
+      "CEN1607NLinen-Ivory-97": 2,
+      "CEN803NLinen-Black-100": 2,
+      "CEN803NLinen-Black-153": 2,
+      "CEN803NLinen-Black-194": 2,
+      "CEN961NLinen-SageGreen-100": 1,
+      "CEN961NLinen-SageGreen-138": 2,
+      "CEN961NLinen-SageGreen-153": 2,
+      "CEN961NLinen-SageGreen-194": 2,
+      "CENC/Linen-Grey-60CM": 2,
+      "CENC/Linen-Ivory-60": 2,
+      "CENC/Linen-Yellow-60": 2,
+      "CENKZ1323-LTGrey-138": 2,
+      "CENKZ1323-LTGrey-153": 2,
+      "CENKZ1323-LTGrey-194": 2,
+      "CENKZ1323-LTGrey-97": 1,
+      "CENKZ1324-SkyBlue-138": 2,
+      "CENKZ1324-SkyBlue-153": 2,
+      "CENKZ1324-SkyBlue-194": 2,
+      "CENKZ1324-SkyBlue-97": 2,
+      "CENKZ1325-Yellow-138": 2,
+      "CENKZ1325-Yellow-153": 2,
+      "CENKZ1325-Yellow-194": 2,
+      "CENKZ1325-Yellow-97": 2
+    },
+    "per_sku": {
+      "CEN1607NLinen-Ivory-138": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CEN1607NLinen-Ivory-153": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CEN1607NLinen-Ivory-194": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CEN1607NLinen-Ivory-97": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CEN803NLinen-Black-100": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CEN803NLinen-Black-153": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CEN803NLinen-Black-194": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CEN961NLinen-SageGreen-100": {
+        "restricted_months": [
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-07"
+        ]
+      },
+      "CEN961NLinen-SageGreen-138": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CEN961NLinen-SageGreen-153": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CEN961NLinen-SageGreen-194": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENC/Linen-Grey-60CM": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENC/Linen-Ivory-60": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENC/Linen-Yellow-60": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1323-LTGrey-138": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1323-LTGrey-153": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1323-LTGrey-194": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1323-LTGrey-97": {
+        "restricted_months": [
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-07"
+        ]
+      },
+      "CENKZ1324-SkyBlue-138": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1324-SkyBlue-153": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1324-SkyBlue-194": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1324-SkyBlue-97": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1325-Yellow-138": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1325-Yellow-153": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1325-Yellow-194": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      },
+      "CENKZ1325-Yellow-97": {
+        "restricted_months": [
+          "2026-06",
+          "2026-07"
+        ],
+        "restricted_months_loose": [
+          "2026-06",
+          "2026-07"
+        ]
+      }
+    }
+  },
+  "routes": {
+    "raw": "ridge on log1p(y), all months weighted 1",
+    "censored": "ridge on log1p(y) with one-sided lower-censored loss: a prediction below the observed restricted value costs 0, above it costs the usual squared loss (IRLS, 6 iterations)"
+  },
+  "summary": {
+    "raw": {
+      "non_restricted": {
+        "n": 132,
+        "wape": 0.5265605150214592,
+        "bias": 0.20684721030042919
+      },
+      "restricted_exposure": {
+        "n": 76,
+        "over": 30,
+        "rate": 0.39473684210526316
+      },
+      "backlog_proxy": {
+        "n": 202,
+        "median": 1.077,
+        "over_share": 0.401
+      }
+    },
+    "censored": {
+      "non_restricted": {
+        "n": 132,
+        "wape": 0.5181476394849786,
+        "bias": 0.17942145922746783
+      },
+      "restricted_exposure": {
+        "n": 76,
+        "over": 30,
+        "rate": 0.39473684210526316
+      },
+      "backlog_proxy": {
+        "n": 202,
+        "median": 1.039,
+        "over_share": 0.3861
+      }
+    }
+  },
+  "unscored": {
+    "n": 0,
+    "reasons": {}
+  },
+  "scored_skus": 26,
+  "per_sku_forecasts": {
+    "CEN1607NLinen-Ivory-138": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            10.56,
+            6.517,
+            15.266
+          ],
+          "censored": [
+            10.56,
+            6.517,
+            15.266
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            6.419,
+            15.051,
+            11.71
+          ],
+          "censored": [
+            6.419,
+            15.051,
+            11.71
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            15.182,
+            11.815
+          ],
+          "censored": [
+            15.051,
+            11.71
+          ]
+        }
+      }
+    },
+    "CEN1607NLinen-Ivory-153": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            21.695,
+            14.698,
+            27.035
+          ],
+          "censored": [
+            21.695,
+            14.698,
+            27.035
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            14.519,
+            26.712,
+            26.653
+          ],
+          "censored": [
+            14.519,
+            26.712,
+            26.653
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            28.047,
+            28.0
+          ],
+          "censored": [
+            26.712,
+            26.653
+          ]
+        }
+      }
+    },
+    "CEN1607NLinen-Ivory-194": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            22.326,
+            21.418,
+            30.398
+          ],
+          "censored": [
+            22.326,
+            21.418,
+            30.398
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            21.717,
+            30.822,
+            25.997
+          ],
+          "censored": [
+            21.418,
+            30.398,
+            25.634
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            30.712,
+            25.903
+          ],
+          "censored": [
+            30.33,
+            25.575
+          ]
+        }
+      }
+    },
+    "CEN1607NLinen-Ivory-97": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            18.128,
+            16.864,
+            38.77
+          ],
+          "censored": [
+            18.128,
+            16.864,
+            38.77
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            15.989,
+            36.804,
+            16.97
+          ],
+          "censored": [
+            15.989,
+            36.804,
+            16.97
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            36.023,
+            16.594
+          ],
+          "censored": [
+            36.023,
+            16.594
+          ]
+        }
+      }
+    },
+    "CEN803NLinen-Black-100": {
+      "n_months": 23,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            1.698,
+            2.894,
+            8.322
+          ],
+          "censored": [
+            1.698,
+            2.894,
+            8.322
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            3.609,
+            10.105,
+            3.865
+          ],
+          "censored": [
+            2.894,
+            8.322,
+            3.057
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            10.536,
+            4.06
+          ],
+          "censored": [
+            8.322,
+            3.057
+          ]
+        }
+      }
+    },
+    "CEN803NLinen-Black-153": {
+      "n_months": 24,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            1.733,
+            7.728,
+            3.827
+          ],
+          "censored": [
+            1.733,
+            7.728,
+            3.827
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            8.518,
+            4.281,
+            8.768
+          ],
+          "censored": [
+            7.728,
+            3.827,
+            7.899
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            3.843,
+            7.929
+          ],
+          "censored": [
+            3.433,
+            7.147
+          ]
+        }
+      }
+    },
+    "CEN803NLinen-Black-194": {
+      "n_months": 24,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            1.715,
+            2.863,
+            5.145
+          ],
+          "censored": [
+            1.715,
+            2.863,
+            5.145
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            2.919,
+            5.237,
+            7.423
+          ],
+          "censored": [
+            2.863,
+            5.145,
+            7.294
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            5.445,
+            7.714
+          ],
+          "censored": [
+            5.145,
+            7.294
+          ]
+        }
+      }
+    },
+    "CEN961NLinen-SageGreen-100": {
+      "n_months": 38,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            0.458,
+            0.753,
+            1.625
+          ],
+          "censored": [
+            0.458,
+            0.753,
+            1.625
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            0.857,
+            1.815,
+            1.787
+          ],
+          "censored": [
+            0.857,
+            1.815,
+            1.787
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            2.251,
+            2.223
+          ],
+          "censored": [
+            1.815,
+            1.787
+          ]
+        }
+      }
+    },
+    "CEN961NLinen-SageGreen-138": {
+      "n_months": 38,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            0.491,
+            0.472,
+            1.074
+          ],
+          "censored": [
+            0.491,
+            0.472,
+            1.074
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            0.621,
+            1.332,
+            1.878
+          ],
+          "censored": [
+            0.472,
+            1.074,
+            1.557
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            1.584,
+            2.193
+          ],
+          "censored": [
+            1.074,
+            1.557
+          ]
+        }
+      }
+    },
+    "CEN961NLinen-SageGreen-153": {
+      "n_months": 38,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            1.219,
+            1.028,
+            2.121
+          ],
+          "censored": [
+            1.219,
+            1.028,
+            2.121
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            1.126,
+            2.305,
+            3.78
+          ],
+          "censored": [
+            1.028,
+            2.121,
+            3.513
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            2.898,
+            4.648
+          ],
+          "censored": [
+            2.121,
+            3.513
+          ]
+        }
+      }
+    },
+    "CEN961NLinen-SageGreen-194": {
+      "n_months": 38,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            1.001,
+            0.918,
+            1.712
+          ],
+          "censored": [
+            1.001,
+            0.918,
+            1.712
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            1.094,
+            2.016,
+            3.454
+          ],
+          "censored": [
+            0.918,
+            1.712,
+            3.001
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            2.536,
+            4.231
+          ],
+          "censored": [
+            1.712,
+            3.001
+          ]
+        }
+      }
+    },
+    "CENC/Linen-Grey-60CM": {
+      "n_months": 34,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            15.642,
+            21.976,
+            34.386
+          ],
+          "censored": [
+            15.642,
+            21.976,
+            34.386
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            22.026,
+            34.463,
+            21.659
+          ],
+          "censored": [
+            21.976,
+            34.386,
+            21.608
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            33.455,
+            21.004
+          ],
+          "censored": [
+            33.29,
+            20.896
+          ]
+        }
+      }
+    },
+    "CENC/Linen-Ivory-60": {
+      "n_months": 38,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            72.884,
+            72.483,
+            34.647
+          ],
+          "censored": [
+            72.884,
+            72.483,
+            34.647
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            67.741,
+            31.873,
+            18.391
+          ],
+          "censored": [
+            67.741,
+            31.873,
+            18.391
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            27.784,
+            15.956
+          ],
+          "censored": [
+            27.784,
+            15.956
+          ]
+        }
+      }
+    },
+    "CENC/Linen-Yellow-60": {
+      "n_months": 38,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            8.25,
+            5.457,
+            4.292
+          ],
+          "censored": [
+            8.25,
+            5.457,
+            4.292
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            5.148,
+            3.986,
+            3.005
+          ],
+          "censored": [
+            5.148,
+            3.986,
+            3.005
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            3.975,
+            2.996
+          ],
+          "censored": [
+            3.975,
+            2.996
+          ]
+        }
+      }
+    },
+    "CENKZ1323-LTGrey-138": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            3.844,
+            4.409,
+            9.815
+          ],
+          "censored": [
+            3.844,
+            4.409,
+            9.815
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            4.179,
+            9.35,
+            5.7
+          ],
+          "censored": [
+            4.179,
+            9.35,
+            5.7
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            9.692,
+            5.924
+          ],
+          "censored": [
+            9.35,
+            5.7
+          ]
+        }
+      }
+    },
+    "CENKZ1323-LTGrey-153": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            9.961,
+            5.205,
+            11.243
+          ],
+          "censored": [
+            9.961,
+            5.205,
+            11.243
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            4.958,
+            10.75,
+            7.606
+          ],
+          "censored": [
+            4.958,
+            10.75,
+            7.606
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            10.256,
+            7.24
+          ],
+          "censored": [
+            10.256,
+            7.24
+          ]
+        }
+      }
+    },
+    "CENKZ1323-LTGrey-194": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            8.045,
+            3.294,
+            8.132
+          ],
+          "censored": [
+            8.045,
+            3.294,
+            8.132
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            3.247,
+            8.03,
+            8.301
+          ],
+          "censored": [
+            3.247,
+            8.03,
+            8.301
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            8.531,
+            8.822
+          ],
+          "censored": [
+            8.03,
+            8.301
+          ]
+        }
+      }
+    },
+    "CENKZ1323-LTGrey-97": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            6.367,
+            8.271,
+            12.977
+          ],
+          "censored": [
+            6.367,
+            8.271,
+            12.977
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            7.546,
+            11.872,
+            5.258
+          ],
+          "censored": [
+            7.546,
+            11.872,
+            5.258
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            11.598,
+            5.123
+          ],
+          "censored": [
+            11.598,
+            5.123
+          ]
+        }
+      }
+    },
+    "CENKZ1324-SkyBlue-138": {
+      "n_months": 24,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            2.55,
+            12.043,
+            8.03
+          ],
+          "censored": [
+            2.55,
+            12.043,
+            8.03
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            13.907,
+            9.372,
+            9.623
+          ],
+          "censored": [
+            12.043,
+            8.03,
+            8.202
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            7.953,
+            8.121
+          ],
+          "censored": [
+            6.797,
+            6.904
+          ]
+        }
+      }
+    },
+    "CENKZ1324-SkyBlue-153": {
+      "n_months": 24,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            3.006,
+            6.094,
+            4.921
+          ],
+          "censored": [
+            3.006,
+            6.094,
+            4.921
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            6.092,
+            4.92,
+            8.569
+          ],
+          "censored": [
+            6.092,
+            4.92,
+            8.569
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            5.354,
+            9.297
+          ],
+          "censored": [
+            4.92,
+            8.569
+          ]
+        }
+      }
+    },
+    "CENKZ1324-SkyBlue-194": {
+      "n_months": 24,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            6.402,
+            12.09,
+            7.91
+          ],
+          "censored": [
+            6.402,
+            12.09,
+            7.91
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            11.986,
+            7.836,
+            11.755
+          ],
+          "censored": [
+            11.986,
+            7.836,
+            11.755
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            7.411,
+            11.119
+          ],
+          "censored": [
+            7.411,
+            11.119
+          ]
+        }
+      }
+    },
+    "CENKZ1324-SkyBlue-97": {
+      "n_months": 24,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            6.037,
+            17.606,
+            21.707
+          ],
+          "censored": [
+            6.037,
+            17.606,
+            21.707
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            16.715,
+            20.58,
+            15.652
+          ],
+          "censored": [
+            16.715,
+            20.58,
+            15.652
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            19.477,
+            14.771
+          ],
+          "censored": [
+            19.477,
+            14.771
+          ]
+        }
+      }
+    },
+    "CENKZ1325-Yellow-138": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            1.867,
+            0.963,
+            2.061
+          ],
+          "censored": [
+            1.867,
+            0.963,
+            2.061
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            1.023,
+            2.156,
+            1.861
+          ],
+          "censored": [
+            0.963,
+            2.061,
+            1.774
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            2.152,
+            1.857
+          ],
+          "censored": [
+            2.061,
+            1.774
+          ]
+        }
+      }
+    },
+    "CENKZ1325-Yellow-153": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            5.614,
+            3.242,
+            6.803
+          ],
+          "censored": [
+            5.614,
+            3.242,
+            6.803
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            3.136,
+            6.605,
+            7.232
+          ],
+          "censored": [
+            3.136,
+            6.605,
+            7.232
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            6.346,
+            6.949
+          ],
+          "censored": [
+            6.346,
+            6.949
+          ]
+        }
+      }
+    },
+    "CENKZ1325-Yellow-194": {
+      "n_months": 39,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            2.523,
+            1.285,
+            3.023
+          ],
+          "censored": [
+            2.523,
+            1.285,
+            3.023
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            1.252,
+            2.964,
+            2.833
+          ],
+          "censored": [
+            1.252,
+            2.964,
+            2.833
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            3.218,
+            3.08
+          ],
+          "censored": [
+            2.964,
+            2.833
+          ]
+        }
+      }
+    },
+    "CENKZ1325-Yellow-97": {
+      "n_months": 38,
+      "forecasts": {
+        "2026-05": {
+          "raw": [
+            1.819,
+            3.122,
+            3.904
+          ],
+          "censored": [
+            1.819,
+            3.122,
+            3.904
+          ]
+        },
+        "2026-06": {
+          "raw": [
+            3.378,
+            4.276,
+            3.674
+          ],
+          "censored": [
+            3.122,
+            3.904,
+            3.342
+          ]
+        },
+        "2026-07": {
+          "raw": [
+            3.912,
+            3.349
+          ],
+          "censored": [
+            3.567,
+            3.041
+          ]
+        }
+      }
+    }
+  },
+  "cells": [
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 10.56,
+      "actual": 9.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 6.517,
+      "actual": 7.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 15.266,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 10.56,
+      "actual": 9.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 6.517,
+      "actual": 7.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 15.266,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 6.419,
+      "actual": 7.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 15.051,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 11.71,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 6.419,
+      "actual": 7.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 15.051,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 11.71,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 15.182,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 11.815,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 15.051,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 11.71,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 21.695,
+      "actual": 19.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 14.698,
+      "actual": 23.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 27.035,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 21.695,
+      "actual": 19.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 14.698,
+      "actual": 23.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 27.035,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 14.519,
+      "actual": 23.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 26.712,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 26.653,
+      "actual": 24.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 14.519,
+      "actual": 23.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 26.712,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 26.653,
+      "actual": 24.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 28.047,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 28.0,
+      "actual": 24.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 26.712,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 26.653,
+      "actual": 24.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 22.326,
+      "actual": 26.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 21.418,
+      "actual": 21.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 30.398,
+      "actual": 22.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 22.326,
+      "actual": 26.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 21.418,
+      "actual": 21.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 30.398,
+      "actual": 22.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 21.717,
+      "actual": 21.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 30.822,
+      "actual": 22.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 25.997,
+      "actual": 24.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 21.418,
+      "actual": 21.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 30.398,
+      "actual": 22.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 25.634,
+      "actual": 24.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 30.712,
+      "actual": 22.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 25.903,
+      "actual": 24.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 30.33,
+      "actual": 22.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 25.575,
+      "actual": 24.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 18.128,
+      "actual": 10.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 16.864,
+      "actual": 13.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 38.77,
+      "actual": 16.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 18.128,
+      "actual": 10.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 16.864,
+      "actual": 13.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 38.77,
+      "actual": 16.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 15.989,
+      "actual": 13.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 36.804,
+      "actual": 16.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 16.97,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 15.989,
+      "actual": 13.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 36.804,
+      "actual": 16.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 16.97,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 36.023,
+      "actual": 16.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 16.594,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 36.023,
+      "actual": 16.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN1607NLinen-Ivory-97",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 16.594,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.698,
+      "actual": 7.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 2.894,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 8.322,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.698,
+      "actual": 7.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 2.894,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 8.322,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 3.609,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 10.105,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.865,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 2.894,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 8.322,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.057,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 10.536,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 4.06,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 8.322,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-100",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 3.057,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.733,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 7.728,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 3.827,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.733,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 7.728,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 3.827,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 8.518,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 4.281,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 8.768,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 7.728,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 3.827,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 7.899,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 3.843,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 7.929,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 3.433,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 7.147,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.715,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 2.863,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 5.145,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.715,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 2.863,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 5.145,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 2.919,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 5.237,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 7.423,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 2.863,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 5.145,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 7.294,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 5.445,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 7.714,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 5.145,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN803NLinen-Black-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 7.294,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 0.458,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 0.753,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 1.625,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 0.458,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 0.753,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 1.625,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 0.857,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 1.815,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 1.787,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 0.857,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 1.815,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 1.787,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 2.251,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 2.223,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 1.815,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-100",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 1.787,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 0.491,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 0.472,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 1.074,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 0.491,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 0.472,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 1.074,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 0.621,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 1.332,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 1.878,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 0.472,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 1.074,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 1.557,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 1.584,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 2.193,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 1.074,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 1.557,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.219,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 1.028,
+      "actual": 12.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 2.121,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.219,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 1.028,
+      "actual": 12.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 2.121,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 1.126,
+      "actual": 12.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 2.305,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.78,
+      "actual": 11.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 1.028,
+      "actual": 12.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 2.121,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.513,
+      "actual": 11.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 2.898,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 4.648,
+      "actual": 11.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 2.121,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 3.513,
+      "actual": 11.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.001,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 0.918,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 1.712,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.001,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 0.918,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 1.712,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 1.094,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 2.016,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.454,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 0.918,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 1.712,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.001,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 2.536,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 4.231,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 1.712,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CEN961NLinen-SageGreen-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 3.001,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 15.642,
+      "actual": 16.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 21.976,
+      "actual": 16.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 34.386,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 15.642,
+      "actual": 16.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 21.976,
+      "actual": 16.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 34.386,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 22.026,
+      "actual": 16.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 34.463,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 21.659,
+      "actual": 20.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 21.976,
+      "actual": 16.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 34.386,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 21.608,
+      "actual": 20.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 33.455,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 21.004,
+      "actual": 20.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 33.29,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Grey-60CM",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 20.896,
+      "actual": 20.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 72.884,
+      "actual": 31.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 72.483,
+      "actual": 15.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 34.647,
+      "actual": 18.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 72.884,
+      "actual": 31.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 72.483,
+      "actual": 15.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 34.647,
+      "actual": 18.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 67.741,
+      "actual": 15.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 31.873,
+      "actual": 18.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 18.391,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 67.741,
+      "actual": 15.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 31.873,
+      "actual": 18.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 18.391,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 27.784,
+      "actual": 18.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 15.956,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 27.784,
+      "actual": 18.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Ivory-60",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 15.956,
+      "actual": 26.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 8.25,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 5.457,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 4.292,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 8.25,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 5.457,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 4.292,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 5.148,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 3.986,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.005,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 5.148,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 3.986,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.005,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 3.975,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 2.996,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 3.975,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENC/Linen-Yellow-60",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 2.996,
+      "actual": 14.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 3.844,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 4.409,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 9.815,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 3.844,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 4.409,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 9.815,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 4.179,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 9.35,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 5.7,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 4.179,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 9.35,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 5.7,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 9.692,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 5.924,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 9.35,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 5.7,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 9.961,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 5.205,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 11.243,
+      "actual": 10.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 9.961,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 5.205,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 11.243,
+      "actual": 10.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 4.958,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 10.75,
+      "actual": 10.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 7.606,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 4.958,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 10.75,
+      "actual": 10.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 7.606,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 10.256,
+      "actual": 10.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 7.24,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 10.256,
+      "actual": 10.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 7.24,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 8.045,
+      "actual": 7.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 3.294,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 8.132,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 8.045,
+      "actual": 7.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 3.294,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 8.132,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 3.247,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 8.03,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 8.301,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 3.247,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 8.03,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 8.301,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 8.531,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 8.822,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 8.03,
+      "actual": 13.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 8.301,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 6.367,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 8.271,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 12.977,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 6.367,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 8.271,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 12.977,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 7.546,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 11.872,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 5.258,
+      "actual": 12.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 7.546,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 11.872,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 5.258,
+      "actual": 12.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 11.598,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 5.123,
+      "actual": 12.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 11.598,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1323-LTGrey-97",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 5.123,
+      "actual": 12.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 2.55,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 12.043,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 8.03,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 2.55,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 12.043,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 8.03,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 13.907,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 9.372,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 9.623,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 12.043,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 8.03,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 8.202,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 7.953,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 8.121,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 6.797,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 6.904,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 3.006,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 6.094,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 4.921,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 3.006,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 6.094,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 4.921,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 6.092,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 4.92,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 8.569,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 6.092,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 4.92,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 8.569,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 5.354,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 9.297,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 4.92,
+      "actual": 9.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 8.569,
+      "actual": 4.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 6.402,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 12.09,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 7.91,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 6.402,
+      "actual": 6.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 12.09,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 7.91,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 11.986,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 7.836,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 11.755,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 11.986,
+      "actual": 8.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 7.836,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 11.755,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 7.411,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 11.119,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 7.411,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 11.119,
+      "actual": 8.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 6.037,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 17.606,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 21.707,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 6.037,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 17.606,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 21.707,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 16.715,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 20.58,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 15.652,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 16.715,
+      "actual": 11.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 20.58,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 15.652,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 19.477,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 14.771,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 19.477,
+      "actual": 6.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1324-SkyBlue-97",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 14.771,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.867,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 0.963,
+      "actual": 1.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 2.061,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.867,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 0.963,
+      "actual": 1.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 2.061,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 1.023,
+      "actual": 1.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 2.156,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 1.861,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 0.963,
+      "actual": 1.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 2.061,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 1.774,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 2.152,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 1.857,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 2.061,
+      "actual": 2.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-138",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 1.774,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 5.614,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 3.242,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 6.803,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 5.614,
+      "actual": 4.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 3.242,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 6.803,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 3.136,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 6.605,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 7.232,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 3.136,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 6.605,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 7.232,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 6.346,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 6.949,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 6.346,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-153",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 6.949,
+      "actual": 7.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 2.523,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 1.285,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 3.023,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 2.523,
+      "actual": 2.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 1.285,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 3.023,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 1.252,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 2.964,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 2.833,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 1.252,
+      "actual": 3.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 2.964,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 2.833,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 3.218,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 3.08,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 2.964,
+      "actual": 1.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-194",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 2.833,
+      "actual": 3.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.819,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 3.122,
+      "actual": 1.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 3.904,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-05",
+      "month": "2026-06",
+      "forecast": 1.819,
+      "actual": 5.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-05",
+      "month": "2026-07",
+      "forecast": 3.122,
+      "actual": 1.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-05",
+      "month": "2026-08",
+      "forecast": 3.904,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 3.378,
+      "actual": 1.0,
+      "restricted": true
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 4.276,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.674,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-06",
+      "month": "2026-07",
+      "forecast": 3.122,
+      "actual": 1.0,
+      "restricted": true
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-06",
+      "month": "2026-08",
+      "forecast": 3.904,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-06",
+      "month": "2026-09",
+      "forecast": 3.342,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 3.912,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "raw",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 3.349,
+      "actual": 0.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-07",
+      "month": "2026-08",
+      "forecast": 3.567,
+      "actual": 5.0,
+      "restricted": false
+    },
+    {
+      "route": "censored",
+      "sku": "CENKZ1325-Yellow-97",
+      "origin": "2026-07",
+      "month": "2026-09",
+      "forecast": 3.041,
+      "actual": 0.0,
+      "restricted": false
+    }
+  ]
+}

@@ -1,0 +1,448 @@
+{
+  "global": {
+    "tri_rows_by_warehouse": {
+      "美东-CENTRADE": 14489,
+      "DANEEY-皮壳/半成品": 10695,
+      "美中-FZH-DANEEY": 4374,
+      "波兰": 2697,
+      "其他": 1228,
+      "DANEEY-退货仓": 168
+    },
+    "missing_rows_by_warehouse": {
+      "DANEEY-皮壳/半成品": 365,
+      "波兰": 173,
+      "美中-FZH-DANEEY": 126,
+      "其他": 66,
+      "美东-CENTRADE": 29,
+      "DANEEY-退货仓": 4
+    },
+    "global_missing_rows": 763,
+    "g1_missing_rows": 155,
+    "excluded_warehouse_missing_rows": 608
+  },
+  "g1_missing_breakdown": {
+    "recoverable_p1_suffix_or_platform": 31,
+    "p2_maps_non_family": 124
+  },
+  "recovered_p1_by_method": {
+    "strip-Cover": 30,
+    "strip-out": 1
+  },
+  "p2_non_family_top_items": {
+    "KS0194-HLR-60-GREY": 29,
+    "KS0003-DM-60-YELLOW": 20,
+    "KS0194-HLR-60-DEEPBLUE": 17,
+    "KS0383-HLR-153x50x24-OLIVEGREEN": 15,
+    "KS0383-HLR-153x50x24-DIRTYPINK": 8,
+    "KS0419-HLR-150x20x56-OLIVEGREENMILKYWHITE": 6,
+    "KS0003-DM-60-BLUE": 5,
+    "KS0003-DM-60-GREY": 4,
+    "KS0260-TR-50-PEACH": 3,
+    "KS0003-HLR-60-GREY": 3,
+    "KS0260-DM-50-GRASSGREEN": 2,
+    "KS0260-TR-50-OFFWHITE": 2,
+    "KS0260-HLR-50-OFFWHITE": 2,
+    "KS0316-HLR-55-LINEPURPLE": 2,
+    "KS0383-HLR-153x50x24-BLUE": 2,
+    "KS0003-DM-60-IVORY": 1,
+    "KS0260-DM-50-YELLOW": 1,
+    "KS0260-TR-100-OFFWHITE": 1,
+    "KS0260-TR-100-PEACH": 1
+  },
+  "g1_missing_total": 155,
+  "recovered_p1_sample": [
+    {
+      "sku": "C/Velvet-Yellow-183-698-wow-Cover",
+      "hit": "C/Velvet-Yellow-183-698-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-PR-183-GINGER"
+    },
+    {
+      "sku": "C/Linen-White-194-662-WOW-Cover",
+      "hit": "C/Linen-White-194-662-WOW",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMM-194-WHITE"
+    },
+    {
+      "sku": "C/Cord-White-138-706-wow-Cover",
+      "hit": "C/Cord-White-138-706-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMKTR-140-WHITE"
+    },
+    {
+      "sku": "CEN-No/B-Velvet-Grey-138-Cover",
+      "hit": "CEN-No/B-Velvet-Grey-138",
+      "how": "strip-Cover",
+      "en_item": "KS0248-HLR-140-GREY"
+    },
+    {
+      "sku": "C/Cord-Black-194-707-wow-Cover",
+      "hit": "C/Cord-Black-194-707-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMKTR-194-BLACK"
+    },
+    {
+      "sku": "C/Linen-White-153-662-WOW-Cover",
+      "hit": "C/Linen-White-153-662-WOW",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMM-153-WHITE"
+    },
+    {
+      "sku": "C/Cord-White-138-706-wow-Cover",
+      "hit": "C/Cord-White-138-706-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMKTR-140-WHITE"
+    },
+    {
+      "sku": "C/Cord-White-138-706-wow-Cover",
+      "hit": "C/Cord-White-138-706-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMKTR-140-WHITE"
+    },
+    {
+      "sku": "C/Velvet-DKBlue-100-700-wow-Cover",
+      "hit": "C/Velvet-DKBlue-100-700-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-PR-100-DEEPBLUE"
+    },
+    {
+      "sku": "C/Velvet-DKBlue-100-700-wow-Cover",
+      "hit": "C/Velvet-DKBlue-100-700-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-PR-100-DEEPBLUE"
+    },
+    {
+      "sku": "C/Cord-White-138-706-wow-Cover",
+      "hit": "C/Cord-White-138-706-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMKTR-140-WHITE"
+    },
+    {
+      "sku": "C/Linen-White-153-662-WOW-Cover",
+      "hit": "C/Linen-White-153-662-WOW",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMM-153-WHITE"
+    },
+    {
+      "sku": "C/Cord-Black-194-707-wow-Cover",
+      "hit": "C/Cord-Black-194-707-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMKTR-194-BLACK"
+    },
+    {
+      "sku": "C/Velvet-DKBlue-100-700-wow-Cover",
+      "hit": "C/Velvet-DKBlue-100-700-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-PR-100-DEEPBLUE"
+    },
+    {
+      "sku": "C/Cord-Black-194-707-wow-Cover",
+      "hit": "C/Cord-Black-194-707-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMKTR-194-BLACK"
+    },
+    {
+      "sku": "CENC/Linen1626-Coffee-153-Cover",
+      "hit": "CENC/Linen1626-Coffee-153",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMM-153-COFFEE"
+    },
+    {
+      "sku": "C/Velvet-Yellow-100-698-wow-Cover",
+      "hit": "C/Velvet-Yellow-100-698-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-PR-100-GINGER"
+    },
+    {
+      "sku": "C/Cord-White-138-706-wow-Cover",
+      "hit": "C/Cord-White-138-706-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-CMKTR-140-WHITE"
+    },
+    {
+      "sku": "C/Velvet-DKBlue-100-700-wow-Cover",
+      "hit": "C/Velvet-DKBlue-100-700-wow",
+      "how": "strip-Cover",
+      "en_item": "KS0001-PR-100-DEEPBLUE"
+    },
+    {
+      "sku": "C/Linen-DKGrey-60-651-WOW-Cover",
+      "hit": "C/Linen-DKGrey-60-651-WOW",
+      "how": "strip-Cover",
+      "en_item": "KS0248-CMM-60-DEEPGREY"
+    }
+  ],
+  "recovered_p2_sample": [],
+  "still_missing_sample": [
+    {
+      "sku": "TT0312572K0064143",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "拼色褶皱床头靠枕",
+      "unified": "拼色褶皱床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "拼色褶皱床头靠枕 荷兰绒 橄榄绿+奶白色 150*20*56cm"
+    },
+    {
+      "sku": "TT0031122K0063765",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角靠枕配件 圆枕",
+      "unified": "三角靠枕配件 圆枕",
+      "material_code": "ML-TR",
+      "product": "三角靠枕配件 圆枕 条绒 桃色 50*13cm"
+    },
+    {
+      "sku": "TT0031237K0064071",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "复古拼色褶皱三角靠枕",
+      "unified": "复古拼色褶皱三角靠枕",
+      "material_code": "ML-HLR",
+      "product": "复古拼色褶皱三角靠枕 荷兰绒 脏粉色 153*50*24cm"
+    },
+    {
+      "sku": "TT0031073K0063250",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 3.0,
+      "category": "沙发床头靠枕",
+      "unified": "沙发床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "沙发床头靠枕 荷兰绒 灰色 60*13*50CM"
+    },
+    {
+      "sku": "TT0031124K0063771",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 2.0,
+      "category": "三角靠枕配件 圆枕",
+      "unified": "三角靠枕配件 圆枕",
+      "material_code": "ML-DM",
+      "product": "三角靠枕配件 圆枕 涤麻 草绿色 50*13cm"
+    },
+    {
+      "sku": "TT0000930K0011510",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 黄色 靠枕 Triangle W/Cylinder Linen yellow 60cm "
+    },
+    {
+      "sku": "TT0031073K0063250",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 3.0,
+      "category": "沙发床头靠枕",
+      "unified": "沙发床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "沙发床头靠枕 荷兰绒 灰色 60*13*50CM"
+    },
+    {
+      "sku": "TT0031073K0063251",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 9.0,
+      "category": "沙发床头靠枕",
+      "unified": "沙发床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "沙发床头靠枕 荷兰绒 深蓝色 60*13*50CM"
+    },
+    {
+      "sku": "TT0031124K0063771",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角靠枕配件 圆枕",
+      "unified": "三角靠枕配件 圆枕",
+      "material_code": "ML-DM",
+      "product": "三角靠枕配件 圆枕 涤麻 草绿色 50*13cm"
+    },
+    {
+      "sku": "TT0031073K0063251",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 2.0,
+      "category": "沙发床头靠枕",
+      "unified": "沙发床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "沙发床头靠枕 荷兰绒 深蓝色 60*13*50CM"
+    },
+    {
+      "sku": "TT0000931K0011512",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 灰色 靠枕 Triangle W/Cylinder Linen Grey 60cm Cu"
+    },
+    {
+      "sku": "TT0312572K0064143",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "拼色褶皱床头靠枕",
+      "unified": "拼色褶皱床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "拼色褶皱床头靠枕 荷兰绒 橄榄绿+奶白色 150*20*56cm"
+    },
+    {
+      "sku": "TT0031073K0063250",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 2.0,
+      "category": "沙发床头靠枕",
+      "unified": "沙发床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "沙发床头靠枕 荷兰绒 灰色 60*13*50CM"
+    },
+    {
+      "sku": "TT0000930K0011510",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 黄色 靠枕 Triangle W/Cylinder Linen yellow 60cm "
+    },
+    {
+      "sku": "TT0031073K0063250",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 3.0,
+      "category": "沙发床头靠枕",
+      "unified": "沙发床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "沙发床头靠枕 荷兰绒 灰色 60*13*50CM"
+    },
+    {
+      "sku": "TT0000931K0011512",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 灰色 靠枕 Triangle W/Cylinder Linen Grey 60cm Cu"
+    },
+    {
+      "sku": "TT0000931K0011512",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 灰色 靠枕 Triangle W/Cylinder Linen Grey 60cm Cu"
+    },
+    {
+      "sku": "TT0031121K0063767",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角靠枕配件 圆枕",
+      "unified": "三角靠枕配件 圆枕",
+      "material_code": "ML-TR",
+      "product": "三角靠枕配件 圆枕 条绒 米白色 50*13cm"
+    },
+    {
+      "sku": "TT0000897K0011773",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-HLR",
+      "product": "三角无扣带圆柱 荷兰绒 60cm 灰色 靠枕 Triangle W/Cylinder Velvet Grey 60cm "
+    },
+    {
+      "sku": "TT0031125K0063773",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 2.0,
+      "category": "三角靠枕配件 圆枕",
+      "unified": "三角靠枕配件 圆枕",
+      "material_code": "ML-HLR",
+      "product": "三角靠枕配件 圆枕 荷兰绒 米白色 50*13cm"
+    },
+    {
+      "sku": "TT0031073K0063251",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "沙发床头靠枕",
+      "unified": "沙发床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "沙发床头靠枕 荷兰绒 深蓝色 60*13*50CM"
+    },
+    {
+      "sku": "TT0312572K0064143",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "拼色褶皱床头靠枕",
+      "unified": "拼色褶皱床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "拼色褶皱床头靠枕 荷兰绒 橄榄绿+奶白色 150*20*56cm"
+    },
+    {
+      "sku": "TT0000933K0011516",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 米白色 靠枕 Triangle W/Cylinder Linen white 60cm "
+    },
+    {
+      "sku": "TT0000932K0011514",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 蓝色 靠枕 Triangle W/Cylinder Linen blue 60cm Cu"
+    },
+    {
+      "sku": "TT0000931K0011512",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 灰色 靠枕 Triangle W/Cylinder Linen Grey 60cm Cu"
+    },
+    {
+      "sku": "TT0031073K0063251",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "沙发床头靠枕",
+      "unified": "沙发床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "沙发床头靠枕 荷兰绒 深蓝色 60*13*50CM"
+    },
+    {
+      "sku": "TT0031073K0063251",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "沙发床头靠枕",
+      "unified": "沙发床头靠枕",
+      "material_code": "ML-HLR",
+      "product": "沙发床头靠枕 荷兰绒 深蓝色 60*13*50CM"
+    },
+    {
+      "sku": "TT0000932K0011514",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 蓝色 靠枕 Triangle W/Cylinder Linen blue 60cm Cu"
+    },
+    {
+      "sku": "TT0000932K0011514",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "三角无扣带圆柱",
+      "unified": "三角带圆柱靠枕",
+      "material_code": "ML-DM",
+      "product": "三角无扣带圆柱 涤麻 60cm 蓝色 靠枕 Triangle W/Cylinder Linen blue 60cm Cu"
+    },
+    {
+      "sku": "TT0031237K0064071",
+      "wh": "美中-FZH-DANEEY",
+      "qty": 1.0,
+      "category": "复古拼色褶皱三角靠枕",
+      "unified": "复古拼色褶皱三角靠枕",
+      "material_code": "ML-HLR",
+      "product": "复古拼色褶皱三角靠枕 荷兰绒 脏粉色 153*50*24cm"
+    }
+  ]
+}
