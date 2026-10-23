@@ -169,3 +169,10 @@ uv run python docs/research/supply-chain/2026-10-20/claude/experiments/business_
 
 - 只读 DB（`read_only=True`），无生产查询、无拟合。
 - 行级：`map_evidence_lines.csv`(4,279)、`map_evidence_codes.csv`(282)、`map_evidence_dn.csv`(39)。
+
+## 13. 与 `dn_split` 空状态串修复的关系（2026-10-23）
+
+`dn_split.route_state` 的空串 bug 已修（`DN-26-00112` 由"已签收"改为"未知"）。
+本报告的计数**不受影响**，已复跑验证：`map_evidence.json` 修复前后 sha256 完全一致（`4b66e5ef…`），
+映射三态仍为 **58 / 217 / 7**，证据分级仍为 **doc 39/39、qty 0/39、would 20/39**。
+原因：本报告只从 `dn_split_dn.csv` 取 `dn` 字段，其余全部由 `dn_split_lines.csv` 重算。

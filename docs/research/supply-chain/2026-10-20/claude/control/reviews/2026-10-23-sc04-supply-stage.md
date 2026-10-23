@@ -109,7 +109,7 @@ artifacts:
 
 （`reconciliation.ok = true`，见 `sc04_supply.json`。）
 
-## 7. 必须上报的一个发现（未修）
+## 7. 必须上报的一个发现（**已修**，2026-10-23 单点返修）
 
 `dn_split.py` 的 `route_state` 在状态为空字符串时会被判成"已签收/已入仓"：
 `all(s in SIGNED for s in statuses if s)` 在 `statuses = ['']` 时对空序列求值为 `True`。
@@ -118,7 +118,10 @@ artifacts:
 
 - 本轮 **SC04 没有继承这个字段**，而是直接用 `dn_status_recon.csv` 的原始 `status11` 重新判阶段，
   因此 00112 在本表是 `unknown_status`。
-- **我没有修改 `dn_split.py`**（那是已 PASS 的 59c4e5ec 产物）；请工头决定是否开一张单点返修。
+- 该缺陷已由单点返修修掉：`route_state` 抽成纯函数 `route_state_of()`，
+  **空串 / None / 空列表 / 纯空白一律判「未知」**，并加了回归测试 `test_dn_split_route.py`（12 条断言）。
+  重跑后 `dn_split_dn.csv` 中 `DN-26-00112` 已是「未知」，与 SC04 的分类**一致**。
+  分布影响：按 DN 的"已签收"由 8 → **7**、新增"未知 **1**"；`stock_inclusion` 分布（5 / 34）不变。
 
 ## 8. 边界
 

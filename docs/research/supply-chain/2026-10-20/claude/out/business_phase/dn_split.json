@@ -25,8 +25,9 @@
         "no_so_link": 2
       },
       "state": {
-        "已签收/已入仓": 7,
-        "在途": 30
+        "已签收/已入仓": 6,
+        "在途": 30,
+        "未知": 1
       }
     },
     "multi_route": {
@@ -58,7 +59,8 @@
       "candidate_only": 5,
       "dest_not_tracked": 17,
       "in_transit": 15,
-      "no_receipt_date": 2
+      "no_receipt_date": 1,
+      "status_unknown": 1
     },
     "credited_qty": "null（全部 39 张；本轮不做数量入账）",
     "note": "received_before_snapshot_candidate 仅表示「签收日 ≤ CUTOFF，值得去账面核」，不等于该批货已在库存中；其余一律 stock_inclusion_unknown"
@@ -80,9 +82,10 @@
   },
   "status_split": {
     "by_dn": {
-      "已签收/已入仓": 8,
+      "已签收/已入仓": 7,
       "在途": 30,
-      "部分签收": 1
+      "部分签收": 1,
+      "未知": 1
     },
     "by_number": {
       "已签收/已入仓": 12,

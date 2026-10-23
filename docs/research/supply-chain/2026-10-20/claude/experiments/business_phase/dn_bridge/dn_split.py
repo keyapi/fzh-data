@@ -49,6 +49,24 @@ DEST_MAP = {"美国FBA仓": None, "DANEEY": "美中-FZH-DANEEY",
             "CENTRADE": "美东-CENTRADE", "波兰公司": "波兰-FZHPoland-covers"}
 
 
+def route_state_of(statuses):
+    """运单号状态 -> DN 承接状态（纯函数，可被回归测试直接调用）。
+
+    **空串/缺失一律 unknown**：旧实现用 `all(s in SIGNED for s in statuses if s)`，
+    过滤掉空串后对空序列求值为 True，于是 `['']` 会被判成"已签收/已入仓"
+    （实际案例 DN-26-00112，19,669 件，真实 Unmatched）。
+    """
+    if not statuses or any(not str(s).strip() for s in statuses):
+        return "未知"
+    if all(s in SIGNED for s in statuses):
+        return "已签收/已入仓"
+    if any(s in SIGNED for s in statuses):
+        return "部分签收"
+    if all(s in IN_TRANSIT for s in statuses):
+        return "在途"
+    return "未知"
+
+
 def load_roles():
     """role：mapped_sku（直接映射到通途码）/ component_via_bom（BOM 可推导）/ unmapped。
     与 map_evidence.py 同一判据，独立计算以免循环依赖。"""
@@ -153,14 +171,7 @@ def main() -> None:
             if r.get("ata"):
                 ata_dates.append(r["ata"])
 
-        if statuses and all(s in SIGNED for s in statuses if s):
-            route_state = "已签收/已入仓"
-        elif any(s in SIGNED for s in statuses):
-            route_state = "部分签收"
-        elif statuses and all(s in IN_TRANSIT for s in statuses if s):
-            route_state = "在途"
-        else:
-            route_state = "未知"
+        route_state = route_state_of(statuses)
 
         # 数量守恒：DN 行 -> SO 行（只判单据，不涉库存）
         matched = [x for x in lines if (x["against_sales_order"], x["so_detail"]) in so_index]
