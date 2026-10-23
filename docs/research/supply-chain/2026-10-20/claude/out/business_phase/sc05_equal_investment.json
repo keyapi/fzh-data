@@ -1,0 +1,278 @@
+{
+  "schema_version": "sc05_equal_investment/1",
+  "bootstrap": {
+    "resamples": 2000,
+    "seed": 20261023,
+    "cluster": "unit = SKU×仓",
+    "includes_retrain_variance": false,
+    "note": "固定预测下的抽样方差；不含重训/选模方差"
+  },
+  "universes": {
+    "scored790": {
+      "units": 1354,
+      "frozen_hash": "e977e8311a69c428",
+      "policy": {
+        "lead": 2,
+        "review": 1,
+        "semantics": "lost_sales",
+        "beta_target": 0.95,
+        "opening": 0.0
+      },
+      "A_same_beta_target": {
+        "results": {
+          "T5": {
+            "units": 1354,
+            "beta": 0.7304712518853695,
+            "alpha": 0.79957805907173,
+            "avg_inventory": 7.4545,
+            "excess": 11472.85
+          },
+          "combo": {
+            "units": 1354,
+            "beta": 0.6426500855675759,
+            "alpha": 0.7075949367088608,
+            "avg_inventory": 8.4848,
+            "excess": 16226.7
+          },
+          "tree": {
+            "units": 1354,
+            "beta": 0.5751930033937789,
+            "alpha": 0.8067510548523207,
+            "avg_inventory": 7.2667,
+            "excess": 14839.41
+          }
+        },
+        "beta_ci": {
+          "T5": [
+            0.6381,
+            0.8175
+          ],
+          "combo": [
+            0.5682,
+            0.7167
+          ],
+          "tree": [
+            0.5023,
+            0.6511
+          ]
+        },
+        "delta_vs_T5": {
+          "combo": {
+            "ci95": [
+              -0.1406,
+              -0.0409
+            ],
+            "significant": true
+          },
+          "tree": {
+            "ci95": [
+              -0.2072,
+              -0.1076
+            ],
+            "significant": true
+          }
+        },
+        "note": "S 由各档『预测+历史CV』的蒙特卡洛标定到 β=95%，再用实际需求评分（标定不看实际值）"
+      },
+      "B_same_inventory_budget": {
+        "results": {
+          "T5": {
+            "units": 1354,
+            "beta": 0.7802969905904537,
+            "alpha": 0.8628691983122362,
+            "avg_inventory": 12.55,
+            "excess": 23740.21
+          },
+          "combo": {
+            "units": 1354,
+            "beta": 0.7019374479568498,
+            "alpha": 0.7571729957805907,
+            "avg_inventory": 12.55,
+            "excess": 25927.3
+          },
+          "tree": {
+            "units": 1354,
+            "beta": 0.6680347843260291,
+            "alpha": 0.89915611814346,
+            "avg_inventory": 12.55,
+            "excess": 26782.07
+          }
+        },
+        "beta_ci": {
+          "T5": [
+            0.686,
+            0.8665
+          ],
+          "combo": [
+            0.6287,
+            0.7757
+          ],
+          "tree": [
+            0.5894,
+            0.7461
+          ]
+        },
+        "delta_vs_T5": {
+          "combo": {
+            "ci95": [
+              -0.1289,
+              -0.0294
+            ],
+            "significant": true
+          },
+          "tree": {
+            "ci95": [
+              -0.1674,
+              -0.0629
+            ],
+            "significant": true
+          }
+        },
+        "inventory_target": 12.55,
+        "t5_A_inventory": 7.4545,
+        "scale_k": {
+          "T5": 1.3669,
+          "combo": 1.2978,
+          "tree": 1.4504
+        },
+        "note": "把各档 S 统一乘 k，使平均库存等于 T5 在 (A) 的水平"
+      }
+    },
+    "verifiable239": {
+      "units": 178,
+      "frozen_hash": "066150d3bf4fb22d",
+      "policy": {
+        "lead": 2,
+        "review": 1,
+        "semantics": "lost_sales",
+        "beta_target": 0.95,
+        "opening": 0.0
+      },
+      "A_same_beta_target": {
+        "results": {
+          "T5": {
+            "units": 178,
+            "beta": 0.9102120696514886,
+            "alpha": 0.8462441314553991,
+            "avg_inventory": 7.1912,
+            "excess": 1038.69
+          },
+          "combo": {
+            "units": 178,
+            "beta": 0.6767460549274364,
+            "alpha": 0.7183098591549296,
+            "avg_inventory": 6.1815,
+            "excess": 1351.07
+          },
+          "tree": {
+            "units": 178,
+            "beta": 0.6099622772042019,
+            "alpha": 0.7007042253521126,
+            "avg_inventory": 4.8408,
+            "excess": 1137.3
+          }
+        },
+        "beta_ci": {
+          "T5": [
+            0.834,
+            0.968
+          ],
+          "combo": [
+            0.5609,
+            0.8083
+          ],
+          "tree": [
+            0.5017,
+            0.7403
+          ]
+        },
+        "delta_vs_T5": {
+          "combo": {
+            "ci95": [
+              -0.3365,
+              -0.1213
+            ],
+            "significant": true
+          },
+          "tree": {
+            "ci95": [
+              -0.402,
+              -0.1822
+            ],
+            "significant": true
+          }
+        },
+        "note": "S 由各档『预测+历史CV』的蒙特卡洛标定到 β=95%，再用实际需求评分（标定不看实际值）"
+      },
+      "B_same_inventory_budget": {
+        "results": {
+          "T5": {
+            "units": 178,
+            "beta": 0.9528108525128643,
+            "alpha": 0.926056338028169,
+            "avg_inventory": 13.54,
+            "excess": 2946.53
+          },
+          "combo": {
+            "units": 178,
+            "beta": 0.7990107316431381,
+            "alpha": 0.8345070422535211,
+            "avg_inventory": 13.54,
+            "excess": 3515.59
+          },
+          "tree": {
+            "units": 178,
+            "beta": 0.7967719274265115,
+            "alpha": 0.8767605633802817,
+            "avg_inventory": 13.54,
+            "excess": 3602.88
+          }
+        },
+        "beta_ci": {
+          "T5": [
+            0.9066,
+            0.9894
+          ],
+          "combo": [
+            0.7007,
+            0.9039
+          ],
+          "tree": [
+            0.7031,
+            0.9021
+          ]
+        },
+        "delta_vs_T5": {
+          "combo": {
+            "ci95": [
+              -0.2426,
+              -0.0617
+            ],
+            "significant": true
+          },
+          "tree": {
+            "ci95": [
+              -0.2459,
+              -0.0616
+            ],
+            "significant": true
+          }
+        },
+        "inventory_target": 13.54,
+        "t5_A_inventory": 7.1912,
+        "scale_k": {
+          "T5": 1.3734,
+          "combo": 1.5853,
+          "tree": 1.8584
+        },
+        "note": "把各档 S 统一乘 k，使平均库存等于 T5 在 (A) 的水平"
+      }
+    }
+  },
+  "boundaries": [
+    "不替换默认",
+    "不出补货量",
+    "790 与 239 分别报、不外推",
+    "标定不使用实际需求"
+  ]
+}
