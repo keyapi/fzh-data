@@ -2,7 +2,7 @@
 okf: v0.1
 type: Research
 title: 通途库存「当前记录 + 每日历史」放哪最好 —— EN、DuckDB、NAS 与云端可靠性调研
-description: 实测 EN 测试/生产服务器规格与磁盘、确认 /mnt/nas 并非 NAS 挂载、核实 DFP S3（香港 OSS 桶仍在但跨区、生产 internal 端点超时、NAS MinIO 可达）、盘点现有浏览器导出/Windows API 备份/Jack PR #309 低库存/demand_forecast DuckDB；给出「当前进 EN、历史进上海云盘 + OSS 镜像 + DuckDB」的分层方案
+description: 实测 EN 测试/生产服务器规格与磁盘、确认 /mnt/nas 并非 NAS 挂载、核实 DFP S3（香港 OSS 桶可写但跨区慢、生产 internal 端点超时、NAS MinIO 可达）、盘点现有浏览器导出/Windows API 备份/Jack PR #309 低库存/demand_forecast DuckDB；结论收敛为「当前进 EN、历史直接放 EN 本地盘、DuckDB 读本地，OSS/NAS 仅做低频备份」
 tags: [tongtool, inventory, erpnext, duckdb, nas, backup, architecture, research]
 timestamp: 2026-10-23
 ---
@@ -11,7 +11,7 @@ timestamp: 2026-10-23
 
 > 问题：通途库存的**当前值**可以写进 EN；**每日历史**要不要也进 EN？还是外挂 DuckDB？
 > 背景：NAS 在北京办公室、可能断电；Jack 的低库存任务跑在他本地电脑；本地电脑不如云端可靠。
-> 结论：**当前值进 EN（只读最新快照），历史不进 EN；原始文件放 EN 上海云盘，并镜像到 OSS（现有香港桶已实测可写，跨区慢；要快就上上海桶），DuckDB 只做查询层，且不要跑在生产（2C4G）。**
+> 结论：**当前值进 EN（只读最新快照），历史直接放 EN 服务器本地盘（2 年 <2GB，测试 51G/生产 319G 都够）；DuckDB 读本地，且不跑生产；OSS/S3/NAS 只做低频备份，不做每日管道。**
 
 - 日期：2026-10-23
 - 调研范围：EN 测试/生产服务器、现有两条通途库存流水线、Jack 低库存实现、demand_forecast DuckDB
@@ -22,9 +22,9 @@ timestamp: 2026-10-23
 | 数据 | 放哪 | 理由 |
 |---|---|---|
 | 当前库存（每仓×SKU 一行） | EN 只读 DocType `Tongtool Stock Latest` | 运营要在 EN 里看，量小（约 5k 行） |
-| 每日历史原始文件 | EN 云盘（上海）+ 镜像到 OSS | 云端供电/网络比办公室 NAS/Windows 稳；文件很小 |
-| 历史查询/预测 | DuckDB（测试站或分析机），**不在生产** | 分析型 as-of/窗口/join 是 DuckDB 强项；生产只有 3.5G 内存 |
-| 备份副本 | 现有香港 OSS（已实测可写，跨区慢）/ 上海区 OSS（更快，需新建）/ NAS MinIO（快但断电） | 香港桶日增量可用（0.42/0.19 MB/s，年成本约 ¥0–10）；多年远读慢；NAS 不能当唯一副本 |
+| 每日历史原始文件 | **EN 服务器本地盘（上海）** | 2 年 <2GB；测试 51G / 生产 319G 都绰绰有余；无跨区延迟、无额外管道 |
+| 历史查询/预测 | DuckDB（测试站或分析机），**不在生产** | 直接读本地文件；分析型 as-of/窗口/join 是 DuckDB 强项；生产只有 3.5G 内存 |
+| 备份副本 | 阿里云磁盘快照 / **月度** tar 到香港桶或 NAS（可选） | 本地盘解决容量，不解决误删/整机丢失；低频备份即可，不必每日传 |
 | 低库存告警 | 与库存抓取**同一次拉取**，在 EN 跑 | 避免第二次 API 拉取和 5 次/分钟争抢；摆脱 Jack 本地电脑 |
 
 ## 2. 实测事实（2026-10-23）
@@ -104,7 +104,7 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
 - 本项目体量：1.5MB/天 ≈ **0.55GB/年**，2 年 <2GB；每天约 14 次 PUT、少量 GET，远低于免费额度；即使算上行下载，年成本约 **¥0–10**。**主要代价是跨区速度，不是钱。**
 - 上海区新桶与香港桶的价格同一量级；同区可走内网端点、免外网下行，速度也快。开新桶的“成本”主要是配置/凭证/运维，而不是账单。
 
-**结论**：现有香港桶可以直接用，加 `fzh-inventory/` 前缀即可，无需新建桶；每日镜像完全可行。若以后要频繁做 DuckDB 分析/回填，建议上海区新桶或本地/NAS 缓存，不要每次都跨区读。
+**结论**：按 2 年 <2GB 的体量，**本地盘优先，不需要每日 S3**；现有香港桶只作为**月度/低频备份**。若以后确实需要异地容灾、或多台机器共享读，再考虑上海区新桶。
 
 ## 3. 方案对比
 
@@ -127,16 +127,12 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
  erp2_stocks_stocksquery（pageSize=100，13s，502/526 重试）   │
                                                               ▼
                  ┌──────────────────────────────┬──────────────────────────────┐
-                 │ EN 只读 DocType               │ EN 云盘原始层                  │
+                 │ EN 只读 DocType               │ EN 本地盘原始层                │
                  │ Tongtool Stock Latest         │ /home/frappe/fzh-inventory/    │
                  │ 每仓×SKU 一行，约 5k 行        │   YYYY-MM-DD/*.jsonl           │
                  │ 不写 Bin/Stock Ledger         │   manifest.json                │
                  └──────────────────────────────┴──────────────────────────────┘
-                                                              │  异步镜像
-                                                              ▼
-                                              上海区 OSS（首选）/ 香港 OSS 公开端点
-                                              prefix: fzh-inventory/YYYY-MM-DD/
-                                                              │
+                                                              │  本地读取
                                                               ▼
                  ┌──────────────────────────────┬──────────────────────────────┐
                  │ 低库存告警（同一批内存行）      │ DuckDB（测试站或分析机）        │
@@ -145,6 +141,9 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
                                                               │
                                                               ▼
                                               销量预测：断货剔除 / censored 标记
+
+可选备份（不参与主链路）：每月把 YYYY-MM-DD/ 打成一个 tar.gz，
+复制到现有香港桶或 NAS；不做每日 S3 管道。
 ```
 
 ### 4.1 EN 当前快照 DocType
@@ -160,7 +159,7 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
 ### 4.2 历史原始层
 
 - 路径：`/home/frappe/fzh-inventory/YYYY-MM-DD/warehouse=<id>_<name>.jsonl` + `manifest.json`。
-- 镜像：异步上传到上海区 OSS（首选）；暂无上海桶时用现有香港桶的**公开端点**（`oss-cn-hongkong.aliyuncs.com`），不要用生产配置里的 `-internal` 端点（已超时）。NAS MinIO 只作第三副本。
+- 镜像/备份：**本地盘为主，不做每日 S3 管道**。2 年 <2GB，本地盘容量完全够；若需要异地备份，**每月**把当天目录打成一个 tar.gz 传到现有香港桶或 NAS 即可。香港桶测速/成本见 §2.5（跨区慢，只适合低频备份）。
 - 保留：JSONL/Parquet 13–24 个月；DuckDB 视图可覆盖全部。
 - 原子写 + manifest 记录 `complete`、每仓 pages/rows、文件 sha256；失败仓标 `complete=false`，不写 0。
 - **原始文件是唯一事实源**；DuckDB 可随时从文件重建，不做唯一副本。
@@ -175,7 +174,7 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
 ### 4.4 低库存告警合并
 
 - 目标：**一次 API 拉取**同时产出当前快照、历史文件、低库存告警；不要 Jack 本地任务再拉一遍。
-- Jack 的 PR 还没提交，先不 fork。等他 PR 落地后：
+- Jack PR #309 已提交（33 tests 通过，已 approve）；合并后：
   - 复用 `stock_alert/scan.py`（阈值/死库存过滤）与 `notify.py`（钉钉汇总/Excel）逻辑；
   - 在 EN 定时任务里直接调用这些规则（或把纯函数抽到共享模块）；
   - 停掉 Jack 本地 `FZH-StockAlert-daily`，避免双跑和重复 API 调用。
@@ -187,6 +186,13 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
 - 候选断货日：`available=0 且 intransit=0 且无在途补货/采购单`；预测时剔除或做 censored-demand。
 - **不能只看 available=0**：通途为标记发货会先报溢，美中长期显示 0（见 `cargo-location-tracking-source-reliability.md`）。候选需结合订单下降、在途、补货单与人工例外。
 
+### 4.6 为什么不做每日 S3
+
+- **容量不是问题**：1.5MB/天 × 730 天 ≈ 1.1GB；测试站 51G、生产 319G 空闲，2 年只占 0.002%–0.0003%。
+- **每日 S3 不带来容量收益**，只增加跨区延迟（0.19–0.42 MB/s）、请求失败面和运维；本地盘读取是毫秒级。
+- **本地盘真正的缺口是备份**：用阿里云磁盘快照，或每月把 `YYYY-MM-DD/` 打成一个 tar.gz 传到现有香港桶/NAS 即可；不需要每天传。
+- 只有出现「多台机器共享读」「本地盘不可信」「需要异地容灾」时才值得把 S3 变成主存储；目前 EN 是唯一写入/读取方，本地盘就是最简单正确的选择。
+
 ## 5. 限流与调度（关键）
 
 - 商户级 **5 次/分钟**，多 App、多服务器共享；**放测试站也一样占用同一额度**，不会因为不是生产就更快。
@@ -194,13 +200,13 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
 - 调度 **05:17**，避开现有 3 个凌晨同步任务（约 01:00 / 02:00 / 04:00–04:30）。用 **long 队列**，避免阻塞 default 队列。
 - 2026-10-23 实测通途 MCP 对美东仓返回 **502 Bad Gateway**；必须做 502/503/504 重试（10s/20s），526 继续 60s 指数退避。
 - 只允许**一个**调度器跑全量（EN 或 Windows 二选一），否则双倍调用必然 526。
-- **S3 端点**：EN 测试用香港 OSS 公开端点可写；生产 DFP 配的 `oss-cn-hongkong-internal.aliyuncs.com` 在迁到上海后已超时，使用前必须改成公开端点或换上海桶。跨区只适合日增量小文件；DuckDB 查询前先把文件拉到本地。
+- **S3 只做低频备份**：本地盘为主，不做每日 S3。若要用现有香港桶做月度备份，测试站用公开端点可写；生产 DFP 配的 `oss-cn-hongkong-internal.aliyuncs.com` 在迁到上海后已超时，用前必须改成公开端点。跨区只适合低频小文件。
 
 ## 6. 分阶段建议
 
 | 阶段 | 做什么 | 验收 |
 |---|---|---|
-| P0 测试站试点 | `tongtool_integration` 加 `sync/stock_sync.py` + `17 5 * * *`；写云盘 JSONL/manifest；先不写 EN DocType | 连续 3–5 天 `complete=true`，14 仓齐全 |
+| P0 测试站试点 | `tongtool_integration` 加 `sync/stock_sync.py` + `17 5 * * *`；写**本地** JSONL/manifest；先不写 EN DocType | 连续 3–5 天 `complete=true`，14 仓齐全 |
 | P1 当前快照进 EN | 加只读 `Tongtool Stock Latest` + run 头表；每日覆盖 | EN 里能看到当天库存；行数约 5k；无 Bin 变化 |
 | P2 告警合并 | Jack PR 落地后接入低库存规则；钉钉；停本地任务 | 同一批数据同时出告警；只调用一次 API |
 | P3 生产决策 | 评估把抓取放生产（轻量，主要是网络/写文件）还是留测试站；DuckDB 绝不进生产 | 502/526 可控；生产内存无明显增长 |
@@ -219,7 +225,7 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
 
 1. **抓取放测试站还是生产？** 建议先测试站；生产网络/磁盘更足但内存小，抓取本身轻，可作为 P3 决策。
 2. **DuckDB 长期放哪？** 建议先分析机（已有 222MB 订单库）；要多人共享再上独立小云主机。
-3. **云盘备份方式**：现有香港桶已实测可写（0.42/0.19 MB/s，年成本约 ¥0–10），可直接用 `fzh-inventory/` 前缀做日增量镜像；上海区新桶主要解决**速度**，不是省钱。生产 DFP 的 `-internal` 端点需要修或迁到上海桶。
+3. **备份方式**：本地盘为主，不做每日 S3；需要异地备份时**每月** tar 一次到现有香港桶或 NAS。香港桶已实测可写（0.42/0.19 MB/s，年成本约 ¥0–10），但跨区慢，只适合低频。生产 DFP 的 `-internal` 端点需要修或改用公开端点。
 4. **Jack PR 合并时间**：PR #309 已提交、33 tests 通过；合并后再接低库存规则，避免两套代码。
 5. **EN 当前快照是否要映射 `item_code`**：先用通途 SKU；映射到 EN Item 作为下一步。
 6. **S3 写入能力**：需在有权限的 frappe 进程里补一次 1 字节 put/stat/remove 探针（本次因 `/home/frappe/logs` 权限未完成）。
