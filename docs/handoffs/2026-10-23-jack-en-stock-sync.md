@@ -125,10 +125,19 @@ related_prs: [308, 309, 310]
 
 ## 7. 部署顺序
 
-1. 测试站 `feat/throttled-refresh` 加代码 + DocType + 依赖，跑 3–5 天。
-2. 合并到 `main`，按现有发布链路推生产（pull → migrate → clear-cache → restart）。
+1. 测试站 `feature/stock-sync`（基于 `feat/throttled-refresh`）：已 migrate、已装 duckdb；跑 3–5 天。
+2. 合并 app PR #5（`feature/stock-sync-main`，从 main 拉出）到 `main`；生产按现有链路 `pull → migrate → 装 duckdb → clear-cache → restart`。
 3. 生产只跑抓取 + 当前表 + Run；**不要在生产跑 DuckDB/Insights/重分析**（2C/3.5G）。
 4. 生产稳定后停 Windows `FZH-TongtuStockApiDaily`，只保留浏览器导出。
+
+手动单仓测试命令（测试站）：
+
+```bash
+cd /home/frappe/frappe-bench
+bench --site erpnext.vilavi.cn execute \
+  tongtool_integration.sync.stock_sync.run_stock_snapshot \
+  --kwargs '{"warehouses": "美中-FZH-DANEEY", "source": "manual"}'
+```
 
 ### 7.1 目录与权限（先做）
 
