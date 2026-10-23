@@ -178,12 +178,15 @@ df -h /home/frappe
 
 ## 10. 实现进度（2026-10-23）
 
-- **app PR**：https://github.com/keyapi/tongtool_integration/pull/5（`feature/stock-sync-main`，从 main 拉出）
-- **测试站分支**：`feature/stock-sync`；已 `bench migrate`；`duckdb 1.5.6` 已装进 bench env
-- **单仓实测**：美中-FZH-DANEEY → 1,024 行、`Run.status=Success`、`complete=true`、Parquet 可读
-- **全量 14 仓**：测试站实跑中（结果补在 PR 评论）
-- **生产目录**：`/home/frappe/fzh-inventory` 已建（`frappe:frappe`，750）；代码未部署
+- **app PR**：https://github.com/keyapi/tongtool_integration/pull/5 已合并 main（`5a6d28e`）
+- **测试站**：已切 main；单仓 1,024 行、全量 **5,316 行 / 14 仓 / complete=true / 64 次调用**；Parquet/Latest/Run 一致
+- **生产**：已 pull main（`5a6d28e`）、装 `duckdb 1.5.6`、migrate、restart；单仓 1,024 行 + 全量 **5,316 行 / 14 仓 / complete=true / 64 次调用**；Parquet 5,316 行 / 10 个有数据仓、Latest 5,316 行、Run Success
+- **生产已启用** `enable_stock_sync=1`（05:17）；只有生产这一路在跑
+- **测试站定时已关闭**（`enable_stock_sync=0`），避免与生产重复抓取同一 5 次/分钟额度
+- **Windows API 任务** `FZH-TongtuStockApiDaily` 已禁用（保留为手动回退，未删除）；浏览器导出 02:17 保留
+- **历史起点**：EN Parquet 目前只有 2026-10-23；如需接上 10/20–10/22 的 Windows JSONL，做一次性 backfill 即可
 - **低库存告警**：未并入 v1，Jack 后续按 §5 接入
+- **体检脚本**（PR #308）：目前仍看 Windows 两条线；API 线迁 EN 后需改为读生产 Parquet/Run（后续）
 - ⚠️ **安全**：`test_fix.py` 含硬编码 app_secret（已跟踪），请尽快轮换并清理；本实现不使用该文件
 
 ## 11. Jack 开工 checklist
@@ -196,6 +199,8 @@ df -h /home/frappe
 - [x] 写单 Parquet：tmp + `os.replace`，保留 `stock.prev.parquet`。
 - [x] 加 `duckdb` 依赖并在测试站安装。
 - [x] `hooks.py` 注册 05:17、long 队列。
+- [x] 合并 main、推生产并实测（14 仓 5,316 行，complete=true）。
+- [x] Windows API 任务已禁用（保留手动回退）；浏览器导出 02:17 保留。
 - [ ] 低库存告警复用 PR #309 规则；先 dry-run。
-- [ ] 连续 3–5 天验收；再合并 main、推生产。
-- [ ] 生产稳定后停 Windows API 任务和 Jack 本地低库存任务。
+- [ ] 低库存并入 EN 后，停 Jack 本地 `FZH-StockAlert-daily`。
+- [ ] 连续 3–5 天验收；体检脚本改为读生产 Parquet/Run。
