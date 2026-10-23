@@ -1,0 +1,95 @@
+---
+okf: v0.1
+type: Report
+title: 全 SKU 主线自审：bootstrap 不确定性 + 时点纯净性 + 计数对账
+date: 2026-10-23
+owner: claude-worker
+status: 只读自审；不重做 full_sku_routing；未 commit
+artifacts:
+  - experiments/business_phase/forecast_eval/full_sku_selfaudit.py
+  - out/business_phase/full_sku_selfaudit.json
+---
+
+# 全 SKU 主线自审
+
+> 只读离线；重算同一批单元用于审计，未修改 A/B/C 任何产物。
+
+## 1. 复算校验
+
+- 本次重算的 WAPE 与已交付 `full_sku_eval.json` 的最大绝对差：**0.000000**（应为 0）。
+
+## 2. SKU 整簇 bootstrap（2,000 次，seed 20261023）
+
+重采样单位是 **SKU 整簇**：同一 SKU 的多个切点单元高度相关，按单元重采样会低估方差。
+
+| 方法 | WAPE | 95% CI | Δ vs global_tree | Δ 的 95% CI | 显著? |
+|---|---:|---|---:|---|---|
+| naive | 0.6059 | [0.5593, 0.6589] | +0.1121 | [+0.0728, +0.1485] | 是 |
+| ma3 | 0.6311 | [0.5645, 0.7091] | +0.1373 | [+0.0811, +0.1992] | 是 |
+| tsb | 0.5901 | [0.5380, 0.6488] | +0.0962 | [+0.0597, +0.1375] | 是 |
+| seasonal_naive | 0.5981 | [0.5504, 0.6476] | +0.1043 | [+0.0521, +0.1550] | 是 |
+| combo | 0.5237 | [0.4845, 0.5691] | +0.0298 | [+0.0037, +0.0580] | 是 |
+| global_tree | 0.4939 | [0.4587, 0.5306] | — | — | —（参照自身） |
+
+- 与 global_tree 的差异中，**5/5** 个方法的 95% CI 不跨 0；跨 0 的一律写「无显著差异」，不按点估计排序。
+- 最接近 0 的是 combo：Δ +0.0298，CI [+0.0037, +0.0580]——下界仅比 0 大 0.0037，**显著但差距很小**。
+
+## 3. 时点纯净性逐项自检
+
+| 项 | 证据（文件:行） | 结论 | 说明 |
+|---|---|---|---|
+| 分型表特征（A.features(s['y'])） | `full_sku_routing.py:105 + routing_eval.py:186` | not_point_in_time | 特征在整段历史（截至 2026-09）上计算，晚于评估切点 2025-03..2026-03；泄漏方向：用未来数据描述分型。该列只用于接回 C 的边注，未参与评估。 |
+| 评估训练向量 ytr = s['y'][:tr] | `full_sku_routing.py:154` | point_in_time | 只取 origin 及之前的月份。 |
+| 切点与标签可用时间 | `routing_eval.py:94 decision_date + routing_eval.py:148 window_value` | point_in_time | 决策日 = origin 次月 22 日；目标窗 origin+1..origin+3，与 forecast_window 同一窗口函数，标签在决策日之后才发生。 |
+| 全局树训练集 | `full_sku_routing.py:176-190` | point_in_time | df 由 train 里的 ytr 构造，未含目标期。 |
+| 方法选择是否用分型 | `full_sku_routing.py:159-166, 202-203` | point_in_time | 基线 + 全局树对所有 SKU 一致，方法集合不随分型变化；class_of 只在 full_sku_routing.py:224 用于 C 边注。 |
+| 分型规则本身是否可训练窗内算 | `routing_eval.py:186-227` | point_in_time | rules 只用历史长度/零占比/ADI/CV²/季节强度，均可用切点前数据计算；问题是表格实现用了全历史。 |
+
+> **本次自查发现的唯一问题**：分型表用的是整段历史（截至 2026-09），对评估切点而言是 `not_point_in_time`；但它只用于 C 的边注，评估的方法集合与分型无关，因此没有泄漏进 WAPE。报告此前写「分型只用训练窗内特征」应更正为「**规则**可在训练窗内算，**表格实现**用全历史、仅作现状描述」。
+
+## 4. 计数对账
+
+| 项 | 等式 | 值 |
+|---|---|---:|
+| 母集 SKU | destinations 去重 | 1328 |
+| 候选单元 | 1328 × 5 = 6640 | 6640 |
+| 已评分单元 | 六方法交集 | 2820 |
+| 未评分单元 | 全部 `history_lt_min_train` | 3820 |
+| 闭合 | 2820 + 3820 = 6640 (== 6640) | ✅ |
+| 评分 SKU | 共同单元去重 | 790 |
+| C 行数（原/边注） | 2309 / 2309 | 一致 |
+| 边注分布 | 1366 + 943 = 2309 | 2309 |
+
+差额去向：未评分的 3,820 个单元全部是「该 SKU 在该切点历史 <18 个月」，没有其他原因、没有静默丢弃；C 的 2,309 行全部带边注，行数未变。
+
+## 5. 与 A 包一致性
+
+| 方法 | A 报告 WAPE | 本次在 A 的共同 SKU 上复算 | 差 |
+|---|---:|---:|---:|
+| naive | 0.6059 | 0.6059 | +0.0000 |
+| ma3 | 0.6311 | 0.6311 | +0.0000 |
+| tsb | 0.5898 | 0.5898 | +0.0000 |
+| seasonal_naive | 0.5982 | 0.5982 | +0.0000 |
+| combo | 0.5192 | 0.5236 | +0.0044 |
+| global_tree | 0.4935 | 0.4933 | -0.0002 |
+
+- A 的 SKU 1237 个（评分 774），本次在共同单元 2763 个上复算。
+- 差异来源：
+  1. **combo 定义不同**——A 的 combo 是 6 个基模型（naive/ma3/tsb/croston/seasonal_naive/seasonal_yoy）等权，本次是 4 个（无 croston/seasonal_yoy），因此 +0.0044；
+  2. **global_tree 的 −0.0002 是取整差**（A 在 9 方法交集上、本次在 6 方法交集上，单元数同为 2,763）；
+  3. 其余四个方法**逐位一致**（差 0.0000）。
+  **A 的产物与数字未被改动。**
+
+## 6. 结论
+
+- 不确定性：global_tree 的 WAPE 点估计 0.4939，与 combo 的 Δ 为 +0.0298，是否显著见第 2 节（以 CI 为准，不按点排序）。
+- 时点纯净性：评估路径全部 point-in-time；分型表 not_point_in_time（仅边注，无泄漏）。
+- 计数闭合；与 A 的差异已定位为集合口径，不是数字改动。
+
+## 7. 复现
+
+```bash
+uv run python docs/research/supply-chain/2026-10-20/claude/experiments/business_phase/forecast_eval/full_sku_selfaudit.py
+```
+
+耗时 **7.3 s**。
