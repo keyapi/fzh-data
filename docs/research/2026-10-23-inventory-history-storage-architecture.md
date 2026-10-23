@@ -11,11 +11,11 @@ timestamp: 2026-10-23
 
 > 问题：通途库存的**当前值**可以写进 EN；**每日历史**要不要也进 EN？还是外挂 DuckDB？
 > 背景：NAS 在北京办公室、可能断电；Jack 的低库存任务跑在他本地电脑；本地电脑不如云端可靠。
-> 结论：**当前值进 EN（只读最新快照），历史不进 EN；原始文件放 EN 上海云盘并镜像到上海 OSS（没有上海桶时用现有香港桶公开端点），DuckDB 只做查询层，且不要跑在生产（2C4G）。**
+> 结论：**当前值进 EN（只读最新快照），历史不进 EN；原始文件放 EN 上海云盘，并镜像到 OSS（现有香港桶已实测可写，跨区慢；要快就上上海桶），DuckDB 只做查询层，且不要跑在生产（2C4G）。**
 
 - 日期：2026-10-23
 - 调研范围：EN 测试/生产服务器、现有两条通途库存流水线、Jack 低库存实现、demand_forecast DuckDB
-- 全程只读探测；未改任何服务器配置、未写通途数据
+- 全程只读探测；未改任何服务器配置、未写通途数据；S3 探针写/删了 1.5MB 临时对象（put/stat/get/remove 后清理）
 
 ## 1. 一句话结论
 
@@ -24,7 +24,7 @@ timestamp: 2026-10-23
 | 当前库存（每仓×SKU 一行） | EN 只读 DocType `Tongtool Stock Latest` | 运营要在 EN 里看，量小（约 5k 行） |
 | 每日历史原始文件 | EN 云盘（上海）+ 镜像到 OSS | 云端供电/网络比办公室 NAS/Windows 稳；文件很小 |
 | 历史查询/预测 | DuckDB（测试站或分析机），**不在生产** | 分析型 as-of/窗口/join 是 DuckDB 强项；生产只有 3.5G 内存 |
-| 备份副本 | **上海区 OSS（首选）** / 现有香港 OSS 公开端点 / NAS MinIO（次要） | 香港 OSS 桶还在但与上海跨区；NAS 在北京、会断电，不能当唯一副本 |
+| 备份副本 | 现有香港 OSS（已实测可写，跨区慢）/ 上海区 OSS（更快，需新建）/ NAS MinIO（快但断电） | 香港桶日增量可用（0.42/0.19 MB/s，年成本约 ¥0–10）；多年远读慢；NAS 不能当唯一副本 |
 | 低库存告警 | 与库存抓取**同一次拉取**，在 EN 跑 | 避免第二次 API 拉取和 5 次/分钟争抢；摆脱 Jack 本地电脑 |
 
 ## 2. 实测事实（2026-10-23）
@@ -81,7 +81,30 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
 - 阿里云 OSS 桶 `erpnext-hk` **还在**（未授权 403 = 桶存在），但它是**香港区**；EN 已迁到上海，跨区日增量（约 1.5MB/天）可接受，但不适合把多年历史反复远读。生产配置的 `-internal` 端点在迁移后已不可达，需要改成公开端点或迁到上海桶。
 - NAS MinIO `en.media` 当前从测试/生产都能访问，但仍受北京办公室供电影响，只能做副本。
 - 凭证在 `DFP External Storage` DocType 内（`access_key` / 加密的 `secret_key`），运行时用 Frappe 读取；**不要把凭证复制到仓库或脚本**。
-- 写探针（1 字节 put/stat/remove）未完成：用 `./env/bin/python` 初始化 Frappe 时 `/home/frappe/logs/database.log` 权限拒绝；桶存在已由 HTTP 403 证明，写入能力待在有权限的 frappe 进程里补测。
+- 写探针已完成：在 EN 测试站用 `bench console` + 显式 `Minio(secure=True)` 对香港桶做了 1.5MB put/stat/get/remove，全部成功；NAS MinIO 同样成功。速度与成本见 §2.5。
+- 注意：DFP 记录里香港 OSS 的 `secure=0`（HTTP）；探针用的是 HTTPS。正式写入建议把该字段改为 1，或用显式 `Minio(secure=True)`。
+
+### 2.5 香港 OSS 速度与成本实测（EN 上海测试站 → 香港）
+
+2026-10-23 实测（1.5MB 随机文件，put → stat → get → delete）：
+
+| 目标 | 上传 | 下载 | 小对象 RTT |
+|---|---|---|---|
+| 香港 OSS `erpnext-hk`（HTTPS） | 3.61s（**0.42 MB/s**） | 8.00s（**0.19 MB/s**） | ~0.33s |
+| NAS MinIO `en.media`（HTTP） | 0.66s（**2.27 MB/s**） | 0.21s（**7.21 MB/s**） | 0.07–0.17s |
+
+- 每日全量约 **1.5MB**（14 个 JSONL）：香港桶上传约 4 秒、下载约 8 秒，**日增量镜像可用**；但按 0.19 MB/s 算，1GB 历史下载要 ~1.5 小时，**不适合多年历史反复远读**。
+- NAS MinIO 快一个数量级，但办公室断电/断网就不可用；适合做**本地缓存/第二副本**，不能当唯一。
+- 建议把一天的文件**打包成 1 个 tar.gz 或 1 个 Parquet** 再上传，减少 14 次小请求与 RTT。
+
+成本（按 2026 年公开价，具体以官网为准）：
+
+- **创建存储桶本身免费**；OSS 按存储量、请求数、外网下行流量计费，没有固定月费。
+- 香港标准存储约 **¥0.136/GB/月**（部分价目表首 5GB 免费）或国际站约 **$0.0173/GB/月**；外网下行约 **$0.076/GB**；PUT/GET 有较大免费额度。
+- 本项目体量：1.5MB/天 ≈ **0.55GB/年**，2 年 <2GB；每天约 14 次 PUT、少量 GET，远低于免费额度；即使算上行下载，年成本约 **¥0–10**。**主要代价是跨区速度，不是钱。**
+- 上海区新桶与香港桶的价格同一量级；同区可走内网端点、免外网下行，速度也快。开新桶的“成本”主要是配置/凭证/运维，而不是账单。
+
+**结论**：现有香港桶可以直接用，加 `fzh-inventory/` 前缀即可，无需新建桶；每日镜像完全可行。若以后要频繁做 DuckDB 分析/回填，建议上海区新桶或本地/NAS 缓存，不要每次都跨区读。
 
 ## 3. 方案对比
 
@@ -196,7 +219,7 @@ Jack 的 Excel 上传**只是 EN 文件附件**（`send_file_card` → ERPNext �
 
 1. **抓取放测试站还是生产？** 建议先测试站；生产网络/磁盘更足但内存小，抓取本身轻，可作为 P3 决策。
 2. **DuckDB 长期放哪？** 建议先分析机（已有 222MB 订单库）；要多人共享再上独立小云主机。
-3. **云盘备份方式**：优先开一个**上海区 OSS 桶**（与 EN 同区）；暂不可行时用现有香港桶公开端点做日增量镜像；NAS MinIO 只做副本。生产 DFP 的 `-internal` 端点需要修或迁到上海桶。
+3. **云盘备份方式**：现有香港桶已实测可写（0.42/0.19 MB/s，年成本约 ¥0–10），可直接用 `fzh-inventory/` 前缀做日增量镜像；上海区新桶主要解决**速度**，不是省钱。生产 DFP 的 `-internal` 端点需要修或迁到上海桶。
 4. **Jack PR 合并时间**：PR #309 已提交、33 tests 通过；合并后再接低库存规则，避免两套代码。
 5. **EN 当前快照是否要映射 `item_code`**：先用通途 SKU；映射到 EN Item 作为下一步。
 6. **S3 写入能力**：需在有权限的 frappe 进程里补一次 1 字节 put/stat/remove 探针（本次因 `/home/frappe/logs` 权限未完成）。
@@ -231,3 +254,13 @@ ssh sh-erpnext-test-frappe "cd /home/frappe/frappe-bench && bench --site erpnext
 - `docs/solutions/architecture-patterns/order-history-duckdb-store.md` — 订单历史 DuckDB 分层（PR #290）
 - `docs/solutions/workflow-issues/cargo-location-tracking-source-reliability.md` — 通途“可用 0”不可信
 - `docs/solutions/integration-issues/en-tongtool-order-package-sync-failures.md` — EN 通途同步的 300s/526/重叠
+
+## 11. 价格与测速来源
+
+- 阿里云 OSS 计费概述: https://www.alibabacloud.com/help/zh/oss/billing-overview
+- OSS 计费项（存储/请求/流量）: https://www.alibabacloud.com/help/en/oss/billable-item-overview
+- 阿里云 OSS 价格详情: https://www.aliyun.com/price/detail/oss
+- 2026 国际站 OSS 价格分析（含香港/海外参考）: https://sevencoloryun.com/blog/aliyun-oss-pricing-cost-comparison-2026/
+- OSS 香港端点与用法: https://cloudinsight.cc/en/blog/alibaba-cloud-oss-guide
+
+> 测速为 2026-10-23 从 EN 上海测试站到香港 OSS / NAS MinIO 的单文件 1.5MB put/stat/get/remove，网络状况会波动；价格以官网当期为准。
