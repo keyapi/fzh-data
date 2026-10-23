@@ -76,6 +76,29 @@ uv run python web_automation/scripts/dispatch.py tongtu.stock.export
 
 > 详细见 `web_automation/docs/reference/scheduling-exports.md`。
 
+## 日常体检（两条现成流水线）
+
+通途库存有两条独立落地线，**不要另写取数器**：
+
+| 线 | 定时 | 产物 |
+|---|---|---|
+| 浏览器导出 `tongtu.stock.export` | 02:17 `FZH-TongtuAutoExport-stock` | `web_automation/output/通途合并库存结存清单*.xlsx` |
+| API 全量备份（仓库外） | 05:17 `FZH-TongtuStockApiDaily` | `D:\Work\库存备份\YYYY-MM-DD\*.jsonl` + `manifest.json` |
+
+每天用 `scripts/inventory_daily_health.py` 读这两条线的产物做体检 + 离线互证；失败推钉钉：
+
+```bash
+# 历史回放（不写文件、不推送）
+uv run python scripts/inventory_daily_health.py --date 2026-10-22 --dry-run
+# 正式跑（写 health/YYYY-MM-DD.json，异常才推钉钉）
+uv run python scripts/inventory_daily_health.py
+# 注册每天 07:17 的体检任务（在主仓库根执行，不要在 worktree）
+powershell -ExecutionPolicy Bypass -File scripts/install_inventory_health_schedule.ps1 -AtTime "07:17"
+```
+
+口径、阈值与排障见 `docs/solutions/workflow-issues/tongtool-inventory-daily-health.md`。
+**不要用赛狐库存或 EN Bin 替代通途库存**；API 的“可用 0”也不等于断货（见同目录的可靠性分级）。
+
 ## Hard Constraints
 
 - 通途是 **ExtJS**，永远不用 el-select/el-dialog 等 Element UI 选择器。

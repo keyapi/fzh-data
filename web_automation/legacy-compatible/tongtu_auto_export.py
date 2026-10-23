@@ -30,6 +30,7 @@ from tongtu_warehouses import (
     safe_prefix,
     should_exit_after_export_run,
 )
+from tongtu_urls import is_inventory_url, looks_like_erp_url
 
 sys.stdout.reconfigure(encoding='utf-8')
 import os
@@ -37,7 +38,11 @@ import os
 def load_env():
     """加载 .env 文件中的环境变量（web_automation 根 + 仓库根）"""
     here = Path(__file__).resolve().parent
-    candidates = [here.parent / ".env", here.parent.parent / ".env"]
+    candidates = [
+        here.parent / ".env",
+        here.parent.parent / ".env",
+        here.parent.parent / "fzh-web-automation" / ".env",
+    ]
     for env_path in candidates:
         if not env_path.exists():
             continue
@@ -67,6 +72,7 @@ PROFILE_DIR = WEB_ROOT / "chrome-profile"
 DOWNLOADS_DIR = WEB_ROOT / "downloads"
 OUTPUT_DIR = WEB_ROOT / "output"
 LOGIN_TIMEOUT_SECS = 300
+_RUN_STARTED_AT: float | None = None
 
 # 导出的仓库列表（2026-09-03 通途仓名统一为 美东-/波兰-/美中- 前缀）
 # 结构 = 3 分公司主仓 + 3 对应退货仓。皮壳库存已并入「美中-FZH-DANEEY」主仓；
@@ -316,6 +322,13 @@ def _try_login(page, auto_login: bool, *, show_expired: bool = False) -> bool:
     （--auto-login）时自动试装，装不上自动落到人工输码。
     """
     if auto_login:
+        # j_security_check may still be redirecting to the ERP dashboard while
+        # the caller saw "not logged in"; give the SSO hop a few seconds to land.
+        for _ in range(5):
+            if is_already_logged_in(page) or looks_like_erp_url(page.url):
+                print("[OK] 登录会话已恢复，跳过自动登录")
+                return True
+            page.wait_for_timeout(1000)
         ocr_ok, reason = ensure_ocr()
         if ocr_ok:
             if not (os.getenv("TONGTU_USER") and os.getenv("TONGTU_PASSWORD")):
@@ -344,6 +357,8 @@ def run():
 
     fresh = "--fresh" in sys.argv
     auto_login = "--auto-login" in sys.argv
+    global _RUN_STARTED_AT
+    _RUN_STARTED_AT = time.time()
 
     if fresh and PROFILE_DIR.exists():
         print("[信息] --fresh: 清除旧的登录会话...")
@@ -376,8 +391,15 @@ def run():
             print("[OK] 检测到已登录会话，自动继续...")
         elif not _try_login(page, auto_login=auto_login, show_expired=not first_run):
             print("[错误] 登录超时，请重试")
+            print("FAILURE_CODE=LOGIN_TIMEOUT")
             context.close()
             sys.exit(1)
+
+        # Remember-me/SSO can land on the dashboard instead of the stock page.
+        if not is_inventory_url(page.url):
+            print("[信息] 登录后未停在库存结存页，重新打开...")
+            page.goto(TONGTU_URL, wait_until="networkidle", timeout=60000)
+            page.wait_for_timeout(2000)
 
         # 确保筛选项正确
         print("\n[信息] 确认筛选条件...")
@@ -468,6 +490,13 @@ def merge_all_inventory():
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )
+        # Never reuse yesterday's download when this run skipped the warehouse:
+        # the merged file is named with the current timestamp.
+        if _RUN_STARTED_AT is not None:
+            files = [f for f in files if f.stat().st_mtime >= _RUN_STARTED_AT - 300]
+            if not files:
+                print(f"  [跳过] {wh}: 本次运行没有新文件（忽略旧文件）")
+                continue
         if not files:
             print(f"  [跳过] {wh}: 未找到下载文件")
             continue
