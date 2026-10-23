@@ -178,18 +178,32 @@ df -h /home/frappe
 
 ## 10. 实现进度（2026-10-23）
 
-- **app PR**：https://github.com/keyapi/tongtool_integration/pull/5 已合并 main（`5a6d28e`）
-- **测试站**：已切 main；单仓 1,024 行、全量 **5,316 行 / 14 仓 / complete=true / 64 次调用**；Parquet/Latest/Run 一致
-- **生产**：已 pull main（`5a6d28e`）、装 `duckdb 1.5.6`、migrate、restart；单仓 1,024 行 + 全量 **5,316 行 / 14 仓 / complete=true / 64 次调用**；Parquet 5,316 行 / 10 个有数据仓、Latest 5,316 行、Run Success
-- **生产已启用** `enable_stock_sync=1`（05:17）；只有生产这一路在跑
+- **app PR**：#5（基础同步）+ #6（重试/历史 API）均已合并 main（`7f598f0`）
+- **测试站/生产**：均已切 main、部署 `7f598f0`、装 `duckdb 1.5.6`、restart
+- **全量实测**：测试站与生产均 **14 仓 / 5,316 行 / complete=true / 64 次调用**；Latest/Run/Parquet 一致
+- **回填**：10/20 5,192 行（当天一个仓超时，属部分数据）、10/21 5,314、10/22 5,314、10/23 5,316；Parquet 现有 4 天
+  - 回填行 `avg_cost=0`（Windows JSONL 不含成本），live 行有成本；`source=backfill_windows`
+- **生产已启用** `enable_stock_sync=1`（05:17）；**06:17 / 07:17 自动重试**（当天 Run 不 complete 才重跑；文件锁防并发）
 - **测试站定时已关闭**（`enable_stock_sync=0`），避免与生产重复抓取同一 5 次/分钟额度
 - **Windows API 任务** `FZH-TongtuStockApiDaily` 已禁用（保留为手动回退，未删除）；浏览器导出 02:17 保留
-- **历史起点**：EN Parquet 目前只有 2026-10-23；如需接上 10/20–10/22 的 Windows JSONL，做一次性 backfill 即可
+- **失败重试**：每次 API 调用已有 13s 节流 + 502/503/504 重试 + 526 指数退避；整天失败由 06:17/07:17 再跑。不能绝对保证 100%，但已覆盖“单次/整轮失败”
 - **低库存告警**：未并入 v1，Jack 后续按 §5 接入
 - **体检脚本**（PR #308）：目前仍看 Windows 两条线；API 线迁 EN 后需改为读生产 Parquet/Run（后续）
-- ⚠️ **安全**：`test_fix.py` 含硬编码 app_secret（已跟踪），请尽快轮换并清理；本实现不使用该文件
+- ⚠️ **安全（已核实）**：`test_fix.py` 已跟踪、在 main 且推到 GitHub；其 secret 与**测试和生产** `Tongtool Settings.app_secret` 哈希一致 ⇒ 必须轮换并清理文件/历史
 
-## 11. Jack 开工 checklist
+## 11. 外部查询 API
+
+- **当前库存**：
+  `GET /api/resource/Tongtool Stock Latest?filters=[["warehouse","=","美中-FZH-DANEEY"]]&limit_page_length=1000`
+- **运行日志**：
+  `GET /api/resource/Tongtool Stock Run?filters=[["snapshot_date","=","2026-10-23"]]`
+- **历史**：
+  `GET /api/method/tongtool_integration.sync.stock_sync.get_stock_history?sku=...&warehouse=...&start_date=2026-10-20&end_date=2026-10-23&limit=1000`
+- **认证**：`Authorization: token <api_key>:<api_secret>`；需要 `Tongtool Stock Latest` 读权限（All read）
+- **限制**：默认最近 30 天、最多 5,000 行；大批量/全量请 SFTP 拿 `stock.parquet` 或走外部分析服务
+- 已实测：生产 HTTP 200，返回 `message` 数组（10/23 美东 TEST-1 等）
+
+## 12. Jack 开工 checklist
 
 - [x] 测试站建目录/权限（`/home/frappe/fzh-inventory`，`frappe:frappe`）。
 - [x] 生产建目录/权限（你有权限，Jack 没有）。
@@ -197,8 +211,11 @@ df -h /home/frappe
 - [x] 新建 `Tongtool Stock Latest` / `Tongtool Stock Run` DocType（只读、无 Bin）。
 - [x] 写 `sync/stock_sync.py`：14 仓抓取 + 13s 节流 + 502/526 重试。
 - [x] 写单 Parquet：tmp + `os.replace`，保留 `stock.prev.parquet`。
-- [x] 加 `duckdb` 依赖并在测试站安装。
+- [x] 加 `duckdb` 依赖并在**测试站和生产**安装。
 - [x] `hooks.py` 注册 05:17、long 队列。
+- [x] 06:17 / 07:17 失败重试 + 文件锁。
+- [x] 历史查询 API；生产 HTTP 200 实测。
+- [x] 10/20–10/22 回填测试站与生产（Parquet 现有 4 天）。
 - [x] 合并 main、推生产并实测（14 仓 5,316 行，complete=true）。
 - [x] Windows API 任务已禁用（保留手动回退）；浏览器导出 02:17 保留。
 - [ ] 低库存告警复用 PR #309 规则；先 dry-run。
