@@ -130,6 +130,28 @@ related_prs: [308, 309, 310]
 3. 生产只跑抓取 + 当前表 + Run；**不要在生产跑 DuckDB/Insights/重分析**（2C/3.5G）。
 4. 生产稳定后停 Windows `FZH-TongtuStockApiDaily`，只保留浏览器导出。
 
+### 7.1 目录与权限（先做）
+
+测试站（Jack 有权限）和生产（你有权限）都先建同一目录：
+
+```bash
+sudo mkdir -p /home/frappe/fzh-inventory
+sudo chown frappe:frappe /home/frappe/fzh-inventory
+sudo chmod 750 /home/frappe/fzh-inventory
+# 可选：备份/调试子目录
+sudo -u frappe mkdir -p /home/frappe/fzh-inventory/backup /home/frappe/fzh-inventory/debug
+# 写权限自检
+sudo -u frappe touch /home/frappe/fzh-inventory/.write_test
+sudo -u frappe rm /home/frappe/fzh-inventory/.write_test
+df -h /home/frappe
+```
+
+- 测试站如果当前 SSH 用户就是 `frappe`，可省略 `sudo`。
+- 目录在站点 `public` 之外，不会被 nginx 直接访问。
+- 代码里仍要 `Path(dir).mkdir(parents=True, exist_ok=True)` 兜底，但预建能提前暴露权限问题。
+- 生产顺序：**建目录 → 部署 app + 安装 `duckdb` → 手工跑一次 → 核对 Latest/Run/Parquet → 再开定时 → 最后停 Windows API 任务**。
+- 生产装依赖：`/home/frappe/frappe-bench/env/bin/pip install duckdb`（生产不会自动跑 app 依赖）；测试站用 `bench setup requirements` 或同样 pip 安装。
+
 ## 8. 以后可加（现在不做）
 
 - 数据 >1GB、重写 >2–3s、或需要历史不可变/局部恢复 → 拆成**一年一个 Parquet**（只重写当年），不要按天/按月。
@@ -147,6 +169,8 @@ related_prs: [308, 309, 310]
 
 ## 10. Jack 开工 checklist
 
+- [ ] 测试站建目录/权限（`/home/frappe/fzh-inventory`，`frappe:frappe`）。
+- [ ] 生产建目录/权限（你有权限，Jack 没有）。
 - [ ] 测试站拉 `feat/throttled-refresh`，确认 `Tongtool Settings` 凭证可用。
 - [ ] 新建 `Tongtool Stock Latest` / `Tongtool Stock Run` DocType（只读、无 Bin）。
 - [ ] 写 `sync/stock_sync.py`：14 仓抓取 + 13s 节流 + 502/526 重试。
