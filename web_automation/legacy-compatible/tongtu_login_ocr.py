@@ -9,7 +9,11 @@ from pathlib import Path
 def _load_env():
     """加载 .env 文件中的环境变量（web_automation 根 + 仓库根）"""
     here = Path(__file__).resolve().parent
-    for env_path in (here.parent / ".env", here.parent.parent / ".env"):
+    for env_path in (
+        here.parent / ".env",
+        here.parent.parent / ".env",
+        here.parent.parent / "fzh-web-automation" / ".env",
+    ):
         if not env_path.exists():
             continue
         for line in env_path.read_text(encoding="utf-8").splitlines():
@@ -28,6 +32,7 @@ import subprocess
 
 import requests
 from ddddocr_login import DdddocrLogin, _normalize_captcha_text
+from tongtu_urls import looks_like_erp_url
 
 sys.stdout.reconfigure(encoding='utf-8')
 
@@ -39,8 +44,6 @@ LOGIN_URL = (
     "https://passport.tongtool.com/"
     "?u=http%3A%2F%2Ferp102.tongtool.com%2Fj_security_check"
 )
-SUCCESS_FRAGMENT = "erp102"
-EXCLUDE_FRAGMENT = "passport"
 MAX_ATTEMPTS = 8
 
 USERNAME = os.getenv("TONGTU_USER", "")
@@ -198,7 +201,16 @@ def login(page) -> bool:
 
     logger.info("导航到通途登录页...")
     page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
-    page.wait_for_selector('input[name="username"]', state='attached', timeout=15000)
+    try:
+        page.wait_for_selector('input[name="username"]', state='attached', timeout=15000)
+    except Exception as exc:
+        # 记住密码 cookie 仍有效时，passport 会经 j_security_check 直接跳到
+        # erp102 dashboard，永远不会出现用户名框。这不是登录失败。
+        if looks_like_erp_url(page.url):
+            logger.info("会话仍有效，已跳到 ERP，跳过验证码登录：%s", page.url)
+            return True
+        logger.warning("登录表单未出现，且未跳转 ERP：%s", exc)
+        return False
     page.wait_for_timeout(1500)
 
     # 勾选"7天内自动登录"
@@ -270,7 +282,7 @@ def login(page) -> bool:
         # 等待结果
         page.wait_for_timeout(2000)
         url = page.url or ""
-        if SUCCESS_FRAGMENT in url and EXCLUDE_FRAGMENT not in url:
+        if looks_like_erp_url(url):
             logger.info("登录成功！URL: %s", url)
             return True
 
