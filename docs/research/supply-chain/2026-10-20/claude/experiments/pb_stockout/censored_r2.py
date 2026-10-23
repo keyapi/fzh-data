@@ -353,10 +353,19 @@ def main() -> None:
         )
 
     # zero-denominator cells (M03: listed, never folded into a ratio)
-    zero_cells = [dict(sku=c["sku"], origin=c["origin"], month=c["month"],
-                       forecast=c["forecast"], actual=c["actual"],
-                       route="both", note="actual=0 -> 比值无定义；单列，不并入任何分母")
-                  for c in cells["raw"] if c["actual"] == 0]
+    # NOTE: both routes are reported per cell. The first version of this table took
+    # `cells["raw"]` only but labelled every row route="both", which is false for
+    # cells where the two routes disagree (301 窄复审 minor).
+    lb_by_key = {(c["sku"], c["origin"], c["month"]): c for c in cells["lower_bound"]}
+    zero_cells = [dict(
+        sku=c["sku"], origin=c["origin"], month=c["month"],
+        forecast_raw=c["forecast"],
+        forecast_lower_bound=lb_by_key[(c["sku"], c["origin"], c["month"])]["forecast"],
+        forecast_delta=round(lb_by_key[(c["sku"], c["origin"], c["month"])]["forecast"]
+                             - c["forecast"], 6),
+        actual=c["actual"],
+        note="actual=0 -> 比值无定义；单列，不并入任何分母；两路线预测分别列出",
+    ) for c in cells["raw"] if c["actual"] == 0]
     with (OUT / "ratio_zero_denominator_cells.csv").open("w", encoding="utf-8-sig", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(zero_cells[0].keys()))
         w.writeheader()
