@@ -50,7 +50,8 @@ date: 2026-10-22
 | 角色 | 精确 handle | 当前任务 | 状态 | 最近证据 | 下一负责人 |
 |---|---|---|---|---|---|
 | Claude工头｜项目调度 | `term_3f397f4a-1360-4af0-900e-08f014acfed1` | 唯一日常调度 + **唯一提交者** | 工作中 | run `run_ab028056dc4e`；已落地 `dcdc430b` → `b9c9b4ed` → `b2217e4d` → `1a66d3fc` → `fd3aa72f` → `7d9f7fc7` → `9acec3db` | 工头 |
-| Claude打工仔1｜全 SKU 主线 | `term_dae491ca-08bf-462c-b402-0938a02cb4f6` | R3-N04 生成器字段同步（task `task_bf74836e9f97`） | 运行中 | R3 `fd3aa72f` 已 PASS-with-minor（301 核 M01/N01/N02/N03 全 PASS，数值未变）；dispatch `ctx_25c760c246b7` | 工头收 DONE FULLSKU-R3-MINOR |
+| Claude打工仔1｜全 SKU 主线 | `term_0346a36e-fca7-4039-9a23-ea80ac9e03dd` | SC02-R4 供应阶段证据接进前向账（task `task_9da65441c400` / `ctx_eece62b3bbb5`） | 运行中 | 2026-10-23 新建（旧 `term_dae491ca…` 上下文超限）；已核 `AUTO_COMPACT_WINDOW=850000`、`MAX_OUTPUT_TOKENS=16000`、模型 `deepseek-v4-flash[1m]`、cwd 与分支正确 | 工头收 DONE SC02-R4 |
+| ~~Claude打工仔1｜旧终端~~ | `term_dae491ca-08bf-462c-b402-0938a02cb4f6` | — | **已退役（2026-10-23 17:0x）** | 第 3 次上下文超限（400 / 1065180 > 1048576），屏幕 `100% context used`；进程仍在但推理循环已停；终端保留不删 | 无人 |
 | Claude打工仔2｜PB 断货验证 | `term_696190a8-f7c6-4869-87bf-ed59c893677b` | 空闲 | 空闲 | R2 `b2217e4d` + 零分母 minor `9acec3db`；301 判 **PASS-with-minor**（唯一 minor 已修） | 待工头派新任务 |
 | Codex #301｜独立审核 | `term_d0bcd5e0-9f57-43b9-8dfc-6ffe4578063a` | 空闲 | 空闲 | 四份复审：CENSOR **FAIL** / FULLSKU **FAIL** / PB-R2 **PASS-with-minor** / FULLSKU-R3 **PASS-with-minor**；5h 额度约 20%，**只接窄审** | 工头 |
 | Codex2｜决策参谋 | `term_0eb8e41d-dc3e-4b3f-bbb2-7e7e4aed1a87` | 已完成有界裁决（D35） | 空闲 | 模型准入 / 538 去向 / 数量衔接三项已交付，记入 `DECISIONS.md` D35 | 工头 |
@@ -80,6 +81,19 @@ date: 2026-10-22
   旧 `term_4c1c8d12…`、`term_6d7a52b3…` 上下文近满/已满，**登记退役、不再派任务**，终端保留未删。
 - 2026-10-23 工头本机 DeepSeek 上游额度重置后，**在原终端 `term_3f397f4a…` 内 `/clear` 恢复**（未另开总调度、未新建工头）。
   上一轮 99% 上下文 + 网关 403 `need123727` 导致消息无法执行；旧会话保留未删。
+- 2026-10-23 17:0x 打工仔1 `term_dae491ca…` **上下文超限停用**（第 3 次）：
+  报错 `400 maximum context length 1048576, requested 1065180`，屏幕 `100% context used`。
+  **进程仍在，停的是推理循环**。→ 新建 `term_0346a36e-fca7-4039-9a23-ea80ac9e03dd`（"Claude打工仔1b｜前向与模型"）。
+  旧终端保留不删，旧 dispatch `ctx_a1e8ba2b0d53` 作废，任务 `task_0da01f62975a` 状态 blocked，
+  已用新任务 `task_9da65441c400` / `ctx_eece62b3bbb5` 重派。
+  **根因与修复**：`~/.claude/bin/claude-gw.ps1` 只设了 `CLAUDE_CODE_MAX_CONTEXT_TOKENS=1000000`，
+  **没有设自动压缩阈值**，会话一路冲到 1.03M 输入才撞 400。已在该启动器加入：
+  ```powershell
+  $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = '850000'
+  $env:CLAUDE_CODE_MAX_OUTPUT_TOKENS  = '16000'
+  ```
+  新终端实测生效（打工仔1b 回报 `AUTO_COMPACT_WINDOW=850000`、`MAX_OUTPUT_TOKENS=16000`）。
+  **注意**：`term_696190a8…`（打工仔2）是在修复前启动的，其压缩阈值仍是旧值，需留意。
 
 ## 下一步（完成即流转）
 
