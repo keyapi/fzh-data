@@ -1,0 +1,69 @@
+{
+  "schema_version": "forward_net/1",
+  "snapshot": {
+    "date": "2026-10-22",
+    "run_date": "2026-10-23",
+    "note": "库存数据截至 2026-10-22，不是「当前库存」；距运行日 1 天、距 11/1 10 天"
+  },
+  "horizon": {
+    "oct_remaining_days": 10,
+    "primary": "月率×10/31（22–31 含）",
+    "sensitivity": "月率×9/31（23–31）",
+    "buckets": [
+      "2026-10 剩余",
+      "2026-11",
+      "2026-12"
+    ]
+  },
+  "rows": 2309,
+  "row_tiers": {
+    "A": 1849,
+    "B": 209,
+    "不能算": 251
+  },
+  "reconcile": "1849 + 209 + 251 = 2309",
+  "reconcile_ok": true,
+  "sku_universe": 1328,
+  "sku_tiers": {
+    "A": 940,
+    "不能算": 251,
+    "B": 137
+  },
+  "sku_mixed_rows": 229,
+  "totals": {
+    "gross": 21716.1,
+    "gross_sensitivity": 21414.4,
+    "so": 50.0,
+    "on_hand": 47164.0,
+    "gap_a": 11148.5,
+    "gap_b": 8087.9,
+    "by_tier": {
+      "A": {
+        "gross": 12065.0,
+        "so": 0.0,
+        "on_hand": 37602.0,
+        "gap_a": 5621.5,
+        "gap_b": 5621.5,
+        "supp_b": 0.0
+      },
+      "B": {
+        "gross": 9651.1,
+        "so": 50.0,
+        "on_hand": 9562.0,
+        "gap_a": 5526.9,
+        "gap_b": 2466.3,
+        "supp_b": 10063.0
+      }
+    }
+  },
+  "reasons": {
+    "在手库存未取得": 160,
+    "无月需求率（状态 C）": 91
+  },
+  "model_interface": {
+    "current": "T5 AutoETS 平月率（T5 迭代版默认，SKU 级拟合 × 仓占比分配）",
+    "not_used": "tree / combo / TSB 等新模型均未接入本口径",
+    "switch_point": "待 Codex2 裁定：何时把新预测接回前向净需求、以何种判据（嵌套重训 + 真未用留出）授权；本轮不替换"
+  },
+  "boundary": "不给可下单量；MOQ/包装/预算另列；B 档假设逐行写在本地 CSV；缺口是需求-供给的算术差，不是采购量"
+}
