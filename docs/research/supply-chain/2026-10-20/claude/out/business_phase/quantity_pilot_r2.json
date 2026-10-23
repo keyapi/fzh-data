@@ -1,0 +1,86 @@
+{
+  "schema_version": "quantity_pilot_r2/1",
+  "passed_skus": 206,
+  "buckets": 618,
+  "computable": 412,
+  "unknown": 206,
+  "reconcile": "412 + 206 = 618 == 618",
+  "reconcile_ok": true,
+  "month_agg": {
+    "2026-10": {
+      "demand": 0.0,
+      "net": 0.0,
+      "n": 0,
+      "unknown": 206
+    },
+    "2026-11": {
+      "demand": 294.3,
+      "net": 44.7,
+      "n": 206,
+      "unknown": 0
+    },
+    "2026-12": {
+      "demand": 294.3,
+      "net": 124.3,
+      "n": 206,
+      "unknown": 0
+    }
+  },
+  "stock_observation_date": "2026-10-22",
+  "examples": [
+    {
+      "label": "① 最大缺口（12 月净需求最大）",
+      "sku": "PTC/Linen-Natural-100-681-wow",
+      "warehouse": "美东-CENTRADE",
+      "demand_source": "T5 预测：AutoETS（SKU 级 × 仓占比分配）",
+      "monthly_rate": 14.0,
+      "stock_observed": "2026-10-22",
+      "on_hand": 0.0,
+      "po_open": "",
+      "transit": "0",
+      "gates": "已证/已证/已证/已证",
+      "oct_status": "unknown_asof（10-22 > 10-01，不可抵扣）",
+      "nov_net": 14.0,
+      "dec_net": 28.0,
+      "old_dec_net": 42.0
+    },
+    {
+      "label": "② 中位（正值升序取中位）",
+      "sku": "TT0000910K0011672",
+      "warehouse": "波兰-FZHPoland-covers",
+      "demand_source": "T5 预测：AutoETS（SKU 级 × 仓占比分配）",
+      "monthly_rate": 1.3333,
+      "stock_observed": "2026-10-22",
+      "on_hand": 0.0,
+      "po_open": "",
+      "transit": "0",
+      "gates": "已证/已证/已证/已证",
+      "oct_status": "unknown_asof（10-22 > 10-01，不可抵扣）",
+      "nov_net": 1.333,
+      "dec_net": 2.667,
+      "old_dec_net": 4.0
+    },
+    {
+      "label": "③ 零缺口（零缺口里月需求最大）",
+      "sku": "TT0001325K0010512",
+      "warehouse": "波兰-FZHPoland-covers",
+      "demand_source": "T5 预测：AutoETS（SKU 级 × 仓占比分配）",
+      "monthly_rate": 8.3333,
+      "stock_observed": "2026-10-22",
+      "on_hand": 25.0,
+      "po_open": "",
+      "transit": "0",
+      "gates": "已证/已证/已证/已证",
+      "oct_status": "unknown_asof（10-22 > 10-01，不可抵扣）",
+      "nov_net": 0.0,
+      "dec_net": 0.0,
+      "old_dec_net": 0.0
+    }
+  ],
+  "void_numbers": {
+    "old_oct_net_total": 44.7,
+    "old_nov_net_total": 124.3,
+    "old_dec_net_total": 212.0,
+    "reason": "旧表用 10/22 快照抵扣 10/01 起的需求（含 10 月桶），时间口径不成立"
+  }
+}
