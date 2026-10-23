@@ -1,0 +1,146 @@
+{
+  "schema_version": "monthcell_audit/1",
+  "coverage_evidence": {
+    "months_compared": 45,
+    "max_abs_qty_diff": 0.0,
+    "monthly_series_skus": 2553,
+    "gs_orders_skus": 2553,
+    "skus_only_in_monthly_series": 0,
+    "window": [
+      "2023-01",
+      "2026-09"
+    ],
+    "every_month_has_orders": true
+  },
+  "thresholds": {
+    "source": "Codex2 DECISIONS D36（照用，未改）",
+    "verifiable": ">=12 usable closed months (6 train + 2x3 windows)",
+    "shadow": "6-11",
+    "insufficient": "<6"
+  },
+  "all_538": {
+    "skus": 538,
+    "month_cells_old_span": 6636,
+    "positive_months": 4100,
+    "proven_zero_months": 1945,
+    "unknown_months": 591,
+    "usable_months": 6045,
+    "old_zero_months": 2536,
+    "check_cells": true,
+    "old_zero_share": 0.3822,
+    "proven_zero_share_of_old_zero": 0.767,
+    "trailing_fill_share_of_old_zero": 0.233,
+    "new_zero_share": 0.3218
+  },
+  "median_old_zero_share": 0.4286,
+  "median_new_zero_share": 0.2609,
+  "tiers_on_mapped_481": {
+    "可验证(>=12)": {
+      "skus": 239,
+      "sales_qty": 20766.0,
+      "sales_coverage_of_538": 0.7764,
+      "skus_with_two_windows": 239,
+      "window_placements_total": 1652,
+      "usable_months_dist": {
+        "12-14": 45,
+        "15-17": 57,
+        "18-20": 69,
+        "21-23": 68
+      }
+    },
+    "仅影子(6-11)": {
+      "skus": 155,
+      "sales_qty": 5333.0,
+      "sales_coverage_of_538": 0.1994,
+      "skus_with_two_windows": 0,
+      "window_placements_total": 0,
+      "usable_months_dist": {
+        "<12": 155
+      }
+    },
+    "不足(<6)": {
+      "skus": 87,
+      "sales_qty": 441.0,
+      "sales_coverage_of_538": 0.0165,
+      "skus_with_two_windows": 0,
+      "window_placements_total": 0,
+      "usable_months_dist": {
+        "<12": 87
+      }
+    }
+  },
+  "unmapped_isolation": {
+    "skus": 57,
+    "tiers": {
+      "不足(<6)": 53,
+      "仅影子(6-11)": 2,
+      "可验证(>=12)": 2
+    },
+    "sales_qty": 206.0,
+    "sales_coverage_of_538": 0.0077,
+    "note": "未映射 = sku_item 无 item_code；不进供需衔接、不进选模；仍计入 538 事实口径"
+  },
+  "reconciliation": {
+    "total_538": 538,
+    "mapped": 481,
+    "unmapped": 57,
+    "tier_sum": 481,
+    "equation": "538 = 481(三档) + 57(未映射)",
+    "ok": true
+  },
+  "missing_evidence": {
+    "insufficient": {
+      "skus": 140,
+      "months_to_6": {
+        "1": 21,
+        "2": 23,
+        "3": 19,
+        "4": 15,
+        "5": 62
+      },
+      "months_to_12": {
+        "7": 21,
+        "8": 23,
+        "9": 19,
+        "10": 15,
+        "11": 62
+      },
+      "with_zero_usable": 0,
+      "never_sold_marker": 0,
+      "last_positive_before_2026_03": 0
+    },
+    "shadow": {
+      "skus": 157,
+      "months_to_12": {
+        "1": 20,
+        "2": 43,
+        "3": 31,
+        "4": 27,
+        "5": 20,
+        "6": 16
+      }
+    }
+  },
+  "old_history_bucket_x_new_tier": {
+    "可验证(>=12)": {
+      "12-17": 83,
+      "18-23": 156
+    },
+    "仅影子(6-11)": {
+      "12-17": 21,
+      "6-11": 134
+    },
+    "不足(<6)": {
+      "1-5": 60,
+      "6-11": 27
+    }
+  },
+  "boundaries": [
+    "只做证据分类与分档：无预测、无数量、未填 0、未删 SKU。",
+    "proven_zero 的定义是「在已观测跨度内、源覆盖已证、且无订单」；跨度外一律 unknown。",
+    "unknown 不是 0，也未被计入任何分母。",
+    "538 的零占比旧值（中位 42.9%）包含尾部补零，本轮拆开并重算。",
+    "57 个未映射 SKU 单独隔离，不参与分档分子之外的任何衔接或选模。",
+    "TSB 仅限间歇候选；<=23 月序列不准入年度季节结论（登记，未执行）。"
+  ]
+}
