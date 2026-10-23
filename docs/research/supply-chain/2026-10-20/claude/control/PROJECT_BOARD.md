@@ -4,22 +4,22 @@ type: Reference
 title: 自动补货实时项目看板
 date: 2026-10-23
 owner: claude-foreman
-last_verified_at: '2026-10-23T15:58:00+08:00'
+last_verified_at: '2026-10-23T16:05:06+08:00'
 ---
 
 # 项目看板：给甲方和外部监督共用
 
-**最近核查：2026-10-23 15:58，北京时间。核查人：Claude工头。** 这是证据快照，不代表之后没有变化。运行状态必须重读Orca。
+**最近核查：2026-10-23 16:05，北京时间。核查人：Claude工头。** 这是证据快照，不代表之后没有变化。运行状态必须重读 Orca。
 
-**调度状态：本轮三个任务已全部收取完毕，当前无在跑任务（空闲）**——
-301 `task_651b6134edcd` PASS 已收；Claude1 `task_28b099e3cc79` SC05 已收；Claude2 `task_1b6546bcd883` SC10 已收。
-工作区无未收取完成事件。下一动作见各卡；**若会话在此结束且无新派工，本行将变为「调度未运行」。**
+**Orchestration Run 已换绑**：旧 `run_ab028056dc4e`（objective 仍是 10 SKU 试点收尾，与现状错位，保留不删、不再派新任务）
+→ 新 **`run_4ae01a38bbcf`**（objective 引用 ROADMAP **M1 DoD**：全母集 1,328 + SC10 扩展 271 逐仓条件建议，
+SC01-12 各自验收，**整体 M1 未达成前不停工**，局部不足只隔离该行）。
+**Run 是 namespace 不是 scheduler**——它不会自动唤醒工头；推进靠同终端派工 + `check --wait` 收件。
 
-| 本轮 Task | Dispatch | turn_started 证据 | 结果 |
+| 本轮 Task | Dispatch | turn_started 证据 | 状态 |
 |---|---|---|---|
-| `task_651b6134edcd` | `ctx_781a254f7ad9` | 15:54:20 读屏 `Working (19s)` | **PASS** 五项 |
-| `task_28b099e3cc79` | `ctx_e6905a0ddb56` | 15:54:20 `Cascading… 18s` | 已交付 |
-| `task_1b6546bcd883` | `ctx_da025ff151be` | 15:54:20 `Metamorphosing… 16s ↓2.5k` | 已交付 |
+| `task_f11a40529660` | `ctx_4430102e0760` | 16:05:06 `Manifesting… 21s ↓3.4k` | 运行中 |
+| `task_8f1082b10ab5` | `ctx_6a08f4277d67` | 16:05:06 `Hullaballooing… 15s ↓1.2k` | 运行中 |
 
 **本轮工头接收**：四份新控制文档已读入（ROADMAP / BOARD / BOSS_BRIEF / INVENTORY_EVALUATION），
 M0 文档已建、工头已确认接收；**接管看板与唯一提交权**。三处口径已内化：
