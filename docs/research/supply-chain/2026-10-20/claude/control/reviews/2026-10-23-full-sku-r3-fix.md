@@ -109,3 +109,30 @@ uv run python scripts/check_secrets.py
 ```
 
 未新增依赖；未跑 `update_index.py`；未 commit / push。
+
+---
+
+## R3-N04（301 复审唯一 minor）· 生成逻辑与已修 JSON 同步
+
+**问题**：上一轮只改了固定产物 JSON，生成逻辑没同步——按 `frozen_artifacts.json` 的复现命令重跑会丢掉新增字段。
+
+| # | 生成器 | 改前 | 改后 |
+|---|---|---|---|
+| 1 | `full_sku_routing.py` payload（原 `:259-274`） | 无分型时点字段 | 新增 `classification_as_of="2026-09"`、`classification_point_in_time=False` |
+| 2 | `full_sku_selfaudit.py` payload（原 `:282-287`） | `note` 仍写「差异来自集合口径」；无消融块 | `note` 改为三处差异说明；新增 `training_pool_ablation`（A 产物 / 1,328 训练仅 A 单元评分 / 精确差 / 限回 1,237 恢复 / attribution） |
+
+**验证方式（按要求重生成到临时路径比对，未动冻结产物）**：把两个生成器的 `OUT` 指向
+`tempfile.mkdtemp()`（selfaudit 额外把 `final_bundle.csv` / `final_bundle_routing.csv`
+复制进临时目录供读取），执行后与冻结 JSON 做结构比对：
+
+| 比对项 | full_sku_eval.json | full_sku_selfaudit.json |
+|---|---|---|
+| 新增字段 | `classification_as_of` / `classification_point_in_time` **一致** | `note` / `training_pool_ablation` **一致** |
+| 顶层键集合 | 无缺失、无多余 | 无缺失、无多余 |
+| 数值块 | `metrics`、`reconciliation` **逐位一致** | `bootstrap.rows`、`reconciliation`、`verification`、`purity` **逐位一致** |
+| 允许差异 | `elapsed_s`（7.1 s） | `elapsed_s`（6.7 vs 7.3 s） |
+
+- **未重训模型语义、未改任何统计数值**：重生成结果与冻结 JSON 除 `elapsed_s` 外完全一致
+  （`max_abs_delta` 仍为 0.0，bootstrap 2000 次的结果逐位相同）。
+- 冻结产物（`full_sku_eval.json` / `full_sku_selfaudit.json` / 两份 CSV）**未被本轮写入**；
+  验证输出只落在系统临时目录。

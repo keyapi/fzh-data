@@ -33,11 +33,11 @@ date: 2026-10-22
 
 | 角色 | 精确 handle | 当前任务 | 状态 | 最近证据 | 下一负责人 |
 |---|---|---|---|---|---|
-| Claude工头｜项目调度 | `term_3f397f4a-1360-4af0-900e-08f014acfed1` | 唯一日常调度 + **唯一提交者** | 工作中 | run `run_ab028056dc4e`；本轮已落地 commit `dcdc430b`（清关阻塞）→ `b9c9b4ed`（全 SKU）→ `b2217e4d`（PB R2） | 工头 |
-| Claude打工仔1｜全 SKU 主线 | `term_dae491ca-08bf-462c-b402-0938a02cb4f6` | R3 窄返修：A 包训练池归因 / 分型时点措辞 / 冻结 CSV hash（task `task_0fca24196c39`，base `b9c9b4ed`） | 运行中 | 前置已交付 `b9c9b4ed`；301 判 FAIL（1 major + 3 minor，数值全可复现）；dispatch `ctx_42cf3871fe7f` | 工头收 DONE FULLSKU-R3 |
-| Claude打工仔2｜PB 断货验证 | `term_696190a8-f7c6-4869-87bf-ed59c893677b` | 空闲（R2 已交付） | 空闲 | session `33a53c4b…`；`task_4fe287aaeeb5` 完成，成果已提交 `b2217e4d`：M01 方向已修、旧改善作废、R2 在未删失月可测更差 | 工头按 301 窄复审结果决定是否再派 |
-| Codex #301｜独立审核 | `term_d0bcd5e0-9f57-43b9-8dfc-6ffe4578063a` | 窄复审 `b2217e4d`（task `task_22bdff00ce5d`） | 运行中 | 已交两份 FAIL 报告：CENSOR-REVIEW、FULLSKU-REVIEW；5h 额度紧张，**只接窄审**；dispatch `ctx_8c64e2e56c80` | 工头收 DONE PB-R2-REVIEW |
-| Codex2｜决策参谋 | `term_0eb8e41d-dc3e-4b3f-bbb2-7e7e4aed1a87` | 有界决策：模型准入 / 538 SKU 去向 / 数量衔接（task `task_1cf75e2ea940`） | 运行中 | `GPT-6.1-Sol medium`；dispatch `ctx_2575f587b47a` | 工头收决策 |
+| Claude工头｜项目调度 | `term_3f397f4a-1360-4af0-900e-08f014acfed1` | 唯一日常调度 + **唯一提交者** | 工作中 | run `run_ab028056dc4e`；已落地 `dcdc430b` → `b9c9b4ed` → `b2217e4d` → `1a66d3fc` → `fd3aa72f` → `7d9f7fc7` → `9acec3db` | 工头 |
+| Claude打工仔1｜全 SKU 主线 | `term_dae491ca-08bf-462c-b402-0938a02cb4f6` | R3-N04 生成器字段同步（task `task_bf74836e9f97`） | 运行中 | R3 `fd3aa72f` 已 PASS-with-minor（301 核 M01/N01/N02/N03 全 PASS，数值未变）；dispatch `ctx_25c760c246b7` | 工头收 DONE FULLSKU-R3-MINOR |
+| Claude打工仔2｜PB 断货验证 | `term_696190a8-f7c6-4869-87bf-ed59c893677b` | 空闲 | 空闲 | R2 `b2217e4d` + 零分母 minor `9acec3db`；301 判 **PASS-with-minor**（唯一 minor 已修） | 待工头派新任务 |
+| Codex #301｜独立审核 | `term_d0bcd5e0-9f57-43b9-8dfc-6ffe4578063a` | 空闲 | 空闲 | 四份复审：CENSOR **FAIL** / FULLSKU **FAIL** / PB-R2 **PASS-with-minor** / FULLSKU-R3 **PASS-with-minor**；5h 额度约 20%，**只接窄审** | 工头 |
+| Codex2｜决策参谋 | `term_0eb8e41d-dc3e-4b3f-bbb2-7e7e4aed1a87` | 已完成有界裁决（D35） | 空闲 | 模型准入 / 538 去向 / 数量衔接三项已交付，记入 `DECISIONS.md` D35 | 工头 |
 | ~~Claude打工仔｜旧实施~~ | `term_4c1c8d12-ba0a-4cdb-9dc3-b3b464bc7449` | — | **已退役（2026-10-23）** | 上下文近满；R1-FIX 已交付 commit `a59dc213`；**不再派新任务**，终端保留不删 | 无人 |
 | ~~Claude打工仔｜旧终端~~ | `term_6d7a52b3-26e4-4278-b21f-4269cd5c5b89` | — | **已退役（2026-10-23）** | 读屏 `100% context used`；**不再派新任务**，终端保留不删 | 无人 |
 

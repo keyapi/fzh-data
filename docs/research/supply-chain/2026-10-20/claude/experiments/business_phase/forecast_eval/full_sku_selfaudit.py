@@ -283,8 +283,17 @@ def main() -> None:
             a_skus=len(a_rows), a_scored_skus=len(a_skus), a_cells_shared=len(a_cells),
             a_recomputed_on_shared_cells=a_metrics, a_reported=a_reported,
             delta=a_diff,
-            note=("A 的共同子集按 9 个方法取交集（含 routed），本次按 6 个方法；"
-                  "A 母集 1,237 合格 SKU，本次 1,328。差异来自集合口径，不是数字被改。")),
+            note=("A 与本次的差异有三处：① combo 定义不同（A 6 基模型等权 vs 本次 4 基模型）；"
+                  "② global_tree 的 −0.0002 来自训练母集 1,237→1,328 的重训，不是取整也不是评分交集"
+                  "（消融：A 产物 0.49354508379541745 / 1,328 训练仅在 A 单元评分 "
+                  "0.49333642687199925 / 限回 1,237 精确恢复 0.49354508379541745）；"
+                  "③ 其余四法逐位一致。A 的产物与数字未被改动。"),
+            training_pool_ablation=dict(
+                a_fixed_product_tree_wape=0.49354508379541745,
+                full_1328_train_scored_on_a_cells=0.49333642687199925,
+                exact_diff=-0.00020865692341820452,
+                train_pool_restored_to_1237=0.49354508379541745,
+                attribution="训练母集扩大导致重训预测变化，非取整、非评分交集")),
         elapsed_s=elapsed)
 
     (OUT / "full_sku_selfaudit.json").write_text(

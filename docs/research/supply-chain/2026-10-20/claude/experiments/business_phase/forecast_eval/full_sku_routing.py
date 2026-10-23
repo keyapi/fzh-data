@@ -262,6 +262,8 @@ def main() -> None:
                     origins=used_origins, min_train=MIN_TRAIN, methods=methods),
         tree=dict(available=tree_ok, note=tree_note),
         classes=dict(Counter(c["type"] for c in class_rows)),
+        classification_as_of="2026-09",
+        classification_point_in_time=False,
         metrics=metrics,
         common_cells=len(common),
         reconciliation=recon,
