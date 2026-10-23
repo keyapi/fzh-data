@@ -66,8 +66,20 @@ def main() -> None:
             return "窗口内无缺口"
         return first_gap.get(k, "2026-12（累计）")
 
+    def rate_status(r):
+        """251 个 HOLD 行的 forecast_rate 上游为空 -> 必须保持 null，不得写 0。"""
+        if r["forecast_rate"] in ("", None):
+            if r["reason"] == "需求":
+                return "null · 缺需求依据"
+            if r["reason"] == "库存":
+                return "null · 缺库存证据（整行 HOLD，上游未出需求率）"
+            return "null · 原因未标注"
+        return "ok"
+
     def missing(r):
         m = []
+        if r["forecast_rate"] in ("", None):
+            m.append("预测率缺失：" + ("缺需求依据" if r["reason"] == "需求" else "缺库存证据"))
         if r["inventory_basis"] == "unknown":
             m.append("库存口径未证(physical/net 并列)")
         if r["wo_status"] == "not_observed":
@@ -101,7 +113,8 @@ def main() -> None:
             need_time=needs_time(r),
             can_make_it="无法判断（无 ETA/在途证据，WO not_observed）",
             forecast_basis=f"{r['demand_source']} / {r['method']} / {r['version']}",
-            forecast_rate=float(r["forecast_rate"] or 0),
+            forecast_rate=(float(r["forecast_rate"]) if r["forecast_rate"] not in ("", None) else ""),
+            forecast_rate_status=rate_status(r),
             rate_clamped=r["rate_clamped"],
             fallback_reason=r["fallback_reason"],
             stock_basis=f"{r['inventory_basis']} (available={r['stock_available']}, physical={r['stock_physical']})",
@@ -213,6 +226,25 @@ def main() -> None:
                                          if r["qty_max"] != "" and float(r["qty_max"]) > 0))),
         scenario=dict(Counter(r["scenario_id"] for r in rows)),
         missing_evidence=dict(Counter(r["missing_evidence"].split("；")[0] for r in pack)),
+        forecast_rate=dict(
+            with_rate=sum(1 for r in pack if r["forecast_rate_status"] == "ok"),
+            null_total=sum(1 for r in pack if r["forecast_rate_status"] != "ok"),
+            null_by_cause=dict(Counter(r["forecast_rate_status"] for r in pack
+                                       if r["forecast_rate_status"] != "ok")),
+            note="null 不等于 0；上游为空的行不得填 0（301 D-minor）",
+        ),
+        to_confirm=[
+            dict(item="预测率缺失", rows=sum(1 for r in pack if r["forecast_rate_status"] != "ok"),
+                 action="按缺库存证据 / 缺需求依据分别补证；补证前该行只能「不可算」"),
+            dict(item="库存口径未证（physical/net）", rows=sum(1 for r in pack if "库存口径未证" in r["missing_evidence"]),
+                 action="仓储确认可售/占用口径"),
+            dict(item="无 WO/在制证据", rows=sum(1 for r in pack if "无 WO" in r["missing_evidence"]),
+                 action="采购·生产补未结 PO/WO 与 ETA"),
+            dict(item="SO 与预测重叠未证", rows=sum(1 for r in pack if "SO 与预测重叠未证" in r["missing_evidence"]),
+                 action="运营确认内部 SO 冲减规则"),
+            dict(item="PO/WO/在途去重无记录", rows=sum(1 for r in pack if "去重无记录" in r["missing_evidence"]),
+                 action="主数据/采购提供去重键"),
+        ],
         extension=ext,
         boundaries=[
             "只汇总已 PASS 产物，未重算预测、未改上游文件。",
