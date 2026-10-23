@@ -100,16 +100,145 @@ def list_dns(session, h, since: str | None, fields, limit):
     return rows
 
 
+def doctype_meta(session, dt: str, limit_fields: int = 400):
+    """字段字典（父单 meta）——只读，用来判断 EN 里有没有现成的物流状态字段。"""
+    code, body = get(session, f"/api/resource/DocType/{dt.replace(' ', '%20')}")
+    if code != 200:
+        return {"doctype": dt, "http": code, "error": str(body)[:200]}
+    d = body.get("data") or {}
+    fields = []
+    for f in (d.get("fields") or [])[:limit_fields]:
+        fields.append({k: f.get(k) for k in ("fieldname", "label", "fieldtype", "options")})
+    return {"doctype": dt, "http": code, "n_fields": len(d.get("fields") or []),
+            "fields": fields}
+
+
+def custom_fields(session, dts):
+    flt = json.dumps([["Custom Field", "dt", "in", dts]])
+    code, body = get(session, "/api/resource/Custom Field",
+                     {"filters": flt, "limit_page_length": 300,
+                      "fields": json.dumps(["dt", "fieldname", "label", "fieldtype", "options"])})
+    return {"http": code, "rows": (body.get("data") or []) if code == 200 else str(body)[:200]}
+
+
+SHIP_FIELDS = ["name", "custom_zmt_logistic_number", "custom_zmt_tracking",
+               "custom_zmt_status4", "custom_zmt_status11", "custom_zmt_last_node",
+               "custom_zmt_eta", "custom_zmt_ata", "custom_zmt_atd", "custom_zmt_clr",
+               "custom_zmt_dlvr", "custom_zmt_appt", "custom_zmt_wms_in_time",
+               "custom_zmt_match_status", "custom_zmt_dn_count", "custom_zmt_source",
+               "custom_zmt_synced_at", "custom_zmt_events"]
+
+
+def run_status(session, with_events: bool = False) -> None:
+    """47 个运单号 -> EN Shipment 既有状态（不改 EN，不调承运商 API）。"""
+    rows = list(csv.DictReader((OUT / "dn_bridge_rows.csv").open(encoding="utf-8-sig", newline="")))
+    numbers = sorted({r["logistic_number"] for r in rows})
+    by_key = {}
+    for i in range(0, len(numbers), 20):                 # in 过滤分块（约束 4）
+        chunk = numbers[i:i + 20]
+        code, body = get(session, "/api/resource/Shipment", {
+            "filters": json.dumps([["Shipment", "custom_zmt_logistic_number", "in", chunk]]),
+            "fields": json.dumps(SHIP_FIELDS), "limit_page_length": 200})
+        if code != 200:
+            raise SystemExit(f"Shipment list -> HTTP {code}: {str(body)[:300]}")
+        for s in body.get("data") or []:
+            by_key.setdefault((s.get("custom_zmt_logistic_number") or "").strip(), []).append(s)
+        # 兜底：有单号写在 tracking 字段里的
+        code2, body2 = get(session, "/api/resource/Shipment", {
+            "filters": json.dumps([["Shipment", "custom_zmt_tracking", "in", chunk]]),
+            "fields": json.dumps(SHIP_FIELDS), "limit_page_length": 200})
+        if code2 == 200:
+            for s in body2.get("data") or []:
+                by_key.setdefault((s.get("custom_zmt_tracking") or "").strip(), []).append(s)
+
+    out_rows, buckets = [], Counter()
+    for r in rows:
+        ln = r["logistic_number"]
+        ships = by_key.get(ln, [])
+        s = ships[0] if ships else {}
+        has_status = bool((s.get("custom_zmt_status4") or "").strip()
+                          or (s.get("custom_zmt_status11") or "").strip())
+        has_eta = bool(s.get("custom_zmt_eta"))
+        events = s.get("custom_zmt_events") or []
+        if with_events and s.get("name"):
+            code, body = get(session, f"/api/resource/Shipment/{s['name']}")
+            events = ((body.get("data") or {}).get("custom_zmt_events") or []) if code == 200 else []
+            time.sleep(SLEEP)
+        out_rows.append(dict(
+            dn=r["dn"], logistic_number=ln, is_primary=r["is_primary"],
+            shipment=s.get("name", ""), n_shipments=len(ships),
+            status4=s.get("custom_zmt_status4", ""), status11=s.get("custom_zmt_status11", ""),
+            last_node=s.get("custom_zmt_last_node", ""),
+            eta=s.get("custom_zmt_eta") or "", ata=s.get("custom_zmt_ata") or "",
+            atd=s.get("custom_zmt_atd") or "", dlvr=s.get("custom_zmt_dlvr") or "",
+            match_status=s.get("custom_zmt_match_status", ""),
+            source=s.get("custom_zmt_source", ""),
+            synced_at=s.get("custom_zmt_synced_at", ""),
+            n_events=len(events),
+            tracking=s.get("custom_zmt_tracking", ""),
+            # 子表无 SKU/qty -> 运单号无法落到 DN 物料行
+            can_map_to_dn_line="no",
+        ))
+        buckets["with_status" if has_status else "no_status"] += 1
+        buckets["with_eta" if has_eta else "no_eta"] += 1
+        buckets["shipment_found" if ships else "shipment_missing"] += 1
+
+    with (OUT / "dn_status_recon.csv").open("w", encoding="utf-8-sig", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(out_rows[0].keys()))
+        w.writeheader()
+        w.writerows(out_rows)
+
+    print(json.dumps({
+        "numbers": len(numbers), "rows": len(out_rows),
+        "buckets": dict(buckets),
+        "status4_values": dict(Counter(x["status4"] for x in out_rows)),
+        "status11_values": dict(Counter(x["status11"] for x in out_rows)),
+        "match_status_values": dict(Counter(x["match_status"] for x in out_rows)),
+        "sources": dict(Counter(x["source"] for x in out_rows)),
+        "multi_shipment_numbers": [x["logistic_number"] for x in out_rows if x["n_shipments"] > 1],
+        "events_total": sum(x["n_events"] for x in out_rows),
+    }, ensure_ascii=False, indent=1))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--probe", action="store_true")
     ap.add_argument("--run", action="store_true")
+    ap.add_argument("--meta", action="store_true",
+                    help="枚举 Shipment / Delivery Note / 子表 doctype 的字段与自定义字段")
+    ap.add_argument("--status", action="store_true",
+                    help="把 dn_bridge_rows.csv 的 47 个运单号对到 EN Shipment 的既有状态")
+    ap.add_argument("--with-events", action="store_true",
+                    help="同时逐单 get_single 拉轨迹节点（list 查询不返回子表）")
     ap.add_argument("--max-dn", type=int, default=0, help="safety cap for get_single fan-out")
     args = ap.parse_args()
 
     env = load_env()
     session = requests.Session()
     session.headers.update(auth(env))
+
+    if args.meta:
+        dts = ["Shipment", "Delivery Note", "Delivery Note Logistics Number"]
+        out = {"doctypes": [doctype_meta(session, dt) for dt in dts],
+               "custom_fields": custom_fields(session, dts)}
+        (OUT / "dn_status_meta.json").write_text(
+            json.dumps(out, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        for d in out["doctypes"]:
+            if "fields" not in d:
+                print(d["doctype"], "->", d)
+                continue
+            hit = [f for f in d["fields"]
+                   if any(k in (f["fieldname"] or "").lower() + (f["label"] or "").lower()
+                          for k in ("logist", "track", "status", "eta", "carrier",
+                                    "ship", "deliver", "arrive", "customs"))]
+            print(f"== {d['doctype']}: {d['n_fields']} fields; matched {len(hit)}")
+            for f in hit:
+                print("   ", f)
+        cf = out["custom_fields"]
+        print("== Custom Field rows:", cf.get("http"), len(cf.get("rows") or []))
+        for r in (cf.get("rows") or []):
+            print("   ", r)
+        return
 
     # ---- counts ------------------------------------------------------------
     code, body = get(session, "/api/method/frappe.client.get_count",
@@ -135,6 +264,10 @@ def main() -> None:
                 "custom_zmt_logistic_numbers": d.get("custom_zmt_logistic_numbers"),
                 "n_items": len(d.get("items") or []),
             }, ensure_ascii=False, indent=1)[:2000])
+        return
+
+    if args.status:
+        run_status(session, args.with_events)
         return
 
     if not args.run:
