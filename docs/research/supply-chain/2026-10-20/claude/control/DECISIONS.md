@@ -434,6 +434,27 @@ xlsx 本地生成、仓库忽略。
 - **零星退货不视为持续恢复**；PB 三角涤麻畅销品断货线索须与**日销量/发货**结合判断。
 - 任何用到历史库存的结论，必须写明**来源层级 + 时间粒度 + 是否为人工维护表**。
 
+## 2026-10-23 D31：历史库存导入完成 —— 旧结论"只有 3 天历史"作废
+
+**外部 Codex 已导入**（`D:/Work/fzh-order-store/order_store.duckdb`，独立 schema `wx_inventory`）：
+- **observations 198,363 / canonical 198,363 / 38 个日期（2026-06-09..10-19）**；库存动态宽表 **27 个库存日期**；
+  **人工宽表仓名 scope 未证**，不得直接并入原仓。
+- 视图：`canonical` / `interval_candidates`；**不填每日、不改** `stock_history`（15,820）、`gs_orders`（407,898）、`publish`(3)。
+- 脚本 `wx_inventory_ingest.py`、报告 `wx_inventory_import_report.json`；4 个回归测试通过，重复 publish 数量不增。
+- **状态口径**：仅"系统非正 / 1–3 低库存 / 正 / 未知"，**不证明物理断货**。
+- `raw_row_json` / `method_rows` 保留 WX 的预测/近期/冬季建议，**不是实际需求真值**。
+
+**结论更新**：D19/D23/D28 中"2026 仅 3 天库存历史"的说法**作废**，改为：
+**"2026-06-09..10-19 共 38 个日期、198,363 条观测（来源分层：原始快照 / 多日期列 / 人工宽表，后者 scope 未证）"**。
+
+**PB 断货线索（先搜项目的既有结论）**：`docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`；
+PB 根 `D:/Work/美国/Tracy Miller/PB orders` 的 `checked0stock` CSV 是**实际受阻订单证据**；
+按文件名发现 **81 个候选跨 2023–2026（3/27/15/36）**，**须去重 `NotUsed`**，**不是 81 个独立事件**。
+
+**评价纪律（不预设 WX/LH 谁好）**：按**同范围的服务率 / 缺货暴露 / 库存积压**比较；
+**通途正几件不自动判恢复**（可能退货例外），**低销量不直接判断货**；
+调研见 `wx_inventory_research.json`（FreshRetailNet / 删失似然 / stockout-aware 全局模型），**不拿补出来的需求评自身**。
+
 ## 2026-10-22 D18：Codex2 三项裁定（16:49）——选样口径、情景假设、N2 后任务
 
 **1) 选样改为「唯一 SKU + 交叉属性覆盖」**
