@@ -9,6 +9,12 @@ tags: [supply-chain, research, log]
 
 # 过程日志
 
+## 2026-10-23 — 整体交付计划、看板与库存业务评价
+
+- **新增**：control/PROJECT_ROADMAP.md、PROJECT_BOARD.md、BOSS_BRIEF.md，统一长短史/PB/Shipment/补货/监督的目标、里程碑与SC01–SC12验收。
+- **新增**：control/INVENTORY_EVALUATION.md，调研服务水平、Fill rate、库存资金、保护期分位数、成本与业务仿真；WAPE不换算准确率，不用插补需求自证。
+- **登记**：控制面index/log与CONTROL导航；外部Codex建文档，交工头单一提交和事件更新，不公开推送业务数据。
+
 ## 2026-10-20 — Phase 0 脚手架
 
 - 用户确认 4 项范围决策：历史记录挖掘优先；分阶段汇报；允许装包 + 只读拉数；验证切片 = PB 楔形枕 × 美中 Daneey。

@@ -9,6 +9,8 @@ updated: 2026-10-21
 
 # 供应链整合 — 项目总控页
 
+> **2026-10-23 当前入口**：[整体计划](PROJECT_ROADMAP.md) / [实时看板](PROJECT_BOARD.md) / [老板简报](BOSS_BRIEF.md) / [业务评价依据](INVENTORY_EVALUATION.md)。以下保留历次里程碑审计轨迹，不把旧“下一步”当当前派工。
+
 Updated: 2026-10-22 13:40 (Asia/Shanghai)
 
 ## 已验收（窄样本契约）

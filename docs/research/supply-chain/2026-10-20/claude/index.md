@@ -9,6 +9,8 @@ tags: [supply-chain, research, index]
 
 # 供应链整合 — Claude 独立调研
 
+> **当前项目交付入口（2026-10-23）**：[整体计划](control/PROJECT_ROADMAP.md)、[实时看板](control/PROJECT_BOARD.md)、[老板简报](control/BOSS_BRIEF.md)、[库存业务评价理论](control/INVENTORY_EVALUATION.md)。这些是跨角色控制面，不是另一份独立调研；下文保留早期研究轨迹。
+
 > **独立性声明**：本项目由 Claude / Codex / Cursor 三家**各自独立**完成同一份调研。
 > Claude 的早期独立 PR #302 已按用户要求关闭并合入 **PR #300**；Codex 的 #301 保持独立，不合并。
 > 本目录只属于 Claude 这一路；Codex 内容不写入这里。
