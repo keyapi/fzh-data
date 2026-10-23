@@ -62,13 +62,13 @@
       "个": 77336.0,
       "套": 49435.0
     },
-    "total_qty": 126771.0,
+    "note": "跨 UOM 不合计（个与套不同单位）",
     "non_piece_codes": 1,
     "need_convert": [
       {
         "item_code": "KZKP1010-5#-IRONBOTTOMSURFACE-SILVERY",
         "uoms": "个|套",
-        "qty": 83805.0,
+        "qty_by_uom": "个:34370.0|套:49435.0",
         "bom_uom": "",
         "state": "可推导"
       }

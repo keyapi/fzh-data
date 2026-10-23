@@ -97,12 +97,16 @@ def main() -> None:
 
     code_rows = []
     for c in codes:
-        qty = sum(float(x["qty"]) for x in lines if x["item_code"] == c)
+        qty_by_uom_c = defaultdict(float)
+        for x in lines:
+            if x["item_code"] == c:
+                qty_by_uom_c[x["uom"]] += float(x["qty"])
         uoms = sorted({x["uom"] for x in lines if x["item_code"] == c})
         code_rows.append(dict(
             item_code=c, mapping_state=code_state[c], mapping_reason=code_reason[c],
             n_lines=sum(1 for x in lines if x["item_code"] == c),
-            qty_total=round(qty, 2), uoms="|".join(uoms),
+            qty_by_uom="|".join(f"{u}:{round(v, 2)}" for u, v in sorted(qty_by_uom_c.items())),
+            uoms="|".join(uoms),
             tongtool_skus=("|".join(sorted(pairs[c]))[:300] if c in pairs else ""),
             n_tongtool=len(pairs.get(c, ())),
             tongtool_in_stock=len([s for s in pairs.get(c, ()) if s in stock_tt]),
@@ -121,6 +125,9 @@ def main() -> None:
     dn_evidence = []
     for d in dns:
         ls = by_dn.get(d["dn"], [])
+        qty_by_uom_d = defaultdict(float)
+        for x in ls:
+            qty_by_uom_d[x["uom"]] += float(x["qty"])
         states = {code_state[x["item_code"]] for x in ls}
         uoms = sorted({x["uom"] for x in ls})
         all_mapped = states == {"已映射"}
@@ -128,7 +135,9 @@ def main() -> None:
         doc_level = bool(ls)                     # DN 行 + 数量 + 状态 -> 单据级
         qty_level = bool(doc_level and all_mapped and single_uom)
         dn_evidence.append(dict(
-            dn=d["dn"], n_lines=len(ls), qty=d["total_qty"], uoms="|".join(uoms),
+            dn=d["dn"], n_lines=len(ls),
+            qty_by_uom="|".join(f"{u}:{round(v, 2)}" for u, v in sorted(qty_by_uom_d.items())),
+            uoms="|".join(uoms),
             states="|".join(sorted(states)),
             doc_level_ok=doc_level,
             qty_level_would_hold=("yes" if qty_level else "no"),
@@ -145,7 +154,7 @@ def main() -> None:
     for x in lines:
         qty_by_uom[x["uom"]] += float(x["qty"])
     non_piece = [r for r in code_rows if r["uoms"] != "个"]
-    need_convert = [dict(item_code=r["item_code"], uoms=r["uoms"], qty=r["qty_total"],
+    need_convert = [dict(item_code=r["item_code"], uoms=r["uoms"], qty_by_uom=r["qty_by_uom"],
                          bom_uom=r["bom_uom"], state=r["mapping_state"]) for r in non_piece]
 
     payload = dict(
@@ -176,7 +185,7 @@ def main() -> None:
             blockers=dict(Counter(d["qty_level_blocker"] for d in dn_evidence)),
         ),
         uom=dict(qty_by_uom={k: round(v, 2) for k, v in qty_by_uom.items()},
-                 total_qty=round(sum(qty_by_uom.values()), 2),
+                 note="跨 UOM 不合计（个与套不同单位）",
                  non_piece_codes=len(need_convert), need_convert=need_convert,
                  stock_uom_basis=uom_basis),
     )

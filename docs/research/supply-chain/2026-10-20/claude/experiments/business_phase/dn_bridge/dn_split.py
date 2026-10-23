@@ -1,22 +1,28 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""SC03 分路核验：39 张有号 DN 拆成 单号路(37) / 多号路(2)（只读，不改 EN）。
+"""SC03 DN 分路核验 R2（只读，不改 EN）—— 修 301 的 D01 / D02。
 
-接 `control/reviews/2026-10-23-dn-status.md`。核心问题：
-「没有逐运单 qty」不等于「永远无法把运单和物料量关联」——
-**单号 DN 的运单覆盖整张 DN**，所以运单的物料内容 = 该 DN 的全部物料行（按单据规则，不需要业务再填一对一）。
+D01（证据分层）
+  * 只凭「目的仓 + 状态 + 日期」**不能**断言某批货已计入库存。
+    旧字段 already_in_stock / not_yet 已删除，改为：
+      received_before_snapshot_candidate  —— 仅表示「签收日 ≤ CUTOFF，是个候选」
+      stock_inclusion_unknown             —— 其余一律未知（附具体原因）
+    `credited_qty` 恒为 null：本轮**不认任何数量入账**。
+  * 单据关联（运单 ↔ DN 整单）与数量入账（DN → 库存账面）**分开两列**，不混为一谈。
+  * ATA（到港）与 dlvr（签收）分开记录；**只有 dlvr 参与候选判定**，ATA 永不当作签收。
+  * 全篇固定 **CUTOFF = 2026-10-20**（stock_history 第一个快照日），不再用 10-22 另立口径。
 
-(A) 37 张单号 DN：逐张核 承接状态 / 目的仓 / 物料行数量守恒 / 是否已在在手 stock_history 计入；
-    四项成立 -> 建立「运单 ↔ 物料量」关联，并写明规则与适用范围。
-(B) 2 张多号 DN：混合到货且无分号数量 -> 保留「分配未知」；不均摊、不整单提前抵扣。
-
-红线：只读；不改 EN；不下单；不扩样；不 commit。
+D02（禁止跨 UOM 合计）
+  * 不再有「DN 总件数」这种数：数量以 (item_code, UOM, role) 的**原始向量**输出。
+  * 跨 UOM 不相加；只有换算/BOM 证据成立才谈目标 SKU 数量 —— 本批**不成立**（套→个 无依据），
+    所以输出里没有任何"目标 SKU 数量"。
 
 输出（本地）：
-  out/business_phase/dn_split_lines.csv   DN 物料行（含 SO 关联键）
-  out/business_phase/dn_split_so.csv      SO 行（qty / delivered_qty / pending）
-  out/business_phase/dn_split_dn.csv      逐 DN 核验结果
-  out/business_phase/dn_split.json        聚合
+  out/business_phase/dn_split_dn.csv         逐 DN 核验（含 stock_inclusion / credited_qty=null）
+  out/business_phase/dn_split_qty_vectors.csv (item_code × UOM × role 的原始向量)
+  out/business_phase/dn_split_lines.csv      DN 物料行
+  out/business_phase/dn_split_so.csv         SO 行
+  out/business_phase/dn_split.json           聚合（无跨 UOM 总量）
 """
 from __future__ import annotations
 
@@ -36,14 +42,33 @@ import dn_bridge as B                      # noqa: E402  (env / auth / get)
 OUT = B.OUT
 DB_PATH = Path("D:/Work/fzh-order-store/order_store.duckdb")
 SNAPSHOTS = ["2026-10-20", "2026-10-21", "2026-10-22"]
+CUTOFF = SNAPSHOTS[0]                     # 唯一 cutoff：签收候选只比这一天
 SIGNED = {"已签收", "已上传POD", "已入仓"}
 IN_TRANSIT = {"已订舱", "已报关", "已离港", "已转运", "已到港", "清关中", "已清关"}
-DEST_MAP = {                              # DN 客户 -> stock_history 仓库名
-    "美国FBA仓": None,                    # 不在 stock_history 里（外部 FBA）
-    "DANEEY": "美中-FZH-DANEEY",
-    "CENTRADE": "美东-CENTRADE",
-    "波兰公司": "波兰-FZHPoland-covers",
-}
+DEST_MAP = {"美国FBA仓": None, "DANEEY": "美中-FZH-DANEEY",
+            "CENTRADE": "美东-CENTRADE", "波兰公司": "波兰-FZHPoland-covers"}
+
+
+def load_roles():
+    """role：mapped_sku（直接映射到通途码）/ component_via_bom（BOM 可推导）/ unmapped。
+    与 map_evidence.py 同一判据，独立计算以免循环依赖。"""
+    con = duckdb.connect(str(DB_PATH), read_only=True)
+    try:
+        mapped = {r[0] for r in con.execute("SELECT DISTINCT item_code FROM sku_item").fetchall()}
+        parents = defaultdict(set)
+        for node, root in con.execute("SELECT node, root FROM bom_exploded").fetchall():
+            parents[node].add(root)
+    finally:
+        con.close()
+
+    def role(code):
+        if code in mapped:
+            return "mapped_sku"
+        ps = parents.get(code)
+        if ps and any(r in mapped for r in ps):
+            return "component_via_bom"
+        return "unmapped"
+    return role
 
 
 def main() -> None:
@@ -51,6 +76,7 @@ def main() -> None:
     env = B.load_env()
     session = requests.Session()
     session.headers.update(B.auth(env))
+    role_of = load_roles()
 
     dn_rows = list(csv.DictReader((OUT / "dn_bridge_rows.csv").open(encoding="utf-8-sig", newline="")))
     dn_meta = {r["dn"]: r for r in csv.DictReader(
@@ -61,12 +87,10 @@ def main() -> None:
     for r in dn_rows:
         per_dn_numbers[r["dn"]].append(r["logistic_number"])
 
-    # stock_history 覆盖
     con = duckdb.connect(str(DB_PATH), read_only=True)
     try:
         stock_wh = {r[0] for r in con.execute(
             "SELECT DISTINCT warehouse_name FROM stock_history").fetchall()}
-        snap_max = con.execute("SELECT max(snapshot_date) FROM stock_history").fetchone()[0]
     finally:
         con.close()
 
@@ -87,7 +111,6 @@ def main() -> None:
                 so_names.add(it["against_sales_order"])
         time.sleep(B.SLEEP)
 
-    # ---- 逐 SO 拉行（qty / delivered_qty）------------------------------------
     so_rows, so_status = [], {}
     for so in sorted(so_names):
         code, body = B.get(session, f"/api/resource/Sales Order/{so}")
@@ -112,24 +135,25 @@ def main() -> None:
     for r in line_rows:
         lines_by_dn[r["dn"]].append(r)
 
-    # ---- 逐 DN 核验 ----------------------------------------------------------
-    out_rows = []
+    # ---- 逐 DN 核验（D01：单据级 vs 数量级分开）------------------------------
+    out_rows, vector_rows = [], []
     for dn, numbers in sorted(per_dn_numbers.items()):
         meta = dn_meta.get(dn, {})
         lines = lines_by_dn.get(dn, [])
-        total_qty = sum(x["qty"] for x in lines)
-        src_wh = sorted({x["warehouse"] for x in lines if x["warehouse"]})
         dest = meta.get("customer", "")
         dest_wh = DEST_MAP.get(dest)
-        receipts = []
-        statuses = []
+
+        # ATA 与签收日**分开**存；只有 dlvr 参与候选
+        statuses, dlvr_dates, ata_dates = [], [], []
         for ln in numbers:
             r = recon.get(ln, {})
             statuses.append(r.get("status11") or "")
-            for k in ("dlvr", "ata"):      # 签收 / 到港
-                if r.get(k):
-                    receipts.append(r[k])
-        if all(s in SIGNED for s in statuses if s) and statuses:
+            if r.get("dlvr"):
+                dlvr_dates.append(r["dlvr"])
+            if r.get("ata"):
+                ata_dates.append(r["ata"])
+
+        if statuses and all(s in SIGNED for s in statuses if s):
             route_state = "已签收/已入仓"
         elif any(s in SIGNED for s in statuses):
             route_state = "部分签收"
@@ -138,10 +162,9 @@ def main() -> None:
         else:
             route_state = "未知"
 
-        # 数量守恒：DN 行 -> SO 行
+        # 数量守恒：DN 行 -> SO 行（只判单据，不涉库存）
         matched = [x for x in lines if (x["against_sales_order"], x["so_detail"]) in so_index]
-        viol_over_delivered = 0
-        viol_over_ordered = 0
+        viol_over_delivered = viol_over_ordered = 0
         ordered = delivered = pending = 0.0
         seen = set()
         for x in matched:
@@ -160,57 +183,60 @@ def main() -> None:
             if so_it["delivered_qty"] > so_it["qty"] + 1e-6:
                 viol_over_ordered += 1
 
-        # 重复计入：目的仓是否已被 stock_history 覆盖 + 是否已签收
-        if dest_wh and dest_wh in stock_wh:
-            if route_state in ("已签收/已入仓", "部分签收"):
-                if receipts and min(receipts) <= SNAPSHOTS[0]:
-                    double = "already_in_stock(签收日≤首个快照)"
-                elif receipts:
-                    double = "not_yet(签收日晚于快照)"
-                else:
-                    double = "unverifiable(无签收日期)"
-            elif route_state == "在途":
-                double = "not_yet(在途)"
-            else:
-                double = "unverifiable(状态未知)"
-        elif dest_wh:
-            double = "dest_wh_not_in_stock_history"
+        # D01：只给「候选」，不给「已入账」； credited_qty 恒为 null
+        signed_state = route_state in ("已签收/已入仓", "部分签收")
+        if not dest_wh:
+            stock_inclusion, unknown_reason = "stock_inclusion_unknown", "dest_not_tracked"
+        elif dest_wh not in stock_wh:
+            stock_inclusion, unknown_reason = "stock_inclusion_unknown", "dest_not_in_stock_history"
+        elif not signed_state:
+            stock_inclusion, unknown_reason = "stock_inclusion_unknown", (
+                "in_transit" if route_state == "在途" else "status_unknown")
+        elif not dlvr_dates:
+            stock_inclusion, unknown_reason = "stock_inclusion_unknown", "no_receipt_date"
+        elif min(dlvr_dates) <= CUTOFF:
+            stock_inclusion, unknown_reason = "received_before_snapshot_candidate", "candidate_only"
         else:
-            double = "dest_not_tracked(外部FBA)"
+            stock_inclusion, unknown_reason = "stock_inclusion_unknown", "receipt_after_cutoff"
 
         single = len(numbers) == 1
         no_so = sum(1 for x in lines if not x["against_sales_order"])
-        if single and lines:
-            if len(seen) == 0 and no_so:
-                so_check = "no_so_link"
-            elif viol_over_delivered or viol_over_ordered:
-                so_check = "over_delivery"
-            else:
-                so_check = "ok"
-        else:
-            so_check = "n/a"
-        # 关联本身只看单据规则：1 张已提交 DN + 1 个运单号 -> 运单覆盖整张 DN
+        so_check = ("n/a" if not (single and lines) else
+                    "no_so_link" if len(seen) == 0 and no_so else
+                    "over_delivery" if (viol_over_delivered or viol_over_ordered) else "ok")
         link_conf = ("C 多号未分配" if not single else
                      ("A 四项全过" if so_check == "ok" else "B 关联成立·SO校验未过"))
+
+        # D02：数量按 (item_code, UOM, role) 输出向量；不求和
+        vec = defaultdict(float)
+        for x in lines:
+            r_ = role_of(x["item_code"])
+            vec[(x["item_code"], x["uom"], r_)] += x["qty"]
+            vector_rows.append(dict(dn=dn, item_code=x["item_code"], uom=x["uom"], role=r_,
+                                    qty=round(x["qty"], 4),
+                                    source_line_warehouse=x["warehouse"]))
+        qty_by_uom = defaultdict(float)
+        for x in lines:
+            qty_by_uom[x["uom"]] += x["qty"]
+
         out_rows.append(dict(
-            dn=dn, numbers=len(numbers), n_lines=len(lines), total_qty=round(total_qty, 2),
-            source_warehouses="|".join(src_wh), destination=dest, dest_warehouse=dest_wh or "",
+            dn=dn, numbers=len(numbers), n_lines=len(lines),
+            dest=dest, dest_warehouse=dest_wh or "",
             route="单号路" if single else "多号路",
             route_state=route_state,
             statuses="|".join(sorted(set(statuses))),
+            dlvr_dates="|".join(sorted(set(dlvr_dates))),
+            ata_dates="|".join(sorted(set(ata_dates))),
+            # 单据级
+            doc_link=("运单↔DN 整单（单号）" if single and lines else "分配未知（多号）"),
             so_lines_matched=len(seen), so_ordered=round(ordered, 2),
             so_delivered=round(delivered, 2), so_pending=round(pending, 2),
-            so_check=so_check,
-            no_so_lines=no_so,
-            double_count=double,
-            link_confidence=link_conf,
-            quantity_link=("运单↔物料量可关联（单号覆盖整张 DN）" if single and lines
-                           else "分配未知（多号无分号数量）"),
-            link_blockers=";".join([b for b, c in (
-                ("无物料行", not lines),
-                ("SO 行未匹配", len(matched) == 0),
-                ("DN>SO已发", viol_over_delivered > 0),
-                ("SO已发>订购", viol_over_ordered > 0)) if c]) or "none",
+            so_check=so_check, no_so_lines=no_so, link_confidence=link_conf,
+            # 数量级：明确分层
+            stock_inclusion=stock_inclusion,
+            stock_inclusion_reason=unknown_reason,
+            credited_qty="",                      # null：本轮不认任何数量入账
+            qty_by_uom="|".join(f"{u}:{round(v, 2)}" for u, v in sorted(qty_by_uom.items())),
         ))
 
     with (OUT / "dn_split_dn.csv").open("w", encoding="utf-8-sig", newline="") as fh:
@@ -218,51 +244,72 @@ def main() -> None:
         w.writeheader()
         w.writerows(out_rows)
 
-    # ---- 聚合 ----------------------------------------------------------------
+    # D02：向量表（同 dn/item/uom/role 合并行）
+    agg_vec = defaultdict(float)
+    for r in vector_rows:
+        agg_vec[(r["dn"], r["item_code"], r["uom"], r["role"])] += r["qty"]
+    vector_out = [dict(dn=k[0], item_code=k[1], uom=k[2], role=k[3], qty=round(v, 4))
+                  for k, v in sorted(agg_vec.items())]
+    with (OUT / "dn_split_qty_vectors.csv").open("w", encoding="utf-8-sig", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(vector_out[0].keys()))
+        w.writeheader()
+        w.writerows(vector_out)
+
+    # ---- 聚合：只给分 UOM / 分 role 的向量，不给跨 UOM 总量 -------------------
     single_rows = [r for r in out_rows if r["route"] == "单号路"]
     multi_rows = [r for r in out_rows if r["route"] == "多号路"]
+    by_uom, by_role_uom = defaultdict(float), defaultdict(float)
+    for r in vector_out:
+        by_uom[r["uom"]] += r["qty"]
+        by_role_uom[(r["role"], r["uom"])] += r["qty"]
+
     payload = dict(
-        schema_version="dn_split/1",
-        inputs=dict(snapshots=SNAPSHOTS, stock_history_warehouses=sorted(stock_wh),
-                    snapshot_max=str(snap_max)),
+        schema_version="dn_split/2",
+        cutoff=CUTOFF,
+        cutoff_note=("唯一 cutoff = stock_history 第一个快照日；"
+                     "签收日 ≤ CUTOFF 只产生「候选」，不产生「已入账」"),
         counts=dict(dns=len(out_rows), single=len(single_rows), multi=len(multi_rows),
                     numbers=sum(r["numbers"] for r in out_rows)),
-        single_route=dict(
-            n=len(single_rows),
-            qty_total=round(sum(r["total_qty"] for r in single_rows), 2),
-            by_confidence={
-                c: dict(n=sum(1 for r in single_rows if r["link_confidence"] == c),
-                        qty=round(sum(r["total_qty"] for r in single_rows
-                                      if r["link_confidence"] == c), 2))
-                for c in sorted({r["link_confidence"] for r in single_rows})},
-            so_check=dict(Counter(r["so_check"] for r in single_rows)),
-            state=dict(Counter(r["route_state"] for r in single_rows)),
+        linkage=dict(
+            single_route=dict(
+                n=len(single_rows),
+                by_confidence={c: dict(n=sum(1 for r in single_rows if r["link_confidence"] == c))
+                               for c in sorted({r["link_confidence"] for r in single_rows})},
+                so_check=dict(Counter(r["so_check"] for r in single_rows)),
+                state=dict(Counter(r["route_state"] for r in single_rows)),
+            ),
+            multi_route=dict(n=len(multi_rows),
+                             dns=[dict(dn=r["dn"], numbers=r["numbers"], lines=r["n_lines"],
+                                       state=r["route_state"], statuses=r["statuses"])
+                                  for r in multi_rows]),
         ),
-        multi_route=dict(
-            n=len(multi_rows),
-            dns=[dict(dn=r["dn"], numbers=r["numbers"], lines=r["n_lines"], qty=r["total_qty"],
-                      state=r["route_state"], statuses=r["statuses"],
-                      double_count=r["double_count"]) for r in multi_rows],
-            qty=round(sum(r["total_qty"] for r in multi_rows), 2),
+        stock_inclusion=dict(
+            states=dict(Counter(r["stock_inclusion"] for r in out_rows)),
+            reasons=dict(Counter(r["stock_inclusion_reason"] for r in out_rows)),
+            credited_qty="null（全部 39 张；本轮不做数量入账）",
+            note=("received_before_snapshot_candidate 仅表示「签收日 ≤ CUTOFF，值得去账面核」，"
+                  "不等于该批货已在库存中；其余一律 stock_inclusion_unknown"),
         ),
-        status_split=dict(
-            by_dn=dict(Counter(r["route_state"] for r in out_rows)),
-            by_number=dict(Counter(
-                ("已签收/已入仓" if (recon[n].get("status11") or "") in SIGNED else
-                 "在途" if (recon[n].get("status11") or "") in IN_TRANSIT else "未知")
-                for n in recon)),
+        quantities=dict(
+            rule="按 (item_code, UOM, role) 输出原始向量；跨 UOM 不合计",
+            by_uom={u: round(v, 2) for u, v in sorted(by_uom.items())},
+            by_role_uom={f"{r}|{u}": round(v, 2) for (r, u), v in sorted(by_role_uom.items())},
+            target_sku_qty="not computed：套→个 无换算依据（KZKP1010 无 BOM 头、库存 uom_basis=unknown）",
+            n_vector_rows=len(vector_out),
         ),
-        destination=dict(Counter(r["destination"] for r in out_rows)),
-        source_warehouse=dict(Counter(w for r in out_rows for w in r["source_warehouses"].split("|") if w)),
-        double_count=dict(Counter(r["double_count"] for r in out_rows)),
-        settlement=dict(so_status=so_status),
+        status_split=dict(by_dn=dict(Counter(r["route_state"] for r in out_rows)),
+                          by_number=dict(Counter(
+                              ("已签收/已入仓" if (recon[n].get("status11") or "") in SIGNED else
+                               "在途" if (recon[n].get("status11") or "") in IN_TRANSIT else "未知")
+                              for n in recon))),
+        destination=dict(Counter(r["dest"] for r in out_rows)),
     )
     (OUT / "dn_split.json").write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    print(json.dumps({k: payload[k] for k in ("counts", "single_route", "multi_route",
-                                              "status_split", "destination", "source_warehouse",
-                                              "double_count")}, ensure_ascii=False, indent=1))
+    print(json.dumps({k: payload[k] for k in ("cutoff", "counts", "linkage",
+                                              "stock_inclusion", "quantities", "status_split")},
+                     ensure_ascii=False, indent=1))
 
 
 if __name__ == "__main__":
