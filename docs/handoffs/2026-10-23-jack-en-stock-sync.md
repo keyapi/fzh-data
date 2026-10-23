@@ -167,16 +167,26 @@ df -h /home/frappe
 - PR #310（调研）：`docs/research/2026-10-23-inventory-history-storage-architecture.md`。
 - 参考脚本：`D:\Work\fzh-stock-backup\stock_daily_backup.py`（分页/重试/run state 逻辑）。
 
-## 10. Jack 开工 checklist
+## 10. 实现进度（2026-10-23）
 
-- [ ] 测试站建目录/权限（`/home/frappe/fzh-inventory`，`frappe:frappe`）。
-- [ ] 生产建目录/权限（你有权限，Jack 没有）。
-- [ ] 测试站拉 `feat/throttled-refresh`，确认 `Tongtool Settings` 凭证可用。
-- [ ] 新建 `Tongtool Stock Latest` / `Tongtool Stock Run` DocType（只读、无 Bin）。
-- [ ] 写 `sync/stock_sync.py`：14 仓抓取 + 13s 节流 + 502/526 重试。
-- [ ] 写单 Parquet：tmp + `os.replace`，保留 `stock.prev.parquet`。
-- [ ] 加 `duckdb` 依赖并在测试站安装。
-- [ ] `hooks.py` 注册 05:17、long 队列。
+- **app PR**：https://github.com/keyapi/tongtool_integration/pull/5（`feature/stock-sync-main`，从 main 拉出）
+- **测试站分支**：`feature/stock-sync`；已 `bench migrate`；`duckdb 1.5.6` 已装进 bench env
+- **单仓实测**：美中-FZH-DANEEY → 1,024 行、`Run.status=Success`、`complete=true`、Parquet 可读
+- **全量 14 仓**：测试站实跑中（结果补在 PR 评论）
+- **生产目录**：`/home/frappe/fzh-inventory` 已建（`frappe:frappe`，750）；代码未部署
+- **低库存告警**：未并入 v1，Jack 后续按 §5 接入
+- ⚠️ **安全**：`test_fix.py` 含硬编码 app_secret（已跟踪），请尽快轮换并清理；本实现不使用该文件
+
+## 11. Jack 开工 checklist
+
+- [x] 测试站建目录/权限（`/home/frappe/fzh-inventory`，`frappe:frappe`）。
+- [x] 生产建目录/权限（你有权限，Jack 没有）。
+- [x] 测试站拉 `feat/throttled-refresh`，确认 `Tongtool Settings` 凭证可用。
+- [x] 新建 `Tongtool Stock Latest` / `Tongtool Stock Run` DocType（只读、无 Bin）。
+- [x] 写 `sync/stock_sync.py`：14 仓抓取 + 13s 节流 + 502/526 重试。
+- [x] 写单 Parquet：tmp + `os.replace`，保留 `stock.prev.parquet`。
+- [x] 加 `duckdb` 依赖并在测试站安装。
+- [x] `hooks.py` 注册 05:17、long 队列。
 - [ ] 低库存告警复用 PR #309 规则；先 dry-run。
 - [ ] 连续 3–5 天验收；再合并 main、推生产。
 - [ ] 生产稳定后停 Windows API 任务和 Jack 本地低库存任务。
