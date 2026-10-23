@@ -1,34 +1,71 @@
 {
-  "schema_version": "forward_net/3",
+  "schema_version": "forward_net/4",
   "snapshot": {
     "as_of": "2026-10-22",
     "run_date": "2026-10-23",
-    "anchor": "snapshot_anchored（桶 1 从快照日起，完整保留后续需求；不另扣已过天数）"
+    "anchor": "snapshot_anchored"
+  },
+  "inputs": {
+    "decision_v2": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\decision_v2.csv",
+      "sha256": "4b9efecc892342bfb2f463a814b53fed91b0b91750e112dd57e5f63f9899b30e"
+    },
+    "replenishment_v2": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\replenishment_v2.csv",
+      "sha256": "6b30e751ecda86301bc73831ffb21705574a0a57b0fbb62c7f43aaba9716c9b7"
+    }
+  },
+  "outputs": {
+    "rows": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\forward_net_rows.csv",
+      "sha256": "fe74fcc8afef037ccab3ae93756cd54c03685cdca876e5131d5d1230531b7232"
+    },
+    "buckets": {
+      "path": "D:\\Work\\赛狐\\Cursor-claude\\docs\\research\\supply-chain\\2026-10-20\\claude\\out\\business_phase\\forward_net_buckets.csv",
+      "sha256": "d8df603dfb8aebafad9f64e5cee3463f469a9a4af7f38ef3c5a9ad5f0a9a232a"
+    }
   },
   "demand_source": {
     "counts": {
-      "T5_AutoETS_eq_rate": 2058,
-      "negative_rate_clamped": 27
+      "T5_AutoETS": 2106,
+      "T5_MA3_fallback": 112
     },
-    "note": "T5 = 新预测等效率（AutoETS，失败回退 MA3，statsforecast 2.1.1）；decision_v2.月需求率 是 T3 三月均值，本口径不使用"
+    "methods": {
+      "AutoETS": 2106,
+      "MA3_fallback": 112
+    },
+    "fallbacks": {
+      "AutoETS 可用，已作为默认方法": 2106,
+      "NotImplementedError:tiny datasets": 102,
+      "KeyError:'fitted'": 10
+    },
+    "clamps": 27,
+    "note": "逐行保存实际方法/版本/回退原因；AutoETS 与 MA3 回退可分辨"
   },
-  "field_semantics": {
-    "inventory_basis": "unknown",
-    "overlap": "scenario",
-    "same_batch": "unknown_suspected → same/diff 并列"
+  "inventory_basis": {
+    "branches": [
+      "physical",
+      "net",
+      "unknown"
+    ],
+    "note": "physical: opening=available；net: opening=available+waiting；unknown: 两个分支并列成缺口区间"
+  },
+  "so_allocation": {
+    "modes": [
+      "earliest",
+      "proportional"
+    ],
+    "note": "零预测时 proportional 回退 earliest，不会抹掉 SO"
   },
   "wo": {
     "wo_qty": null,
-    "wo_status": "not_observed",
-    "note": "不计未知 WO ≠ 供应完整；不得因此升级已确认"
+    "wo_status": "not_observed"
   },
   "rows": 2309,
   "row_tiers": {
     "B": 2058,
     "不能算": 251
   },
-  "reconcile": "2058 + 251 = 2309",
-  "reconcile_ok": true,
   "readiness": {
     "条件": 2058,
     "HOLD": 251
@@ -37,40 +74,43 @@
     "库存": 160,
     "需求": 91
   },
-  "buckets": 24696,
-  "identity_failures": 0,
+  "buckets": 37044,
   "scenario_totals": {
-    "S_overlap0_onhand": {
+    "S_phys_overlap0_onhand": {
       "demand": 16477.3,
       "receipts": 0.0,
-      "fulfilled": 10325.8,
-      "unserved_sum": 9376.4,
-      "unserved_end": 6151.4,
-      "closing_end": 36793.2
+      "fulfilled": 10342.7,
+      "unserved_end": 6134.5
     },
-    "S_overlap_proven_onhand": {
+    "S_net_overlap0_onhand": {
+      "demand": 16477.3,
+      "receipts": 0.0,
+      "fulfilled": 10362.7,
+      "unserved_end": 6114.5
+    },
+    "S_phys_overlap_proven_onhand": {
       "demand": 16427.4,
       "receipts": 0.0,
-      "fulfilled": 10297.9,
-      "unserved_sum": 9344.9,
-      "unserved_end": 6129.5,
-      "closing_end": 36821.1
+      "fulfilled": 10312.9,
+      "unserved_end": 6114.5
     },
-    "S_overlap0_same_batch": {
+    "S_net_overlap_proven_onhand": {
+      "demand": 16427.4,
+      "receipts": 0.0,
+      "fulfilled": 10332.9,
+      "unserved_end": 6094.5
+    },
+    "S_phys_overlap0_same_batch": {
       "demand": 16477.3,
       "receipts": 19083.0,
-      "fulfilled": 12525.2,
-      "unserved_sum": 5870.7,
-      "unserved_end": 3952.0,
-      "closing_end": 53676.8
+      "fulfilled": 12541.1,
+      "unserved_end": 3936.1
     },
-    "S_overlap0_diff_batch": {
+    "S_phys_overlap0_diff_batch": {
       "demand": 16477.3,
       "receipts": 28748.0,
-      "fulfilled": 12874.2,
-      "unserved_sum": 5517.0,
-      "unserved_end": 3603.0,
-      "closing_end": 62992.8
+      "fulfilled": 12890.2,
+      "unserved_end": 3587.1
     }
   },
   "naming": {
@@ -79,7 +119,7 @@
     "C": "HOLD"
   },
   "model_interface": {
-    "current": "T5 AutoETS 等效率（MA3 回退）",
+    "current": "T5 等效率（AutoETS / MA3 回退逐行标注）",
     "switch": "待 Codex2 裁定"
   }
 }

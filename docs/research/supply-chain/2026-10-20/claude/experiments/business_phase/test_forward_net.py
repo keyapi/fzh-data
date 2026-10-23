@@ -304,9 +304,9 @@ def test_bucket_identities_hold_and_unserved_carries():
 
 def test_demand_source_is_t5_not_t3():
     rate, src = fn.choose_rate("5.0", "7.0")
-    assert rate == 5.0 and src == "T5_AutoETS_eq_rate", "有 T5 时必须用 T5 并如实标注"
+    assert rate == 5.0 and src == "T5", "有 T5 时必须用 T5"
     rate2, src2 = fn.choose_rate("", "7.0")
-    assert rate2 == 7.0 and src2 == "T3_3month_mean_fallback", "无 T5 才回退 T3，且标注 T3"
+    assert rate2 == 7.0 and src2 == "T3_fallback", "无 T5 才回退 T3，且标注 T3"
     assert fn.choose_rate("", "") == (None, "missing")
 
 
@@ -321,6 +321,83 @@ def test_unknown_wo_never_promotes_to_confirmed():
     assert fn.readiness_of("A", True) == "已确认"
     assert fn.readiness_of("B", False) == "条件"
     assert fn.readiness_of("C", False) == "HOLD"
+
+
+# ===========================================================================
+# Main-flow tests (M01/M02) — the bug was that the fix lived only in helpers
+# ===========================================================================
+
+F100_RATE = 100 * 31 / 71.0          # three buckets sum to exactly 100
+
+
+def _near(a, b, tol=1e-6):
+    return a is not None and abs(a - b) <= tol
+
+
+def _row(**kw):
+    base = dict(SKU="X", 仓="W", 可用="80", 已承诺待发="20", 在途="0", PO未结="",
+                在途去重状态="none_recorded", 状态="B")
+    base.update(kw)
+    return base
+
+
+def _rep(t5="43.661971830985916", method="AutoETS（SKU 级 × 仓占比分配）",
+         version="statsforecast 2.1.1", fb="AutoETS 可用，已作为默认方法"):
+    return {"新预测等效率(T5)": t5, "历史率(T3)": "3",
+            "预测方法(实际使用)": method, "方法版本": version, "fallback理由": fb}
+
+
+def test_main_flow_overlap_physical_basis():
+    """F=100, SO=20, physical on-hand 80 -> gap 20 (not 40)."""
+    out = fn.compute_row(_row(可用="80"), _rep(t5=str(F100_RATE)))
+    assert _near(out["gaps"]["S_phys_overlap_proven_onhand"], 20.0), out["gaps"]
+    assert out["record"]["stock_available"] == 80.0
+
+
+def test_main_flow_overlap_net_basis():
+    """available already nets the occupancy: 60 + SO 20 = physical 80 -> gap 20."""
+    out = fn.compute_row(_row(可用="60"), _rep(t5=str(F100_RATE)))
+    assert _near(out["gaps"]["S_net_overlap_proven_onhand"], 20.0), out["gaps"]
+
+
+def test_main_flow_non_overlap_adds_demand():
+    """SO outside the forecast: demand 120, physical 80 -> gap 40."""
+    out = fn.compute_row(_row(可用="80"), _rep(t5=str(F100_RATE)))
+    assert _near(out["gaps"]["S_phys_overlap0_onhand"], 40.0), out["gaps"]
+
+
+def test_main_flow_zero_forecast_keeps_the_so():
+    """Forecast 0 must NOT wipe the SO 20 (the old share-based code returned 0)."""
+    out = fn.compute_row(_row(可用="0"), _rep(t5="0"))
+    assert _near(out["gaps"]["S_phys_overlap0_onhand"], 20.0), out["gaps"]
+    total_so = sum(b["included_SO"] for b in out["buckets"]
+                   if b["scenario_id"] == "S_phys_overlap0_onhand")
+    assert abs(total_so - 20.0) < 1e-9
+
+
+def test_main_flow_negative_rate_clamped_keeps_the_so():
+    out = fn.compute_row(_row(可用="0"), _rep(t5="-5"))
+    assert out["record"]["rate_clamped"] == 1
+    assert out["record"]["forecast_rate"] == 0.0
+    assert _near(out["gaps"]["S_phys_overlap0_onhand"], 20.0), out["gaps"]
+
+
+def test_so_allocation_never_depends_on_a_nonzero_forecast():
+    assert fn.allocate_so(20, [0, 0, 0], "earliest") == [20.0, 0.0, 0.0]
+    assert fn.allocate_so(20, [0, 0, 0], "proportional") == [20.0, 0.0, 0.0]
+    prop = fn.allocate_so(20, [10, 10, 10], "proportional")
+    assert all(abs(v - 20 / 3) < 1e-9 for v in prop)
+
+
+def test_main_flow_method_provenance_is_per_row():
+    aut = fn.compute_row(_row(), _rep())
+    ma3 = fn.compute_row(_row(), _rep(method="MA3（SKU 级 × 仓占比分配）",
+                                      fb="NotImplementedError: 'fitted'"))
+    assert aut["record"]["method"] == "AutoETS"
+    assert aut["record"]["version"] == "statsforecast 2.1.1"
+    assert ma3["record"]["method"] == "MA3_fallback"
+    assert "NotImplementedError" in ma3["record"]["fallback_reason"]
+    assert aut["record"]["demand_source"] != ma3["record"]["demand_source"]
 
 
 TESTS = [
@@ -355,6 +432,13 @@ TESTS = [
     test_demand_source_is_t5_not_t3,
     test_unknown_wo_never_promotes_to_confirmed,
     test_negative_forecast_rate_is_clamped_to_zero,
+    test_main_flow_overlap_physical_basis,
+    test_main_flow_overlap_net_basis,
+    test_main_flow_non_overlap_adds_demand,
+    test_main_flow_zero_forecast_keeps_the_so,
+    test_main_flow_negative_rate_clamped_keeps_the_so,
+    test_so_allocation_never_depends_on_a_nonzero_forecast,
+    test_main_flow_method_provenance_is_per_row,
 ]
 
 
