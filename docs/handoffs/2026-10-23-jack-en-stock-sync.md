@@ -189,7 +189,7 @@ df -h /home/frappe
 - **失败重试**：每次 API 调用已有 13s 节流 + 502/503/504 重试 + 526 指数退避；整天失败由 06:17/07:17 再跑。不能绝对保证 100%，但已覆盖“单次/整轮失败”
 - **低库存告警**：未并入 v1，Jack 后续按 §5 接入
 - **体检脚本**（PR #308）：目前仍看 Windows 两条线；API 线迁 EN 后需改为读生产 Parquet/Run（后续）
-- ⚠️ **安全（已核实）**：`test_fix.py` 已跟踪、在 main 且推到 GitHub；其 secret 与**测试和生产** `Tongtool Settings.app_secret` 哈希一致 ⇒ 必须轮换并清理文件/历史
+- **安全清理**：私有仓 `tongtool_integration` 的 `test_fix.py` 已按内部安全流程处理（删除 + secret 扫描 PR）；具体细节在私有仓维护记录中，不在公开仓展开。
 
 ## 11. 外部查询 API
 
