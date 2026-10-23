@@ -1,69 +1,85 @@
 {
-  "schema_version": "forward_net/1",
+  "schema_version": "forward_net/3",
   "snapshot": {
-    "date": "2026-10-22",
+    "as_of": "2026-10-22",
     "run_date": "2026-10-23",
-    "note": "库存数据截至 2026-10-22，不是「当前库存」；距运行日 1 天、距 11/1 10 天"
+    "anchor": "snapshot_anchored（桶 1 从快照日起，完整保留后续需求；不另扣已过天数）"
   },
-  "horizon": {
-    "oct_remaining_days": 10,
-    "primary": "月率×10/31（22–31 含）",
-    "sensitivity": "月率×9/31（23–31）",
-    "buckets": [
-      "2026-10 剩余",
-      "2026-11",
-      "2026-12"
-    ]
+  "demand_source": {
+    "counts": {
+      "T5_AutoETS_eq_rate": 2058,
+      "negative_rate_clamped": 27
+    },
+    "note": "T5 = 新预测等效率（AutoETS，失败回退 MA3，statsforecast 2.1.1）；decision_v2.月需求率 是 T3 三月均值，本口径不使用"
+  },
+  "field_semantics": {
+    "inventory_basis": "unknown",
+    "overlap": "scenario",
+    "same_batch": "unknown_suspected → same/diff 并列"
+  },
+  "wo": {
+    "wo_qty": null,
+    "wo_status": "not_observed",
+    "note": "不计未知 WO ≠ 供应完整；不得因此升级已确认"
   },
   "rows": 2309,
   "row_tiers": {
-    "A": 1849,
-    "B": 209,
+    "B": 2058,
     "不能算": 251
   },
-  "reconcile": "1849 + 209 + 251 = 2309",
+  "reconcile": "2058 + 251 = 2309",
   "reconcile_ok": true,
-  "sku_universe": 1328,
-  "sku_tiers": {
-    "A": 940,
-    "不能算": 251,
-    "B": 137
-  },
-  "sku_mixed_rows": 229,
-  "totals": {
-    "gross": 21716.1,
-    "gross_sensitivity": 21414.4,
-    "so": 50.0,
-    "on_hand": 47164.0,
-    "gap_a": 11148.5,
-    "gap_b": 8087.9,
-    "by_tier": {
-      "A": {
-        "gross": 12065.0,
-        "so": 0.0,
-        "on_hand": 37602.0,
-        "gap_a": 5621.5,
-        "gap_b": 5621.5,
-        "supp_b": 0.0
-      },
-      "B": {
-        "gross": 9651.1,
-        "so": 50.0,
-        "on_hand": 9562.0,
-        "gap_a": 5526.9,
-        "gap_b": 2466.3,
-        "supp_b": 10063.0
-      }
-    }
+  "readiness": {
+    "条件": 2058,
+    "HOLD": 251
   },
   "reasons": {
-    "在手库存未取得": 160,
-    "无月需求率（状态 C）": 91
+    "库存": 160,
+    "需求": 91
+  },
+  "buckets": 24696,
+  "identity_failures": 0,
+  "scenario_totals": {
+    "S_overlap0_onhand": {
+      "demand": 16477.3,
+      "receipts": 0.0,
+      "fulfilled": 10325.8,
+      "unserved_sum": 9376.4,
+      "unserved_end": 6151.4,
+      "closing_end": 36793.2
+    },
+    "S_overlap_proven_onhand": {
+      "demand": 16427.4,
+      "receipts": 0.0,
+      "fulfilled": 10297.9,
+      "unserved_sum": 9344.9,
+      "unserved_end": 6129.5,
+      "closing_end": 36821.1
+    },
+    "S_overlap0_same_batch": {
+      "demand": 16477.3,
+      "receipts": 19083.0,
+      "fulfilled": 12525.2,
+      "unserved_sum": 5870.7,
+      "unserved_end": 3952.0,
+      "closing_end": 53676.8
+    },
+    "S_overlap0_diff_batch": {
+      "demand": 16477.3,
+      "receipts": 28748.0,
+      "fulfilled": 12874.2,
+      "unserved_sum": 5517.0,
+      "unserved_end": 3603.0,
+      "closing_end": 62992.8
+    }
+  },
+  "naming": {
+    "B": "条件",
+    "A": "已确认（复核后）",
+    "C": "HOLD"
   },
   "model_interface": {
-    "current": "T5 AutoETS 平月率（T5 迭代版默认，SKU 级拟合 × 仓占比分配）",
-    "not_used": "tree / combo / TSB 等新模型均未接入本口径",
-    "switch_point": "待 Codex2 裁定：何时把新预测接回前向净需求、以何种判据（嵌套重训 + 真未用留出）授权；本轮不替换"
-  },
-  "boundary": "不给可下单量；MOQ/包装/预算另列；B 档假设逐行写在本地 CSV；缺口是需求-供给的算术差，不是采购量"
+    "current": "T5 AutoETS 等效率（MA3 回退）",
+    "switch": "待 Codex2 裁定"
+  }
 }

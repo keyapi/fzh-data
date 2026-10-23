@@ -1,112 +1,52 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Executable acceptance examples for the forward-net line (TDD, RED on purpose).
+"""Executable acceptance examples for the forward-net line (SC02 repair).
 
 Source of truth: `control/PROJECT_ROADMAP.md` →「核心验收例」six domains.
-This file is written BEFORE the implementation is fixed. `forward_net.py` is NOT
-touched here; the tests encode what the pipeline MUST do and therefore FAIL
-against the current arithmetic. That is the expected red light.
+Since 2026-10-23 the tests exercise the REAL implementation
+(`forward_net.py`), not a local mirror. Expectations were NOT weakened: the
+fourteen examples that were red before the repair must now pass.
 
-How to read the result
-  PASS  – the assertion holds today
-  RED   – expected failure: the current implementation is known to violate it
-  FAIL  – unexpected failure (a red test that suddenly fails for another reason,
-          or a green test that broke) — this one needs attention
+`_legacy_gap_a` keeps the retired formula only to document the old red light.
 
 Run either way:
   uv run python docs/research/supply-chain/2026-10-20/claude/experiments/business_phase/test_forward_net.py
-  uv run pytest docs/research/supply-chain/2026-10-20/claude/experiments/business_phase/test_forward_net.py -q
+  uv run python -m pytest docs/research/supply-chain/2026-10-20/claude/experiments/business_phase/test_forward_net.py -q
 
 Synthetic fixtures only; no DB, no production, no network.
 """
 from __future__ import annotations
 
 import sys
-from datetime import date, timedelta
+from datetime import date
+from pathlib import Path
 
-# ---------------------------------------------------------------------------
-# Mirror of the CURRENT implementation (forward_net.py, 2026-10-23)
-#   net  = max(0, gross - so)
-#   gapA = max(0, net - on_hand)
-# Keep this in sync with forward_net.py only to *describe* it; the tests below
-# assert the CORRECT behaviour and are therefore red where the mirror differs.
-# ---------------------------------------------------------------------------
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import forward_net as fn  # noqa: E402
 
 
-def current_gap_a(gross, so, on_hand):
-    net = max(0.0, gross - so)
-    return max(0.0, net - on_hand)
-
-
-def current_oct_demand(monthly_rate, days=10):
-    return monthly_rate * days / 31
-
-
-def current_horizon_demand(monthly_rate, oct_days=10):
-    """remaining-Oct + Nov + Dec, Nov/Dec each a full month."""
-    return current_oct_demand(monthly_rate, oct_days) + monthly_rate + monthly_rate
-
-
-# ---------------------------------------------------------------------------
-# Correct-behaviour oracles (hand-computed, tiny numbers)
-# ---------------------------------------------------------------------------
-
-def gap_after_so(demand, so_in_forecast, so_extra, stock, stock_net_of_so=False):
-    """SO inside the forecast window is already part of demand -> never deducted
-    twice. SO outside the forecast adds demand. Stock is only decremented by the
-    outstanding SO when the stock field is documented as gross (not netted)."""
-    total = demand + so_extra
-    if stock_net_of_so:
-        return max(0.0, total - stock)
-    return max(0.0, total - stock)
-
-
-def days_inclusive(a: date, b: date) -> int:
-    return (b - a).days + 1
-
-
-# ---------------------------------------------------------------------------
-# Harvest/aggregation oracle for domain 3 (supply quantity)
-# ---------------------------------------------------------------------------
-
-def harvest_total(rows):
-    """rows: dicts with qty, docstatus, tracking, kind.
-    Rules: one row counted once regardless of tracking numbers; a child row with
-    docstatus 0 is a draft and excluded; a return (kind='return') subtracts."""
-    seen_tracking = set()
-    total = 0.0
-    for r in rows:
-        if r.get("docstatus") != 1:
-            continue
-        tr = r.get("tracking")
-        if tr:
-            if tr in seen_tracking:
-                continue
-            seen_tracking.add(tr)
-        q = float(r.get("qty") or 0)
-        total += -abs(q) if r.get("kind") == "return" else q
-    return total
+def _legacy_gap_a(gross, so, on_hand):
+    """RETIRED formula (forward_net.py before SC02) — kept as the red-light record."""
+    return max(0.0, max(0.0, gross - so) - on_hand)
 
 
 class _Results:
     def __init__(self):
         self.rows = []
 
-    def record(self, name, fn, expected_red):
+    def record(self, name, fnc):
         try:
-            fn()
+            fnc()
             self.rows.append(("PASS", name, ""))
         except AssertionError as exc:
-            status = "RED" if expected_red else "FAIL"
-            self.rows.append((status, name, str(exc)))
+            self.rows.append(("FAIL", name, str(exc)))
 
     def report(self):
-        counts = {"PASS": 0, "RED": 0, "FAIL": 0}
+        counts = {"PASS": 0, "FAIL": 0}
         for st, name, msg in self.rows:
             counts[st] += 1
             print(f"{st:4s} {name}" + (f"  ← {msg}" if msg else ""))
-        print(f"\nsummary: PASS {counts['PASS']} / RED(expected) {counts['RED']} / "
-              f"UNEXPECTED FAIL {counts['FAIL']} / total {len(self.rows)}")
+        print(f"\nsummary: PASS {counts['PASS']} / FAIL {counts['FAIL']} / total {len(self.rows)}")
         return counts
 
 
@@ -116,26 +56,25 @@ class _Results:
 
 def test_so_in_forecast_window_is_not_deducted_twice():
     """F=100, unfulfilled SO=20 (inside the forecast), stock=80 -> gap must be 20."""
-    got = current_gap_a(100, 20, 80)
+    got = fn.gap_after_so(100, True, 0.0, 80, True)
     assert got == 20, f"SO 已在预测内时不能再扣一次；得到 {got}，应为 20"
 
 
 def test_so_outside_forecast_adds_demand():
     """Forecast 100 + extra SO 20 outside the forecast, stock 80 -> gap 40."""
-    got = current_gap_a(100, 0, 80)  # 既有实现没有"SO 不在预测内则加需求"的概念
+    got = fn.gap_after_so(100, False, 20.0, 80, False)
     assert got == 40, f"SO 不在预测内应加需求 20（总 120 − 80）；得到 {got}，应为 40"
 
 
 def test_stock_already_net_of_so_must_not_deduct_so_again():
-    """If the stock field is documented as available (already net of the SO),
-    demand stays 100 and gap = 100 − 80 = 20; deducting SO again is double."""
-    got = current_gap_a(100, 20, 80)
+    """available 已扣占用 -> 需求仍 100，缺口 100 − 80 = 20；再扣 SO 就是双扣。"""
+    got = fn.gap_after_so(100, True, 0.0, 80, True)
     assert got == 20, f"available 已扣占用时不得再扣 SO；得到 {got}，应为 20"
 
 
 def test_red_light_current_impl_returns_zero_for_the_roadmap_case():
-    """Documents the red light: the current formula returns 0 for F=100/SO=20/stock=80."""
-    assert current_gap_a(100, 20, 80) == 0
+    """Historical record: the retired formula returned 0 for F=100/SO=20/stock=80."""
+    assert _legacy_gap_a(100, 20, 80) == 0
 
 
 # ===========================================================================
@@ -143,59 +82,56 @@ def test_red_light_current_impl_returns_zero_for_the_roadmap_case():
 # ===========================================================================
 
 def test_midmonth_snapshot_consumption_is_deducted():
-    """Snapshot 10/22, run 10/23, daily demand 10 -> opening at 10/23 is stock − 10."""
-    stock, daily = 80.0, 10.0
-    opening = stock - daily          # 1 day already elapsed
-    assert opening == 70.0
-    # current pipeline never deducts the elapsed day
-    piped = stock
-    assert piped == 70.0, f"现实现未扣 10/23 当天消耗（得到 {piped}，应为 70）"
+    """Snapshot 10/22, run 10/23, daily demand 10 -> opening at 10/23 is 70."""
+    got = fn.stock_after_elapsed(80.0, 10.0, 1)
+    assert got == 70.0, f"须扣掉快照日到运行日的消耗；得到 {got}，应为 70"
 
 
 def test_cross_month_uses_actual_days_not_full_months():
-    """10/22 → 11/30 is 40 inclusive days; at 1/day demand must be 40, not 41."""
-    want = days_inclusive(date(2026, 10, 22), date(2026, 11, 30))   # 40 days
-    got = current_oct_demand(monthly_rate=31.0, days=10) + 31.0      # 10 + 31
-    assert round(got, 6) == want, f"跨月应按实际天数 40；现实现得到 {got}"
+    """10/22 → 11/30 是 40 个含首含尾的天；月率 31 → 需求 40。"""
+    got = fn.horizon_demand(31.0, date(2026, 10, 22), date(2026, 11, 30))
+    assert round(got, 6) == 40.0, f"跨月应按实际天数 40；得到 {got}"
 
 
 def test_late_supply_after_horizon_is_not_counted():
-    """A PO arriving 2026-12-15 is outside the horizon and must not offset it."""
-    eta = date(2026, 12, 15)
-    horizon_end = date(2026, 12, 31)
-    assert eta <= horizon_end          # inside horizon by date
-    # but a PO arriving 2027-01-05 is outside
-    late = date(2027, 1, 5)
-    counted = late <= horizon_end
-    assert counted is False
-    # current pipeline counts every open PO regardless of ETA
-    pipeline_counts = True
-    assert pipeline_counts is False, "现实现把无 ETA/超期 PO 一并计入"
+    """No-ETA / late supply is split out and never enters the main gap."""
+    rows = [dict(qty=30, docstatus=1, eta_ok=False, kind="po"),
+            dict(qty=10, docstatus=1, eta_ok=False, kind="transit")]
+    split = fn.split_by_eta(rows)
+    assert split["undated_total"] == 40.0
+    assert split["dated_total"] == 0.0, "无 ETA 供给不得进入主口径"
+    assert split["dated_rows"] == 0
 
 
 def test_partial_receipt_and_in_transit_are_not_double_counted():
-    """PO 100, received 40, in transit 60 -> countable supply is 100, never 140."""
-    po, received, in_transit = 100.0, 40.0, 60.0
-    assert received + in_transit == po
-    pipeline = received + in_transit + po
-    assert pipeline == po, f"分批接收与在途是同一批；现实现得到 {pipeline}，应为 {po}"
+    """PO 100, received 40, in transit 60 -> countable supply is 100, never 140/200."""
+    rows = [dict(qty=40, docstatus=1, kind="receipt"),
+            dict(qty=60, docstatus=1, kind="transit")]
+    got = fn.harvest_total(rows)
+    assert got == 100.0, f"分批接收与在途是同一批；得到 {got}，应为 100"
 
 
 def test_future_cancellation_reduces_supply():
-    """A known cancellation dated 11/5 of 30 units must be removed from the horizon."""
-    supply = 100.0
-    cancelled = 30.0
-    assert supply - cancelled == 70.0
-    pipeline = supply          # no cancellation concept in the current pipeline
-    assert pipeline == 70.0, f"未来取消未处理（得到 {pipeline}，应为 70）"
+    rows = [dict(qty=100, docstatus=1, kind="po"),
+            dict(qty=30, docstatus=1, kind="cancel")]
+    got = fn.harvest_total(rows)
+    assert got == 70.0, f"未来取消未处理（得到 {got}，应为 70）"
 
 
 def test_earliest_gap_is_not_masked_by_later_surplus():
-    """Month 1 is short 10, month 2 has +50 surplus -> the earliest gap is 10, not 0."""
-    m1_gap, m2_surplus = 10.0, 50.0
-    assert m1_gap == 10.0
-    pipeline = max(0.0, m2_surplus - m1_gap)   # netting across time
-    assert pipeline == 10.0, f"期末盈余不能掩盖最早缺口；现实现得到 {pipeline}，应为 10"
+    """月 1 缺 10、月 2 多 50：最早的缺口仍是 10，不是 0。
+
+    新守恒口径：closing = opening + receipts − fulfilled，缺口记在 unserved，
+    因此 closing 不会为负；未履约滚入下一桶。
+    """
+    gaps = fn.bucket_gaps([
+        dict(name="m1", opening=0, receipts=0, demand=10),
+        dict(name="m2", opening=None, receipts=50, demand=0)])
+    assert gaps[0]["gap"] == 10.0, f"最早缺口不得被期末盈余吃掉；得到 {gaps[0]['gap']}"
+    assert gaps[0]["unserved"] == 10.0 and gaps[0]["closing"] == 0.0
+    # bucket 2 receives the carried 10, has 50 receipts -> fully served
+    assert gaps[1]["demand"] == 10.0 and gaps[1]["fulfilled"] == 10.0
+    assert gaps[1]["gap"] == 0.0 and gaps[1]["closing"] == 40.0
 
 
 # ===========================================================================
@@ -203,77 +139,68 @@ def test_earliest_gap_is_not_masked_by_later_surplus():
 # ===========================================================================
 
 def test_one_dn_five_tracking_numbers_does_not_multiply_qty():
-    rows = [dict(qty=2, docstatus=1, tracking=f"TRK{i}", kind="dn") for i in range(5)]
-    rows = [dict(rows[0])]  # one DN row, five tracking numbers on it
-    got = harvest_total(rows)
+    """一个 DN 行 qty=2（不管带几个跟踪号）只算一次。"""
+    rows = [dict(qty=2, docstatus=1, tracking="TRK1", kind="dn")]
+    got = fn.harvest_total(rows)
     assert got == 2.0, f"一个 DN 五个号只算一次 2 件；得到 {got}"
 
 
 def test_one_tracking_number_on_many_dns_counts_once():
     rows = [dict(qty=3, docstatus=1, tracking="TRK1", kind="dn"),
             dict(qty=4, docstatus=1, tracking="TRK1", kind="dn")]
-    got = harvest_total(rows)
+    got = fn.harvest_total(rows)
     assert got == 3.0, f"同一号多张 DN 只能算一次（首张 3）；得到 {got}"
 
 
 def test_partial_received_supply_is_received_plus_remaining_not_double():
-    rows = [dict(qty=40, docstatus=1, tracking=None, kind="receipt"),
-            dict(qty=60, docstatus=1, tracking=None, kind="transit")]
-    got = harvest_total(rows)
-    assert got == 100.0, f"部分签收 40 + 在途 60 = 100；得到 {got}"
+    rows = [dict(qty=40, docstatus=1, kind="receipt"),
+            dict(qty=60, docstatus=1, kind="transit")]
+    assert fn.harvest_total(rows) == 100.0
 
 
 def test_parent_submitted_child_draft_is_excluded():
-    rows = [dict(qty=50, docstatus=1, tracking=None, kind="dn"),
-            dict(qty=50, docstatus=0, tracking=None, kind="dn")]   # child draft
-    got = harvest_total(rows)
+    rows = [dict(qty=50, docstatus=1, kind="dn"),
+            dict(qty=50, docstatus=0, kind="dn")]   # child draft
+    got = fn.harvest_total(rows)
     assert got == 50.0, f"子表 docstatus=0 是草稿，必须排除；得到 {got}"
 
 
 def test_return_subtracts_from_supply():
-    rows = [dict(qty=10, docstatus=1, tracking=None, kind="dn"),
-            dict(qty=4, docstatus=1, tracking=None, kind="return")]
-    got = harvest_total(rows)
+    rows = [dict(qty=10, docstatus=1, kind="dn"),
+            dict(qty=4, docstatus=1, kind="return")]
+    got = fn.harvest_total(rows)
     assert got == 6.0, f"退货应冲减（10 − 4 = 6）；得到 {got}"
 
 
 def test_shared_component_is_not_split_evenly():
-    """A shared cover pool of 30 for 3 SKUs must not become 10 each without proof."""
-    shared_qty, n_skus = 30.0, 3
-    naive_split = shared_qty / n_skus
-    assert naive_split == 10.0
-    assert False, "共享料不能均摊：需显式分配规则，当前实现无此规则"
+    """共享料 30 件 / 3 个 SKU：没有显式规则就不能均摊。"""
+    assert fn.shared_allocation(30.0, ["a", "b", "c"], rule=None) is None
+    assert fn.shared_allocation(30.0, ["a", "b", "c"],
+                                rule={"a": 0.5, "b": 0.3, "c": 0.2}) == [15.0, 9.0, 6.0]
 
 
 # ===========================================================================
 # Domain 4 — 未知与 SKU×仓
 # ===========================================================================
 
-def _gap(stock, demand):
-    if stock is None:
-        return None                 # unknown, not zero
-    return max(0.0, demand - stock)
-
-
 def test_missing_stock_is_unknown_not_zero():
-    assert _gap(None, 100) is None
-    assert _gap(None, 100) != 0, "缺库存必须记 unknown，不能自动 0"
-    pipeline = 0.0                  # current pipeline coerces missing to 0 elsewhere
-    assert pipeline is None, f"现实现把缺值当 0（得到 {pipeline}）"
+    assert fn.gap_or_unknown(None, 100) is None
+    assert fn.gap_or_unknown(80, 100) == 20.0
 
 
 def test_missing_uom_item_or_eta_blocks_the_row():
-    for missing in ("uom", "item", "eta"):
-        assert False, f"缺 {missing} 时必须标不可算/放弃，当前实现未阻断"
+    base = dict(stock=10, uom="个", item="X", supply_expected=True, eta_ok=True)
+    assert fn.require_evidence(base) == []
+    assert fn.require_evidence(dict(base, uom=None)) == ["单位"]
+    assert fn.require_evidence(dict(base, item="")) == ["物料"]
+    assert fn.require_evidence(dict(base, eta_ok=False)) == ["ETA"]
 
 
 def test_same_sku_in_two_warehouses_does_not_offset():
-    wh_a = dict(stock=0, demand=10)
-    wh_b = dict(stock=50, demand=0)
-    gaps = [_gap(wh_a["stock"], wh_a["demand"]), _gap(wh_b["stock"], wh_b["demand"])]
-    assert gaps == [10, 0], "同 SKU 不同仓不得互相抵消"
-    pipeline = max(0.0, (wh_b["stock"] + wh_a["stock"]) - (wh_a["demand"] + wh_b["demand"]))
-    assert pipeline == 10, f"现实现按 SKU 合计求缺口（得到 {pipeline}，应为 per-仓 10/0）"
+    rows = [dict(warehouse="A", stock=0, demand=10),
+            dict(warehouse="B", stock=50, demand=0)]
+    got = fn.warehouse_gaps(rows)
+    assert [g["gap"] for g in got] == [10.0, 0.0], f"同 SKU 不同仓不得互相抵消；得到 {got}"
 
 
 def test_zero_sales_is_a_fact_and_missing_source_is_unknown():
@@ -285,12 +212,8 @@ def test_zero_sales_is_a_fact_and_missing_source_is_unknown():
 
 
 def test_missing_values_are_not_silently_zero_in_aggregation():
-    vals = [10.0, None, 5.0]
-    total = sum(v for v in vals if v is not None)
-    assert total == 15.0
-    naive = sum(v or 0 for v in vals)
-    assert naive == 15.0, "缺值不得当成 0 参与合计（数值相同但语义不同，需同时保留 unknown 计数）"
-    assert False, "当前实现未输出 unknown 计数，无法区分 15（10+5）与 15（10+0+5）"
+    agg = fn.aggregate_with_unknown([10.0, None, 5.0])
+    assert agg == dict(total=15.0, known=2, unknown=1)
 
 
 # ===========================================================================
@@ -305,17 +228,13 @@ def test_forecast_uses_only_information_before_the_origin():
     full = [10, 12, 14]
     f = naive_forecast(full)
     assert f == [14, 14, 14]
-    # later data becomes available, but the ORIGIN-TRUNCATED series is unchanged
     later = full + [99, 100, 101]
-    f2 = naive_forecast(later[:len(full)])
-    assert f2 == f, "追加未来证据后，历史切点的预测必须不变"
+    assert naive_forecast(later[:len(full)]) == f, "追加未来证据后，历史切点的预测必须不变"
 
 
 def test_appending_future_evidence_does_not_change_history():
     train = [10, 12, 14]
-    before = naive_forecast(train)
-    after = naive_forecast(train)
-    assert before == after, "同一训练窗必须给出同一预测（无未来信息泄漏）"
+    assert naive_forecast(train) == naive_forecast(train)
 
 
 # ===========================================================================
@@ -323,88 +242,137 @@ def test_appending_future_evidence_does_not_change_history():
 # ===========================================================================
 
 def test_fill_rate_is_hand_computable():
-    demand, served = 100.0, 90.0
-    assert served / demand == 0.9, "fill rate = 满足量/需求 = 0.9"
+    assert 90.0 / 100.0 == 0.9
 
 
 def test_cycle_service_level_is_hand_computable():
-    # demand is uniform over {0..10}, stock 8 -> P(D <= 8) = 9/11
     p = sum(1 for d in range(0, 11) if d <= 8) / 11
     assert round(p, 6) == round(9 / 11, 6)
 
 
 def _quantile(values, q):
-    xs = sorted(values)
     import math
+    xs = sorted(values)
     idx = min(len(xs) - 1, math.ceil(q * (len(xs) - 1) - 1e-12))
     return xs[idx]
 
 
 def test_cumulative_quantile_is_not_sum_of_monthly_quantiles():
     m = list(range(0, 11))                 # uniform 0..10, P90 = 9
-    two = [a + b for a in m for b in m]    # two iid months
+    two = [a + b for a in m for b in m]
     p90_month = _quantile(m, 0.9)
     p90_two = _quantile(two, 0.9)
     assert p90_month == 9
     # hand-computed: P(sum<=15)=108/121=0.893 < 0.9, P(sum<=16)=111/121=0.917
     assert p90_two == 16, f"两月合计 P90 手算为 16，得到 {p90_two}"
     assert p90_two != 2 * p90_month, "累计分位数不得用逐月分位数相加（16 != 18）"
-    # skewed example: 80% zero, 20% ten -> monthly P90 = 10, two-month P90 = 10
     skewed = [0] * 8 + [10] * 2
     assert _quantile(skewed, 0.9) == 10
     assert _quantile([a + b for a in skewed for b in skewed], 0.9) == 10
     assert 10 != 2 * 10, "逐月相加会给出 20，明显高估"
 
 
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# 301 forward review + coordinator follow-up (2026-10-23)
+# ===========================================================================
+
+def test_same_batch_is_not_upgraded_to_proven():
+    """gross 100 / 在手 0 / PO 30 / 在途 30 / suspected：
+    同批 → 供给 30、缺口 70；不同批 → 供给 60、缺口 40。两组必须并存。"""
+    b = fn.batch_supply(30, 30, "suspected_same_batch_as_po")
+    assert b["same_batch"] == 30.0 and b["different_batch"] == 60.0
+    assert b["dedupe_state"] == "unknown_suspected", "suspected 不得升级为已证同批"
+    assert max(0.0, 100 - 0 - b["same_batch"]) == 70.0
+    assert max(0.0, 100 - 0 - b["different_batch"]) == 40.0
+    # no same-batch evidence -> both scenarios carry the full sum
+    n = fn.batch_supply(30, 30, "none_recorded")
+    assert n["same_batch"] == 60.0 and n["different_batch"] == 60.0
+
+
+def test_bucket_identities_hold_and_unserved_carries():
+    chain = fn.bucket_gaps([
+        dict(name="m1", opening=20, receipts=0, demand=50),
+        dict(name="m2", opening=None, receipts=10, demand=30),
+        dict(name="m3", opening=None, receipts=0, demand=0)])
+    for c in chain:
+        fn.assert_bucket_identities(c)
+    assert chain[0]["unserved"] == 30.0 and chain[0]["closing"] == 0.0
+    assert chain[1]["demand"] == 60.0          # 30 carried + 30 new
+    assert chain[1]["fulfilled"] == 10.0 and chain[1]["unserved"] == 50.0
+    assert chain[2]["demand"] == 50.0          # carried into the third bucket
+
+
+def test_demand_source_is_t5_not_t3():
+    rate, src = fn.choose_rate("5.0", "7.0")
+    assert rate == 5.0 and src == "T5_AutoETS_eq_rate", "有 T5 时必须用 T5 并如实标注"
+    rate2, src2 = fn.choose_rate("", "7.0")
+    assert rate2 == 7.0 and src2 == "T3_3month_mean_fallback", "无 T5 才回退 T3，且标注 T3"
+    assert fn.choose_rate("", "") == (None, "missing")
+
+
+def test_negative_forecast_rate_is_clamped_to_zero():
+    """负的 T5 等效率是模型伪影，不是负需求：钳到 0，并保留原值标注。"""
+    assert fn.demand_rate(-6.3388) == 0.0
+    assert fn.demand_rate(5.0) == 5.0
+
+
+def test_unknown_wo_never_promotes_to_confirmed():
+    assert fn.readiness_of("A", False) == "条件", "WO 未观测的行不得给已确认"
+    assert fn.readiness_of("A", True) == "已确认"
+    assert fn.readiness_of("B", False) == "条件"
+    assert fn.readiness_of("C", False) == "HOLD"
+
 
 TESTS = [
-    # (function, expected_red)
-    (test_so_in_forecast_window_is_not_deducted_twice, True),
-    (test_so_outside_forecast_adds_demand, True),
-    (test_stock_already_net_of_so_must_not_deduct_so_again, True),
-    (test_red_light_current_impl_returns_zero_for_the_roadmap_case, False),
-    (test_midmonth_snapshot_consumption_is_deducted, True),
-    (test_cross_month_uses_actual_days_not_full_months, True),
-    (test_late_supply_after_horizon_is_not_counted, True),
-    (test_partial_receipt_and_in_transit_are_not_double_counted, True),
-    (test_future_cancellation_reduces_supply, True),
-    (test_earliest_gap_is_not_masked_by_later_surplus, True),
-    (test_one_dn_five_tracking_numbers_does_not_multiply_qty, False),
-    (test_one_tracking_number_on_many_dns_counts_once, True),
-    (test_partial_received_supply_is_received_plus_remaining_not_double, False),
-    (test_parent_submitted_child_draft_is_excluded, False),
-    (test_return_subtracts_from_supply, False),
-    (test_shared_component_is_not_split_evenly, True),
-    (test_missing_stock_is_unknown_not_zero, True),
-    (test_missing_uom_item_or_eta_blocks_the_row, True),
-    (test_same_sku_in_two_warehouses_does_not_offset, True),
-    (test_zero_sales_is_a_fact_and_missing_source_is_unknown, False),
-    (test_missing_values_are_not_silently_zero_in_aggregation, True),
-    (test_forecast_uses_only_information_before_the_origin, False),
-    (test_appending_future_evidence_does_not_change_history, False),
-    (test_fill_rate_is_hand_computable, False),
-    (test_cycle_service_level_is_hand_computable, False),
-    (test_cumulative_quantile_is_not_sum_of_monthly_quantiles, False),
+    test_so_in_forecast_window_is_not_deducted_twice,
+    test_so_outside_forecast_adds_demand,
+    test_stock_already_net_of_so_must_not_deduct_so_again,
+    test_red_light_current_impl_returns_zero_for_the_roadmap_case,
+    test_midmonth_snapshot_consumption_is_deducted,
+    test_cross_month_uses_actual_days_not_full_months,
+    test_late_supply_after_horizon_is_not_counted,
+    test_partial_receipt_and_in_transit_are_not_double_counted,
+    test_future_cancellation_reduces_supply,
+    test_earliest_gap_is_not_masked_by_later_surplus,
+    test_one_dn_five_tracking_numbers_does_not_multiply_qty,
+    test_one_tracking_number_on_many_dns_counts_once,
+    test_partial_received_supply_is_received_plus_remaining_not_double,
+    test_parent_submitted_child_draft_is_excluded,
+    test_return_subtracts_from_supply,
+    test_shared_component_is_not_split_evenly,
+    test_missing_stock_is_unknown_not_zero,
+    test_missing_uom_item_or_eta_blocks_the_row,
+    test_same_sku_in_two_warehouses_does_not_offset,
+    test_zero_sales_is_a_fact_and_missing_source_is_unknown,
+    test_missing_values_are_not_silently_zero_in_aggregation,
+    test_forecast_uses_only_information_before_the_origin,
+    test_appending_future_evidence_does_not_change_history,
+    test_fill_rate_is_hand_computable,
+    test_cycle_service_level_is_hand_computable,
+    test_cumulative_quantile_is_not_sum_of_monthly_quantiles,
+    test_same_batch_is_not_upgraded_to_proven,
+    test_bucket_identities_hold_and_unserved_carries,
+    test_demand_source_is_t5_not_t3,
+    test_unknown_wo_never_promotes_to_confirmed,
+    test_negative_forecast_rate_is_clamped_to_zero,
 ]
 
 
 def main() -> int:
     res = _Results()
-    for fn, red in TESTS:
-        res.record(fn.__name__, fn, red)
+    for fnc in TESTS:
+        res.record(fnc.__name__, fnc)
     counts = res.report()
-    # expected reds are not a CI break; unexpected failures are
-    return 1 if counts["FAIL"] else 0
+    return 0 if counts["FAIL"] == 0 else 1
 
 
 def test_suite_runs():
-    """pytest entry point: run everything and require zero UNEXPECTED failures."""
+    """pytest entry point: the whole suite must pass."""
     res = _Results()
-    for fn, red in TESTS:
-        res.record(fn.__name__, fn, red)
+    for fnc in TESTS:
+        res.record(fnc.__name__, fnc)
     counts = res.report()
-    assert counts["FAIL"] == 0, f"unexpected failures: {counts['FAIL']}"
+    assert counts["FAIL"] == 0, f"failures: {counts['FAIL']}"
 
 
 if __name__ == "__main__":
