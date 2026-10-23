@@ -484,3 +484,35 @@ PB 根 `D:/Work/美国/Tracy Miller/PB orders` 的 `checked0stock` CSV 是**实�
 - 8 样本 + 2 缺额验收 → 证据索要清单 → 交付物整理 → Top50 准备；
 - 上述验收且**无系统性阻塞**后，可做 **Top200 只读数据准备**，**不扩数量结论**；
 - 沿用停止规则；**不重审 LR1 与 122**。
+
+## 2026-10-23 D33：Git 清关阻塞（本地领先 69 提交，含业务 CSV，仓库 PUBLIC）
+
+**事实（2026-10-23 实测，非推测）**
+
+- `origin = https://github.com/keyapi/fzh-data.git` —— **公开仓库**。
+- 分支 `docs/supply-chain-integration-handoff` 本地**领先 upstream 69 个提交**
+  （`git rev-list --left-right --count @{u}...HEAD` → `0	69`）。
+- 这 69 个提交内含 **38 个 CSV**，均为业务明细：`out/auto_order/*.csv`（`order_suggestions`、`so_sample`、
+  `external_view` 等）、`out/business_phase/*.csv`（`final_bundle`、`replenishment_all`、`decision_v2` 等）、
+  `out/pb_stockout/*.csv`（`pb_30sku_list`、`stockout_intervals`）、`experiments/business_phase/forecast_eval/*.csv`。
+  另有 149 md / 46 py / 31 json。
+- `uv run python scripts/check_secrets.py`：扫 656 文件，**零明文凭证**（凭证无泄漏；**业务数据仍需清关**）。
+
+**阻塞（直接说清，不绕）**
+
+- **禁止 `git push`**：一旦推送，业务 CSV 进入公开 GitHub 历史；即使事后删除也无法真正移除（fork / 缓存 / 索引）。
+- **禁止改写历史**（`rebase` / `filter-branch` / `filter-repo` / force-push）：未经用户明确授权，不得动既有 69 个提交。
+
+**本阶段处置原则**
+
+- **原始业务数据留本地**：新增产物中凡含行级业务明细的 CSV / JSON，**不提交**；只提交源码、测试、**脱敏结论**、索引。
+- 阶段成果按 **ce-okf** 沉淀：源码 + 测试 + 脱敏结论（聚合数字 / 口径 / 边界）+ `index.md` / `log.md` 联动。
+- 已入库的 38 个 CSV 本轮**不处理**。**解除阻塞必须由用户决策**，可选项：
+  ① 迁移到私有仓库；② 只导出脱敏快照到公开侧；③ 保持本地、不推送。
+  Agent 不自行选择其中任何一项。
+
+**对当前派工的约束**
+
+- 打工仔本轮**一律不 commit、不 push**；工头是唯一提交者。
+- 工头提交前**逐文件确认**是否含行级业务数据；含则排除并在报告里列出被排除的文件与原因（不静默丢弃）。
+
