@@ -103,3 +103,4 @@ description: docs/research 目录变更历史
 - **S3**: `dfp_external_storage` 配了两条：阿里云 OSS 香港 `erpnext-hk`（桶存在，403；生产 `-internal` 端点从上海超时）与 NAS MinIO `fzh.myds.me:9000/en.media`（当前可达，200）。香港桶已实测可写：1.5MB 上传 3.6s（0.42 MB/s）、下载 8.0s（0.19 MB/s）；NAS MinIO 为 2.27/7.21 MB/s。结论收敛为**本地盘优先，不做每日 S3**；香港桶仅作月度/低频备份（年成本约 ¥0–10，创建桶免费），NAS 只作副本。
 - **结论**: 当前库存进 EN 只读 `Tongtool Stock Latest`；历史不进 EN，原始 JSONL/Parquet 放 EN 上海云盘并镜像 OSS；DuckDB 只做查询层，且不跑生产（2C4G）。
 - **协同**: Jack PR #309（stock_alert 低库存，33 tests 通过）已复核；后续把低库存与库存抓取合并成 EN 一次拉取。Windows API 备份 2026-10-23 修复后手工重跑 `complete=True`（14 仓）。
+- **Handoff**: [docs/handoffs/2026-10-23-jack-en-stock-sync.md](../handoffs/2026-10-23-jack-en-stock-sync.md) — 给 Jack 的 v1 落地清单（单个 Parquet、Latest/Run、05:17、低库存合并）。

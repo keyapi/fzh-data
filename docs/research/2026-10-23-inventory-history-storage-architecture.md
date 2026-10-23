@@ -260,6 +260,7 @@ ssh sh-erpnext-test-frappe "cd /home/frappe/frappe-bench && bench --site erpnext
 - `docs/solutions/architecture-patterns/order-history-duckdb-store.md` — 订单历史 DuckDB 分层（PR #290）
 - `docs/solutions/workflow-issues/cargo-location-tracking-source-reliability.md` — 通途“可用 0”不可信
 - `docs/solutions/integration-issues/en-tongtool-order-package-sync-failures.md` — EN 通途同步的 300s/526/重叠
+- `docs/handoffs/2026-10-23-jack-en-stock-sync.md` — 给 Jack 的 EN `tongtool_integration` 落地清单（v1）
 
 ## 11. 价格与测速来源
 
