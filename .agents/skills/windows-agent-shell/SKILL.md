@@ -109,3 +109,4 @@ uv run python scripts/env_doctor.py --probe
 
 - `docs/solutions/developer-experience/codex-chatgpt-windows-setup-config-recovery.md` —— Codex (ChatGPT Desktop) 更新后 Windows 安装失败与对话历史恢复
 - `docs/solutions/developer-experience/windows-wsl-docker-disk-optimization.md` —— Windows WSL2 Docker VHDX disk space optimization and migration
+- `docs/solutions/developer-experience/dotenv-bom-source-leak.md` —— 父仓库 `.env` 的 BOM/畸形行，不要用 `source`

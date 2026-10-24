@@ -311,6 +311,7 @@ gh pr create --title "<70 字以内>" --body-file "$BODY_FILE"
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/tooling-decisions/ce-okf-conversation-wrapup-skill.md` —— ce-okf skill — 把「ce-compound + OKF 收尾」固化成一个命令
+- `docs/solutions/developer-experience/claude-desktop-3p-session-retention.md` —— Claude Desktop/Code 长对话保留、30 天清理、归档与 `--resume`
 ## 相关经验（docs/solutions）
 
 踩过的坑与设计取舍，动手前先读：

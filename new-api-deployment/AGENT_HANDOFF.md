@@ -449,4 +449,5 @@ crontab -l  # 查看定时任务
 - 桥接器: `../new-api-dingtalk-oidc/main.py` + `stream_listener.py`
 - 方案文档: `../docs/solutions/integration-issues/dingtalk-sso-new-api-oidc-bridge.md`
 - 方案文档: `../docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md`（分时定价）
+- 相关经验: `../docs/solutions/tooling-decisions/deepseek-1017-harness-selection-cost-cache.md`（1017 Harness 成本/缓存/Windows 沙箱）
 - 本地敏感信息: `.secrets.env`（请勿提交）

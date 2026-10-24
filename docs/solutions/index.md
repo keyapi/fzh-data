@@ -13,6 +13,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-19 | 父仓库 .env 的 BOM + 畸形行 — 不要用 bash source 读取 | [developer-experience/dotenv-bom-source-leak.md](developer-experience/dotenv-bom-source-leak.md) |
+| 2026-10-19 | DeepSeek 1017 Harness 选型 — Claude Code vs DSH vs Pi 的成本/缓存/Windows 现实 | [tooling-decisions/deepseek-1017-harness-selection-cost-cache.md](tooling-decisions/deepseek-1017-harness-selection-cost-cache.md) |
+| 2026-10-19 | Claude Desktop 3P 长对话保留 — 30 天清理、transcript 映射与归档 | [developer-experience/claude-desktop-3p-session-retention.md](developer-experience/claude-desktop-3p-session-retention.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-10-08 | key_test 应用的两个结构性隐患：每次登录写元数据 + 打核心报表猴补丁，且生产/测试分支割裂 | [workflow-issues/key-test-login-hook-and-prod-test-divergence.md](workflow-issues/key-test-login-hook-and-prod-test-divergence.md) |
 | 2026-09-24 | 知识库防腐三件套 — 孤儿检测 / 生成式索引 / 链接图 | [best-practices/knowledge-base-anti-rot.md](best-practices/knowledge-base-anti-rot.md) |
