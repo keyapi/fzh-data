@@ -19,3 +19,4 @@ timestamp: 2026-09-10
 | Amazon 在线商品配对的分层候选与运营确认流程 | [amazon-online-product-pairing-candidate-workflow.md](amazon-online-product-pairing-candidate-workflow.md) |
 | 赛狐组合商品/套件 SKU 创建与配对工作流 | [sellfox-combo-sku-create-pairing-workflow.md](sellfox-combo-sku-create-pairing-workflow.md) |
 | 赛狐 Apifox API 文档本地镜像刷新与对账 | [sellfox-apifox-api-docs-mirror-refresh.md](sellfox-apifox-api-docs-mirror-refresh.md) |
+| 把问卷交给非 AI 同事填写：单份仓库 MD + Notion 通道 | [external-questionnaire-via-notion.md](external-questionnaire-via-notion.md) |
