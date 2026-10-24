@@ -33,6 +33,7 @@ metadata:
 - **科目映射**：列式列即科目（product_sales↔销售额、selling_fees↔佣金、fba↔FBA、Cost of Advertising↔广告、tax 列↔税）；结算 amount-description 同向。
 - **赛狐店名↔渠道账号**：用「收款主体→账号族 code」+「站点」匹配共享表「和运营部共享/渠道账号（20260521起在此维护）」；`赛狐店铺` 列已加在「渠道账号别名」右侧；北京熙锦(XJ)=AMZBJXJ、VERCART=AMZVer、Daneey-CA=AMZDANEEYCA、如泱-CA=AMZBJRYECLTDCA、**北京固祥未启用→排除**。
 - **别名坑**：`渠道账号别名` 会被 explode+去重作匹配键，必须是**完整账户标识**，**不能含裸地区/品牌 token**（colab cell 1.2/1.2.1）。
+- **和钉钉并存**：赛狐结算组不是钉钉提交的替代品。每月先钉钉 API 与 aflow Excel 按审批编号交叉，再拿 `groupPage`（结算结束日）对已提交行。赛狐没有的组不要假装已核对。打款额不要拿去改钉钉手填销售额。见 `dingtalk/dingtalk_oa_approval/docs/research/browser-admin-download.md`。
 
 ## 用法
 ```bash
