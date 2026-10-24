@@ -10,6 +10,8 @@ triggers:
   - "OpenAI API Proxy"
   - "US AI Proxy"
   - "模型授权失败"
+  - "应急线路"
+  - "出口线路"
 ---
 
 # US OpenAI API Proxy Skill
@@ -20,6 +22,8 @@ triggers:
 2. `us_openai_api_proxy/docs/operations.md`：脱敏运维 runbook。
 3. `docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md`：
    `503 auth_unavailable` 的诊断和恢复边界。
+4. `docs/solutions/architecture-patterns/office-egress-fallback-chain.md`：出口走哪条线、应急线路的两端、
+   主线路内部的通用线 vs `AI 出口`（后者**无自动故障转移**）、按域名判线法与维护窗口。
 
 ## 处理规则
 
@@ -42,3 +46,5 @@ triggers:
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/integration-issues/grokbot-ssh-via-shanghai-jump-symmetric-nat.md` —— grok-bot（美东）SSH 接入 — 对称 NAT 下的跳板选路与 Tailscale SSH 验证绕过
+- `docs/solutions/architecture-patterns/office-egress-fallback-chain.md` —— 办公室出口拓扑与应急链路：三条出口路径、主线路内部的通用线 vs `AI 出口`（后者无自动故障转移）、按域名判线法与维护窗口
+- `docs/solutions/integration-issues/openclash-overwrite-stale-group-name-orphaned-egress.md` —— 覆写脚本写死上一代订阅的策略组名 → `find` 返回 nil 静默跳过 → 应急出口「活着但没接线」；订阅模板漂移类的通用教训与检测手段

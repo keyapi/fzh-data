@@ -28,6 +28,7 @@ tags: [openai, api-proxy, handoff, authentication]
 | ChatGPT/Codex OAuth 需要刷新 | [docs/operations.md](docs/operations.md) 的“授权恢复”（含浏览器 OAuth、隔离失效记录、重启和目标模型验收） |
 | 服务 active 但模型仍失败 | 对**目标模型**运行最小真实请求，不以 health check 为结论 |
 | 上游返回 `429` | [429 限流调研](../docs/solutions/integration-issues/chatgpt-edu-cliproxyapi-429-rate-limit.md) |
+| 出口走哪条线 / 应急线路到底有没有接上 | [办公室出口拓扑与应急链路](../docs/solutions/architecture-patterns/office-egress-fallback-chain.md)、[覆写脚本写死组名致应急出口悬空](../docs/solutions/integration-issues/openclash-overwrite-stale-group-name-orphaned-egress.md) |
 
 ## `auth_unavailable` 处置顺序
 
@@ -55,3 +56,5 @@ tags: [openai, api-proxy, handoff, authentication]
 - [docs/lessons/lessons-learned.md](docs/lessons/lessons-learned.md) — 经验教训
 - [docs/index.md](docs/index.md) — 模块文档索引
 - [解决方案：`auth_unavailable` 恢复](../docs/solutions/integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md)
+- [解决方案：办公室出口拓扑与应急链路](../docs/solutions/architecture-patterns/office-egress-fallback-chain.md) — 三条出口路径、主线路内部的通用线 vs `AI 出口`（后者无自动故障转移）、判线法与维护窗口
+- [解决方案：覆写脚本写死策略组名致应急出口悬空](../docs/solutions/integration-issues/openclash-overwrite-stale-group-name-orphaned-egress.md) — 订阅模板漂移→静默 no-op 的事故正文与检测手段

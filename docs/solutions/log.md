@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-14（OpenClash 应急出口悬空 + 办公室出口拓扑补全）
+- **新增**: `integration-issues/openclash-overwrite-stale-group-name-orphaned-egress.md` —— 办公室 OpenClash 覆写脚本写死上一代订阅的策略组名（`Auto` → 现役 `自动选择`），`find` 返回 nil 即静默跳过，**自建应急出口 `Emergency` 长期「活着但没接线」**（入向引用为零）。含「数入向引用」的定界法、副本干跑→重载→端到端换出口的验证顺序、以及「为什么不能顺手塞进 url-test 自动组」的取舍表。原则早已在模块 Lesson 9/11 里，本篇补的是可复现事故与检测手段。
+- **更新**: `architecture-patterns/office-egress-fallback-chain.md`（`last_updated: 2026-10-14`）—— 补「主线路内部还分了两条：通用线（url-test 会自愈）vs `AI 出口`（三层手动 select、**无任何自动故障转移**）」，并点明两条线**共用同一批节点**（同一节点名在 `proxies:` 里只有一个定义，可被多个组引用 ⇒ 日志记成通用线的掉线，坏的可能正是 AI 在用的那台）；补「按域名 grep 日志看 `using 组[节点]`」的分应用判线法、`/tmp/openclash.log` 被 watchdog **按大小清空**故历史留不住、以及每天 04:30 重启 / 07:00 重启 OpenClash 两个必断窗口。**订正**该文原先「已在 OpenClash 侧修正优先级」的过度乐观表述 —— 修过优先级 ≠ 接上了。
+
 ## 2026-10-08（PB 无货件：UPS 才算真发 + 重复建单加后缀）
 - **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`（`last_updated: 2026-10-08`）—— 三处补料：**① §2.1.1 新增「重复建单也占 `-N`」**：通途不允许重复订单号；`-N` 与拆单后缀是**同一命名空间**（同批多行占 `-1…-M`、跨批补发继续排），所以**下一个可用 = 该 PO 已用过的最大 `-N` + 1**，不是固定 `-2`（用户纠正：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」）。两种查法都实测：**离线扫历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（286 个文件，结果与「`PBUS-<PO>` 存不存在」完全吻合）或通途模糊搜 `PBUS-{PO}`；注意导入 xlsx 里存的是**光号**（`137770200-1`），`PBUS-` 是通途侧店铺码。已在 `pb_orders` 落地成 `--reorder`/`--history-dir`。**② §6.1 补「通途 `orderStatus=despatched` 同样不等于真发」**：它和 ASN/面单一样只证明「建了单/建了标」，判定「真发」只有 **UPS 取件**一个口径。**③ §6.6 新增 2026-10-08 无货件复核实测**（10 个 PO：真发 2 —— `137770200-1` 与 `137974027` 的有货行 `-194`；只建标未取件 8），并记下本次**先拿 shipment/ASN 反推「已发货」、把 7 行改成已发、被用户纠正**的教训 —— ASN 与通途状态都替代不了 UPS。
 
