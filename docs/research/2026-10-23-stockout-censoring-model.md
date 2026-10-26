@@ -30,7 +30,7 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 | WX 6/26 库存 | 同目录 | 2026-06-26 全量 5,551 行（数据源/美东/波兰/美中/退货/Wayfair） | 6 月检查点 |
 | WX 7 月销售/库存报表 | 同目录 | 7/10、7/16、7/22、7/24、7/28、7/29、7/30、7/31 | 7 月检查点（含销量/库存） |
 | EN 每日快照 | `/home/frappe/fzh-inventory/stock.parquet` | 10/20–10/23（每日） | 之后每日累积 |
-| PB `check0stock` / `checked0stock` | PB orders 本地历史目录 | **2023-08 至今，约 275 个文件** | PB/美中断货与零库存订单的地面真值（28 个涤麻三角靠枕） |
+| PB `check0stock` / `checked0stock` | PB orders 本地历史目录 | **2023-08 至今，约 275 个文件；实际出现 35 个 Vendor Style：27 个 CEN… + 8 个 TT0031010…（Gap Filler）** | PB/美中断货与零库存订单的地面真值（28 个涤麻三角靠枕；第 28 个未在 check0stock 出现，待清单确认） |
 | PB 无货通知链 | 订单 → 中国运营 → 美中 → 中国运营 → 你 | 事件驱动 | 美中/PB 实际无货信号 |
 | 钉钉盘点群 | 钉钉群 | — | **当前无读取/搜索权限，暂不可用** |
 
@@ -49,7 +49,7 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 
 - **美东**：**先假定所有账号（Centrade / WOWMAX 等）都只吃美东-CENTRADE**；≤5 下架只影响美东发货仓。断货不是 `available=0` 才开始，而是运营在 ≤5 手动下架后销售停止。
 - **美中**：停售阈值/负责人**不知道，也没人负责**；不套用美东的 5。PB 的流程是：订单 → 中国运营 → 美中 → 没货 → 美中通知中国运营 → 中国运营通知你。**非 PB 的美中 Listing 没有稳定无货信号，按 `stock_unknown` 处理**，不能因系统库存 >5 就当有货。
-- **PB 历史**：2023–2024 美东；2024 美中分公司成立后改美中 USTX；偶发美中断货临时改美东，极少；Wayfair CG 从美东调拨，先忽略。**PB 本地 `check0stock`/`checked0stock` 2023-08 至今约 275 个文件，是 PB/美中断货的地面真值**。
+- **PB 历史**：2023–2024 美东；2024 美中分公司成立后改美中 USTX；偶发美中断货临时改美东，极少；Wayfair CG 从美东调拨，先忽略。**PB 本地 `check0stock`/`checked0stock` 2023-08 至今约 275 个文件，是 PB/美中断货的地面真值**；实际出现 27 个 CEN 涤麻三角/Headboard/Personal Wedge + 8 个 TT Gap Filler，第 28 个涤麻三角未出现，需清单确认。
 - **退货**：退到主仓的退货可售；美东/波兰以前没有退货仓，现在有但可能没人操作入库；美中退货仓一直有，9 月仓库改名后不确定是否直接进正常品仓。**不能假设退货仓是唯一退货入口**。
 - **下架通知**：美东运营会在钉钉盘点/通知群发；当前**没有钉钉群消息读取/搜索权限**，暂不可用。美东先用“销量停止 + ≤5”推断；PB/美中直接用 `check0stock` + 无货通知链，不依赖钉钉。
 
@@ -117,7 +117,7 @@ sellable_stock(listing, sku, day) =
 
 ## 4. 如何侦测退货/手工调整
 
-好消息：通途有库存变动明细接口 `erp2_stocks_stockschangedetailquery`（`updatedDateFrom` 只能 7 天内），实测返回：
+好消息：通途 ERP2 官方库存变动明细接口 `erp2_stocks_stockschangedetailquery`（`updatedDateFrom` 只能 7 天内），实测返回：
 
 - `goodsSku`、`operateTime`、`operaterUserName`
 - `relatedVoucherType` / `relatedVoucherTypeName`（如“包裹”）、`relatedVoucherNumber`
@@ -157,10 +157,10 @@ sellable_stock(listing, sku, day) =
 4. **保留 unknown**：快照缺失/批次不完整时不要写 0，也不参与删失。
 5. **运营日志**：请美东/中国运营把下架/恢复/盘点调整记到共享表；盘点群消息可请中国运营转发/导出。没有日志时先用“销量停止 + ≤5”推断。
 6. **Listing ↔ 仓 ↔ 时期映射**：美东 → 美东-CENTRADE；美中 → 美中-FZH-DANEEY；PB 2023–2024 → 美东，2024+ → 美中 USTX；Wayfair CG 暂忽略。
-7. **PB 无货标签**：解析 `check0stock` / `checked0stock` 2023-08 至今约 275 个文件，按 28 个涤麻三角靠枕 SKU 过滤，生成断货窗口/受影响订单；作为 PB/美中的地面真值。
+7. **PB 无货标签**：解析 `check0stock` / `checked0stock` 2023-08 至今约 275 个文件（实际 35 个 Vendor Style：27 CEN + 8 TT），按 28 个涤麻三角靠枕 + 8 个新楔形 SKU 过滤，生成断货窗口/受影响订单；作为 PB/美中的地面真值。
 8. **美中非 PB**：没有稳定无货信号时按 `stock_unknown`，不能因系统库存 >5 就当有货；有客服/运营反馈再标。
 9. **WX 历史库存入库**：6/26、7 月报表、库存动态 8/24–10/19（27 个日期列）→ `stock_checkpoint` / 长表；统一仓库名（美东仓 → 美东-CENTRADE 等），与 EN 10/20–23 对齐；6 月以前没有。
-10. **钉钉**：当前没有群消息读取/搜索权限，不纳入自动化；需要时请运营导出或记共享表。
+10. **钉钉**：`qyapi_chat_read` 只读群信息/成员，**不返回消息历史**；当前没有群消息读取/搜索权限，不纳入自动化；需要时请运营导出或记共享表。会话存档是另一套企业能力，暂不启动。
 
 ## 6. 预测里怎么用
 
