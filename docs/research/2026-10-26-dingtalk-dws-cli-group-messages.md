@@ -199,6 +199,28 @@ dws chat +chat-messages --group "<通知群 openConversationId>" \
 - 未发送任何消息、未改群/机器人配置、未改生产系统。
 - 未接自动化；建议下一步按天只读拉取，落库前断言 `complete && !hasMore && failures.isEmpty()`。
 
+### 7.7 目标群实测：美国客服沟通（2026-10）
+
+> 用户确认：**美国物资盘点不是** WX/Paula 沟通群；真正有下架/库存记录的是「美国客服沟通」（用户在其中）。
+
+- 10/01–10/26 共 **233 条**，`complete=true`、3 页、`stopReason=source_complete`。
+- **156 条可读，77 条（33%）是 SafeChat/安恒密盾加密**：`decryptCandidateCount=77`、`decryptFailedCount=77`、`decryptAllowedCount=0`、reason=`policy_disabled`。当前安装的 `dws` 为 open 版，`safechat` 子命令不存在；要解密需要 SafeChat 后端 + 企业密盾策略允许。
+- 可读消息里库存相关关键词：**下架 9、库存 20、缺货 5、恢复 2、盘点 1、报溢 1**。典型内容（去标识）：
+  - “亚马逊已经下架，请把通途库存调为零”；
+  - “没有库存，请下架”；
+  - “缺货的 SKU 用 Blue Geometry 替代，注意更新库存”；
+  - “退货后再报溢出 label”；
+  - “这类盘点/调整库存的信息发盘点群集中处理”（10/20 WX）。
+- **关键缺口**：WX 要求把盘点/调整库存信息集中到「盘点群」，但**用户不在该群**；DWS 只能读登录用户可见的会话，所以该群目前读不到。要完整覆盖，需要把用户或专用账号拉进盘点群，或让 WX 转发/导出。
+- 33% 加密 + 盘点群不可见 ⇒ **不能用“没搜到”证明“没有下架/缺货”**；只能把已读到的当正证据。
+
+**建议顺序**：
+
+1. 先让用户/专用账号加入「盘点群」；这是比解密更关键的覆盖面问题。
+2. 如企业使用安恒密盾，找密盾管理员确认是否允许该应用解密；否则接受 67% 明文覆盖。
+3. 现阶段只解析明文消息，按 `下架/库存/缺货/恢复/报溢` 做关键词 + 人工复核，**不自动当作断货标签**。
+4. 原始消息只落在 `D:/Work/fzh-order-store/dingtalk/`（不入公开仓库）；仓库只记录方法、聚合数和限制。
+
 ## 8. 来源
 
 - [DingTalk-Real-AI/dingtalk-workspace-cli（官方仓库）](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli)
