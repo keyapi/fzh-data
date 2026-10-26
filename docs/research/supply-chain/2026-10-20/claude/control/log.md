@@ -43,4 +43,6 @@ date: 2026-10-23
 - **2026-10-26 Jack 答复 Q11**：`[W1-A11]` 已写入 `JACK_QA.md`；仓库 scope 语义（operator）、波兰仓 confidence→assumed、
   SC14 离线同步 + `tests/run_canonical_tests.py`、`sample_skus.json` as_of_note 已落地。代码 `e15b1b91`；draft PR #312。
   验证：233 行 / SC14 21/21 + 132 warning / SC04 差 0 / B_min 1,212 / B_max 2,762+433 / 19 passed 0 skip。
+- **2026-10-26 A11 验收**：工头判定通过；核心逻辑未改，数字沿用。合并顺序建议 `#311 → rebase #312 → #312`；
+  #311/#312 仍 draft，等用户/审核会话批准。待业务确认：PO status=4、FZH-DANEEY 子仓运营方。
 

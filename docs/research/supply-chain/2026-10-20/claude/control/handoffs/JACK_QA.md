@@ -26,7 +26,7 @@ channel: docs/jack-w1-channel
 | **Q08 received** | `received_evidenced` 保持 `qty=null + qty_status='unknown'` 可接受，只进 `supply_unknown`；分 `received_booked`（Stock Entry）与 `received_evidenced`（签收）。9 SKU 覆盖 8/39 DN、1,516/4,279 行是预期，不是 39/39。 |
 | **Q09 复审** | W1 v0 数据口径基本落地；**6 项必改**：代码移到 feature 分支、SC14 不 fork、PO021735 status=4 不写“作废”、WO 过滤可审计、received 28 行拆分、B_min/B_max 桥接表。详见 §2 `[W1-Q09]`。 |
 | **Q10 复审** | A09 大部分通过；**1 个阻塞**：`config/frozen_20261022.json` 是行级业务 JSON 进公开仓库，违反 D33；另有 4 项必改：SC14 同步测试 skip、PR312 body 过期、WO 审计时点、B 桥接 per-PO 明细。详见 §2 `[W1-Q10]`。 |
-| **Q11 复审** | A10 已清关数量 JSON；用户已决定**保留** `sample_skus/warehouse_map`（无数量）；剩余 2 项必改：仓库 confidence/scope 一致性、SC14 同步默认仍可能 skip。详见 §2 `[W1-Q11]`。 |
+| **Q11 复审** | A11 **通过**：仓库 `scope=operator`、波兰 `assumed`、SC14 离线同步 19/0；用户已保留 `sample_skus/warehouse_map`（无数量）。**#312 技术上可进合并评审**；剩业务确认（PO status=4、子仓运营方）+ 合并决定。详见 §2 `[W1-A11]`。 |
 
 ## 2. 轮次记录（只追加）
 
@@ -239,6 +239,20 @@ channel: docs/jack-w1-channel
 **未合并**
 
 - #311、#312 保持 draft；行级 JSON 清关前不合并。
+
+### [W1-A11] 工头验收：通过（2026-10-26）
+
+**结论：Q11 两项已修；核心逻辑未改（diff 不含 `w1_supply_timeline.py`），数字沿用 v0；#312 技术上可进合并评审。**
+
+- 仓库：`warehouse_scope=operator` 已写明；波兰 `assumed`；CENTRADE/DANEEY `confirmed` + basis。
+  `FZH-DANEEY-成品仓/半成品仓` 仍是 `own/assumed`——**运营方待业务确认**（若 DANEEY 运营应为 3pl），不阻塞技术合并。
+- **下游映射**：`supply_own_*` 用 `scope=in_house` 判断“我方库存”，**不要用 `warehouse_scope=own`**；`warehouse_scope` 只用于运营方展示。
+- SC14：离线 unittest 无 canonical 时 1 skip 是预期；`tests/run_canonical_tests.py` 19/0；CI 应跑这个入口。
+- 数字：233 / B_min 1,212 / B_max 2,762+433 / SC14 21/21 + 0 error / 132 warning / SC04 差 0 沿用。
+- **合并顺序建议**：`#311`（docs/contracts）→ rebase `#312` → `#312`；#311 先把 `experiments/sc14` 带到 main，
+  让 #312 的 `test_canonical_matches` 真正 0 skip。
+- 待业务确认（不阻塞技术合并）：PO `status=4` 语义；FZH-DANEEY 子仓运营方（own/3pl）。
+- #311/#312 仍 draft；等用户/审核会话批准。
 
 ## 3. 更早的问答（归档）
 

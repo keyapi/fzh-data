@@ -89,3 +89,5 @@ git pull
   （`config/frozen_20261022.json` 行级业务 JSON 进公开仓库，违反 D33）+ 4 项必改。
 - **A10 已收**（feature `62546ea7`）：数量 JSON 已移出、SC14 同步 19/0、WO 时点/per-PO/received 字段已补。
   `[W1-Q11]`：用户已决定**保留** `sample_skus/warehouse_map`（无数量）；剩余 2 项必改（仓库 confidence/scope、SC14 同步默认）。
+- **A11 已验收通过**（feature `e15b1b91`）：仓库 `scope=operator`、波兰 `assumed`、SC14 离线同步 19/0；
+  **#312 技术上可进合并评审**。下一动作：`#311 → rebase #312 → #312`；等用户/审核会话批准。
