@@ -219,3 +219,35 @@ def test_line_po_no_blank_when_neither_present():
 
 def test_line_po_no_trims_whitespace():
     assert iss.line_po_no({"po_no": "  PO-X  "}, {"purchase_order": "  "}) == "PO-X"
+
+
+# ── 退货净额抵扣 ────────────────────────────────────────────────────────
+def test_enrich_so_rows_nets_return_dn():
+    """退货型 DN 行 qty 为负且仍带 so/so_detail → shipped_dn 应净额抵扣。"""
+    so_rows = [{"so": "SO-1", "line_id": "L1", "item_code": PK, "qty": 40,
+                "delivered_qty": 30, "wos": [], "pps": []}]
+    dn_rows = [
+        {"so": "SO-1", "so_line_id": "L1", "item_code": PK, "dn": "DN-1",
+         "dn_status": "Submitted", "dn_docstatus": 1, "is_return": 0, "qty": 40,
+         "is_return_amt": 0},
+        {"so": "SO-1", "so_line_id": "L1", "item_code": PK, "dn": "DN-2",
+         "dn_status": "Submitted", "dn_docstatus": 1, "is_return": 1, "qty": -10},
+    ]
+    iss.enrich_so_rows(so_rows, dn_rows, [], [], {}, "")
+    assert so_rows[0]["shipped_dn"] == 30      # 40 正向 - 10 退货
+    assert so_rows[0]["open_qty"] == 10        # 40 - delivered 30（delivered_qty 已是净额）
+
+
+# ── 工单归属：行级外键（同 SO 同物料多行不互串）────────────────────────────
+def test_wos_for_line_prefers_line_level_foreign_key():
+    """有 sales_order_item 的工单按行级外键挂；同 SO 同 item_code 的多行不互串。"""
+    wos = [
+        {"name": "WO-a", "sales_order": "SO-1", "sales_order_item": "L1", "production_item": PK,
+         "docstatus": 1, "status": "In Process"},
+        {"name": "WO-b", "sales_order": "SO-1", "sales_order_item": "L2", "production_item": PK,
+         "docstatus": 1, "status": "In Process"},
+        {"name": "WO-old", "sales_order": "SO-1", "production_item": PK,
+         "docstatus": 1, "status": "In Process"},   # 无 sales_order_item → 退回复合键
+    ]
+    assert {w["name"] for w in iss.wos_for_line(wos, "SO-1", PK, "L1")} == {"WO-a", "WO-old"}
+    assert {w["name"] for w in iss.wos_for_line(wos, "SO-1", PK, "L2")} == {"WO-b", "WO-old"}
