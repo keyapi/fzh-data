@@ -35,4 +35,7 @@ date: 2026-10-23
   （只留 schema/sha256/聚合 summary），代码在 `feature/jack-supply-timeline`（`62546ea7`），draft PR #312。
   验证：233 行 / SC14 21/21 + 132 warning / SC04 差 0 / B_min 1,212 / B_max 2,762+433 / 单测 19 passed 0 skip。
   #311、#312 保持 draft，行级 JSON 清关前不合并。
+- **2026-10-26 A10/Q11**：A10 已收；数量 JSON 清关解除（config 只剩 schema/sha256/summary）。
+  `[W1-Q11]`：剩余 2 项必改（仓库 confidence/scope 一致性、SC14 同步默认仍可能 skip）+ 1 项用户决定
+  （`sample_skus/warehouse_map` 标识 JSON 是否也移出公开仓库）。
 

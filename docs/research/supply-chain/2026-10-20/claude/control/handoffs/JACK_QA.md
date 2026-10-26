@@ -26,6 +26,7 @@ channel: docs/jack-w1-channel
 | **Q08 received** | `received_evidenced` 保持 `qty=null + qty_status='unknown'` 可接受，只进 `supply_unknown`；分 `received_booked`（Stock Entry）与 `received_evidenced`（签收）。9 SKU 覆盖 8/39 DN、1,516/4,279 行是预期，不是 39/39。 |
 | **Q09 复审** | W1 v0 数据口径基本落地；**6 项必改**：代码移到 feature 分支、SC14 不 fork、PO021735 status=4 不写“作废”、WO 过滤可审计、received 28 行拆分、B_min/B_max 桥接表。详见 §2 `[W1-Q09]`。 |
 | **Q10 复审** | A09 大部分通过；**1 个阻塞**：`config/frozen_20261022.json` 是行级业务 JSON 进公开仓库，违反 D33；另有 4 项必改：SC14 同步测试 skip、PR312 body 过期、WO 审计时点、B 桥接 per-PO 明细。详见 §2 `[W1-Q10]`。 |
+| **Q11 复审** | A10 已清关数量 JSON；剩余 2 项必改（仓库 confidence/scope 一致性、SC14 同步默认仍可能 skip）+ 1 项用户决定（`sample_skus/warehouse_map` 标识 JSON 是否也移出公开仓库）。详见 §2 `[W1-Q11]`。 |
 
 ## 2. 轮次记录（只追加）
 
@@ -178,6 +179,45 @@ channel: docs/jack-w1-channel
 
 - `status=4` 语义仍待业务确认。
 - #311、#312 保持 draft；行级 JSON 清关前不合并。
+
+### [W1-Q11] 2026-10-26 工头复审：A10
+
+**结论：Q10 的 D33 数量 JSON 阻塞已解除；剩余 2 项需改 + 1 项用户决定，修完可进合并评审。**
+
+#### 通过
+
+- 行级数量 JSON 已移出 git：`config/` 只剩 `schema` / `sha256` / `summary`；`local/` 已 gitignore；`--config` / `--wo-audit` 从本地读取。
+- SC14 同步：19 passed / 0 skip；canonical 从 `origin/docs/jack-w1-channel` 读取；`SOURCE.json` pin；`run_sc14.py` 从 `SOURCE.json` 读 contract pin。
+- WO：`wo_state_as_of` / `jc_as_of` / `modified_after_as_of` 已补；`production_conflict` 保留。
+- per-PO 桥接：本地 `b_bridge_po.csv` + 公开 summary（6 行 / 914 / 全部 `same_batch_suspected` + 无 ETA）。
+- received 主行带 `doc_qty / received_qty / posting_date / received_source`。
+- 验证：233 行 / B_min 1,212 / B_max 2,762+433 / SC14 21/21 / 0 error / 132 warning / SC04 差 0。
+
+#### 必须改
+
+1. **仓库 confidence / scope 一致性**：
+   - `warehouse_map.json` 的 `波兰-FZHPoland-covers` 是 `warehouse_confidence=confirmed`，但 `source/note` 写 `assumed EN mapping`；应为 `assumed`，除非有独立证据。
+   - `FZH-DANEEY-成品仓/半成品仓` 是 `warehouse_scope=own`，而 CENTRADE/DANEEY 是 `3pl`。请写清 `warehouse_scope` 是**库存所有权**还是**仓库运营方**：
+     若指所有权，3PL 仓内我方货也应是 `own`；若指运营方，子仓应是 `3pl`。当前混用会让 `supply_own_*` 误读。
+   - 建议加 `warehouse_scope_basis`（ownership / operator）字段。
+2. **SC14 同步测试默认仍可能 skip**：只有 `SC14_SYNC_REQUIRE=1` 或 `GITHUB_ACTIONS` 才 fail；离线/未 fetch 时普通单测仍 skip。PR body 写“默认不再 skip”不准确。
+   - 在 CI/测试入口设 `SC14_SYNC_REQUIRE=1`，或把 canonical checkout 到 `SC14_CANONICAL_DIR`；或明确“离线 skip 是预期”。
+   - 单测里的 `git fetch` 网络依赖建议放到 CI 步骤，测试保持离线。
+3. **PR #312 body 措辞**：`无行级 JSON` → `无行级数量 JSON；sample_skus/warehouse_map 仍含标识/映射，待用户确认`。
+4. （minor）`W1-RESULTS` §8.6 的 `po` 行排除原因补一句：6 行 / 914 全部 `same_batch_suspected` + 无 ETA；per-PO 明细在本地。
+   `sample_skus.json` 的 `as_of=2026-10-23` 与快照 10-22/10-20/10-19 不一致，请注明它是“样本冻结日”。
+
+#### 用户决定（不是 Jack 改）
+
+- `sample_skus.json`（9 SKU 映射，无数量）与 `warehouse_map.json`（仓 ID / EN 映射，无数量）仍在公开仓库。
+  按严格 D33“行级业务明细 JSON 不提交”，它们也应移出；但只有标识/映射、没有数量。
+  **请用户拍板**：保留（视为配置/映射）或移出（schema + sha256 + 本地）。
+  在用户决定前，#312 不合并。
+
+#### 下一步
+
+- 1/2/3/4 在 #312 修；用户决定 5。
+- 修完追加 `[W1-A11]`；#311 / #312 保持 draft。
 
 ## 3. 更早的问答（归档）
 
