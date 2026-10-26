@@ -40,32 +40,34 @@ Request Type 有四类：
 
 ### 与既有记录的关系
 
-此前**不是完全没有记录**，但都不足以直接照做：
+此前**不是完全没有记录**，先分清哪部分是现成的、哪部分是缺的：
 
-- 未合并分支上的 stockout 文档只有一行旁注：`取消类另起一条链：Re:WSI WISMO/Cancel Request/CHAD - 5806 Centrade Inc <日期>`，
-  另给过一个例子 `PO 137892570 Cancel accepted`；Notion 状态映射也只有 `顾客=取消 + 状态=顾客取消` 一行。
-- **实际处理早就有**：Sent 里能看到 2026-09-23「CANCEL impossible, already on the way」、
-  10-12「PO 138039519 CANCEL not accepted」、10-15「PO 137892570 Cancel accepted」、
-  10-19「PO 137987968 Cancel accepted」。
+| 已有 | 在哪 | 本文是否重复 |
+|---|---|---|
+| 腾讯企业邮箱 IMAP 检索特性（`FROM/SUBJECT` 服务端静默忽略、必须 `SINCE/BEFORE` + 客户端过滤；文件夹名带空格要加引号；UID/序号不能混用） | `sps_api/docs/reference/tencent-imap.md`（**main**） | 不重复，只链接 |
+| 现成读信脚本（列邮件 / `--full N` 看正文） | `sps_api/read_sps_mail.py`（**main**） | 不重写；它只 `select INBOX` |
+| 取消类邮件链的一句话 + 例子 `PO 137892570 Cancel accepted` | 未合并分支的 stockout 文档 | 本文补全流程 |
+| 实际处理先例 | Sent：2026-09-23 / 10-12 / 10-15 / 10-19 | 本文只提炼口径 |
 
-缺的是**可执行的全流程**：怎么在多个文件夹里找全邮件、按哪四项核实「从未发货」、汇总提醒怎么处理、
-HTML 表格最后一列怎么填、SMTP 后怎么归档、Notion 备注怎么写。这篇把这些补齐。
-旧 stockout 分支合并后，两篇互相链接即可，不需要重复正文。
+缺的是 **PB CANCEL 业务闭环**：多文件夹找全、四项核实「从未发货」、汇总提醒怎么处理、
+HTML 表格最后一列怎么填、SMTP 后怎么归档、Notion 备注怎么写。本文只写这些；
+IMAP 机制和读信脚本直接复用上面的现成文档/脚本。
 
 ## Guidance
 
-### 1. 先把邮件找全 —— 按日期范围扫，不要只按主题过滤
+### 1. 先把邮件找全 —— 复用现有 IMAP 读信工具
 
-| 项 | 做法 |
-|---|---|
-| 账号 | `us@mxdeals.com`（Tencent Exmail，`imap.exmail.qq.com:993` SSL） |
-| 凭证 | 内部 Notion 页面 / 父仓库未跟踪处；**绝不写进仓库** |
-| 文件夹 | `INBOX` / `Junk` / `Sent Messages` / `Drafts` / `Deleted Messages`，以及一个非 select 的中文文件夹 |
-| 检索 | 先 `SEARCH SINCE <date> BEFORE <date>` 取日期范围内全部邮件，再在本地按主题过滤；**不要只靠 `SEARCH SUBJECT`** |
-| 正文 | 同时取 `text/plain` 与 `text/html`；HTML 表格才是回复时要保留的原件 |
-
-> 实测：两封 CANCEL 就在 `INBOX`，但只看「最近几封」或只按主题搜会漏掉。日期范围
-> `18-Oct-2026 .. 27-Oct-2026` 一次列出 50 封，主题过滤后稳定命中。
+- 腾讯企业邮箱的检索坑（`FROM/SUBJECT` 被服务端静默忽略、必须 `SINCE/BEFORE` + 客户端过滤、
+  `Sent Messages` 要加引号）已在 `sps_api/docs/reference/tencent-imap.md`，**不要重写**。
+- `sps_api/read_sps_mail.py` 已封装「列窗口内邮件 / `--full N` 看正文」，凭据走环境变量。
+  但它 **只 `select INBOX`**，且只输出纯文本；本场景还要：
+  1. 遍历 `INBOX` / `Junk` / `Sent Messages` / `Drafts` / `Deleted Messages` + 非 select 文件夹；
+  2. 取 `text/html` 原表（回复时要保留对方的 HTML 格式）；
+  3. 发信 + `APPEND` 到 `Sent Messages`。
+- 账号 `us@mxdeals.com`（Tencent Exmail，`imap.exmail.qq.com:993` SSL）；凭证在内部 Notion 页面 /
+  父仓库未跟踪处，**绝不写进仓库**。
+- 实测：两封 CANCEL 就在 `INBOX`，但只看「最近几封」或只按主题搜会漏掉。按
+  `18-Oct-2026 .. 27-Oct-2026` 一次列出 50 封，再本地按主题过滤，稳定命中。
 
 ### 2. 读表，把 Buyer SKU 映射成我方 SKU
 
@@ -140,7 +142,7 @@ Buyer SKU → 我方 SKU 的可靠来源是 Notion 台账的 `对方SKU` / `通�
 
 跨 PO / 台账里没有对应行 → 按既有惯例在 `任务202408-` 库建任务页（事件表 / 操作清单 / 其他操作 / 待办）。
 Notion 写入走 `notion-personal` MCP；CLI 会话里没有该工具时，见
-[notion-mcp-direct-access.md](../developer-experience/notion-mcp-direct-access.md)。
+[notion-mcp-setup.md §六](../../lessons/notion-mcp-setup.md)。
 
 ## Why This Matters
 
@@ -174,6 +176,8 @@ Notion 两行分别追加操作记录并改为 `顾客取消` / `取消` / `通�
 ## Related
 
 - [pb-out-of-stock-notification-and-zero-stock-orders.md](pb-out-of-stock-notification-and-zero-stock-orders.md) —— 断货判据、PO↔通途映射、「真发」只认 UPS 取件
-- [../developer-experience/notion-mcp-direct-access.md](../developer-experience/notion-mcp-direct-access.md) —— CLI 会话里没有 `notion-personal` 工具时怎么直接写 Notion
+- [tencent-imap.md](../../../sps_api/docs/reference/tencent-imap.md) —— 腾讯企业邮箱 IMAP 检索特性（本文不重复）
+- [read_sps_mail.py](../../../sps_api/read_sps_mail.py) —— 现成读信脚本（只读 INBOX、纯文本）
+- [notion-mcp-setup.md](../../lessons/notion-mcp-setup.md) —— Notion MCP 的 3P 配置与授权；本文只补「CLI 直接调用」一节
 - `pb_orders/AGENT_HANDOFF.md` —— PB 订单履约模块交接（文件位置、批次目录、库存预检）
 - `pb_orders/docs/reference/workflow.md` —— 批次文件命名、PO/SKU 列映射

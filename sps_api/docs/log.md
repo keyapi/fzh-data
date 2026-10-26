@@ -8,6 +8,10 @@ tags: [sps-api, changelog]
 
 # 变更日志
 
+## 2026-10-26
+
+- **更新**: `reference/tencent-imap.md` — 「相关脚本」补指向 PB 取消邮件业务闭环（`docs/solutions/workflow-issues/pb-cancel-request-email-closed-loop.md`）。IMAP 检索结论不变，只是给这份机制文档补一个业务层出口。
+
 ## 2026-08-18（第二次）
 
 - **新增脚本** `read_sps_mail.py`：IMAP 读邮件，凭据从环境变量读，不写进代码。

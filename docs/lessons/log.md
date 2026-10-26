@@ -8,6 +8,10 @@ tags: [lessons, log]
 
 # 变更日志
 
+## 2026-10-26
+
+- **更新**: [notion-mcp-setup.md](notion-mcp-setup.md) — 新增「六、当前会话没有 MCP 工具时：从 CLI 直接调用已授权的 MCP」。起因：CLI 会话的工具列表没有 `notion-personal`，被误判成「Notion 写不了」。补：**REST 401 ≠ MCP 不可用**（`api.notion.com` 与 `mcp.notion.com/mcp` 是两套凭证）、token 缓存位置（含 `MCP_REMOTE_CONFIG_DIR`）、JSON-RPC/SSE/`User-Agent` 请求格式、`notion-update-page` 属性键名与回读要求。原「Notion 接入」与多工作区章节不重复。
+
 ## 2026-09-20
 
 - **新增**: [../../chatgpt/](../../chatgpt/README.md) — **新建 `chatgpt/` 子项目**（OKF bundle：`docs/index.md` + `docs/log.md` + `docs/reference/`）。主题：ChatGPT 当 Agent 宿主的接入知识，后续 ChatGPT 相关工作都记到这里。**起因**：在 ChatGPT 智能体「新应用」弹窗里不知道怎么选身份验证，且误入「访问令牌/API 密钥 → 标头方案（持有者/基本/自定义标头）」这条死路。结论：**必须选 OAuth** —— FAC 只有 OAuth 2.0+PKCE，无静态 token 方案（选「无身份验证」实测 401）。本文档最初写在本目录下（`chatgpt-mcp-connector.md`），随子项目建立**已迁移**，避免两处说同一件事。

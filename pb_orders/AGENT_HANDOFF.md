@@ -656,4 +656,4 @@ PO 重复列出）也要回，否则她的跟踪表会一直显示未答复。�
 
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
 - `docs/solutions/workflow-issues/pb-cancel-request-email-closed-loop.md` —— PB 顾客取消（CANCEL）邮件闭环 — 找邮件、核实未发货、回原线程、填 Vendor Comment、写 Notion
-- `docs/solutions/developer-experience/notion-mcp-direct-access.md` —— CLI 会话没有 `notion-personal` 工具时，复用 Claude-3p OAuth 缓存直接调 Notion MCP（写台账用）
+- `docs/lessons/notion-mcp-setup.md` §六 —— CLI 会话没有 `notion-personal` 工具时，复用 Claude-3p OAuth 缓存直接调 Notion MCP（写台账用）

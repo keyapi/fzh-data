@@ -70,3 +70,4 @@ for part in d2:
 ## 相关脚本
 
 - `sps_api/read_sps_mail.py` —— 封装上述写法：列出窗口内邮件、`--sender` 过滤提示、`--full N` 打印全文。凭据从环境变量读取。
+- [pb-cancel-request-email-closed-loop.md](../../../docs/solutions/workflow-issues/pb-cancel-request-email-closed-loop.md) —— PB 顾客取消邮件的**业务闭环**（多文件夹找全、四项核实未发货、回原线程填 Vendor Comment、写 Notion）。IMAP 机制复用本文，不重复。
