@@ -258,6 +258,34 @@ channel: docs/jack-w1-channel
 
 用户要求额度收尾后交 Jack。见 [完整交接](2026-10-26-codex-native-report-handoff.md)：原生报表测试实现与 PO 入库只读适配器已审、75 项本地测试通过；完整七阶段/PO 去重整合尚未完成，禁止把库存证据入口当成可承诺供给。生产库存/Parquet 已运行，本次不改生产、不自动通途入库。后续优先核实 warehousingDate、部分入库、稳定事件身份、时区及采集窗口；#311 已合并，#312 独立评审。
 
+### [P0-A-2026-10-26] Jack 接手进展：入库证据 → 采集/对账 → 数据层 → 报表 UI
+
+> 代码：fzh-data `feature/en-native-supply-report-plan` @ `f5bf3dcc`（PR #314 draft）；key_test `feature/so-chain-report-filters` @ `e7a4f6d`（PR #2 draft）。生产未改动。
+
+**已完成**
+
+- 核对 app 与扁平副本：key_test `135131d` 的 12 个文件逐字节一致（`so_chain.py` 也一致；扁平 `sales_order_chain_append.js` 无对应分支文件）。
+- 入库证据：`PO021704` 头 10-14，实际 **38 行 10-14 + 12 行 10-19**；按头日期 ±1.5 天漏 12/50。`PO021694` 全收 26 行 1:1，`warehousingNum == quantity`。10-01–10-26 全量 102 行 / 8 PO，无同一 PO×SKU 多批行；`warehousingNum` 本次/累计、UOM、绝对时区、库存桶覆盖仍未证。
+- 采集：新增 `receipt_collector.py` + `collect_receipts_cli.py`，重叠窗口 + 仓库外缓存 + 显式弱键/截断。09-01–10-26（14 天窗/2 天重叠）：**166 输入 → 150 唯一 + 16 重叠重复**；12 PO / 113 SKU；无截断。
+- 对账/覆盖：`receipt_coverage.py`；150 条唯一行全部 `unknown`（`missing_stable_id`），全部无 UOM/时区；`not_collected=0`；未自动抵扣。
+- 设计：`supply_chain_visibility/docs/research/2026-10-26-receipt-supply-integration.md`（8 条不变量、来源表、时间桥接、重叠/单位 gate、验收测试）。
+- 数据层：P1 `supply_row.py`；P2 `receipt_bridge.py`；P3 `overlap_gates.py`；P4 `supply_integration.py`（`report_only()` 只返回聚合/flag）；P5 `scripts/bench_supply_integration.py` + 发布清单。
+- 报表 UI：Supply Timeline 增加 `source_layer / qty_status / uom_proven / timezone_status / identity_confidence / B_min/B_max 资格 / exclusion_reason`；文案明确库存证据、UOM 未证不进 B_min、不构成可承诺供给。
+
+**验证**
+
+- 扁平副本/数据层：**113 passed / 2 subtests**。
+- key_test app：**22 passed**。
+- 性能基线（合成）：4k/20k/40k 行 **0.76/3.63/7.90 秒**，peak 12.6/62.4/124.6 MB；不代表生产延迟。
+- 命令：`uv run python -m pytest ... -q`；`python supply_chain_visibility/scripts/bench_supply_integration.py --sizes 1000,5000,10000`。
+
+**未做 / 待决**
+
+- 测试站部署与浏览器验收：本机 SSH 别名不可达，需有 SSH 权限的人执行；#314/#2 保持 draft。
+- 报表实时数据源仍只有库存快照；PO/入库桥接需要预计算/采集产物或服务层接入，未接入。
+- 业务/证据待确认：PO `status=4`、`warehousingNum` 本次/累计、绝对时区、`stock_change.parquet` 桶覆盖、部分入库/换货归属、是否发布“可承诺供给”。
+- 生产只读；未自动入库、未改主数据/调度。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |
