@@ -24,6 +24,7 @@ channel: docs/jack-w1-channel
 | **Q06 映射角色** | 9 个 SKU 的映射对在 `sku_item`，可升 `proven`；但 **6 个皮壳 → `cover`**（C/Cord-White、C/Linen、C/Velvet、CEN1607、CENCord995、CENKZ1323），**2 个成品 → `finished`**（TT0031010、TT0031038），**TT0312701 → `component`**。`scope` 仍只表示 `in_house/external_fba`，不要加 `scope=component`。 |
 | **Q07 仓库** | **可以相加**：不同 `warehouse_id` 且未重复上报即可加；同 ID/别名/同量重复只算一次。`component->main` 只是本地 `warehouse_map` 清洗标签，**不是业务规则**。`FZH-DANEEY-成品仓/半成品仓` status=0、`stock_history` 无 `warehouse_id`、9 SKU 快照 0。皮壳/半成品经海外分公司填充压缩后可发成品 → 算可用供给，但标 `conversion_assumed=true`；B_min 只放已证转换，B_max 可放假设。 |
 | **Q08 received** | `received_evidenced` 保持 `qty=null + qty_status='unknown'` 可接受，只进 `supply_unknown`；分 `received_booked`（Stock Entry）与 `received_evidenced`（签收）。9 SKU 覆盖 8/39 DN、1,516/4,279 行是预期，不是 39/39。 |
+| **Q09 复审** | W1 v0 数据口径基本落地；**6 项必改**：代码移到 feature 分支、SC14 不 fork、PO021735 status=4 不写“作废”、WO 过滤可审计、received 28 行拆分、B_min/B_max 桥接表。详见 §2 `[W1-Q09]`。 |
 
 ## 2. 轮次记录（只追加）
 
@@ -36,6 +37,40 @@ channel: docs/jack-w1-channel
 | 日期 | 更正 | 说明 |
 |---|---|---|
 | 2026-10-26 | **Q07** | 上一版“`FZH-DANEEY-成品仓/半成品仓` 不能与主仓相加”**说过头了**。更正为：不同 `warehouse_id` 且未重复上报**可以相加**；`component->main` 只是本地映射清洗标签。 |
+
+### [W1-Q09] 工头复审：W1 v0（2026-10-26）
+
+**结论：Q01–Q08 的数据口径基本落地；有 6 项必须先改，再进 feature PR 复审。**
+
+#### 通过（不用改）
+
+- Q01：7 阶段启用；`unknown` 行（DN-26-00112）进 supply、只进 `supply_unknown`；本样本 `partially_received=0` 合理。
+- Q02：正式 recon 用 10-22 冻结值；`--snapshot live` 只作 `provisional_live`。
+- Q03：`WO-26-03110` 进 exceptions、不计供给；额外 `WO-26-03118`/`WO-26-03664` 按 Q03 规则计入并标 `sample10_wo_not_listed`。
+- Q05/Q06/Q07/Q08：overlap 情景、6 cover/2 finished/1 component、仓库可加 + `conversion_assumed`、received 分 booked/evidenced，均按答复落地。
+- SC04 对账：39 DN / 47 号 / 4,279 行 / 5 阶段 / FBA 17，全差 0。
+- 9 SKU 覆盖 8/39 DN、1,516/4,279 行：符合预期，不是 39/39。
+- `on_hand` 832 与 sample10 总可用一致（350+55+181+2+0+0+226+17+1=832）。
+
+#### 必须改（按优先级）
+
+1. **代码位置**：`140bbee6` 已从 `docs/jack-w1-channel` revert（`bb87549a`）；代码保留在 `feature/jack-supply-timeline`（`9aea4cb6`）。
+   **请在 feature 分支开 draft PR**；#311 保持 docs-only + draft，不合并。
+2. **不要 fork SC14**：`supply_timeline/sc14/contract.py` 是 canonical 的副本（297 行 vs 267 行）。
+   改为 import `experiments/sc14/contract.py`，或至少加 source commit + 同步测试；否则 7 阶段/21 用例会漂移。
+3. **PO021735 不要写“作废”**：`status=4` 语义未证；写 `po_status=4` + `po_status_semantics=unproven`，只进 B_max。
+   业务确认后再改标签；确认前不得当已关闭。
+4. **WO 过滤要可审计**：给 3 张额外 WO 加 `creation` / `modified` 字段；`WO-26-03110` 给 JC 首工序 sum + conflict 证据。
+5. **`received` 28 行 vs 1 DN**：说明 28 行是否都在 9 SKU 内；非样本行单独 `received_out_of_sample`；给 per-SKU 计数。
+6. **B_min/B_max 桥接**：给一张 from `on_hand 832 / po_open 1,021 / in_production 433 / transit 914` → `B_min 1,212 / B_max 2,762+433` 的桥接表，
+   说明哪些加、哪些排除、哪些只进 B_max；避免重复/遗漏。
+7. （minor）SC14 warning **132 vs 136**：解释少掉的 2 条（是否因 exceptions/unknown 移出），并给 66+66 的行级分类。
+
+#### 下一步
+
+- 在 feature PR 里按 1–2 改；3–7 在 `W1-RESULTS.md` 补表/字段。
+- 改完在本文件追加 `[W1-A09]`，PR 评论只发短指针。
+- #311 保持 draft；合并决定由用户/审核会话拍板。
 
 ## 3. 更早的问答（归档）
 

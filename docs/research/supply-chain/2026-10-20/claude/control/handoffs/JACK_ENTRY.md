@@ -47,16 +47,37 @@ git pull
   `Closed ≠ 已发完`。
 - **业务决策**（服务水平、预算、交期假设、采购授权）由用户拍板；技术口径可直接对话。
 
-## 4. 提问与答复
+## 4. 沟通规则（工头 ↔ Jack Agent）
 
-- **提问**：PR #311 评论用 `[W1-Qxx]`；或在你自己的 `feature/jack-supply-timeline` PR 里评论。
-- **答复**：统一追加到 [`JACK_QA.md`](JACK_QA.md)；PR 评论只发「已答复，见 JACK_QA.md 第 N 条」的短消息。
-- **不要**在东一个 commit、西一个 PR 评论里找口径；**以 `JACK_QA.md` 当前有效结论为准**。
-- 详细长答复按轮次存档（如 `2026-10-26-jack-w1-answers-r1.md`），但速查表在 `JACK_QA.md` 顶部。
+### 4.1 唯一位置
+
+- 入口：**本文件**；问答：**[`JACK_QA.md`](JACK_QA.md)**。
+- 提问用 `[W1-Qxx]`，答复用 `[W1-Axx]`；**PR 评论只发短指针**。
+- 不要从 commit 历史、零散 PR 评论里找口径；以 `JACK_ENTRY.md` + `JACK_QA.md` 为准。
+
+### 4.2 分支所有权
+
+- `docs/jack-w1-channel`（PR #311）：**只放文档/契约，不放代码**；保持 **draft**，不合并。
+- `feature/jack-supply-timeline`：**代码、脚本、W1-RESULTS 放这里**；开 draft PR 供工头复审。
+- 代码误放 docs 分支 → 工头 **revert**，并指向 feature 分支；不改写历史、不 force-push、不删旧记录。
+- 行级 CSV/JSON 留本地；公开侧只放文档、代码、聚合计数、路径/hash。
+
+### 4.3 复审与交付
+
+- 工头**只审 feature PR**；复审结论写进 `JACK_QA.md`（`[W1-Qxx]` / `[W1-Axx]`），不在评论里长篇往返。
+- 每轮必须给：SC14 errors/warnings、SC04 对账、B_min/B_max 桥接、exceptions、unknowns。
+- 业务决策（SLA/预算/交期假设/采购授权）仍由用户拍板；技术口径可直接对话。
+
+### 4.4 触发
+
+- Jack 把问题/结果写到 `JACK_QA.md` 或 feature PR；工头在下次被调度时读。
+- 需要实时响应时，由用户/审核会话触发定时检查；**不要求用户转述技术内容**。
 
 ## 5. 当前状态（2026-10-26）
 
+- W1 v0 结果在 `feature/jack-supply-timeline`（`9aea4cb6`）；`docs/jack-w1-channel` 上的代码提交 `140bbee6` **已 revert**（`bb87549a`）。
+- **PR #311 保持 draft，不合并**；它是 docs-only 通道。
 - 首轮 8 问已答复（Q01–Q08）；SC14 已扩 7 阶段，**21/21 passed**。
 - **Q07 已更正**：不同 `warehouse_id` 且未重复上报的**可以相加**；`component->main` 只是本地映射清洗标签。
 - 9 SKU 的映射角色：**6 个皮壳（cover）/ 2 个成品（finished）/ 1 个组件（component）**，不能全写 finished。
-- 下一步：用 10-22 冻结值重算正式 recon；实时 10-26 只作 `provisional_live`；开自己的 draft PR。
+- W1 v0 复审结论见 `JACK_QA.md` 的 `[W1-Q09]`。
