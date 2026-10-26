@@ -24,6 +24,9 @@ class ReceiptEvent:
     uom: Optional[str]
     quantity: object
     stock_effective_at: Optional[Timestamp]
+    weak_event_key: Optional[tuple] = None
+    possible_duplicate: bool = False
+    dedup_assumed: bool = False
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,9 @@ class ReconciledEvent:
     duplicate_of: Optional[int] = None
     po_association_unknown: bool = False
     receipt_delta_candidate: bool = False
+    weak_event_key: Optional[tuple] = None
+    possible_duplicate: bool = False
+    dedup_assumed: bool = False
 
 
 @dataclass(frozen=True)
@@ -70,6 +76,7 @@ class ReconciliationSummary:
     duplicate_count: int
     conflict_count: int
     unknown_count: int
+    not_collected_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -144,6 +151,7 @@ def reconcile_receipts(
     events: Iterable[ReceiptEvent],
     warehouse_windows: Mapping[str, SnapshotWindow],
     run_window: Optional[SnapshotWindow] = None,
+    collection_windows: Optional[Iterable[SnapshotWindow]] = None,
 ) -> ReconciliationResult:
     """Classify normalized receipt lines against snapshot fetch intervals.
 
@@ -152,6 +160,10 @@ def reconcile_receipts(
     later than window.end is ``after``. Both endpoints and the interval are
     ``uncertain``. A run window is a conservative fallback when a warehouse
     has no dedicated fetch interval.
+
+    When ``collection_windows`` is provided, an event outside every collected
+    window is ``not_collected`` rather than ``after``; this keeps a narrow
+    collection window visible instead of silently treating it as complete.
     """
     source = list(events)
     windows = {}
@@ -162,6 +174,13 @@ def reconcile_receipts(
     if run_window is not None:
         start, end = _timestamp(run_window.start), _timestamp(run_window.end)
         fallback = (start, end) if start and end and start <= end else None
+    collected_bounds = None
+    if collection_windows is not None:
+        collected_bounds = []
+        for window in collection_windows:
+            start, end = _timestamp(window.start), _timestamp(window.end)
+            if start and end and start <= end:
+                collected_bounds.append((start, end))
 
     identities = defaultdict(list)
     for index, event in enumerate(source):
@@ -180,6 +199,7 @@ def reconcile_receipts(
     rows = []
     totals = defaultdict(lambda: [Decimal(0), Decimal(0), Decimal(0)])
     unknown_count = 0
+    not_collected_count = 0
     for index, event in enumerate(source):
         quantity = _decimal(event.quantity)
         effective = _timestamp(event.stock_effective_at)
@@ -190,6 +210,9 @@ def reconcile_receipts(
             disposition, reason = "conflict", "identity_payload_conflict"
         elif index in duplicates:
             disposition, reason = "duplicate", "exact_replay"
+        elif (collected_bounds is not None and effective
+              and not any(start <= effective <= end for start, end in collected_bounds)):
+            disposition, reason = "not_collected", "outside_collection_window"
         elif not _has_stable_id(event):
             reason = "missing_stable_id"
         elif quantity is None:
@@ -216,6 +239,8 @@ def reconcile_receipts(
 
         if disposition == "unknown":
             unknown_count += 1
+        elif disposition == "not_collected":
+            not_collected_count += 1
         row = ReconciledEvent(
             input_index=index,
             receipt_id=event.receipt_id,
@@ -231,6 +256,9 @@ def reconcile_receipts(
             duplicate_of=duplicates.get(index),
             po_association_unknown=not bool(event.po_code),
             receipt_delta_candidate=delta_candidate,
+            weak_event_key=event.weak_event_key,
+            possible_duplicate=event.possible_duplicate,
+            dedup_assumed=event.dedup_assumed,
         )
         rows.append(row)
         if disposition in ("before", "after", "uncertain"):
@@ -248,5 +276,6 @@ def reconcile_receipts(
         duplicate_count=len(duplicates),
         conflict_count=len(conflict_indexes),
         unknown_count=unknown_count,
+        not_collected_count=not_collected_count,
     )
     return ReconciliationResult(tuple(rows), aggregates, summary)

@@ -30,6 +30,15 @@ tags: [purchase-stock, receipt, snapshot, reconciliation]
 EN 的 Delivery Note 按钮将 logistic_number 放进 PO externalNumber，创建成功后写回 custom_tongtool_purchase_order 与 custom_tongtool_po_created_on。
 后者是 EN 创建/写回时间，不是入库时间；手动 PO 不保证具有上述关联，不因无 EN 按钮记录就排除。
 
+## 2026-10-26 实测补充
+
+- `PO021694`（全收）：入库 26 行，事件 `2026-07-27 22:36:06–08`，PO 头 `purchaseArrivalDate=22:35`；26 行与 PO 行 1:1，`warehousingNum == quantity`。
+- `PO021704`（50 行）：PO 头 `purchaseArrivalDate=2026-10-14 07:22`，但实际分两批——**38 行 10-14、12 行 10-19**。按头日期 ±1.5 天采集只返回 38 行（漏 24%）；放宽到 09-01–10-26 才返回 50 行。
+- 10-01–10-26 全量小样本：102 行 / 8 张 PO / 102 个 `(PO, SKU)`；没有同一 PO×SKU 的多条入库行。部分/多批入库与 `warehousingNum` 的“本次量 vs 累计量”仍未证。
+- 响应仍无稳定 `receipt_id/line_id/uom`；`warehousingDate` 与头部时间内部一致（差 1–3 分钟），但绝对时区未证。
+
+**采集要求**：不能只用 PO 头日期定窗；使用 `tongtool_api/receipt_collector.py` 的重叠窗口（默认 7 天窗 / 1 天重叠）+ 仓库外缓存，并把窗口外行交给对账标 `not_collected`，避免静默漏计。
+
 ## Time Reconciliation
 
 05:17 是当前库存批次开始时刻，而不是所有仓库的精确读取时刻；有每仓采集窗口时优先使用，没有时采用整个批次开始/完成区间。
@@ -49,7 +58,8 @@ EN 的 Delivery Note 按钮将 logistic_number 放进 PO externalNumber，创建
 ## Implementation
 
 - `tongtool_api/purchase_receipts.py`：注入已有 MCP caller 的只读适配器；有界分页、13 秒相邻请求节流、严格错误与分页回显检查、显式 truncated 标志；无重试风暴。节流只约束本调用方，商户多 App 仍共享 5 次/分钟。
-- `supply_chain_visibility/receipt_reconciliation.py`：无网络的时间对账核心；强身份重放去重、冲突隔离、按 SKU×仓×单位分开汇总。输入数＝已分类唯一行＋重复行＋冲突行＋未知行。
+- `tongtool_api/receipt_collector.py`：重叠窗口 + 仓库外缓存 + 显式弱键；跨窗口重复标 `overlap_duplicate`，同窗口重复保留并标 `possible_duplicate`；不伪造稳定 ID/UOM。
+- `supply_chain_visibility/receipt_reconciliation.py`：无网络的时间对账核心；强身份重放去重、冲突隔离、按 SKU×仓×单位分开汇总；新增 `not_collected`、`weak_event_key`、`possible_duplicate`/`dedup_assumed` 透传。输入数＝已分类唯一行＋重复行＋冲突行＋未知行＋未采集行。
 - 真实响应缺强身份时保持弱身份，不按相同内容去重；不将这个适配器当作已经具备精准自动库存回放的证明。
 - 查询窗口按上海业务时区格式化；来源事件字符串本身未带时区，保留 unverified，调用者必须核实来源时区后再送入要求 aware timestamp 的对账核心。
 - 单元测试只用合成 fixture；自动通途 PO 入库、调度改点和库存写回不在本次范围。

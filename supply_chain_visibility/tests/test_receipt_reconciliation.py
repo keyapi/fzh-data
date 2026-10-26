@@ -200,5 +200,39 @@ class ReceiptReconciliationTests(unittest.TestCase):
         )
 
 
+    def test_collection_window_marks_uncollected_instead_of_after(self):
+        result = reconcile_receipts(
+            [event("late", stock_effective_at="2026-10-27T09:00:00+08:00")],
+            {"WH-A": self.window},
+            collection_windows=[
+                SnapshotWindow("2026-10-26T00:00:00+08:00", "2026-10-26T23:59:59+08:00")
+            ],
+        )
+        self.assertEqual(result.events[0].disposition, "not_collected")
+        self.assertEqual(result.events[0].reason, "outside_collection_window")
+        self.assertEqual(result.summary.not_collected_count, 1)
+        summary = result.summary
+        self.assertEqual(
+            summary.input_count,
+            summary.unique_count + summary.duplicate_count + summary.conflict_count
+            + summary.unknown_count + summary.not_collected_count,
+        )
+
+    def test_weak_identity_flags_are_preserved(self):
+        result = reconcile_receipts(
+            [event(
+                "weak",
+                weak_event_key=("PO", "1", "G", "S", "W", "T", "N"),
+                possible_duplicate=True,
+                dedup_assumed=True,
+            )],
+            {"WH-A": self.window},
+        )
+        row = result.events[0]
+        self.assertEqual(row.weak_event_key, ("PO", "1", "G", "S", "W", "T", "N"))
+        self.assertTrue(row.possible_duplicate)
+        self.assertTrue(row.dedup_assumed)
+
+
 if __name__ == "__main__":
     unittest.main()
