@@ -13,6 +13,9 @@ QTY_STATUSES = ("known", "estimated", "unknown")
 DATE_CONFIDENCES = ("confirmed", "estimated", "unknown")
 IDENTITY_CONFIDENCES = ("proven", "weak_identity", "unproven")
 TIMEZONE_STATUSES = ("verified", "unverified")
+SCOPES = ("in_house", "external_fba")
+WAREHOUSE_CONFIDENCES = ("confirmed", "assumed", "unmapped")
+ROLES = ("finished", "component", "cover", "unknown")
 
 
 @dataclass(frozen=True)
@@ -31,6 +34,9 @@ class SupplyRow:
     timezone_status: str
     identity_confidence: str
     source_as_of: Optional[str] = None
+    scope: str = "in_house"
+    warehouse_confidence: str = "assumed"
+    role: str = "unknown"
     snapshot_window_start: Optional[str] = None
     snapshot_window_end: Optional[str] = None
     collection_window_start: Optional[str] = None
@@ -57,6 +63,12 @@ def validate_supply_row(row: SupplyRow) -> list[str]:
         errors.append(f"invalid identity_confidence: {row.identity_confidence}")
     if row.timezone_status not in TIMEZONE_STATUSES:
         errors.append(f"invalid timezone_status: {row.timezone_status}")
+    if row.scope not in SCOPES:
+        errors.append(f"invalid scope: {row.scope}")
+    if row.warehouse_confidence not in WAREHOUSE_CONFIDENCES:
+        errors.append(f"invalid warehouse_confidence: {row.warehouse_confidence}")
+    if row.role not in ROLES:
+        errors.append(f"invalid role: {row.role}")
     if row.qty is None and row.qty_status != "unknown":
         errors.append("qty=null requires qty_status=unknown")
     if row.qty is not None and row.qty_status == "unknown":
@@ -69,6 +81,12 @@ def validate_supply_row(row: SupplyRow) -> list[str]:
         errors.append("unknown quantity cannot enter B_min/B_max")
     if not row.uom_proven and row.b_min_eligible:
         errors.append("B_min requires a proven UOM")
+    if row.scope == "external_fba" and (row.b_min_eligible or row.b_max_eligible):
+        errors.append("external_fba rows cannot enter B_min/B_max")
+    if row.warehouse_confidence == "unmapped" and (row.b_min_eligible or row.b_max_eligible):
+        errors.append("unmapped rows cannot enter B_min/B_max")
+    if row.role == "cover" and row.b_min_eligible:
+        errors.append("cover conversion is unproven; cannot enter B_min")
     return errors
 
 

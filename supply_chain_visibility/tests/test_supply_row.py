@@ -40,6 +40,14 @@ class SupplyRowTests(unittest.TestCase):
         self.assertIn("B_min requires a proven UOM",
                       validate_supply_row(row(uom_proven=False, b_min_eligible=True)))
 
+    def test_external_fba_unmapped_and_cover_gates(self):
+        self.assertIn("external_fba rows cannot enter B_min/B_max",
+                      validate_supply_row(row(scope="external_fba", b_max_eligible=True)))
+        self.assertIn("unmapped rows cannot enter B_min/B_max",
+                      validate_supply_row(row(warehouse_confidence="unmapped", b_max_eligible=True)))
+        self.assertIn("cover conversion is unproven; cannot enter B_min",
+                      validate_supply_row(row(role="cover", b_min_eligible=True)))
+
     def test_require_valid_raises(self):
         with self.assertRaises(ValueError):
             require_valid(row(stage="bogus"))

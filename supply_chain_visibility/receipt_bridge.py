@@ -39,6 +39,15 @@ class InventoryRow:
     window_end: Optional[Timestamp] = None
 
 
+@dataclass(frozen=True)
+class TransitRow:
+    sku: str
+    warehouse: str
+    qty: object
+    uom: Optional[str]
+    as_of: Optional[Timestamp] = None
+
+
 def _decimal(value: object) -> Optional[Decimal]:
     if value is None or isinstance(value, bool):
         return None
@@ -88,6 +97,7 @@ def build_receipt_bridge(
     *,
     po_as_of: Optional[Timestamp] = None,
     collection_windows: Optional[Iterable[SnapshotWindow]] = None,
+    transit_rows: Iterable[TransitRow] = (),
 ) -> list[dict]:
     """Return per SKU×warehouse×UOM bridge rows; quantities stay strings or null."""
     po_groups = defaultdict(list)
@@ -99,7 +109,10 @@ def build_receipt_bridge(
     receipt_groups = defaultdict(list)
     for event in receipt_events:
         receipt_groups[(event.sku, event.warehouse, event.uom)].append(event)
-    keys = sorted(set(po_groups) | set(inventory_groups) | set(receipt_groups),
+    transit_groups = defaultdict(list)
+    for row in transit_rows:
+        transit_groups[(row.sku, row.warehouse, row.uom)].append(row)
+    keys = sorted(set(po_groups) | set(inventory_groups) | set(receipt_groups) | set(transit_groups),
                   key=lambda key: tuple("" if value is None else str(value) for value in key))
     collected = _window_bounds(collection_windows)
     effective_po_as_of = _aware(po_as_of)
@@ -110,6 +123,7 @@ def build_receipt_bridge(
         pos = po_groups.get(key, [])
         inventories = inventory_groups.get(key, [])
         receipts = receipt_groups.get(key, [])
+        transits = transit_groups.get(key, [])
 
         po_qty = Decimal(0)
         po_qty_unknown = False
@@ -128,6 +142,23 @@ def build_receipt_bridge(
                 inventory_qty_unknown = True
             else:
                 inventory_qty += quantity
+
+        transit_qty = Decimal(0)
+        transit_qty_unknown = False
+        for row in transits:
+            quantity = _decimal(row.qty)
+            if quantity is None:
+                transit_qty_unknown = True
+            else:
+                transit_qty += quantity
+        po_value = None if po_qty_unknown else po_qty
+        transit_value = None if (not transits or transit_qty_unknown) else transit_qty
+        if po_value and transit_value and abs(po_value - transit_value) < Decimal("0.000001"):
+            overlap_status = "same_batch_suspected"
+        elif po_value and transit_value:
+            overlap_status = "distinct"
+        else:
+            overlap_status = "unknown"
 
         group_po_as_of = effective_po_as_of
         if group_po_as_of is None:
@@ -196,6 +227,8 @@ def build_receipt_bridge(
             "uom_unknown": uom in (None, ""),
             "po_qty_unknown": po_qty_unknown,
             "inventory_qty_unknown": inventory_qty_unknown,
+            "transit_qty_unknown": transit_qty_unknown,
+            "same_batch_suspected": overlap_status == "same_batch_suspected",
             "po_as_of_unverified": group_po_as_of is None,
             "snapshot_window_missing": snapshot_start is None or snapshot_end is None,
         }
@@ -207,6 +240,9 @@ def build_receipt_bridge(
             "po_open_qty": None if po_qty_unknown else _out(po_qty),
             "inventory_rows": len(inventories),
             "inventory_qty": None if inventory_qty_unknown else _out(inventory_qty),
+            "transit_rows": len(transits),
+            "transit_qty": None if (not transits or transit_qty_unknown) else _out(transit_qty),
+            "overlap_status": overlap_status,
             "po_as_of": group_po_as_of.isoformat() if group_po_as_of else None,
             "snapshot_start": snapshot_start.isoformat() if snapshot_start else None,
             "snapshot_end": snapshot_end.isoformat() if snapshot_end else None,

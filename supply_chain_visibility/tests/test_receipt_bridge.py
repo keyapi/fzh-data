@@ -5,6 +5,7 @@ import unittest
 from supply_chain_visibility.receipt_bridge import (
     InventoryRow,
     PoOpenRow,
+    TransitRow,
     build_receipt_bridge,
 )
 from supply_chain_visibility.receipt_reconciliation import ReceiptEvent, SnapshotWindow
@@ -97,6 +98,23 @@ class ReceiptBridgeTests(unittest.TestCase):
         self.assertEqual(len(rows), 2)
         receipt_row = [row for row in rows if row["uom"] is None][0]
         self.assertTrue(receipt_row["flags"]["uom_unknown"])
+
+    def test_same_batch_transit_is_flagged(self):
+        row = build_receipt_bridge(
+            [po()], [event()], [inventory()],
+            transit_rows=[TransitRow("S1", "WH-A", Decimal("10"), "Nos")],
+        )[0]
+        self.assertEqual(row["transit_qty"], "10")
+        self.assertEqual(row["overlap_status"], "same_batch_suspected")
+        self.assertTrue(row["flags"]["same_batch_suspected"])
+
+    def test_unequal_transit_is_distinct(self):
+        row = build_receipt_bridge(
+            [po()], [event()], [inventory()],
+            transit_rows=[TransitRow("S1", "WH-A", Decimal("7"), "Nos")],
+        )[0]
+        self.assertEqual(row["overlap_status"], "distinct")
+        self.assertFalse(row["flags"]["same_batch_suspected"])
 
 
 if __name__ == "__main__":
