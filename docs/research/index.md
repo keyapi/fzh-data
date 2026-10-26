@@ -11,6 +11,7 @@ tags: [research, index]
 | 日期 | 标题 | 文件 |
 |------|------|------|
 | 2026-10-23 | 通途库存「当前记录 + 每日历史」放哪：EN 只读最新快照 + 上海云盘/OSS 历史 + DuckDB；实测 EN 规格、`/mnt/nas` 非挂载、DFP S3 香港桶存在但跨区、生产 internal 端点超时、Jack PR #309 | [2026-10-23-inventory-history-storage-architecture.md](2026-10-23-inventory-history-storage-architecture.md) |
+| 2026-10-23 | 通途历史库存用于销量预测：断货/停售/退货/手工调整判定；现有 `stockout_observed` 是按仓 `available=0` 的朴素标记；库存历史仅 4 天 | [2026-10-23-stockout-censoring-model.md](2026-10-23-stockout-censoring-model.md) |
 | 2026-10-08 | key_test 生产线 vs 测试线逐文件评审清单 — 22 个冲突文件分档 + 引用关系实测（哪些真在跑/哪些死代码）+ 生产 Error Log 里的真 bug + 已建 `main-new`（以生产为基线）与备份分支 | [2026-10-08-key-test-branch-unification-review.md](2026-10-08-key-test-branch-unification-review.md) |
 | 2026-09-21 | 赛狐 API 拉 Amazon 账期报表 — **只有「插件获取报告」一条路且 API 不可触发**；90 店仅 39 店有数据、只有 6/7 两个月；fileUrls 为 1 小时签名 URL | [2026-09-21-sellfox-amazon-settlement-reports.md](2026-09-21-sellfox-amazon-settlement-reports.md) |
 | 2026-09-21 | 赛狐 Walmart 账期 API 实测 — `periodStartDate`/`periodEndDate` 真实可用，`purchaseOrder` 与 EN `Tongtool Order.platform_order_id` 100% 匹配；Wayfair/Overstock 无此路径 | [2026-09-21-sellfox-walmart-settlement-api.md](2026-09-21-sellfox-walmart-settlement-api.md) |
