@@ -25,6 +25,10 @@ git pull
 2. 跑 `experiments/sc14/test_contract.py`，确认 **21/21**。
 3. 用 9 个冻结 SKU + **10-22 冻结库存**重算正式 recon。
 
+> **每次开始任务前都重复这 3 步；不要等用户转述。**
+> 如果 Agent 支持定时轮询，设 15–30 分钟检查一次 `JACK_QA.md` 的新条目。
+> 代码只在 `feature/jack-supply-timeline`；docs 分支只放文档/契约。
+
 ## 2. 固定必读（4 个）
 
 | # | 文档 | 用途 |
