@@ -63,6 +63,7 @@ EN 的 Delivery Note 按钮将 logistic_number 放进 PO externalNumber，创建
 - `tongtool_api/receipt_collector.py`：重叠窗口 + 仓库外缓存 + 显式弱键；跨窗口重复标 `overlap_duplicate`，同窗口重复保留并标 `possible_duplicate`；不伪造稳定 ID/UOM。
 - `tongtool_api/collect_receipts_cli.py`：有界采集入口（`--from/--to/--window-days/--overlap-days/--max-pages/--cache-dir/--out/--coverage-out`）；截断时退出码 2，需提高 `--max-pages` 或加 `--allow-truncated`。
 - `supply_chain_visibility/receipt_coverage.py`：`CollectionResult` → `ReceiptEvent` → `reconcile_receipts`；输出聚合的 coverage / unknown / duplicate 报告，不含行级数量。
+- `supply_chain_visibility/receipt_bridge.py`：PO 剩余 / 库存快照 / 入库事件的按 SKU×仓×UOM 桥接；输出 before/after/uncertain/unknown_time/not_collected 计数与 flags，不自动调整库存或在途。
 - `supply_chain_visibility/receipt_reconciliation.py`：无网络的时间对账核心；强身份重放去重、冲突隔离、按 SKU×仓×单位分开汇总；新增 `not_collected`、`weak_event_key`、`possible_duplicate`/`dedup_assumed` 透传。输入数＝已分类唯一行＋重复行＋冲突行＋未知行＋未采集行。
 - 真实响应缺强身份时保持弱身份，不按相同内容去重；不将这个适配器当作已经具备精准自动库存回放的证明。
 - 查询窗口按上海业务时区格式化；来源事件字符串本身未带时区，保留 unverified，调用者必须核实来源时区后再送入要求 aware timestamp 的对账核心。
