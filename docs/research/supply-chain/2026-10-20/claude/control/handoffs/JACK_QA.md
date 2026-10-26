@@ -281,7 +281,7 @@ channel: docs/jack-w1-channel
 
 **未做 / 待决**
 
-- 测试站部署与浏览器验收：本机 SSH 别名不可达，需有 SSH 权限的人执行；#314/#2 保持 draft。
+- 测试站已**文件级更新**：`8.133.254.66` 的 key_test 两个 `.py` 已备份（`/tmp/supply_timeline_query.py.bak_20261026_175147`、`/tmp/supply_timeline_report.py.bak_20261026_175147`）并覆盖；哈希与本地一致、语法通过；REST 查询已返回新列、页面 200。`bench restart` 因 dev01 无 sudo 未执行（报表端点已加载新代码）；如需全量重启，请 frappe 用户执行 `sudo -u frappe bench restart`。浏览器视觉验收待登录后确认；#314/#2 保持 draft。
 - 报表实时数据源仍只有库存快照；PO/入库桥接需要预计算/采集产物或服务层接入，未接入。
 - 业务/证据待确认：PO `status=4`、`warehousingNum` 本次/累计、绝对时区、`stock_change.parquet` 桶覆盖、部分入库/换货归属、是否发布“可承诺供给”。
 - 生产只读；未自动入库、未改主数据/调度。

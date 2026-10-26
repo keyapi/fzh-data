@@ -47,7 +47,8 @@ date: 2026-10-23
   SC14 离线同步 + `tests/run_canonical_tests.py`、`sample_skus.json` as_of_note 已落地。代码 `e15b1b91`；draft PR #312。
   验证：233 行 / SC14 21/21 + 132 warning / SC04 差 0 / B_min 1,212 / B_max 2,762+433 / 19 passed 0 skip。
 - **2026-10-26 Jack P0 进展**：`[P0-A-2026-10-26]` 已写入 `JACK_QA.md`；入库证据/采集/对账/数据层/报表 UI 完成，
-  fzh-data `f5bf3dcc`（#314）、key_test `e7a4f6d`（#2），113+22 测试；测试站未部署。待决项见条目。
+  fzh-data `f5bf3dcc`（#314）、key_test `e7a4f6d`（#2），113+22 测试；测试站已文件级更新（REST 新列/页面 200，
+  bench restart 待 frappe 用户）。待决项见条目。
 - **2026-10-26 A11 验收**：工头判定通过；核心逻辑未改，数字沿用。合并顺序建议 `#311 → rebase #312 → #312`；
   #311/#312 仍 draft，等用户/审核会话批准。待业务确认：PO status=4、FZH-DANEEY 子仓运营方。
 - **2026-10-26 合并就绪清单**：新增 `handoffs/2026-10-26-merge-readiness.md`（#311 → rebase #312 → #312、
