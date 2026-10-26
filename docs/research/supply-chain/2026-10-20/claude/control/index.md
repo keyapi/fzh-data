@@ -20,4 +20,19 @@ date: 2026-10-23
 | 监督触发与协调规则 | [SUPERVISOR](SUPERVISOR.md) |
 | 变更记录 | [log](log.md) |
 
+## 外部协作（Jack · W1 供应时间线）
+
+| 需要了解 | 文档 |
+|---|---|
+| Jack 任务书（W1–W4） | [handoffs/2026-10-23-jack-supply-timeline](handoffs/2026-10-23-jack-supply-timeline.md) |
+| 七问答复 + 口径 + 红线 | [handoffs/2026-10-23-jack-w1-answers](handoffs/2026-10-23-jack-w1-answers.md) |
+| 数据/背景读取地图 | [handoffs/2026-10-23-jack-data-map](handoffs/2026-10-23-jack-data-map.md) |
+| 阅读顺序 + 旧版识别 | [handoffs/2026-10-23-jack-reading-list](handoffs/2026-10-23-jack-reading-list.md) |
+| W1/W3 验收契约 | [reviews/2026-10-23-sc14-spec](reviews/2026-10-23-sc14-spec.md) + `experiments/sc14/` |
+| 9 个冻结 SKU | [reviews/2026-10-23-jack-sample10](reviews/2026-10-23-jack-sample10.md) |
+
+> 沟通通道：分支 `docs/jack-w1-channel`；PR 评论用 `[W1-Qxx]` / `[W1-Axx]`。
+> 技术口径可直接对话；业务决策（服务水平/预算/交期假设/采购授权）仍由用户拍板。
+> **公开仓库不放行级业务 CSV/JSON**（D33）。
+
 任务书在tasks，具体成果在reviews；301独立审核在其自己的工作区。业务数据不要提交公开仓库。
