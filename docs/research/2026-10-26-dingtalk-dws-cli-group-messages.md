@@ -221,6 +221,20 @@ dws chat +chat-messages --group "<通知群 openConversationId>" \
 3. 现阶段只解析明文消息，按 `下架/库存/缺货/恢复/报溢` 做关键词 + 人工复核，**不自动当作断货标签**。
 4. 原始消息只落在 `D:/Work/fzh-order-store/dingtalk/`（不入公开仓库）；仓库只记录方法、聚合数和限制。
 
+### 7.8 SafeChat / 安恒密盾是什么，为什么 Excel 必须下载
+
+- **安恒密盾（SafeChat）** 是安恒信息（弗兰科）给钉钉做的**第三方加密**：消息/文件在客户端侧加密，密钥存在密盾服务器，钉钉服务器只存密文。所以钉钉本身、DWS 的普通版都解不开；DWS 看到的 `[加密消息，无法解码]` 就是这个。
+- **为什么有的 Excel 必须下载才能看、有的人发的不用**：文件是否加密取决于**发送方/群/部门是否命中密盾的文件加密策略**，不是文件类型本身。命中策略的附件是密文，钉钉预览器打不开，只能下载后用密盾客户端解密；没命中策略的人发的是普通附件，可以直接预览。
+- **它和钉钉“保密文件/钉盘保密模式”不是一回事**：钉钉保密模式是“可预览、不可下载、带水印”；密盾是“密文、必须解密后才能看”。你的症状是后者。
+
+**在哪关（按可能性排序）**：
+
+1. **安恒密盾管理后台**（不是钉钉管理后台）→ 策略管理 / 文件加密策略 → 按组织、部门、群或文件类型调整。你如果是钉钉管理员但不一定是**密盾管理员**，需要找密盾管理员。
+2. 新版密盾支持**加密文件在线解密预览**（不用关加密，也不用先下载）；先看你们的密盾版本/客户端有没有这个开关。
+3. 钉钉管理后台 → 安全与合规 → 安全中心 → 文件安全 / 保密文件：这里主要管“不可下载/水印”，通常不是“必须下载”的原因，但可以顺带确认。
+
+**建议**：不要全组织一刀切关掉（合规风险）；先在测试群/部门关闭文件加密或开启在线解密预览，确认体验后再决定范围。消息加密与文件加密可能是两套策略，DWS 的 33% 消息加密要单独看。
+
 ## 8. 来源
 
 - [DingTalk-Real-AI/dingtalk-workspace-cli（官方仓库）](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli)
@@ -228,3 +242,6 @@ dws chat +chat-messages --group "<通知群 openConversationId>" \
 - [dingtalk-chat SKILL.md](https://github.com/dingtalk-real-ai/dingtalk-workspace-cli/blob/92c4f8c355c749ec470c68f998d862a00d7d1709/skills/multi/dingtalk-chat/SKILL.md)
 - [devapp-agent-install-guide.md](https://raw.githubusercontent.com/DingTalk-Real-AI/dingtalk-workspace-cli/main/docs/devapp-agent-install-guide.md)
 - [capability-limits.md](https://raw.githubusercontent.com/DingTalk-Real-AI/dingtalk-workspace-cli/main/skills/multi/dingtalk-shared/references/capability-limits.md)
+- [无需下载！钉钉加密文件可在线“解密预览”](https://zhuanlan.zhihu.com/p/2038690854399914931)
+- [安恒密盾产品页（密钥/密文分离）](https://www.dbappsecurity.com.cn/product/cloud4367.html)
+- [钉盘文件权限设置（保密模式：可预览不可下载）](https://alidocs.dingtalk.com/i/p/L4BYmaE53pwmNA8EYRBGv1DqQ64j1mDA?dontjump=true)

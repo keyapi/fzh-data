@@ -88,7 +88,60 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 - 原始 WX/PB 文件与 DuckDB 体积大且有业务明细，**不入公开仓库**；仓库只保留方法与结果。
 
 
-## 2. 业务规则（已确认）
+### 1.4 P1 `stock_status_daily`（2026-10-26）
+
+**存放位置**：本地分析 DuckDB `D:/Work/fzh-order-store/order_store.duckdb` 的 `stock_status` schema。
+**不写进 EN 的 `stock.parquet` / `stock_change.parquet`**：这两个是原始每日事实，派生状态表混进去会破坏 schema、回滚和增量写入。EN 生产（2C/3.5G）也不跑重分析；以后若 EN 页面要展示，再单独输出一个小的只读状态 Parquet。
+
+**表**：
+
+| 表/视图 | 内容 |
+|---|---|
+| `stock_status.daily_observation` | 三源原始观测：EN 日快照 / PJ 检查点 / WX 检查点 |
+| `stock_status.sales_daily` | `gs_orders` 日销量（按日期+仓+SKU） |
+| `stock_status.daily` | 每日期×仓×SKU 一行，按 EN > PJ > WX 优先级取一条 |
+| `stock_status.pb_daily` | PB `shortage_calendar`（35 个 Vendor Style × 日期） |
+
+**`stock_status.daily` 关键列**：`d, warehouse, sku, source, stock_state, available, waiting_shipment, intransit, current_status, prior_status, sales_qty, sales_7d, sales_30d, confidence, evidence, warehouse_role, likely_unavailable, review_candidate, pb_reported_shortage, low_stock`。
+
+**规模（2026-10-26 实测）**：
+
+- **287,274 行**，日期 2026-04-14 → 2026-10-26。
+- 来源：EN 37,084（7 天）、PJ 59,559（22 天）、WX 190,631（38 天）。
+- 状态：`present_positive` 110,881；`present_zero` 156,569；`absent_after_presence` 18,900；`unknown` 924。
+- **`likely_unavailable` 46,355**：EN 24,307 + PJ 22,048；**WX 不计入**（宽表 0 多为“不在该仓”）。
+- **`review_candidate` 127,342**：WX 的 0，只作低置信复核。
+- **`pb_reported_shortage` 162 行**：仅加在美中-FZH-DANEEY 行，PB 渠道级证据。
+- **`low_stock` 16,496 行**：美东-CENTRADE 可用 ≤5，只算 EN/PJ；WX 的低置信 0 不计入。**K 天删失 / M 天 prolonged 还没算**。
+- 仓角色：`primary_sellable` 220,336；`returns` 29,557；`components` 29,055；`other` 8,326。
+
+**已知限制**：
+
+- `gs_orders` 只到 **2026-09-30**，所以 10 月的 `sales_qty` 是 NULL（不是 0）；要补 10 月销量需接 EN/Tongtool 订单。
+- WX 非正库存只作 `review_candidate`，不作断货；WX 每日库存是宽表，0 可能只是“没在这个仓”。
+- PJ 的 `absent_after_presence` 只在 `prior_status=在售` 时进 `likely_unavailable`；清仓/停售算下架。
+- PB Vendor Style 与通途 SKU 忽略大小写 **35/35 匹配**；PB 是渠道级断货，不等于该仓库存为 0。
+- 美中 2026-09 合并前后仓库口径不同，分析要按时期分开。
+
+**常用查询**：
+
+```sql
+-- 高置信断货候选
+SELECT d, warehouse, sku, stock_state, sales_qty, confidence
+FROM stock_status.daily
+WHERE likely_unavailable AND warehouse_role = 'primary_sellable'
+ORDER BY d DESC, warehouse, sku;
+
+-- 某 SKU 的时间线
+SELECT d, warehouse, source, stock_state, available, sales_qty, prior_status
+FROM stock_status.daily
+WHERE upper(sku) = upper('CENKZ1323-LTGrey-153')
+ORDER BY d, warehouse;
+```
+
+脚本 `D:/Work/fzh-order-store/build_stock_status.py`，报告 `stock_status_report.json`。
+
+
 
 | 渠道 | 履约仓 | 停售阈值 | 主要风险 |
 |---|---|---|---|
