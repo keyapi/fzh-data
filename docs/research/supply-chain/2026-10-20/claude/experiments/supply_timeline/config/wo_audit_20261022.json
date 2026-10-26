@@ -1,0 +1,24 @@
+{
+  "source": "EN production REST (read-only), queried 2026-10-26",
+  "note": "Audit metadata only; quantities remain in frozen_20261022.json. All three WOs have creation <= 2026-10-20, so Q03 inclusion stands and B_max is unchanged.",
+  "wos": {
+    "WO-26-03110": {
+      "creation": "2026-09-02 08:10:26.546286",
+      "modified": "2026-10-23 13:34:44.001818",
+      "jc_first_op_sum": 110.0,
+      "jc_source": "Job Card first-op sum: operation=裁剪 (sequence_id=1), 48 JCs"
+    },
+    "WO-26-03118": {
+      "creation": "2026-09-02 08:10:26.969457",
+      "modified": "2026-09-02 10:03:10.949189",
+      "jc_first_op_sum": null,
+      "jc_source": "no Job Cards found"
+    },
+    "WO-26-03664": {
+      "creation": "2026-10-19 09:01:25.426270",
+      "modified": "2026-10-22 08:53:01.489833",
+      "jc_first_op_sum": null,
+      "jc_source": "no Job Cards found"
+    }
+  }
+}

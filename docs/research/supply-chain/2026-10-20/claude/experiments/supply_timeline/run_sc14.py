@@ -72,6 +72,8 @@ def main() -> int:
     by_code = Counter(f.code for f in findings)
     by_sev = Counter(f.severity for f in findings)
     error_rows = sorted({f.row for f in findings if f.severity == "error" and f.row >= 0})
+    warning_rows = sorted({f.row for f in findings if f.severity == "warning" and f.row >= 0})
+    warning_rows_by_stage = Counter(rows[i].get("stage", "") for i in warning_rows if 0 <= i < len(rows))
     counts = {
         "rows": len(rows),
         "findings": len(findings),
@@ -79,6 +81,9 @@ def main() -> int:
         "warnings": by_sev.get("warning", 0),
         "by_code": dict(by_code),
         "error_rows": len(error_rows),
+        "finding_rows": len({f.row for f in findings if f.row >= 0}),
+        "warning_rows": len(warning_rows),
+        "warning_rows_by_stage": dict(warning_rows_by_stage),
         "contract_source_commit": "197901f78026c7e9ff1d4193bca19719b397399c",
     }
     out = Path(args.out)
@@ -102,7 +107,7 @@ def main() -> int:
         "null_qty_rows": len(roll["null_qty"]),
     }, ensure_ascii=False, indent=1), encoding="utf-8")
     print("SC14_ROWS", len(rows))
-    print("SC14_COUNTS", json.dumps({k: counts[k] for k in ("errors", "warnings", "error_rows", "by_code")}, ensure_ascii=False))
+    print("SC14_COUNTS", json.dumps({k: counts[k] for k in ("errors", "warnings", "error_rows", "finding_rows", "warning_rows_by_stage", "by_code")}, ensure_ascii=False))
     print("SC14_W3", json.dumps({"opening": w3 and roll["opening_by_uom"],
                                  "confirmed": w3["supply_confirmed"],
                                  "expected": w3["supply_expected"],

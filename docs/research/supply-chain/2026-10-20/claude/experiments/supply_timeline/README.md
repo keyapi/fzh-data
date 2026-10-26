@@ -8,7 +8,7 @@
 - SC14 **7 阶段**：`on_hand / po_open / in_production / shipped_in_transit / received / partially_received / unknown`；21 条验收用例。
 - 映射角色（Q06）：**6 cover / 2 finished / 1 component**；`identity_confidence=proven`（sku_item）；PK# 不 1:1 转成品。
 - 仓库（Q07）：不同 `warehouse_id` 且未重复上报可相加；cover 行 `conversion_assumed=true`，B_min 只放已证转换，B_max 放假设。
-- PO/在途两本账：`overlap_status`；B_min 排除 `same_batch_suspected` PO，B_max 全保留；status=4 的 PO 只进 B_max。
+- PO/在途两本账：`overlap_status`；B_min 排除 `same_batch_suspected` PO，B_max 全保留；status=4 语义未证，只进 B_max，不等同于已关闭。
 - 未知不写 0；`qty=null + qty_status=unknown`；`date_confidence=unknown` 时 `available_date=null`。
 - 一 DN 多号只出一行；外部 FBA `scope=external_fba`，rollup 两边都不算。
 - WO `produced_qty` 只作 estimated remaining；JC 只作 `production_progress`；冲突进 exceptions。
@@ -22,7 +22,7 @@ python w1_supply_timeline.py --live --snapshot frozen   # 正式 recon
 python sc14/test_contract.py                            # 21/21
 python run_sc14.py                                      # E_*/W_* 计数 + W3 预览
 python sc04_recon.py                                    # 39/47/4,279 对账
-python -m unittest discover -s tests -v                 # 14 条本地单测（含 SC14 同步校验）
+python -m unittest discover -s tests -v                 # 17 条本地单测（含 SC14 同步校验）
 ```
 
 `--snapshot live` 用于对照实时库存（标 `provisional_live`）。重复运行走 `cache/`，`--refresh` 强制刷新。
@@ -37,6 +37,7 @@ python -m unittest discover -s tests -v                 # 14 条本地单测（�
 | `exceptions.csv` | production_conflict / 部分签收分配未知 |
 | `unknowns.csv` | 未知数量/日期/仓库行 |
 | `recon.json` / `recon_by_sku_warehouse.csv` | 阶段计数、B_min/B_max、逐 SKU×仓汇总 |
+| `b_bridge.csv` | B_min/B_max 桥接（按 ledger × role × UOM，含排除原因） |
 | `sc14_counts.json` / `sc14_findings.csv` | SC14 校验 |
 | `w3_preview.json` | confirmed/expected/unknown 预览 |
 | `sc04_recon.json` | SC04 基线 + 9 SKU 覆盖 |
@@ -45,6 +46,7 @@ python -m unittest discover -s tests -v                 # 14 条本地单测（�
 
 - `config/sample_skus.json`：9 SKU + 角色/转换假设 + 缺额。
 - `config/frozen_20261022.json`：10-22/10-20/10-19 冻结 stock/PO/WO。
+- `config/wo_audit_20261022.json`：三张额外 WO 的 creation/modified 与 JC 首工序合计（审计元数据，不改冻结数量）。
 - `config/warehouse_map.json`：6 通途仓 + FBA/FZH；`scope`/`warehouse_scope`/`warehouse_confidence`。
 - `sc14/`：从 `docs/jack-w1-channel` @ `197901f7` 复制的 7 阶段契约与 21 用例（逐字节一致）；`sc14/SOURCE.json` 固定来源与 sha256，`tests/test_sc14_sync.py` 防漂移。
 - `W1-RESULTS.md`：正式 recon 结果。
