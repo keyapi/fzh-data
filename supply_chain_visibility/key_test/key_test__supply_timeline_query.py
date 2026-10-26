@@ -24,7 +24,10 @@ RUN_FIELDS = [
 ]
 BASE_MESSAGE = (
     "当前仅覆盖 Tongtool 库存快照；PO、WO、DN 与真实采购入库未接入。"
-    "接通并核验这些来源后才能计算完整可承诺供给。`intransit` 独立展示，不与 PO 在途重复相加。"
+    "接通并核验这些来源后才能计算完整可承诺供给。"
+    "本表新增数据层字段（来源/数量状态/单位/时区/身份/B_min/B_max 资格/排除原因）："
+    "UOM 未证时所有行不进入 B_min；仅作库存证据，不构成可承诺供给。"
+    "`intransit` 独立展示，不与 PO 在途重复相加。"
 )
 
 
@@ -349,6 +352,35 @@ def _historical_rows(snapshot_date, skus, warehouse_filter):
     return output, ""
 
 
+def _annotate_layer(rows):
+    """Add canonical data-layer fields without changing the existing row contract."""
+    for row in rows:
+        qty_known = row.get("evidence_qty") is not None
+        uncovered = row.get("ledger") == "uncovered_chain"
+        coverage = row.get("source_coverage")
+        row["source_layer"] = "uncovered_chain" if uncovered else "inventory_snapshot"
+        row["qty_status"] = "known" if qty_known else "unknown"
+        row["uom_proven"] = False
+        row["timezone_status"] = "unverified"
+        row["identity_confidence"] = "weak_identity"
+        row["b_min_eligible"] = False
+        row["b_max_eligible"] = False
+        row["not_collected"] = False
+        if uncovered:
+            row["exclusion_reason"] = "not_connected"
+        elif coverage in ("not_reported", "warehouse_scope_unknown"):
+            row["exclusion_reason"] = coverage
+        elif coverage == "historical_evidence_only":
+            row["exclusion_reason"] = "historical_evidence_only"
+        elif row.get("stage") == "shipped_in_transit":
+            row["exclusion_reason"] = "intransit_evidence_only"
+        elif not qty_known:
+            row["exclusion_reason"] = "qty_unknown"
+        else:
+            row["exclusion_reason"] = "uom_unproven"
+    return rows
+
+
 def get_report_data(filters=None):
     filters = filters or {}
     skus = _requested_skus(filters.get("sku"))
@@ -361,6 +393,7 @@ def get_report_data(filters=None):
         rows, detail = _latest_rows(skus, warehouse_filter)
     else:
         rows, detail = _historical_rows(snapshot_date, skus, warehouse_filter)
+    rows = _annotate_layer(rows)
     if stage:
         rows = [row for row in rows if row["stage"] == stage]
     return rows, " ".join(part for part in (BASE_MESSAGE, detail) if part)

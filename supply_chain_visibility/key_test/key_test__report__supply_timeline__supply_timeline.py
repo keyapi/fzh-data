@@ -38,6 +38,14 @@ COLUMNS = [
     (_("重叠状态"), "overlap_status", "Data", None, 100),
     (_("计入供给"), "counted", "Check", None, 80),
     (_("来源覆盖"), "source_coverage", "Data", None, 175),
+    (_("数据层"), "source_layer", "Data", None, 130),
+    (_("数量状态"), "qty_status", "Data", None, 90),
+    (_("单位已证"), "uom_proven", "Check", None, 80),
+    (_("时区状态"), "timezone_status", "Data", None, 100),
+    (_("身份置信度"), "identity_confidence", "Data", None, 115),
+    (_("B_min 资格"), "b_min_eligible", "Check", None, 90),
+    (_("B_max 资格"), "b_max_eligible", "Check", None, 90),
+    (_("排除原因"), "exclusion_reason", "Data", None, 165),
     (_("原因"), "reason", "Data", None, 250),
 ]
 

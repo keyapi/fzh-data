@@ -308,6 +308,23 @@ class SupplyTimelineTests(unittest.TestCase):
         self.assertIn("接通并核验这些来源后才能计算完整可承诺供给", message)
         self.assertIsNone(chart)
 
+    def test_script_report_exposes_layer_fields(self):
+        self._configure_complete_latest()
+        columns, rows, message, chart, summary = self.report.execute({"sku": self.skus[0]})
+        fields = {column["fieldname"] for column in columns}
+        self.assertTrue({
+            "source_layer", "qty_status", "uom_proven", "timezone_status",
+            "identity_confidence", "b_min_eligible", "b_max_eligible", "exclusion_reason",
+        } <= fields)
+        self.assertTrue(rows)
+        self.assertTrue(all(row["source_layer"] in ("inventory_snapshot", "uncovered_chain") for row in rows))
+        self.assertTrue(any(row["source_layer"] == "uncovered_chain" for row in rows))
+        self.assertTrue(all(row["uom_proven"] is False for row in rows))
+        self.assertTrue(all(row["b_min_eligible"] is False for row in rows))
+        self.assertTrue(all(row["b_max_eligible"] is False for row in rows))
+        self.assertTrue(all(row["timezone_status"] == "unverified" for row in rows))
+        self.assertIsNone(chart)
+
     def test_history_checks_permission_and_uses_bound_filters(self):
         self.fake.stock_snapshot_dir = "C:/stock"
         duck = FakeDuckDB([
