@@ -25,3 +25,6 @@ date: 2026-10-23
 - **2026-10-26 W1 v0 复审**：`140bbee6`（代码进 docs 分支）已 revert 为 `bb87549a`；代码保留在
   `feature/jack-supply-timeline`（`9aea4cb6`）。复审 `[W1-Q09]` 写入 `JACK_QA.md`：6 项必改
   （代码位置、SC14 不 fork、PO status 4 标签、WO 审计、received 28 行、B_min/B_max 桥接）。#311 保持 draft。
+- **2026-10-26 A09/Q10**：A09 已收（feature `f63af171` + `40d74491`，draft PR #312）；SC14 副本与 canonical
+  逐字节一致，B 桥接自洽。`[W1-Q10]`：**阻塞** `config/frozen_20261022.json` 行级业务 JSON 进公开仓库（D33）；
+  另需修 SC14 同步测试 skip、PR312 body 过期、WO 审计时点、B 桥接 per-PO 明细。

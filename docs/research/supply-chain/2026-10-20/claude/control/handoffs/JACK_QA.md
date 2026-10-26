@@ -25,6 +25,7 @@ channel: docs/jack-w1-channel
 | **Q07 仓库** | **可以相加**：不同 `warehouse_id` 且未重复上报即可加；同 ID/别名/同量重复只算一次。`component->main` 只是本地 `warehouse_map` 清洗标签，**不是业务规则**。`FZH-DANEEY-成品仓/半成品仓` status=0、`stock_history` 无 `warehouse_id`、9 SKU 快照 0。皮壳/半成品经海外分公司填充压缩后可发成品 → 算可用供给，但标 `conversion_assumed=true`；B_min 只放已证转换，B_max 可放假设。 |
 | **Q08 received** | `received_evidenced` 保持 `qty=null + qty_status='unknown'` 可接受，只进 `supply_unknown`；分 `received_booked`（Stock Entry）与 `received_evidenced`（签收）。9 SKU 覆盖 8/39 DN、1,516/4,279 行是预期，不是 39/39。 |
 | **Q09 复审** | W1 v0 数据口径基本落地；**6 项必改**：代码移到 feature 分支、SC14 不 fork、PO021735 status=4 不写“作废”、WO 过滤可审计、received 28 行拆分、B_min/B_max 桥接表。详见 §2 `[W1-Q09]`。 |
+| **Q10 复审** | A09 大部分通过；**1 个阻塞**：`config/frozen_20261022.json` 是行级业务 JSON 进公开仓库，违反 D33；另有 4 项必改：SC14 同步测试 skip、PR312 body 过期、WO 审计时点、B 桥接 per-PO 明细。详见 §2 `[W1-Q10]`。 |
 
 ## 2. 轮次记录（只追加）
 
@@ -78,6 +79,51 @@ channel: docs/jack-w1-channel
 - 结果：**04:07Z 之后没有新的 commit / 评论**；feature head 仍是 `9aea4cb6`（11:56）；docs head 是工头的 `ff197c66`。
 - 如果 Jack 已更新：请 **push 到 `feature/jack-supply-timeline`**，并在本文件追加 `[W1-A09]`；PR 评论只发短指针。
 - 只在本地 / Orca 终端里、未 push 的更新，工头看不到；先 push 再通知。
+
+### [W1-Q10] 2026-10-26 工头复审：A09
+
+**结论：A09 大部分通过；有 1 个阻塞项（公开仓库行级 JSON）+ 4 项必改，修完再进合并评审。**
+
+#### 通过
+
+- Q09 #1 代码位置：docs 分支无 W1 代码；代码只在 `feature/jack-supply-timeline`；PR #312 draft。
+- Q09 #2 SC14 不 fork：`sc14/contract.py` / `test_contract.py` 与 canonical **逐字节一致**（sha256 `45c2bb93…` / `f3da773d…`），`SOURCE.json` 固定来源。
+- Q09 #3 PO status=4：代码只写 `po_status=4` + `po_status_semantics=unproven`，无“作废/cancelled”。
+- Q09 #5 received：28 行 = 1 DN / 1 SKU / doc_qty 231；`out_of_sample=0` 为按设计不抓取，解释成立。
+- Q09 #7 warning：132 = 66 行 × 2；按 stage 54/8/4 分类，解释成立。
+- B_min 1,212 = on_hand 531 + transit 681；B_max 2,762 + 433 个；桥接断言自洽。
+
+#### 阻塞（必须先改）
+
+1. **`config/frozen_20261022.json` 是行级业务 JSON，进了公开仓库**（6.5 KB：9 SKU × 仓的 `available/intransit/waiting/defects`）。
+   D33 明确：**行级业务明细的 CSV/JSON 不提交**。请移出 git：
+   - 公开仓库只留 `config/frozen_20261022.schema.json`（字段/类型）+ `config/frozen_20261022.sha256`（hash）；
+   - 实际值从本地 `--config` 路径读取，CI/单测用合成 fixture；
+   - `wo_audit_20261022.json` 里的 WO 日期/数量同理：要么移本地，要么只留 `creation <= as_of` 的布尔/计数，不留行级量。
+   - 同类需分类：`sample_skus.json`（映射行，无数量）、`warehouse_map.json`（仓 ID/映射，无数量）。至少带数量/金额的 JSON 必须移出公开仓库。
+
+#### 必改
+
+2. **SC14 同步测试在 feature PR 上会 skip**：`test_canonical_matches_if_present` 在 canonical 不存在时 `skipTest`；PR #312 的默认单测因此没有真正比对 canonical。
+   请二选一：
+   - 在 PR/CI 里 checkout `docs/jack-w1-channel` 并设 `SC14_CANONICAL_DIR`，把“17 passed / 1 skip”改成真实“18 passed / 0 skip”；或
+   - 先把 #311（docs/contracts）合到 main，再 rebase #312，让 `experiments/sc14` 存在。
+   - 同时修正 PR #312 body：`Q09 #3–#7 待后续提交` 已过期；`14 passed` 与 A09 的 `17 passed` 不一致。
+3. **WO 审计时点**：`wo_audit_20261022.json` 的 `source` 写 “queried 2026-10-26”，`WO-26-03110` `modified=2026-10-23`，JC sum 110 是 live 证据，不是 10-20 冻结证据。
+   请加 `jc_as_of` / `wo_state_as_of` / `modified_after_as_of`；`production_conflict` 保留（保守不计供给），但要标明证据是 post-as-of。
+   `WO-26-03664` `modified=2026-10-22` 也请标 `modified_after_as_of=true`。
+4. **B 桥接 per-PO 明细**：`po` 6 行 914 → B_min 0 的“排除原因”只有 `po_not_counted`。
+   请补逐 PO 行：`doc_name / open_qty / po_status / overlap_status / date_confidence / exclusion_reason`，
+   说明这 6 行是因为 `same_batch_suspected` + 无 ETA 才不进 B_min，而不是数量为 0。
+5. **received 行字段**：`received_audit` 已有 28 行/1 DN/1 SKU/doc_qty 231；请确认主 supply 行也带
+   `doc_qty / received_qty / posting_date / received_source`（不能只在 audit JSON 里），否则下游无法逐行回溯。
+6. （minor）`run_sc14.py` 的 `contract_source_commit` 硬编码 `197901f7`；请从 `sc14/SOURCE.json` 读取，避免 canonical 更新后过期。
+
+#### 下一步
+
+- 先处理**阻塞项 1**（公开仓库行级 JSON），这是合并前必须解决的。
+- 2–6 在 PR #312 修；修完在 `JACK_QA.md` 追加 `[W1-A10]`，PR #312 只发短指针。
+- #311 保持 draft；#312 合并前必须满足 D33 清关。
 
 ## 3. 更早的问答（归档）
 

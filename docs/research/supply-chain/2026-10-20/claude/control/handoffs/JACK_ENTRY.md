@@ -85,3 +85,5 @@ git pull
 - **Q07 已更正**：不同 `warehouse_id` 且未重复上报的**可以相加**；`component->main` 只是本地映射清洗标签。
 - 9 SKU 的映射角色：**6 个皮壳（cover）/ 2 个成品（finished）/ 1 个组件（component）**，不能全写 finished。
 - W1 v0 复审结论见 `JACK_QA.md` 的 `[W1-Q09]`。
+- **A09 已收**（feature `f63af171` + `40d74491`，draft PR #312）；`[W1-Q10]` 复审：**1 个阻塞**
+  （`config/frozen_20261022.json` 行级业务 JSON 进公开仓库，违反 D33）+ 4 项必改。
