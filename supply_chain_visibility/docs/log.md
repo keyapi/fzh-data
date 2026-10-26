@@ -16,6 +16,7 @@ title: supply_chain_visibility 变更日志
 - **P1/P2 实现（2026-10-26）**：新增 `supply_row.py`（统一行 schema + 校验）与 `receipt_bridge.py`（PO/库存/入库三数桥接，不自动调整）；12 项新测试，共 98 项本地测试通过。
 - **P3 实现（2026-10-26）**：新增 `overlap_gates.py`（PO/在途同批、DN trace、外部 FBA、未映射、未知 UOM、cover 转换 gate）；桥接增加 `transit_qty`/`overlap_status`；9 项新测试，共 107 项本地测试通过。
 - **P4 数据层接入（2026-10-26）**：新增 `supply_integration.py`（rows + gates + bridge + 聚合；`report_only()` 只返回聚合/flag）；5 项新测试，共 112 项本地测试通过；未改 key_test 入口。
+- **P5 基线与清单（2026-10-26）**：新增 `scripts/bench_supply_integration.py` 与发布检查清单；合成 4k/20k/40k 行构建 0.76/3.63/7.90 秒，peak 12.6/62.4/124.6 MB；未部署。
 
 ## 2026-10-13
 - **Stage 1 v35（出库按 DN 归组）**：修「N单」误报 —— 原按 `Delivery Note Item` **明细行**计数，一张 DN 拆多行会显示成「5单」。改为**按出库单归组**（`dns=[{dn,date,status,docstatus,is_return,qty,lines[]}]`），摘要「N单」= **DN 张数**；明细表加「行数」列，`>1` 行时列出 `q1 + q2 + … = 合计`。生产 SO-26-00101 实测：`DM-153-IVORY` 22 行 → **1单·已发200**；真有 2 张 DN 的 `HLR-140-GREY` → **2单**(DN-26-00071+DN-26-00089)。⚠️ 过程踩坑：归组后 `dns` 变 dict，`d.qty` 必须改 `d["qty"]`（否则 `AttributeError`→500），已在**测试机拦下**（未到生产）。
