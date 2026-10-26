@@ -121,7 +121,85 @@ dws chat +chat-messages --group "<openConversationId>" \
 - 所有调用走审计链；**只读试用阶段不要发消息**（发送/撤回是另一组命令）。
 - 若 DWS CLI 最终不可用，官方替代仍是「会话存档」（合规存档能力，需另行开通），不是普通群 API。
 
-## 7. 来源
+## 7. 本机只读实测（2026-10-26）
+
+> 结论：**端到端跑通。** 安装 → 登录 → 找群 → 按天读消息 → 有界分页，全部成功；只读，未发任何消息，未改生产配置。
+
+### 7.1 环境与安装
+
+| 项 | 结果 |
+|---|---|
+| OS | Windows 11 |
+| `dws version` | v1.0.66-beta.2（Build 2026-10-26T03:14:10Z，commit `894cdd4`，Edition open） |
+| 安装方式 | 官方 `install-devapp.ps1`，SHA-256 校验通过 |
+| 二进制 | `C:\Users\zhang\.local\bin\dws.exe`（脚本不改 PATH，不要求管理员） |
+| 附带 skill | 安装脚本复制 `dingtalk-misc` skill 失败：`Skill path permissions mismatch: ...\Temp\dws-dev-*\sk\multi\dingtalk-misc != ...\.dws\skills\multi\.dws-dev-copy-*\payload`；**不影响** `dws chat +chat-messages`（shortcut 由二进制内置） |
+
+### 7.2 授权与登录
+
+- 管理员已在钉钉开发者后台开启「DWS CLI 管理」，Agent 管理已授权「搜索会话列表，拉取会话消息内容」。
+- NEW-API 应用（AppKey 与 `new-api-dingtalk-oidc` 的 `DINGTALK_CLIENT_ID` 相同）重定向 URL 已含 `http://127.0.0.1`、`https://login.dingtalk.com` 及 OIDC 回调，并已发布新版本；在 DWS Agent 管理重新添加后成功（控制台提示可能需约 5 分钟生效，本次保存后立即登录即成功）。
+- 登录命令（凭证从本机 `.env` 读取，未回显、未落仓库）：
+  ```bash
+  dws auth login --client-id <AppKey> --client-secret <AppSecret>
+  ```
+- 结果：`success=true`、`token_valid=true`、`refresh_token_valid=true`；组织「方州汇国际」，登录用户实名。token 约 2 小时过期、refresh token 约 30 天（具体时间已核验，此处不记录）。
+- 登录为 OAuth Loopback：CLI 起 `127.0.0.1:9125/callback`，浏览器完成扫码授权后自动回写。**无头环境需 `--device`。**
+
+### 7.3 实测命令与结果
+
+**(a) 找会话**
+```bash
+dws chat +recent-conversations --start "2026-10-01T00:00:00+08:00" --format json
+```
+- exit 0；`ok=true`，`outcome=success`，`complete=true`，`count=36`，`pagesFetched=7`。
+- 返回结构为包装式：`{ok, outcome, data, meta}`；`data.conversations[]` 字段：`conversationId`、`name`、`nameKnown`、`type`（group/direct）、`latestMessageTime`。
+- 定位到盘点群「美国物资盘点」（`openConversationId` 以 `cidy+...` 开头），`latestMessageTime=2026-10-02T20:58:01+08:00`。
+
+**(b) 按天读（任务指定日期 2026-10-20）**
+```bash
+dws chat +chat-messages --group "<openConversationId>" \
+  --start "2026-10-20T00:00:00+08:00" --end "2026-10-21T00:00:00+08:00" \
+  --order asc --page-all --format json
+```
+- exit 0；`complete=true`，`hasMore=false`，`partial=false`，`truncated=false`，`count=0`，`pagesFetched=1`，`paginationKnown=true`，`failedCount=0`，`stopReason="source_complete"`，`failures=[]`。
+- 0 条是**真的空窗**：该群最后一次发言在 10-02，不是权限或分页问题。
+
+**(c) 有消息的一天（2026-10-02，同群）**
+- `count=1`，其余完整性字段同上（`complete=true`、`stopReason=source_complete`）。
+- `messages[]` 字段：`conversationId`、`createTime`、`messageId`、`resourceRefs`、`sender`、`senderId`、`text`。
+
+**(d) 通知群（2026-10-26「异常订单&库存预警推送」）**
+- `count=2`，`complete=true`，`failures=[]`；字段同上（无资源引用时 `resourceRefs` 省略）。
+
+**(e) 有界分页 / 部分结果**
+```bash
+dws chat +chat-messages --group "<通知群 openConversationId>" \
+  --start "2026-10-01T00:00:00+08:00" --end "2026-10-27T00:00:00+08:00" \
+  --order asc --page-all --page-limit 10 --max-items 25 --format json
+```
+- `pagesFetched=2`，`count=25`，`failedCount=0`，`failures=[]`；
+- **`complete=false`、`hasMore=true`、`partial=true`、`truncated=true`、`truncatedByResultLimit=true`、`stopReason="result_limit"`**；
+- `nextActions[]` 给出继续读取的游标（复用原会话目标与页大小，`start` 为下一条边界）。
+- 结论：**命中 `--max-items` 时必须把结果当“部分”，不能当全量。** 与预期一致。
+
+### 7.4 返回结构差异（实现注意）
+
+- `+recent-conversations`：包装式 `{ok, outcome, data{complete, conversations, count, pagesFetched, rangeSemantics, ...}, meta}`。
+- `+chat-messages`：**扁平 ledger**，完整性字段直接在顶层：`complete / hasMore / partial / truncated / truncatedByPageLimit / truncatedByResultLimit / count / pagesFetched / paginationKnown / failedCount / stopReason / failures / nextActions / queryRange / identityResult`。
+- `queryRange.semantics = "[start,end)"`，与传入参数一致。
+
+### 7.5 观测到的退出码与错误
+
+- 成功均 `exit 0`。
+- 本次未触发失败路径；文档所述“非首页失败退出码 7（`partial_failure`）”未实测。失败时仍以 `complete=false` + `failures[]` 兜底判断。
+
+### 7.6 仍未做
+
+- 未发送任何消息、未改群/机器人配置、未改生产系统。
+- 未接自动化；建议下一步按天只读拉取，落库前断言 `complete && !hasMore && failures.isEmpty()`。
+
+## 8. 来源
 
 - [DingTalk-Real-AI/dingtalk-workspace-cli（官方仓库）](https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli)
 - [message-query：消息读取、搜索与查询](https://raw.githubusercontent.com/DingTalk-Real-AI/dingtalk-workspace-cli/refs/heads/main/skills/multi/dingtalk-chat/references/chat/message-query.md)
