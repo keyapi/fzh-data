@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -100,6 +101,12 @@ def _check_cache_dir(cache_dir: Path) -> None:
     root = _repo_root()
     if root is not None and cache_dir.resolve().is_relative_to(root):
         raise ValueError("cache_dir must be outside the git repository")
+
+
+def assert_outside_repo(path: Path, label: str = "path") -> None:
+    root = _repo_root()
+    if root is not None and Path(path).resolve().is_relative_to(root):
+        raise ValueError(f"{label} must be outside the git repository")
 
 
 def _cache_key(window: CollectionWindow, po_code: Optional[str], page_size: int, max_pages: int) -> str:
@@ -207,3 +214,25 @@ def collect_receipts(
         truncated_windows=tuple(truncated),
         cache_hits=cache_hits,
     )
+
+
+def build_summary(result: CollectionResult) -> dict:
+    """Aggregate-only audit summary; never includes row-level quantities."""
+    kept = [row for row in result.rows if not row.overlap_duplicate]
+    days = Counter((row.row.get("warehousingDate") or "")[:10] for row in kept)
+    return {
+        "input_count": result.input_count,
+        "unique_count": result.unique_count,
+        "overlap_duplicate_count": result.overlap_duplicate_count,
+        "possible_duplicate_count": result.possible_duplicate_count,
+        "windows": [{"start": w.start.isoformat(), "end": w.end.isoformat()} for w in result.windows],
+        "truncated_windows": [
+            {"start": w.start.isoformat(), "end": w.end.isoformat()} for w in result.truncated_windows
+        ],
+        "cache_hits": result.cache_hits,
+        "distinct_po": len({row.row.get("purchaseOrderCode") for row in kept if row.row.get("purchaseOrderCode")}),
+        "distinct_sku": len({row.row.get("sku") for row in kept if row.row.get("sku")}),
+        "day_counts": dict(sorted(days.items())),
+        "rows_without_uom": len(kept),
+        "rows_without_stable_id": len(kept),
+    }

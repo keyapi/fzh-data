@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 
 from tongtool_api.receipt_collector import (
+    CollectedRow,
+    CollectionResult,
     CollectionWindow,
+    build_summary,
     collect_receipts,
     split_windows,
 )
@@ -108,3 +111,26 @@ def test_cache_inside_repo_is_rejected() -> None:
             cache_dir=Path(__file__).resolve().parent, sleep=lambda _: None,
         )
     assert calls == []
+
+
+def test_summary_is_aggregate_only() -> None:
+    window = CollectionWindow(date(2026, 10, 1), date(2026, 10, 7))
+    rows = (
+        CollectedRow(0, window, {"purchaseOrderCode": "PO1", "sku": "S1",
+                                 "warehousingDate": "2026-10-01 08:00:00"}, ("k1",), False, False),
+        CollectedRow(1, window, {"purchaseOrderCode": "PO1", "sku": "S2",
+                                 "warehousingDate": "2026-10-02 09:00:00"}, ("k2",), False, True),
+        CollectedRow(2, window, {"purchaseOrderCode": "PO2", "sku": "S1",
+                                 "warehousingDate": "2026-10-02 10:00:00"}, ("k3",), True, False),
+    )
+    result = CollectionResult(
+        rows=rows, windows=(window,), input_count=3, unique_count=2,
+        overlap_duplicate_count=1, possible_duplicate_count=1,
+        truncated_windows=(), cache_hits=0,
+    )
+    summary = build_summary(result)
+    assert summary["distinct_po"] == 1
+    assert summary["distinct_sku"] == 2
+    assert summary["day_counts"] == {"2026-10-01": 1, "2026-10-02": 1}
+    assert summary["possible_duplicate_count"] == 1
+    assert "rows" not in summary
