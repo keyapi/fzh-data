@@ -87,7 +87,7 @@ module: supply_chain_visibility
 - KTD7. 库存 batch_id 从实际行的 run_id 关联运行范围和完整性，不直接取最新创建的 Stock Run。生产存在手动子集运行，complete=1 仅证明所请求范围完成。
 - KTD8. 供应展示明确库存采集起点、完成时间、EN 单据查询时间；14 分钟采集区间不是严格同一瞬间快照。使用者可区分库存时点与当前履约事实。
 - KTD9. 入库查询按日期窗口分页复用，避免逐 PO 扫全量；相邻请求至少间隔 13 秒，遇 526 停止并明确报错。这只是调用方节流，不代表绕开商户全局共享限流。读原生报表不触发外部 API。采集必须用重叠窗口 + 缓存；PO 头日期不能单独定窗（实测 PO021704 头 10-14，但 12/50 行 10-19 入库）。
-- KTD10. 已实测 purchaseStockQuery 存在 warehousingDate（秒）、PO/SKU/仓及 warehousingNum，但响应缺独立流水/行 ID 和单位。保留每条原始行与弱身份标记，不用内容哈希静默吞掉可能真实相同的两笔入库；在唯一性、单位和库存桶影响未证实时，不自动修正可用库存或抵扣在途。`tongtool_api/receipt_collector.py` 只做重叠窗口去重标记（`overlap_duplicate` / `possible_duplicate`），不改变身份或单位。
+- KTD10. 已实测 purchaseStockQuery 存在 warehousingDate（秒）、PO/SKU/仓及 warehousingNum，但响应缺独立流水/行 ID 和单位。保留每条原始行与弱身份标记，不用内容哈希静默吞掉可能真实相同的两笔入库；在唯一性、单位和库存桶影响未证实时，不自动修正可用库存或抵扣在途。`tongtool_api/receipt_collector.py` 只做重叠窗口去重标记（`overlap_duplicate` / `possible_duplicate`），不改变身份或单位；`supply_chain_visibility/receipt_coverage.py` 只输出覆盖/未知聚合，不改变库存。
 - KTD11. 05:47 的 stock_change.parquet 已有 operate_time、凭证类型/号、available/intransit 等桶增量，可作辅助证据；操作类型、时间覆盖及凭证映射仍需验证，不能仅加采购入库而忽略出库、占用/释放、退货和手工调整。
 
 ### Performance Policy

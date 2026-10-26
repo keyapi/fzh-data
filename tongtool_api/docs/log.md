@@ -13,6 +13,7 @@ timestamp: 2026-08-13
 - 实测采购入库查询的 warehousingDate、PO/SKU/仓与数量字段；新增有界只读适配器与合成测试，保留无稳定流水 ID、无单位、来源时区未证的限制。补录库存快照前后事件的防重复/防漏计契约，不启用自动入库。
 - 复核 PO021704：PO 头 10-14，实际 38 行 10-14 + 12 行 10-19；窄窗口漏 12/50。新增 `receipt_collector.py`（重叠窗口 + 仓库外缓存 + 弱键显式去重）与 6 项测试；对账增加 `not_collected`、弱身份标记。本地 83 项测试通过。
 - 新增 `collect_receipts_cli.py`；跑 09-01–10-26（14 天窗/2 天重叠）：166 输入 → 150 唯一 + 16 重叠重复；12 PO / 113 SKU；无截断。8 项采集/对账新增测试，共 84 项本地测试通过。
+- 新增 `supply_chain_visibility/receipt_coverage.py` 并接 `--coverage-out`：150 条唯一行全部 `unknown`（`missing_stable_id`），全部无 UOM/时区；未自动抵扣。共 86 项本地测试通过。
 
 ## 2026-08-14
 - Added Cursor MCP registration: `setup_cursor_mcp.py` writes user-level `~/.cursor/mcp.json`. Same-chat `erp2_product_goodsquery` returned business 200. Secondary with the same URL did not appear in Cursor Available servers. No Marketplace install prompt.

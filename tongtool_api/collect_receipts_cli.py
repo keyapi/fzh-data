@@ -18,6 +18,7 @@ from tongtool_api.receipt_collector import (
     build_summary,
     collect_receipts,
 )
+from supply_chain_visibility.receipt_coverage import build_coverage_report
 
 
 def main() -> int:
@@ -34,6 +35,8 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=13.0)
     parser.add_argument("--cache-dir", default=str(Path(tempfile.gettempdir()) / "tongtool_receipt_cache"))
     parser.add_argument("--out", default=str(Path(tempfile.gettempdir()) / "tongtool_receipt_summary.json"))
+    parser.add_argument("--coverage-out", default=None,
+                        help="optional aggregate coverage/reconciliation JSON path (outside the repo)")
     parser.add_argument("--no-cache", action="store_true")
     parser.add_argument("--allow-truncated", action="store_true")
     args = parser.parse_args()
@@ -69,6 +72,20 @@ def main() -> int:
         )
     }, ensure_ascii=False))
     print("OUT", out_path)
+    if args.coverage_out:
+        coverage_path = Path(args.coverage_out)
+        assert_outside_repo(coverage_path, "coverage-out")
+        coverage = build_coverage_report(result)
+        coverage_path.parent.mkdir(parents=True, exist_ok=True)
+        coverage_path.write_text(json.dumps(coverage, ensure_ascii=False, indent=1), encoding="utf-8")
+        print("COVERAGE", json.dumps({
+            "dispositions": coverage["reconciliation"]["dispositions"],
+            "unknown_reasons": coverage["reconciliation"]["unknown_reasons"],
+            "rows_without_stable_id": coverage["coverage"]["rows_without_stable_id"],
+            "rows_without_uom": coverage["coverage"]["rows_without_uom"],
+            "rows_with_naive_time": coverage["coverage"]["rows_with_naive_time"],
+        }, ensure_ascii=False))
+        print("COVERAGE_OUT", coverage_path)
     if summary["truncated_windows"] and not args.allow_truncated:
         print("TRUNCATED", json.dumps(summary["truncated_windows"], ensure_ascii=False), file=sys.stderr)
         print("Incomplete: increase --max-pages or narrow the window, then rerun.", file=sys.stderr)

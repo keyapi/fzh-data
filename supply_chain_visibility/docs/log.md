@@ -11,6 +11,7 @@ title: supply_chain_visibility 变更日志
 - 新增原生供应链报表计划：只读核实生产库存 DocType、七日 Parquet、BOM V2 Prepared Report 与 SO 报表单次执行基线；纠正把本机停用任务等同生产同步停用的判断，明确原生过滤查询、后台报表与业务预计算的分工。
 - **入库证据复核（2026-10-26）**：PO021704 头写 10-14，实际 38 行 10-14 + 12 行 10-19；按头日期 ±1.5 天采集漏 12/50。新增 `tongtool_api/receipt_collector.py` 重叠窗口 + 仓库外缓存 + 显式弱键；`receipt_reconciliation.py` 增加 `not_collected`、`weak_event_key`、`possible_duplicate`/`dedup_assumed`。本地 83 项测试通过；未改生产。
 - **采集入口实测（2026-10-26）**：新增 `tongtool_api/collect_receipts_cli.py`；09-01–10-26（14 天窗/2 天重叠）跑出 166 输入 → 150 唯一 + 16 重叠重复，12 PO / 113 SKU，无截断。新增 8 项测试，共 84 项本地测试通过。
+- **覆盖报告（2026-10-26）**：新增 `receipt_coverage.py` 并接 CLI `--coverage-out`；150 条唯一行全部 `unknown`（缺稳定 ID），全部无 UOM/时区；`not_collected=0`；未自动抵扣。共 86 项本地测试通过。
 
 ## 2026-10-13
 - **Stage 1 v35（出库按 DN 归组）**：修「N单」误报 —— 原按 `Delivery Note Item` **明细行**计数，一张 DN 拆多行会显示成「5单」。改为**按出库单归组**（`dns=[{dn,date,status,docstatus,is_return,qty,lines[]}]`），摘要「N单」= **DN 张数**；明细表加「行数」列，`>1` 行时列出 `q1 + q2 + … = 合计`。生产 SO-26-00101 实测：`DM-153-IVORY` 22 行 → **1单·已发200**；真有 2 张 DN 的 `HLR-140-GREY` → **2单**(DN-26-00071+DN-26-00089)。⚠️ 过程踩坑：归组后 `dns` 变 dict，`d.qty` 必须改 `d["qty"]`（否则 `AttributeError`→500），已在**测试机拦下**（未到生产）。
