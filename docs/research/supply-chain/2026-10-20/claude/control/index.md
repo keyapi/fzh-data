@@ -24,9 +24,11 @@ date: 2026-10-23
 
 | 需要了解 | 文档 |
 |---|---|
+| **Jack 唯一入口** | [handoffs/JACK_ENTRY](handoffs/JACK_ENTRY.md) |
+| **Jack 唯一问答日志** | [handoffs/JACK_QA](handoffs/JACK_QA.md) |
 | Jack 任务书（W1–W4） | [handoffs/2026-10-23-jack-supply-timeline](handoffs/2026-10-23-jack-supply-timeline.md) |
-| 七问答复 + 口径 + 红线 | [handoffs/2026-10-23-jack-w1-answers](handoffs/2026-10-23-jack-w1-answers.md) |
-| 首轮 8 问答复（2026-10-26） | [handoffs/2026-10-26-jack-w1-answers-r1](handoffs/2026-10-26-jack-w1-answers-r1.md) |
+| 早期七问答复（归档） | [handoffs/2026-10-23-jack-w1-answers](handoffs/2026-10-23-jack-w1-answers.md) |
+| R1 详细答复（2026-10-26） | [handoffs/2026-10-26-jack-w1-answers-r1](handoffs/2026-10-26-jack-w1-answers-r1.md) |
 | 数据/背景读取地图 | [handoffs/2026-10-23-jack-data-map](handoffs/2026-10-23-jack-data-map.md) |
 | 阅读顺序 + 旧版识别 | [handoffs/2026-10-23-jack-reading-list](handoffs/2026-10-23-jack-reading-list.md) |
 | W1/W3 验收契约 | [reviews/2026-10-23-sc14-spec](reviews/2026-10-23-sc14-spec.md) + `experiments/sc14/` |

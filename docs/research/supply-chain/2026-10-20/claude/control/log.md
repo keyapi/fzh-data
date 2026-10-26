@@ -20,3 +20,5 @@ date: 2026-10-23
   Jack 的必读增加 `EN_API/fulfillment_query.py` 与 `supply_chain_visibility/AGENT_HANDOFF.md`，W1 不重写查询入口。
 - **新增（2026-10-26）**：SC14 阶段扩为 7 个（`partially_received` / `unknown`），21/21 用例通过；
   首轮 8 问答复 `handoffs/2026-10-26-jack-w1-answers-r1.md`（阶段/WO/PO021735/映射/仓库/received + 10-22 冻结基准）。
+- **新增（2026-10-26）**：固定 Jack 入口 `handoffs/JACK_ENTRY.md` + 唯一问答日志 `handoffs/JACK_QA.md`；
+  所有后续答复只追加到 JACK_QA，不再分散在 commit/PR 评论。Q07 仓库相加口径已更正。
