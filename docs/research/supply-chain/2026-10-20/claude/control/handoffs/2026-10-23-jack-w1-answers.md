@@ -299,3 +299,16 @@ channel: docs/jack-w1-channel
   `Closed ≠ 已发完`；出库按 `item_code` 匹配、退货行负数**净额抵扣**；EN `po_no` 不是客户 PO。
 - **W1 应消费它，不要重建平行查询**；若阶段/数量口径与 SC14 冲突，先提 `[W1-Qxx]`。
 - 边界：阶段 0–3；头程/海外仓（4–8）未接入；物料需求/采购/入库 EN 侧基本空白。
+
+---
+
+## 9. 沟通与事实源（2026-10-24）
+
+- **本分支（PR #311）是 Jack 的唯一事实源。** 工头与用户之间产生的、与 Jack 工作有关的技术结论，
+  会追加到本文件或本分支的其他文档并 push；**聊天里未进入本分支的内容不算正式答复**。
+- Jack 的问题优先开在**自己的 `feature/jack-supply-timeline` PR**；工头在该 PR 回复，
+  并把稳定口径回写到本分支。用户不需要转述技术内容，最多说「看 PR #311 最新提交」。
+- **PR #311 的 Files changed 只显示与 main 的差异**；`EN_API/fulfillment_query.py` 等 #291 内容已在 main，
+  不在 PR diff 里。Jack 要 `git switch docs/jack-w1-channel` 读完整分支，或 `git merge origin/main` 到自己分支。
+- 行级业务 CSV/JSON 仍留本地；公开分支只放文档、代码、聚合计数。
+- 业务决策（服务水平、预算、交期假设、采购授权）仍由用户拍板；技术口径可直接对话。
