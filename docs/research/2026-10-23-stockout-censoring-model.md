@@ -31,6 +31,7 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 | WX 6/9、6/11 + 7 月销售/库存报表 | 同目录 | 6/9、6/11、7/10、7/16、7/22、7/24、7/28、7/29、7/30、7/31 | 6–7 月检查点（含销量/库存） |
 | EN 每日快照 | `/home/frappe/fzh-inventory/stock.parquet` | 10/20–10/26（每日，7 天） | 之后每日累积 |
 | PB `check0stock` / `checked0stock` | PB orders 本地历史目录 | **2023-09-08 至 2026-10-22，81 个 `checked0stock` CSV / 68 个检查日 / 2,145 条阻塞明细；35 个 Vendor Style：24 个大号 Wedge + 3 个 Personal Wedge + 8 个 Gap Filler** | PB/美中断货与零库存订单的地面真值（SPS 目录 39 个；Coffee 4 色未在 PB 订单出现） |
+| 同事通途报表备份 | `D:/Work/彭建/通途库存记录 彭建下载备份 20261026.zip` | **2026-04-14–10-09，22 天 / 48 快照 / 42,577 行**；70 个「销售及库存报表」+ 47 个「商品销量分析报表」 | 有货库存检查点（美东/波兰/美中 4 子仓）；**零库存 SKU 大量被隐藏，不能单独判断货** |
 | PB 无货通知链 | 订单 → 中国运营 → 美中 → 中国运营 → 你 | 事件驱动 | 美中/PB 实际无货信号 |
 | 钉钉盘点群 | 钉钉群 | — | **当前无读取/搜索权限，暂不可用** |
 
