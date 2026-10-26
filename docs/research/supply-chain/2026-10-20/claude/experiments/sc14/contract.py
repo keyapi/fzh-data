@@ -17,7 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Any, Iterable
 
-STAGES = ("on_hand", "po_open", "in_production", "shipped_in_transit", "received")
+STAGES = ("on_hand", "po_open", "in_production", "shipped_in_transit", "received",
+          "partially_received", "unknown")
 DATE_CONFIDENCE = ("confirmed", "estimated", "unknown")
 SCOPES = ("in_house", "external_fba")
 UOM_KNOWN = ("个", "套")
@@ -136,9 +137,9 @@ def validate_w1(rows: Iterable[dict]) -> list[Finding]:
             elif stage == "shipped_in_transit" and qty != rem:
                 out.append(Finding("E_PARTIAL_STAGE_QTY", "error", i,
                                    "stage='shipped_in_transit' 的 qty 必须等于 remaining_qty（不得整单抵扣）"))
-            elif stage not in ("received", "shipped_in_transit"):
+            elif stage not in ("received", "shipped_in_transit", "partially_received"):
                 out.append(Finding("E_PARTIAL_STAGE", "error", i,
-                                   "部分到货只能出现在 received / shipped_in_transit 两行上"))
+                                   "部分到货只能出现在 received / shipped_in_transit / partially_received 上"))
         if stage == "shipped_in_transit" and _is_num(recv) and recv > 0 and rem is None:
             out.append(Finding("E_PARTIAL_AS_FULL", "error", i,
                                "已部分签收却整单记为在途：必须拆行"))
@@ -146,6 +147,31 @@ def validate_w1(rows: Iterable[dict]) -> list[Finding]:
             out.append(Finding("E_PARTIAL_UNALLOCATED", "error", i,
                                "部分签收但未拆行、也未给 received_qty/remaining_qty："
                                "不得把整单当在途（分配未知必须显式）"))
+
+        # --- 新增阶段：partially_received / unknown ----------------------
+        # partially_received 只用于“分配未知”的部分签收：知道总量，但不知道
+        # 已收/剩余各自落在哪；数量必须 null，不得猜一个数。
+        if stage == "partially_received":
+            if None in (recv, rem, docq) and not partial:
+                out.append(Finding("E_PARTIAL_INCOMPLETE", "error", i,
+                                   "partially_received 必须给 received_qty / remaining_qty / doc_qty"))
+            if not (r.get("allocation_unknown") is True or r.get("allocation_known") is False):
+                out.append(Finding("E_PARTIAL_ALLOCATION_REQUIRED", "error", i,
+                                   "partially_received 只用于分配未知：必须 allocation_unknown=true "
+                                   "或 allocation_known=false"))
+            if qty is not None or qstat != "unknown":
+                out.append(Finding("E_PARTIAL_QTY_UNKNOWN", "error", i,
+                                   "partially_received 的 qty 必须为 null 且 qty_status='unknown'"))
+            if r["date_confidence"] != "unknown" or r["available_date"] is not None:
+                out.append(Finding("E_PARTIAL_DATE_UNKNOWN", "error", i,
+                                   "partially_received 必须 date_confidence='unknown' 且 available_date=null"))
+
+        # unknown 阶段：知道数量、但不知道处于哪一段（例如 DN 状态缺失）。
+        # 数量可以是 known；但可用日必须 unknown，且不进入 confirmed/expected。
+        if stage == "unknown":
+            if r["date_confidence"] != "unknown" or r["available_date"] is not None:
+                out.append(Finding("E_UNKNOWN_STAGE_DATE", "error", i,
+                                   "stage='unknown' 必须 date_confidence='unknown' 且 available_date=null"))
 
         # --- 外部 FBA ----------------------------------------------------
         scope = r.get("scope")
@@ -206,6 +232,10 @@ def rollup(rows: Iterable[dict], week_start: str | None = None) -> dict:
             null_qty.append(rec)
         if scope == "external_fba":
             excluded.append(rec)
+            continue
+        if r.get("stage") in ("partially_received", "unknown"):
+            # 阶段/分配未知：数量可以 known，但可用性未知，只进 unknown。
+            unknown.append(rec)
             continue
         if r.get("stage") == "on_hand":
             add(opening, uom, qty)

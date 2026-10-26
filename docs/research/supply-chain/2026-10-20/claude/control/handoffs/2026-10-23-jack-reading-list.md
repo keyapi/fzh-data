@@ -49,7 +49,7 @@ uv run python EN_API/fulfillment_query.py --codes CENKZ1325-Yellow-138 --test --
 |---:|---|---|
 | 4 | [`2026-10-23-sc14-spec.md`](../reviews/2026-10-23-sc14-spec.md) | W1/W3 必填字段、阶段枚举、五条边界语义 |
 | 5 | [`experiments/sc14/contract.py`](../../../experiments/sc14/contract.py) | 可执行校验：`E_*` / `W_*` 错误码 |
-| 6 | [`experiments/sc14/test_contract.py`](../../../experiments/sc14/test_contract.py) | 16 条验收用例；你的输出应能过 |
+| 6 | [`experiments/sc14/test_contract.py`](../../../experiments/sc14/test_contract.py) | 21 条验收用例；你的输出应能过 |
 | 7 | [`experiments/sc14/dry_run_sc04.py`](../../../experiments/sc14/dry_run_sc04.py) | 用真实 SC04 产物预演，抓 2,968 条不合规 |
 
 ## 3. 供应侧证据（理解已有什么、缺什么）

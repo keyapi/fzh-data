@@ -182,7 +182,7 @@ channel: docs/jack-w1-channel
 
 - SC09 已冻结：`M1-TRIAL-v1`，行表 sha `0a9371dc…`，2,309 行 / 23 列；**不要改它**。
 - W1 的验收规格用 **SC14**：`control/reviews/2026-10-23-sc14-spec.md`（commit `dd60da80`）
-  + `experiments/sc14/contract.py`（16 条可执行用例）。SC14 已用真实 SC04 产物预演，
+  + `experiments/sc14/contract.py`（21 条可执行用例）。SC14 已用真实 SC04 产物预演，
   抓出 2,968 条不合规（2,347 行无父 SKU、452 行部分签收未拆、169 行状态未知）。
 - **阶段枚举要扩两个**：`on_hand / po_open / in_production / shipped_in_transit / received`
   + **`partially_received`** + **`unknown`**。

@@ -19,7 +19,7 @@ channel: docs/jack-w1-channel
 2. `docs/research/supply-chain/2026-10-20/claude/control/handoffs/2026-10-23-jack-supply-timeline.md` —— W1–W4 任务书与边界。
 3. `.../control/handoffs/2026-10-23-jack-w1-answers.md` —— 七问答复 + 口径修改 + 红线。
 4. `.../control/reviews/2026-10-23-jack-sample10.md` —— **当前 9 个冻结 SKU**（不是旧 8+2）。
-5. `.../control/reviews/2026-10-23-sc14-spec.md` + `experiments/sc14/` —— 16 条可执行验收契约（五条红线）。
+5. `.../control/reviews/2026-10-23-sc14-spec.md` + `experiments/sc14/` —— 21 条可执行验收契约（五条红线）。
 6. `.../control/reviews/2026-10-23-sc04-supply-stage.md` + `2026-10-23-dn-split.md` —— SC04/SC03 已证供应阶段。
 7. `.../control/reviews/2026-10-23-map-evidence.md` —— SKU↔EN 物料映射三态、UOM 与证据分级。
 8. `.../control/reviews/2026-10-22-eta-cover-uom-evidence.md` —— ETA/Cover/UOM 缺证现状。

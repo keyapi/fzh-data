@@ -180,6 +180,55 @@ def test_w3_gap_must_be_null_when_demand_unknown():
     assert validate_w3(ok) == []
 
 
+# ---------------------------------------------------------------- 新增阶段
+def test_unknown_stage_is_allowed_but_never_counted():
+    rows = [base(stage="unknown", qty=19669, qty_status="known",
+                 available_date=None, date_confidence="unknown",
+                 source_key="DN-26-00112|1|个|unknown", doc_name="DN-26-00112")]
+    assert codes(rows) == set(), codes(rows)
+    roll = rollup(rows)
+    assert roll["confirmed"] == [] and roll["expected"] == []
+    assert [r["source_key"] for r in roll["unknown"]] == ["DN-26-00112|1|个|unknown"]
+    col = w3_columns(roll)
+    assert col["supply_unknown"]["rows"] == 1
+    assert col["supply_unknown"]["qty_known"] == {"个": 19669}
+
+
+def test_unknown_stage_with_available_date_is_rejected():
+    rows = [base(stage="unknown", qty=10, available_date="2026-11-01",
+                 date_confidence="unknown")]
+    assert "E_UNKNOWN_STAGE_DATE" in codes(rows)
+
+
+def test_partially_received_allocation_unknown_is_unknown_not_counted():
+    rows = [base(stage="partially_received", qty=None, qty_status="unknown",
+                 received_qty=40, remaining_qty=60, doc_qty=100,
+                 allocation_unknown=True, allocation_known=False,
+                 available_date=None, date_confidence="unknown",
+                 source_key="DN|1|个|partial")]
+    assert codes(rows) == set(), codes(rows)
+    roll = rollup(rows)
+    assert roll["opening_by_uom"] == {}
+    assert roll["confirmed"] == [] and roll["expected"] == []
+    assert [r["source_key"] for r in roll["unknown"]] == ["DN|1|个|partial"]
+
+
+def test_partially_received_requires_allocation_unknown():
+    rows = [base(stage="partially_received", qty=None, qty_status="unknown",
+                 received_qty=40, remaining_qty=60, doc_qty=100,
+                 allocation_unknown=False, allocation_known=True,
+                 available_date=None, date_confidence="unknown")]
+    assert "E_PARTIAL_ALLOCATION_REQUIRED" in codes(rows)
+
+
+def test_partially_received_qty_must_be_null():
+    rows = [base(stage="partially_received", qty=40, qty_status="known",
+                 received_qty=40, remaining_qty=60, doc_qty=100,
+                 allocation_unknown=True, available_date=None,
+                 date_confidence="unknown")]
+    assert "E_PARTIAL_QTY_UNKNOWN" in codes(rows)
+
+
 # ---------------------------------------------------------------- runner
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]

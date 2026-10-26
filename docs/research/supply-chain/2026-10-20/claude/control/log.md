@@ -18,3 +18,5 @@ date: 2026-10-23
   行级业务数据仍留本地；公开仓库不放 CSV（D33）。
 - **补充（2026-10-24）**：`docs/jack-w1-channel` 合并 `origin/main`（`3405ac10`，含 #291 履约查询统一入口）；
   Jack 的必读增加 `EN_API/fulfillment_query.py` 与 `supply_chain_visibility/AGENT_HANDOFF.md`，W1 不重写查询入口。
+- **新增（2026-10-26）**：SC14 阶段扩为 7 个（`partially_received` / `unknown`），21/21 用例通过；
+  首轮 8 问答复 `handoffs/2026-10-26-jack-w1-answers-r1.md`（阶段/WO/PO021735/映射/仓库/received + 10-22 冻结基准）。
