@@ -1,0 +1,157 @@
+{
+ "version": "jack_w1_sample9_2026-10-26",
+ "source": "JACK_ENTRY.md + JACK_QA.md（Q01–Q08，2026-10-26）；sample10 9 SKU 冻结",
+ "as_of": "2026-10-23",
+ "snapshots": {
+  "stock": "2026-10-22",
+  "wo": "2026-10-20",
+  "po": "2026-10-19"
+ },
+ "slots": [
+  {
+   "slot": "S1_urgent",
+   "sku": "TT0031038K0062927",
+   "category": "urgent",
+   "status": "filled",
+   "items": [
+    {"item_code": "KS0156-NYBDSFH-52x52x5-BLACK", "role": "finished", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "production_items": [
+    {"item_code": "PK#KS0156-NYBDSFH-52x52x5-BLACK", "role": "cover", "identity_confidence": "derived", "mapping_source": "derived"}
+   ],
+   "conversion_assumed": false,
+   "ambiguous": false,
+   "needs_business_review": false
+  },
+  {
+   "slot": "S2_overlap_1",
+   "sku": "C/Linen-Natural-100-688-wow",
+   "category": "overlap",
+   "status": "filled",
+   "items": [
+    {"item_code": "PK#KS0001-XMMBS-100-HEMPNATURAL", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "production_items": [
+    {"item_code": "PK#KS0001-XMMBS-100-HEMPNATURAL", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "conversion_assumed": true,
+   "ambiguous": false,
+   "needs_business_review": false
+  },
+  {
+   "slot": "S2_overlap_2",
+   "sku": "TT0312701K0064561",
+   "category": "overlap",
+   "status": "filled",
+   "items": [
+    {"item_code": "ZTGJ5525-SOFALSHAPEDBRACKET-IRON-55x45x45", "role": "component", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "production_items": [],
+   "conversion_assumed": false,
+   "ambiguous": false,
+   "needs_business_review": false
+  },
+  {
+   "slot": "S3_in_production",
+   "sku": "CENCord995-DKGrey-97",
+   "category": "in_production",
+   "status": "filled",
+   "items": [
+    {"item_code": "PK#KS0001-QDKTR-100-DEEPGREY", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "production_items": [
+    {"item_code": "PK#KS0001-QDKTR-100-DEEPGREY", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "conversion_assumed": true,
+   "ambiguous": false,
+   "needs_business_review": false
+  },
+  {
+   "slot": "S4_po_eta_verifiable",
+   "sku": null,
+   "category": "PO",
+   "status": "shortfall",
+   "items": [],
+   "production_items": [],
+   "conversion_assumed": false,
+   "ambiguous": false,
+   "needs_business_review": false,
+   "review_reason": "本地无任何带 ETA 的未结 PO；缺额不补、不换样"
+  },
+  {
+   "slot": "S5_po_eta_uncertain",
+   "sku": "C/Cord-White-100-706-wow",
+   "category": "PO",
+   "status": "filled",
+   "items": [
+    {"item_code": "PK#KS0001-CMKTR-100-WHITE", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "production_items": [
+    {"item_code": "PK#KS0001-CMKTR-100-WHITE", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "conversion_assumed": true,
+   "ambiguous": false,
+   "needs_business_review": false
+  },
+  {
+   "slot": "S6_zero_stock_1",
+   "sku": "C/Velvet-White-100-664-wow",
+   "category": "zero_stock",
+   "status": "filled",
+   "items": [
+    {"item_code": "PK#KS0001-PR-100-WHITE", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "production_items": [
+    {"item_code": "PK#KS0001-PR-100-WHITE", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "conversion_assumed": true,
+   "ambiguous": false,
+   "needs_business_review": false
+  },
+  {
+   "slot": "S6_zero_stock_2",
+   "sku": "TT0031010K0062880",
+   "category": "zero_stock",
+   "status": "filled",
+   "items": [
+    {"item_code": "KS0121-KQC-194-WHITE", "role": "finished", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "production_items": [
+    {"item_code": "PK#KS0121-KQC-194-WHITE", "role": "cover", "identity_confidence": "derived", "mapping_source": "derived"}
+   ],
+   "conversion_assumed": false,
+   "ambiguous": false,
+   "needs_business_review": false
+  },
+  {
+   "slot": "S7_in_stock_sufficient",
+   "sku": "CEN1607NLinen-Ivory-194",
+   "category": "normal",
+   "status": "filled",
+   "items": [
+    {"item_code": "PK#KS0001-DM-194-IVORY", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "production_items": [
+    {"item_code": "PK#KS0001-DM-194-IVORY", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "conversion_assumed": true,
+   "ambiguous": false,
+   "needs_business_review": false
+  },
+  {
+   "slot": "S8_in_stock_short",
+   "sku": "CENKZ1323-LTGrey-97",
+   "category": "normal",
+   "status": "filled",
+   "items": [
+    {"item_code": "PK#KS0001-DM-100-GREY", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "production_items": [
+    {"item_code": "PK#KS0001-DM-100-GREY", "role": "cover", "identity_confidence": "proven", "mapping_source": "sku_item"}
+   ],
+   "conversion_assumed": true,
+   "ambiguous": false,
+   "needs_business_review": false
+  }
+ ]
+}
