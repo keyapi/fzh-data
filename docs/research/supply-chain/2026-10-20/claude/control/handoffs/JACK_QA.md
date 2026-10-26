@@ -153,6 +153,32 @@ channel: docs/jack-w1-channel
 - #311 保持 draft；#312 合并前必须满足 D33 清关。
 
 
+### [W1-A10] 2026-10-26 Jack 答复：Q10 阻塞 + 必改已落地
+
+> 代码：`feature/jack-supply-timeline`（`62546ea7`），draft PR #312；#311 保持 docs-only / draft。
+
+| Q10 | 状态 | 落地与证据 |
+|---|---|---|
+| 阻塞：行级 JSON | ✅ | `config/frozen_20261022.json`、`config/wo_audit_20261022.json` 已从 git 移除；值放本地 `local/`（gitignore）。公开侧只留 `frozen_20261022.schema.json`、`frozen_20261022.sha256`、`wo_audit_20261022.summary.json`；新增 `--config` / `--wo-audit`；单测用 `tests/fixtures/frozen_synthetic.json`；并加“公开配置无数量键”守卫。`git ls-files config/` 只剩 `sample_skus.json`、`warehouse_map.json` + schema/sha256/summary。 |
+| #2 SC14 skip | ✅ | `tests/test_sc14_sync.py` 优先读 `SC14_CANONICAL_DIR`，否则从 `origin/docs/jack-w1-channel` 读取 canonical（缺失时 `git fetch --depth=1`）；`SC14_SYNC_REQUIRE=1`/GitHub Actions 下缺失即失败。默认单测 **19 passed / 0 skip**。 |
+| #3 WO 时点 | ✅ | 本地 `wo_audit` 增加 `wo_state_as_of=2026-10-20`、`jc_as_of=2026-10-26`、`modified_after_as_of`；03110、03664 标 true；`production_conflict` 保留（保守不计供给），证据标 post-as-of。 |
+| #4 per-PO 桥接 | ✅ | `out/b_bridge_po.csv`（本地逐 PO：doc_name/open_qty/po_status/overlap_status/date_confidence/exclusion_reason）；`recon.json.b_bridge_po_summary` 聚合：6 行 / 914 / 全部 `same_batch_suspected` + 无 ETA → `po_not_counted`。公开文档只放不含 open_qty 的视图。 |
+| #5 received 字段 | ✅ | 主 supply 行带 `doc_qty / received_qty / posting_date / received_source`；evidenced 行 `received_source=shipment_signed`、`received_qty=null`。 |
+| #6 contract pin | ✅ | `run_sc14.py` 从 `sc14/SOURCE.json` 读取 `contract_source_commit` 与 `contract_sha256`。 |
+
+**验证（10-22 冻结基准）**
+
+- W1 233 行；B_min 1,212；B_max 2,762 + 433 个；桥接断言通过。
+- SC14 21/21；0 error / 132 warning（66 行；54/8/4）。
+- SC04 39 DN / 47 号 / 4,279 行 / FBA 17，差 0。
+- 单测 19 passed / 0 skip；`sha256sum -c config/frozen_20261022.sha256` OK。
+- `git ls-files` 无 `frozen_20261022.json` / `wo_audit_20261022.json` 行级文件。
+
+**待业务确认 / 未合并**
+
+- `status=4` 语义仍待业务确认。
+- #311、#312 保持 draft；行级 JSON 清关前不合并。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

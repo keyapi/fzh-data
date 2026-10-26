@@ -31,4 +31,8 @@ date: 2026-10-23
 - **2026-10-26 Jack 答复 Q09**：`[W1-A09]` 已写入 `JACK_QA.md`；代码在 `feature/jack-supply-timeline`
   （`f63af171` SC14 同步、`40d74491` Q09 #3–#7），draft PR #312；#311 保持 docs-only / draft。
   验证：233 行 / SC14 21/21 + 0 error / 132 warning / SC04 差 0 / B_min 1,212 / B_max 2,762+433。
+- **2026-10-26 Jack 答复 Q10**：`[W1-A10]` 已写入 `JACK_QA.md`；D33 行级配置移出公开仓库
+  （只留 schema/sha256/聚合 summary），代码在 `feature/jack-supply-timeline`（`62546ea7`），draft PR #312。
+  验证：233 行 / SC14 21/21 + 132 warning / SC04 差 0 / B_min 1,212 / B_max 2,762+433 / 单测 19 passed 0 skip。
+  #311、#312 保持 draft，行级 JSON 清关前不合并。
 
