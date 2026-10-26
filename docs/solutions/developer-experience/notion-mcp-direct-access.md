@@ -29,6 +29,23 @@ Notion 的读写在这个仓库里走 **`notion-personal`** 远程 MCP。它不�
 实际可行路径是：**直接调用远程 MCP `https://mcp.notion.com/mcp`**，复用 Claude Desktop 3P
 已经缓存的 OAuth token。2026-10-26 用这条路径完成了 PB 取消台账两行更新并回读验证。
 
+### 旧记录哪里不够
+
+`pb_orders/docs/reference/notion-stockout.md`（未合并分支）写过：
+
+> Notion 写入只能走交互式 MCP（`notion-personal`）——它的 OAuth 凭证只对 MCP 服务器有效，
+> 脚本复用不了（实测把缓存的 token 打 REST API 返回 401）。
+
+这句话**对 REST 是对的，对 MCP 不成立**：缓存 token 打 `api.notion.com` 确实 401，但打
+`https://mcp.notion.com/mcp` 可用。缺的不是 token，而是三件事：
+
+1. 配置在 `%APPDATA%\Claude-3p\claude_desktop_config.json`（3P 与普通模式是两个文件）；
+2. token 缓存在 `%USERPROFILE%\.mcp-auth-notion-personal`；
+3. 直接调 MCP 端点的请求格式（session id、SSE、User-Agent）。
+
+另外，Agent 的排查顺序也要改：先看 Claude-3p 配置和 `.mcp-auth-*` 缓存，再看项目 `.mcp.json`
+和 `~/.claude.json` —— 这次就是只查了后两者，才误判成「本会话写不了 Notion」。
+
 ## Guidance
 
 ### 1. 先确认配置与凭证在哪

@@ -38,6 +38,20 @@ Request Type 有四类：
 2026-10-22 / 10-23 各有一封单行 CANCEL；10-26 又发来一封**汇总提醒**，把前两封的 PO 合并重复列出。
 本次三封都不涉及刚到货的两个 SKU，核实后全部接受并回复。
 
+### 与既有记录的关系
+
+此前**不是完全没有记录**，但都不足以直接照做：
+
+- 未合并分支上的 stockout 文档只有一行旁注：`取消类另起一条链：Re:WSI WISMO/Cancel Request/CHAD - 5806 Centrade Inc <日期>`，
+  另给过一个例子 `PO 137892570 Cancel accepted`；Notion 状态映射也只有 `顾客=取消 + 状态=顾客取消` 一行。
+- **实际处理早就有**：Sent 里能看到 2026-09-23「CANCEL impossible, already on the way」、
+  10-12「PO 138039519 CANCEL not accepted」、10-15「PO 137892570 Cancel accepted」、
+  10-19「PO 137987968 Cancel accepted」。
+
+缺的是**可执行的全流程**：怎么在多个文件夹里找全邮件、按哪四项核实「从未发货」、汇总提醒怎么处理、
+HTML 表格最后一列怎么填、SMTP 后怎么归档、Notion 备注怎么写。这篇把这些补齐。
+旧 stockout 分支合并后，两篇互相链接即可，不需要重复正文。
+
 ## Guidance
 
 ### 1. 先把邮件找全 —— 按日期范围扫，不要只按主题过滤
