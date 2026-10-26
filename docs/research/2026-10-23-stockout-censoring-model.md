@@ -31,7 +31,7 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 | WX 6/9、6/11 + 7 月销售/库存报表 | 同目录 | 6/9、6/11、7/10、7/16、7/22、7/24、7/28、7/29、7/30、7/31 | 6–7 月检查点（含销量/库存） |
 | EN 每日快照 | `/home/frappe/fzh-inventory/stock.parquet` | 10/20–10/26（每日，7 天） | 之后每日累积 |
 | PB `check0stock` / `checked0stock` | PB orders 本地历史目录 | **2023-09-08 至 2026-10-22，81 个 `checked0stock` CSV / 68 个检查日 / 2,145 条阻塞明细；35 个 Vendor Style：24 个大号 Wedge + 3 个 Personal Wedge + 8 个 Gap Filler** | PB/美中断货与零库存订单的地面真值（SPS 目录 39 个；Coffee 4 色未在 PB 订单出现） |
-| 同事通途报表备份 | `D:/Work/彭建/通途库存记录 彭建下载备份 20261026.zip` | **2026-04-14–10-09，22 天 / 48 快照 / 42,577 行**；70 个「销售及库存报表」+ 47 个「商品销量分析报表」 | 有货库存检查点（美东/波兰/美中 4 子仓）；**零库存 SKU 大量被隐藏，不能单独判断货** |
+| 同事通途报表备份 | `D:/Work/彭建/通途库存记录 彭建下载备份 20261026.zip` | **2026-04-14–10-09，22 天 / 48 快照 / 42,577 行**；70 个「销售及库存报表」+ 47 个「商品销量分析报表」 | 仓级库存检查点：显式 0 + **以前出现过、后来消失**可作断货负证据；从未出现=unknown |
 | PB 无货通知链 | 订单 → 中国运营 → 美中 → 中国运营 → 你 | 事件驱动 | 美中/PB 实际无货信号 |
 | 钉钉盘点群 | 钉钉群 | — | **当前无读取/搜索权限，暂不可用** |
 
@@ -72,6 +72,13 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 - `stockout_windows` 共 159 段（同一 SKU 在连续检查日出现、且相邻检查日间隔 ≤7 天才并段）；**窗口只表示“这些检查日观察到阻塞”，不表示区间内连续断货**。
 - `shortage_calendar`（35 SKU × 1,141 天 = 39,935 行）：`reported_shortage` 938 个 SKU-日（68 个检查日）；`no_reported_shortage` 38,857；`check_result_missing` 140（35 × 4 个结果缺失日）。**没有检查记录的日期按业务口径归入“没有报告断货”。**
 - 脚本 `D:/Work/fzh-order-store/pb_stockout_ingest.py`，报告 `pb_stockout_import_report.json`，测试 `test_pb_stockout_ingest.py`（2 项通过）。
+
+**同事报表检查点（PJ 20261026）**
+
+- 70 个「销售及库存报表」、**22 个日期**（2026-04-14→10-09）、42,577 行、6 个仓；已入 `pengjian_inventory` schema。
+- `sku_status_daily` 59,559 行：逐日 × 仓 × SKU 的 `present_positive` / `present_zero` / `absent_after_presence`，带 `prior_status`。
+- 2026-10-09：美东 283 正 / 87 显式 0 / 153 消失（139 在售 + 14 清仓）；波兰 732 / 18 / 619；美中 573 / 29 / 123。
+- 报表勾了“隐藏所有库存为0”，所以大部分零库存 SKU 是**消失**而不是显式 0；对以前出现过的 SKU，消失按该仓 0 处理；从未出现过的不算。美中 9 月仓库合并前后要分开。
 
 **EN 每日库存（截至 2026-10-26）**
 
@@ -130,6 +137,8 @@ sellable_stock(listing, sku, day) =
 | `reported_shortage` | PB：当天有 `checked0stock` 阻塞记录（订单级地面真值） |
 | `no_reported_shortage` | PB：当天没有阻塞记录。按业务流程（怀疑断货才 check，来货后停止）视为**没有报告断货**，不是 unknown |
 | `check_result_missing` | PB：当天有 `check0stock`、没有 `checked0stock`（检查跑了但结果缺失） |
+| `present_zero_checkpoint` | PJ 报表显式 `可用库存数量=0`（仓级，可信） |
+| `absent_after_presence` | PJ 报表中该 SKU 以前在该仓出现过、本日消失；按 `prior_status` 区分在售=断货候选 / 清仓停售=下架 |
 | `stock_unknown` | **仅美中非 PB**：系统库存 >5 但销量=0 / 无货订单/客服反馈；**不能因库存 >5 就判定有货** |
 | `likely_unavailable` | 美东：sellable ≤5 + 销量=0；美中：销量=0 +（sellable≤0 或无货订单/客服/运营确认） |
 | `censored` | `likely_unavailable` 持续 ≥ K 天（K=2–3） |
@@ -165,6 +174,12 @@ sellable_stock(listing, sku, day) =
    - 没有检查记录 = `no_reported_shortage`（业务流程决定：怀疑断货才 check，来货后不再 check）；
    - 只有 `check0stock`、没有结果文件 = `check_result_missing`，不参与需求拟合；
    - 该负证据只适用于 PB；**美中非 PB 仍按 `stock_unknown`**。
+8. **PJ 稀疏检查点用“显式 0 + 消失”做仓级负证据**
+   - 报表有行且可用=0 = `present_zero_checkpoint`；
+   - 以前在该仓出现过、本日无行 = `absent_after_presence`：`prior_status=在售` 才算断货候选，`清仓/停售` 算下架；
+   - 从未在该仓出现 = `not_carried/unknown`，不当 0；
+   - 同一天消失的 SKU 可能转到了别的仓（如美东→美中）；对**当前渠道仓**仍不可售，但对全局 SKU 不是 0；
+   - **美中 2026-09 仓库合并**：之前 4 个子仓、之后 1 个 `美中-FZH-DANEEY`，分析要按时期分开，别把改名当断货。
 
 ## 4. 如何侦测退货/手工调整
 
@@ -213,6 +228,7 @@ sellable_stock(listing, sku, day) =
 8. **美中非 PB**：没有稳定无货信号时按 `stock_unknown`，不能因系统库存 >5 就当有货；有客服/运营反馈再标。
 9. **WX 历史库存入库**：✅ 已把 6/9、6/11、6/26、7 月 8 个检查点、库存动态 8/24–10/19（27 个日期列）共 38 个日期 / 198,363 条观测入 `wx_inventory` schema；两套仓库命名（6–7 月 12 明细仓 / 8–10 月 5 汇总仓）**尚未合并**，需按 `美东仓 → 美东-CENTRADE` 等映射后再与 EN 10/20–26 对齐。
 10. **钉钉**：`qyapi_chat_read` 只读群信息/成员，**不返回消息历史**；当前没有群消息读取/搜索权限，不纳入自动化；需要时请运营导出或记共享表。会话存档是另一套企业能力，暂不启动。
+11. **PJ 报表检查点**：✅ 70 个销售及库存报表 → `pengjian_inventory.observations` / `daily_snapshot` / `sku_status_daily`（59,559 行）；22 个日期，2026-04-14→10-09。按 §3.3 第 8 条使用：显式 0 + 曾出现后消失（在售）作仓级断货证据；从未出现/清仓/停售不算。
 
 ## 6. 预测里怎么用
 
@@ -228,7 +244,7 @@ sellable_stock(listing, sku, day) =
 
 | 阶段 | 做什么 | 验收 |
 |---|---|---|
-| P0 | 每日抓库存变动明细 + 解析 PB `check0stock`/`checked0stock` + WX 历史库存入库 | ✅ WX 38 日期 / 198,363 行；✅ PB 68 检查日 / 2,145 阻塞明细 / 35 SKU；✅ EN 每日 `stock_change`（05:47，测试站 3 天 653 行，重跑不翻倍） |
+| P0 | 每日抓库存变动明细 + 解析 PB `check0stock`/`checked0stock` + WX 历史库存入库 | ✅ WX 38 日期 / 198,363 行；✅ PB 68 检查日 / 2,145 阻塞明细 / 35 SKU；✅ PJ 22 天 / 42,577 行 / `sku_status_daily`；✅ EN 每日 `stock_change`（05:47，生产 653 行） |
 | P1 | 建立 listing 级 `sellable_stock` + `stock_status_daily`（美东阈值 5、K=2–3、M=7；美中 `stock_unknown`） | 美东抽 20–30 SKU 用 ≤5/销量停核对；PB 35 SKU 用 `checked0stock` 核对；美中非 PB 用客服/运营反馈 |
 | P2 | 与订单历史 join，先做“剔除 censored 天”的基线预测 | 与不剔除的模型对比，检查断货期预测是否不再被 0 拉低 |
 | P3 | 校准 K/M/阈值；评估 Tobit/删失模型；扩展到其他仓/市场 | 运营认可 + 回测稳定 |
@@ -243,6 +259,7 @@ sellable_stock(listing, sku, day) =
 - 盘点群/下架通知没有接入系统；需要运营日志或导出，否则用“销量停止 + ≤5”代理。
 - 现有 `stockout_observed=(batch_complete AND available=0)` 只是“单仓库存为 0 的观察”，不能直接当预测删失标签。
 - 每日快照无法定位日内断货；库存变动明细有 `operateTime`，可用于日内/事件级判断。
+- **PJ 报表是稀疏检查点**（22 天），且勾了“隐藏所有库存为0”：零库存 SKU 多为“消失”，只对**以前出现过**的 SKU 按该仓 0 处理；从未出现过的不算。美中 9 月仓库合并前后不可直接比较。
 
 ## 9. 相关
 
