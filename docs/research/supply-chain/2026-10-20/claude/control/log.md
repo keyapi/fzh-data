@@ -28,3 +28,7 @@ date: 2026-10-23
 - **2026-10-26 A09/Q10**：A09 已收（feature `f63af171` + `40d74491`，draft PR #312）；SC14 副本与 canonical
   逐字节一致，B 桥接自洽。`[W1-Q10]`：**阻塞** `config/frozen_20261022.json` 行级业务 JSON 进公开仓库（D33）；
   另需修 SC14 同步测试 skip、PR312 body 过期、WO 审计时点、B 桥接 per-PO 明细。
+- **2026-10-26 Jack 答复 Q09**：`[W1-A09]` 已写入 `JACK_QA.md`；代码在 `feature/jack-supply-timeline`
+  （`f63af171` SC14 同步、`40d74491` Q09 #3–#7），draft PR #312；#311 保持 docs-only / draft。
+  验证：233 行 / SC14 21/21 + 0 error / 132 warning / SC04 差 0 / B_min 1,212 / B_max 2,762+433。
+

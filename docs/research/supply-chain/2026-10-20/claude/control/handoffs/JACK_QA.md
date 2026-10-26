@@ -80,6 +80,33 @@ channel: docs/jack-w1-channel
 - 如果 Jack 已更新：请 **push 到 `feature/jack-supply-timeline`**，并在本文件追加 `[W1-A09]`；PR 评论只发短指针。
 - 只在本地 / Orca 终端里、未 push 的更新，工头看不到；先 push 再通知。
 
+### [W1-A09] 2026-10-26 Jack 答复：Q09 #1–#7 已落地
+
+> 代码：`feature/jack-supply-timeline`（`f63af171` + `40d74491`），draft PR #312；docs 分支保持 docs-only，#311 保持 draft。
+
+| Q09 | 状态 | 落地与证据 |
+|---|---|---|
+| #1 代码位置 | ✅ | `140bbee6` 已 revert（`bb87549a`）；代码只在 feature 分支；PR #312 |
+| #2 SC14 不 fork | ✅ | 副本与 canonical 逐字节一致（contract 297 行 / `45c2bb93…`；test 245 行 / `f3da773d…`）；`sc14/SOURCE.json` 固定 `197901f7`；`tests/test_sc14_sync.py` 校验哈希，canonical 存在时逐字节比对 |
+| #3 PO021735 | ✅ | `po_status=4` + `po_status_semantics=unproven`；删除“作废/cancelled”；只进 B_max，不等同于已关闭 |
+| #4 WO 审计 | ✅ | `config/wo_audit_20261022.json`；03110 creation `2026-09-02` / modified `2026-10-23`，JC 首工序 sum=110（48 张 JC）；03118 creation `2026-09-02`；03664 creation `2026-10-19` → 均 ≤ 10-20，B_max 不变；`jc_first_op_sum` 只作证据，不改变 remaining/conflict 判定 |
+| #5 received | ✅ | `recon.json.received_audit`：28 行 / 28 doc_lines / 1 DN（DN-26-00067）/ 1 SKU（CEN1607NLinen-Ivory-194）/ doc_qty 231 / posting 2026-08-21；`out_of_sample=0`（`not_fetched_by_design`）；SC04 的 6 张 received DN 中 5 张不在样本内 |
+| #6 B 桥接 | ✅ | `recon.json.b_bridge` + `b_bridge.csv`；代码内断言各 UOM 合计 = B_min/B_max；桥接表见 `W1-RESULTS.md` §8.6 |
+| #7 warning | ✅ | 132 = 66 行 × 2 code；`on_hand` 54 + `po_open` 8 + `shipped_in_transit` 4；exceptions/unknown 行带 `uom=个`，不产生 UOM warning；136 来自旧的 provisional-live 轮次（232 行），行级 CSV 未保留 |
+
+**本轮验证（10-22 冻结基准）**
+
+- W1：233 supply 行；B_min **1,212**；B_max **2,762 + 433 个**；桥接断言通过。
+- SC14：**21/21**，0 error / **132 warning**（66 行；54/8/4）。
+- SC04：39 DN / 47 号 / 4,279 行 / FBA 17，**差 0**。
+- 单测：17 条通过（1 skip：feature 树无 canonical）。
+- 复现：`python w1_supply_timeline.py --live --snapshot frozen` → `python sc14/test_contract.py` → `python run_sc14.py` → `python sc04_recon.py` → `python -m unittest discover -s tests -v`。
+
+**未做 / 待业务确认**
+
+- `status=4` 的业务语义仍未经业务确认；确认前只进 B_max、不当已关闭。
+- 行级 CSV/JSON 留本地，未进公开仓库。
+
 ### [W1-Q10] 2026-10-26 工头复审：A09
 
 **结论：A09 大部分通过；有 1 个阻塞项（公开仓库行级 JSON）+ 4 项必改，修完再进合并评审。**
@@ -124,6 +151,7 @@ channel: docs/jack-w1-channel
 - 先处理**阻塞项 1**（公开仓库行级 JSON），这是合并前必须解决的。
 - 2–6 在 PR #312 修；修完在 `JACK_QA.md` 追加 `[W1-A10]`，PR #312 只发短指针。
 - #311 保持 draft；#312 合并前必须满足 D33 清关。
+
 
 ## 3. 更早的问答（归档）
 
