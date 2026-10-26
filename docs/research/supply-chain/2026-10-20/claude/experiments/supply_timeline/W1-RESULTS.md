@@ -73,9 +73,8 @@ python w1_supply_timeline.py --live --snapshot frozen --config local/frozen_2026
 python sc14/test_contract.py             # 21/21
 python run_sc14.py                       # 0 error / 132 warning
 python sc04_recon.py                     # 39/47/4,279 差 0
-python -m unittest discover -s tests -v  # 19 passed / 0 skip
-SC14_CANONICAL_DIR=/path/to/docs/experiments/sc14 SC14_SYNC_REQUIRE=1 \
-  python -m unittest discover -s tests -v  # 强制 canonical，缺失即失败
+python -m unittest discover -s tests -v  # 离线；无 canonical 时 1 skip（预期）
+python tests/run_canonical_tests.py      # fetch canonical + 19 passed / 0 skip
 ```
 
 实时库存只作对照：`--snapshot live`（标 `provisional_live`，不计算 B_min/B_max）。
@@ -134,7 +133,7 @@ SC14_CANONICAL_DIR=/path/to/docs/experiments/sc14 SC14_SYNC_REQUIRE=1 \
 | unknown | 36 | 55 个（4 行有量） | 0 | 0 | `not_in_ledger` |
 | **合计** | | | **1,212** | **2,762 + 433 个** | |
 
-桥接由 `build_bridge()` 按与 `ledger_sum()` 完全相同的排除顺序生成；`build_recon()` 内断言各 UOM 合计与 B_min/B_max 一致。
+桥接由 `build_bridge()` 按与 `ledger_sum()` 完全相同的排除顺序生成；`build_recon()` 内断言各 UOM 合计与 B_min/B_max 一致。其中 `po` 6 行 / 914 全部是 `same_batch_suspected` 且无 ETA（`date_confidence=unknown`），因此不进 B_min；逐 PO 明细（含 open_qty）在本地 `out/b_bridge_po.csv`。
 
 ### 8.7 SC14 warning 132 vs 136
 
@@ -166,3 +165,20 @@ SC14_CANONICAL_DIR=/path/to/docs/experiments/sc14 SC14_SYNC_REQUIRE=1 \
 | PO021733 | 0 | same_batch_suspected | unknown | po_not_counted |
 
 6 行合计 914，全部因 `same_batch_suspected` 且无 ETA（`date_confidence=unknown`）不进 B_min，不是数量为 0；`open_qty` 逐行在本地 `out/b_bridge_po.csv`。
+
+## 10. Q11 整改对照（2026-10-26）
+
+| Q11 | 状态 | 落地 |
+|---|---|---|
+| #1 仓库 confidence/scope | ✅ | `warehouse_map.json` 增加 `warehouse_scope_basis=operator`：`warehouse_scope` 表示运营方（own/3pl/fba），**不是库存所有权**；in_house 库存所有权均为我方。波兰仓 `warehouse_confidence` 由 confirmed 降为 assumed（EN 映射无独立证据）；CENTRADE/DANEEY 保留 confirmed 并写 `warehouse_confidence_basis`（DN customer + en_finished 交叉印证）。数量口径不变（assumed 仍计入，只有 unmapped 排除）。 |
+| #2 SC14 默认 skip | ✅ | `tests/test_sc14_sync.py` 改为纯离线：读 `SC14_CANONICAL_DIR` → `local/sc14_canonical` → `../sc14`；都没有时 skip（离线预期）。网络 fetch 移到 `tests/run_canonical_tests.py`，该入口 fetch 后以 `SC14_SYNC_REQUIRE=1` 运行，19 passed / 0 skip。 |
+| #3 PR body | ✅ | 改为“无行级数量 JSON；sample_skus/warehouse_map 仍含标识/映射，已由用户确认保留”；SC14 说明离线 skip 为预期。 |
+| #4 minor | ✅ | §8.6 补 `po` 行说明；`sample_skus.json` 增加 `as_of_note`（样本冻结日；快照 10-22/10-20/10-19）。 |
+
+**用户决定（已关闭）**：保留 `sample_skus.json` / `warehouse_map.json`（只有标识/映射，无数量/金额）。
+
+### 10.1 仓库 scope 语义
+
+- `scope`：`in_house` / `external_fba`（SC14 口径）。
+- `warehouse_scope`：仓库**运营方**，`own`=自营、`3pl`=第三方运营、`fba`=FBA；**不是库存所有权**。
+- in_house 库存所有权均为我方；`supply_own_*` 不应按 `warehouse_scope=own` 过滤，应按 `scope`/所有权口径。
