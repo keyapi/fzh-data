@@ -68,4 +68,4 @@ EN 的 Delivery Note 按钮将 logistic_number 放进 PO externalNumber，创建
 - 查询窗口按上海业务时区格式化；来源事件字符串本身未带时区，保留 unverified，调用者必须核实来源时区后再送入要求 aware timestamp 的对账核心。
 - 单元测试只用合成 fixture；自动通途 PO 入库、调度改点和库存写回不在本次范围。
 
-相关：[原生报表计划](../../../supply_chain_visibility/docs/research/2026-10-26-en-native-report-plan.md)、[PO API](purchase-orders.md)。
+相关：[原生报表计划](../../../supply_chain_visibility/docs/research/2026-10-26-en-native-report-plan.md)、[供应整合设计](../../../supply_chain_visibility/docs/research/2026-10-26-receipt-supply-integration.md)、[PO API](purchase-orders.md)。
