@@ -150,23 +150,47 @@ on_hand / po_open / in_production / shipped_in_transit / received
 
 ## [W1-Q07] 6 个仓的 scope / confidence
 
-**结论：3PL 与自有仓分开；`FZH-DANEEY-成品仓/半成品仓` 是 DANEEY 的子池，不能与 `美中-FZH-DANEEY` 相加。**
+**结论（2026-10-26 更正）：可以相加，前提是同一批货没有被重复报两次。**
+上一版写的“`FZH-DANEEY-成品仓/半成品仓` 不能与主仓相加”**说过头了**，更正如下。
+
+先把 `component->main` 说清楚：它是我们**本地 `warehouse_map` 的清洗/改名标签**（GS 仓库名 → 当前通途仓名），
+**不是业务规则**。它可能表示旧名已并入主仓，也可能是历史遗留名；不能据此断言“子池不能加”。
+
+### 6 个仓
 
 | 仓库 | `warehouse_scope` | `warehouse_confidence` | 依据 / 备注 |
 |---|---|---|---|
-| `美东-CENTRADE` | `3pl` | `confirmed` | `warehouse_map`: CENTRADE → 美东-CENTRADE (renamed)；status=1 |
-| `美中-FZH-DANEEY` | `3pl` | `confirmed` | `warehouse_map`: FZH-DANEEY → 美中-FZH-DANEEY (renamed)；status=1 |
-| `波兰-FZHPoland-covers` | `own` | `assumed` | `FZHPoland-finished → 波兰-FZHPoland-covers` (finished->main)；status=1；归属未证 |
+| `美东-CENTRADE` | `3pl` | `confirmed` | `warehouse_map`: CENTRADE → 美东-CENTRADE (renamed)；status=1；有 `warehouse_id` |
+| `美中-FZH-DANEEY` | `3pl` | `confirmed` | `warehouse_map`: FZH-DANEEY → 美中-FZH-DANEEY (renamed)；status=1；有 `warehouse_id` |
+| `波兰-FZHPoland-covers` | `own` | `assumed` | `FZHPoland-finished → 波兰-FZHPoland-covers`；status=1；归属未证 |
 | `WayfairCG-Cranbury仓` | `3pl` | `assumed` | `current`；归属未证 |
-| `FZH-DANEEY-成品仓` | `3pl` | `confirmed`（映射）/ `inactive` | `component->main` → 美中-FZH-DANEEY；status=0 |
-| `FZH-DANEEY-半成品仓` | `3pl` | `confirmed`（映射）/ `inactive` | `component->main` → 美中-FZH-DANEEY；status=0 |
+| `FZH-DANEEY-成品仓` | `3pl` | `assumed` / `inactive` | `component->main` 只是改名提示；status=0；`stock_history` **无 warehouse_id**；9 SKU 快照 0 |
+| `FZH-DANEEY-半成品仓` | `3pl` | `assumed` / `inactive` | 同上；9 SKU 快照 0 |
 
-规则：
+### 加总规则（按优先级）
 
-- `component->main` 表示这两个是主仓的子池；**不要**把它们与 `美中-FZH-DANEEY` 相加。要么只保留主仓，要么保留子池但写 `warehouse_map_class=component->main` 并去重。
-- `status=0`（停用）不删行；标 `warehouse_status=inactive`，进 unknown/隔离，不进 confirmed。
-- 3PL 不与自有仓合并；多仓不互通，调拨要有单据。
-- SC09 的 `supply_own_*` 里 “own” 指我方拥有的库存（含 3PL 中我方货），FBA 另列；`warehouse_scope` 是另一维，不能替代 `scope`。
+1. **同一物理仓只算一次**：同一 `warehouse_id`、或明确是旧名/别名的，不重复加。
+2. **不同 `warehouse_id`、且不是同一批货的重复上报 → 可以相加**（作为不同库位）。
+   不要因为名字不同就拒绝相加；也不要因为 `component->main` 标签就禁止相加。
+3. **停用仓（status=0）有库存时保留行**，标 `warehouse_status=inactive`；是否计入主供给，
+   看它是否与主仓重复（同 SKU、同量、同快照）——重复就不加，独立就加。
+4. **3PL / 自有**用于归属与可见性分列，不等于不能加。只要都是我方拥有、同一 SKU、同一 UOM、
+   未被重复上报，就可以加；跨 UOM（个/套）仍不合计。
+5. **皮壳 / 半成品 / 成品**：通途面向销售平台，历史上不严格区分；**仓库名不能当 stage 真值**。
+   用 EN `sku_item.ship_type` + 运营填的客户物料号判断角色。皮壳/半成品在海外分公司可**填充压缩后发成品**，
+   所以它们是**可用供给**；但要标 `conversion_assumed=true`（默认 1:1 只是假设，未证）。
+   - B_min：只放**转换已证**的数量；
+   - B_max：可放**转换假设**的数量，并注明 `conversion_assumed=true`。
+6. 样本事实：`TT0031010` 在 `FZH-DANEEY-成品仓/半成品仓/美中-FZH-DANEEY` 三处都是 **0**；
+   `TT0031038` 在 `FZH-DANEEY-成品仓` 是 **0**、主仓是 40 + 在途 201。
+   所以这批样本加不加都不变；但规则不能再写成“永远不能加”。
+
+### 口径提醒
+
+- SC09 的 `supply_own_*` 里 “own” 指我方拥有的库存（含 3PL 中我方货），FBA 另列；
+  `warehouse_scope` 是另一维，不能替代 `scope`。
+- 如果同一 SKU 在主仓和子仓都出现非零，先做**重复上报检查**（同量、同快照、同 ID/别名），再决定加不加；
+  不确定就出“加/不加”两个情景，不要单值。
 
 ## [W1-Q08] received 全是 evidenced、qty=null
 
@@ -201,6 +225,6 @@ on_hand / po_open / in_production / shipped_in_transit / received
 3. WO：先按 `creation <= 2026-10-20` 过滤；`WO-26-03110` 标 `production_conflict`，不计供给。
 4. PO021735：按 PO 号单查；查不到标 `source_missing`，只进 B_max。
 5. 映射：按上表把 6 个皮壳改 `role=cover`、TT0312701 改 `component`、2 个成品保持 `finished`；`identity_confidence=proven`（基于 `sku_item`）。
-6. 仓库：按上表填 `warehouse_scope`/`confidence`；`component->main` 不与主仓相加。
+6. 仓库：按上表填 `warehouse_scope`/`confidence`；**不同 `warehouse_id` 且未重复上报的可以相加**；同 ID/别名/同量重复只算一次；皮壳/半成品的转换标 `conversion_assumed`（B_min 只放已证，B_max 可放假设）。
 7. received：分 `received_booked` / `received_evidenced`；主表不混算。
 8. 开 `feature/jack-supply-timeline` draft PR；把本文件的 8 个结论跑成计数，贴 PR 评论。
