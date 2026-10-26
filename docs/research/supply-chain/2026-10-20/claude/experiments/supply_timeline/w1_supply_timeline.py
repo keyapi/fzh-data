@@ -45,13 +45,14 @@ COLUMNS = [
     "sku", "warehouse", "warehouse_id", "scope", "warehouse_scope", "warehouse_confidence",
     "warehouse_map_source", "warehouse_map_version", "as_of_date", "snapshot_id", "updated_at",
     "stage", "doc_type", "doc_name", "doc_line", "qty", "qty_status", "uom", "uom_proven",
-    "event_date", "available_date", "date_confidence", "date_proof", "mode", "carrier",
+    "event_date", "posting_date", "available_date", "date_confidence", "date_proof", "mode", "carrier",
     "tracking_numbers", "allocation_known", "tracking_qty", "batch_key", "overlap_status",
-    "received_qty", "remaining_qty", "doc_qty", "received_booked", "received_evidenced",
+    "received_qty", "remaining_qty", "doc_qty", "received_booked", "received_evidenced", "received_source",
     "role", "parent_sku", "identity_confidence", "production_status", "production_progress",
     "conversion_assumed", "b_max_only", "production_conflict",
     "po_status", "po_status_semantics",
-    "wo_creation", "wo_modified", "jc_first_op_sum", "jc_source",
+    "wo_creation", "wo_modified", "wo_state_as_of", "jc_as_of", "modified_after_as_of",
+    "jc_first_op_sum", "jc_source",
     "source_key", "ledger", "notes", "counted",
 ]
 SUPPLY_STAGES = ["on_hand", "po_open", "in_production", "shipped_in_transit", "received"]
@@ -74,6 +75,22 @@ def load_env(path: Path) -> dict:
         k, _, v = line.partition("=")
         values[k.strip()] = v.strip().strip("\"'")
     return values
+
+
+def load_frozen_config(path):
+    p = Path(path)
+    if not p.is_file():
+        raise SystemExit(
+            "frozen config not found: %s\n"
+            "公开仓库只保留 schema + sha256；请把本地值文件放到该路径，或用 --config 指定。" % p)
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def load_wo_audit(path):
+    p = Path(path)
+    if not p.is_file():
+        return {}
+    return json.loads(p.read_text(encoding="utf-8")).get("wos", {})
 
 
 def num(value) -> float:
@@ -490,7 +507,7 @@ def make_row(**kw):
     })
     base.update(kw)
     for b in ("allocation_known", "received_booked", "received_evidenced", "uom_proven", "counted",
-              "conversion_assumed", "b_max_only", "production_conflict"):
+              "conversion_assumed", "b_max_only", "production_conflict", "modified_after_as_of"):
         base[b] = 1 if base.get(b) else 0
     for d in ("event_date", "available_date"):
         if base.get(d) == "":
@@ -700,6 +717,8 @@ def build(cfg, wmap, args, stock, pos, so_lines, wos, jcs, dn_lines, shipments, 
                     produced, jc_src, jc_done,
                     ("; jc_first_op_sum=%.3f" % jc_first) if jc_first is not None else ""),
                 wo_creation=wo.get("wo_creation") or "", wo_modified=wo.get("wo_modified") or "",
+                wo_state_as_of=wo.get("wo_state_as_of") or "", jc_as_of=wo.get("jc_as_of") or "",
+                modified_after_as_of=1 if wo.get("modified_after_as_of") else 0,
                 jc_first_op_sum=jc_first, jc_source=wo.get("jc_source") or "",
                 counted=0,
                 notes="production_conflict：%s；不计供给" % (
@@ -725,6 +744,8 @@ def build(cfg, wmap, args, stock, pos, so_lines, wos, jcs, dn_lines, shipments, 
                 produced, jc_src, jc_done, len(jc_by_wo.get(wo.get("name"), [])),
                 ("; jc_first_op_sum=%.3f" % jc_first) if jc_first is not None else ""),
             wo_creation=wo.get("wo_creation") or "", wo_modified=wo.get("wo_modified") or "",
+            wo_state_as_of=wo.get("wo_state_as_of") or "", jc_as_of=wo.get("jc_as_of") or "",
+            modified_after_as_of=1 if wo.get("modified_after_as_of") else 0,
             jc_first_op_sum=jc_first, jc_source=wo.get("jc_source") or "",
             counted=1, conversion_assumed=1 if meta["role"] == "cover" else 0,
             notes="remaining estimated from produced_qty; JC 仅 progress；PK# 不 1:1 转成品" +
@@ -785,7 +806,7 @@ def build(cfg, wmap, args, stock, pos, so_lines, wos, jcs, dn_lines, shipments, 
             snapshot_id="en_dn:%s" % snaps.get("stock", args.as_of), updated_at=updated_at,
             doc_type="Delivery Note", doc_name=line["dn"], doc_line=line["line_id"],
             uom=line.get("uom") or "", uom_proven=1 if line.get("uom") in KNOWN_UOMS else 0,
-            event_date=day(line.get("posting_date")), mode="",
+            event_date=day(line.get("posting_date")), posting_date=day(line.get("posting_date")), mode="",
             carrier=", ".join(sorted({s.get("carrier") or "" for s in ships if s.get("carrier")})),
             tracking_numbers=numbers, allocation_known=0, tracking_qty=None,
             batch_key=None, role=meta["role"], parent_sku=meta["sku"],
@@ -799,7 +820,7 @@ def build(cfg, wmap, args, stock, pos, so_lines, wos, jcs, dn_lines, shipments, 
                 available_date=dlvrs[-1] if dlvrs else None,
                 date_confidence="confirmed" if dlvrs else "unknown",
                 date_proof=("shipment_dlvr:%s" % ",".join(s.get("name") or "" for s in signed)) if dlvrs else "",
-                received_evidenced=1, counted=0, ledger="received_evidenced",
+                received_evidenced=1, received_source="shipment_signed", counted=0, ledger="received_evidenced",
                 source_key="en:dn:%s:%s:received" % (line["dn"], line["line_id"]),
                 notes="已签收到达；数量未证，已计入 on_hand，不重复计"))
         elif transit and not signed and not unknown_ships:
@@ -814,7 +835,8 @@ def build(cfg, wmap, args, stock, pos, so_lines, wos, jcs, dn_lines, shipments, 
         elif signed and transit:
             exceptions.append(make_row(
                 **common, stage="partially_received", qty=None, qty_status="unknown",
-                date_confidence="unknown", received_evidenced=1, counted=0, ledger="exception",
+                date_confidence="unknown", received_evidenced=1, received_source="shipment_partial",
+                counted=0, ledger="exception",
                 source_key="en:dn:%s:%s:partial" % (line["dn"], line["line_id"]),
                 notes="多号部分签收，分配未知；SC14 需 partially_received + allocation_unknown"))
         else:
@@ -838,9 +860,11 @@ def build(cfg, wmap, args, stock, pos, so_lines, wos, jcs, dn_lines, shipments, 
                         identity=meta["identity_confidence"], as_of=snaps.get("stock", args.as_of))
         supply.append(make_row(**f, qty=r.get("qty"), qty_status="known", uom=r.get("uom") or "",
                                uom_proven=1 if r.get("uom") in KNOWN_UOMS else 0,
-                               event_date=day(r.get("posting_date")), available_date=day(r.get("posting_date")),
+                               event_date=day(r.get("posting_date")), posting_date=day(r.get("posting_date")),
+                               available_date=day(r.get("posting_date")),
                                date_confidence="confirmed", date_proof="stock_entry:%s" % r.get("name"),
-                               received_booked=1, doc_qty=r.get("qty"), counted=0,
+                               received_booked=1, received_source="stock_entry", received_qty=r.get("qty"),
+                               doc_qty=r.get("qty"), counted=0,
                                notes="Stock Entry 实收；若已在 on_hand，不重复计"))
 
     # 映射风险标记 + 角色/转换假设（Q06/Q07）
@@ -925,6 +949,27 @@ def build_bridge(supply):
             for k, v in sorted(bucket.items())]
 
 
+def build_po_bridge(supply):
+    out = []
+    for r in supply:
+        if r["ledger"] != "po":
+            continue
+        out.append({
+            "doc_name": r["doc_name"],
+            "sku": r["sku"],
+            "warehouse": r["warehouse"],
+            "open_qty": r["qty"],
+            "po_status": r["po_status"],
+            "overlap_status": r["overlap_status"],
+            "date_confidence": r["date_confidence"],
+            "b_min": 0.0 if bridge_exclude_reason(r, "min") else num(r["qty"]),
+            "b_max": 0.0 if bridge_exclude_reason(r, "max") else num(r["qty"]),
+            "b_min_exclusion_reason": bridge_exclude_reason(r, "min"),
+            "b_max_exclusion_reason": bridge_exclude_reason(r, "max"),
+        })
+    return out
+
+
 def build_recon(cfg, args, supply, demand, excluded, exceptions, counts, en, tong):
     by_stage = defaultdict(lambda: {"rows": 0, "counted_rows": 0, "qty_by_uom": Counter()})
     for r in supply:
@@ -958,6 +1003,14 @@ def build_recon(cfg, args, supply, demand, excluded, exceptions, counts, en, ton
                 b_min[u] += q
 
     bridge = build_bridge(supply) if frozen_mode else []
+    po_bridge = build_po_bridge(supply) if frozen_mode else []
+    po_bridge_summary = {
+        "rows": len(po_bridge),
+        "open_qty": round(sum(num(x["open_qty"]) for x in po_bridge), 3),
+        "by_reason": dict(Counter(x["b_min_exclusion_reason"] for x in po_bridge)),
+        "by_overlap": dict(Counter(x["overlap_status"] for x in po_bridge)),
+        "by_date_confidence": dict(Counter(x["date_confidence"] for x in po_bridge)),
+    }
     if frozen_mode:
         for mode, totals in (("b_max", b_max), ("b_min", b_min)):
             for uom, expected in totals.items():
@@ -1011,6 +1064,8 @@ def build_recon(cfg, args, supply, demand, excluded, exceptions, counts, en, ton
         "b_min": dict(b_min),
         "b_max": dict(b_max),
         "b_bridge": bridge,
+        "b_bridge_po_summary": po_bridge_summary,
+        "b_bridge_po": po_bridge,
         "received_audit": received_audit,
         "po_overlap_suspected": overlap,
         "unknown_rows": len(unknown_rows),
@@ -1037,6 +1092,10 @@ def main():
     ap.add_argument("--live", action="store_true", help="call EN; live snapshot also calls Tongtool")
     ap.add_argument("--snapshot", choices=["frozen", "live"], default="frozen",
                     help="frozen=10-22/10-20/10-19 官方基准；live=provisional_live")
+    ap.add_argument("--config", default=str(HERE / "local" / "frozen_20261022.json"),
+                    help="local-only frozen values file (public repo keeps only schema + sha256)")
+    ap.add_argument("--wo-audit", default=str(HERE / "local" / "wo_audit_20261022.json"),
+                    help="local-only WO audit metadata (optional)")
     ap.add_argument("--refresh", action="store_true")
     ap.add_argument("--as-of", default=None)
     ap.add_argument("--since", default="2025-01-01")
@@ -1055,13 +1114,8 @@ def main():
     finished_whs = [w["en_finished"] for w in wmap["warehouses"] if w.get("en_finished")]
     snaps = cfg.get("snapshots", {})
     wo_items = sorted(set(items) | {"PK#" + i for i in items if i.startswith("KS")})
-    frozen = json.loads((HERE / "config" / "frozen_20261022.json").read_text(encoding="utf-8")) \
-        if args.snapshot == "frozen" else None
-    wo_audit = {}
-    if frozen:
-        audit_path = HERE / "config" / "wo_audit_20261022.json"
-        if audit_path.is_file():
-            wo_audit = json.loads(audit_path.read_text(encoding="utf-8")).get("wos", {})
+    frozen = load_frozen_config(args.config) if args.snapshot == "frozen" else None
+    wo_audit = load_wo_audit(args.wo_audit) if frozen else {}
 
     cache = Cache(HERE / "cache", refresh=args.refresh)
     en = EnClient(cache)
@@ -1085,6 +1139,9 @@ def main():
                     "sample10_wo_not_listed": x.get("sample10_wo_not_listed", False),
                     "wo_creation": (wo_audit.get(x["wo"]) or {}).get("creation", ""),
                     "wo_modified": (wo_audit.get(x["wo"]) or {}).get("modified", ""),
+                    "wo_state_as_of": (wo_audit.get(x["wo"]) or {}).get("wo_state_as_of", ""),
+                    "jc_as_of": (wo_audit.get(x["wo"]) or {}).get("jc_as_of", ""),
+                    "modified_after_as_of": (wo_audit.get(x["wo"]) or {}).get("modified_after_as_of", False),
                     "jc_first_op_sum": (wo_audit.get(x["wo"]) or {}).get("jc_first_op_sum"),
                     "jc_source": (wo_audit.get(x["wo"]) or {}).get("jc_source", "")}
                    for x in frozen["wo"]]
@@ -1137,6 +1194,14 @@ def main():
             w.writerow([x["ledger"], x["role"], x["uom"], x["rows"], x["qty"], x["b_max"], x["b_min"],
                         json.dumps(x["b_max_excluded"], ensure_ascii=False),
                         json.dumps(x["b_min_excluded"], ensure_ascii=False)])
+    with (out / "b_bridge_po.csv").open("w", encoding="utf-8-sig", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["doc_name", "sku", "warehouse", "open_qty", "po_status", "overlap_status",
+                    "date_confidence", "b_min", "b_max", "b_min_exclusion_reason", "b_max_exclusion_reason"])
+        for x in recon.get("b_bridge_po", []):
+            w.writerow([x["doc_name"], x["sku"], x["warehouse"], x["open_qty"], x["po_status"],
+                        x["overlap_status"], x["date_confidence"], x["b_min"], x["b_max"],
+                        x["b_min_exclusion_reason"], x["b_max_exclusion_reason"]])
     with (out / "recon_by_sku_warehouse.csv").open("w", encoding="utf-8-sig", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["sku", "warehouse", "stage", "uom", "qty"])

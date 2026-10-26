@@ -213,5 +213,21 @@ class BuildTest(unittest.TestCase):
         self.assertIn("po_not_counted", po["b_min_excluded"])
 
 
+class ConfigAuditTest(unittest.TestCase):
+    def test_load_synthetic_frozen_fixture(self):
+        cfg = w1.load_frozen_config(HERE / "fixtures" / "frozen_synthetic.json")
+        self.assertEqual(cfg["version"], "synthetic")
+        self.assertEqual(len(cfg["stock"]), 1)
+
+    def test_public_configs_have_no_quantity_keys(self):
+        import re
+        forbidden = re.compile(r'"(qty|quantity|available|intransit|waiting|defects|amount|open_qty)"')
+        for path in (HERE.parent / "config").glob("*.json"):
+            if path.name.endswith((".schema.json", ".summary.json")):
+                continue
+            self.assertIsNone(forbidden.search(path.read_text(encoding="utf-8")),
+                              "%s contains row-level quantities" % path.name)
+
+
 if __name__ == "__main__":
     unittest.main()

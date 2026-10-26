@@ -1,9 +1,10 @@
 # W1 供应时间线 · 9 SKU 正式 recon（冻结基准）
 
 > 样本：`JACK_ENTRY.md` / `JACK_QA.md`（2026-10-26）与 sample10 的 9 个冻结 SKU + 1 个缺额。
-> 基准：库存 2026-10-22、WO 2026-10-20、PO 2026-10-19（`config/frozen_20261022.json`）。
+> 基准：库存 2026-10-22、WO 2026-10-20、PO 2026-10-19（本地 `local/frozen_20261022.json`；公开仓库只留 schema + sha256）。
 > 契约：`docs/jack-w1-channel` @ `197901f7`（sha256 `45c2bb93…`），SC14 7 阶段 / 21 用例；`tests/test_sc14_sync.py` 校验副本未漂移。
 > 只读：EN 生产 REST；未写、未下单、未改主数据。
+> D33：公开仓库不含行级业务值；本文只放聚合计数，行级明细在本地 `out/` / `local/`。
 
 ## 1. 合同校验
 
@@ -62,17 +63,19 @@ W3 预览：opening 832（通途 UOM 未证）；expected 1,506 个；unknown 23
 
 ## 5. 输出
 
-`out/`：`supply_timeline_rows.csv`（233 行）、`demand_context.csv`（34）、`excluded_nonsupply.csv`（0）、`exceptions.csv`（1）、`unknowns.csv`、`recon.json`、`b_bridge.csv`、`recon_by_sku_warehouse.csv`、`sc14_counts.json`、`sc14_findings.csv`、`w3_preview.json`、`sc04_recon.json`。审计元数据：`config/wo_audit_20261022.json`。
+`out/`：`supply_timeline_rows.csv`（233 行）、`demand_context.csv`（34）、`excluded_nonsupply.csv`（0）、`exceptions.csv`（1）、`unknowns.csv`、`recon.json`、`b_bridge.csv`、`b_bridge_po.csv`（本地逐 PO）、`recon_by_sku_warehouse.csv`、`sc14_counts.json`、`sc14_findings.csv`、`w3_preview.json`、`sc04_recon.json`。审计元数据：公开 `config/wo_audit_20261022.summary.json`；本地逐 WO 明细 `local/wo_audit_20261022.json`。
 
 ## 6. 复现
 
 ```bash
 cd docs/research/supply-chain/2026-10-20/claude/experiments/supply_timeline
-python w1_supply_timeline.py --live --snapshot frozen
+python w1_supply_timeline.py --live --snapshot frozen --config local/frozen_20261022.json
 python sc14/test_contract.py             # 21/21
 python run_sc14.py                       # 0 error / 132 warning
 python sc04_recon.py                     # 39/47/4,279 差 0
-python -m unittest discover -s tests -v  # 17 条本地单测（含 SC14 同步校验）
+python -m unittest discover -s tests -v  # 19 passed / 0 skip
+SC14_CANONICAL_DIR=/path/to/docs/experiments/sc14 SC14_SYNC_REQUIRE=1 \
+  python -m unittest discover -s tests -v  # 强制 canonical，缺失即失败
 ```
 
 实时库存只作对照：`--snapshot live`（标 `provisional_live`，不计算 B_min/B_max）。
@@ -100,21 +103,21 @@ python -m unittest discover -s tests -v  # 17 条本地单测（含 SC14 同步�
 
 ### 8.4 WO 审计
 
-| WO | creation | modified | 首工序 JC sum | 结果 |
-|---|---|---|---:|---|
-| WO-26-03110 | 2026-09-02 08:10:26 | 2026-10-23 13:34:44 | 110（裁剪，48 JC） | `production_conflict`，exceptions，qty=null |
-| WO-26-03118 | 2026-09-02 08:10:26 | 2026-09-02 10:03:10 | 无 JC | 计入 70，`sample10_wo_not_listed` |
-| WO-26-03664 | 2026-10-19 09:01:25 | 2026-10-22 08:53:01 | 无 JC | 计入 110，`sample10_wo_not_listed` |
+| WO | creation ≤ as_of | modified_after_as_of | 结果 |
+|---|---|---|---|
+| WO-26-03110 | 是 | 是 | `production_conflict`，exceptions，qty=null |
+| WO-26-03118 | 是 | 否 | 计入，`sample10_wo_not_listed` |
+| WO-26-03664 | 是 | 是 | 计入，`sample10_wo_not_listed` |
 
-三张 WO 的 creation 均 ≤ 2026-10-20，Q03 纳入成立，B_max 不变。`jc_first_op_sum` 只作证据字段，不参与 remaining 计算、不改变 conflict 判定。
+三张 WO 的 creation 均 ≤ 2026-10-20，Q03 纳入成立，B_max 不变。`jc_first_op_sum` 只作证据字段，不参与 remaining 计算、不改变 conflict 判定；`wo_state_as_of=2026-10-20`、`jc_as_of=2026-10-26`，03110/03664 的 modified 晚于 as_of，标 `modified_after_as_of=true`。逐 WO 日期/JC 明细在本地 `local/wo_audit_20261022.json`，公开侧只有聚合 summary。
 
 ### 8.5 received 拆分
 
-| DN | SKU | rows | doc_lines | doc_qty | posting_date |
-|---|---|---:|---:|---:|---|
-| DN-26-00067 | CEN1607NLinen-Ivory-194 | 28 | 28 | 231 | 2026-08-21 |
+| DN | SKU | rows | doc_lines | posting_date |
+|---|---|---:|---:|---|
+| DN-26-00067 | CEN1607NLinen-Ivory-194 | 28 | 28 | 2026-08-21 |
 
-W1 只抓 9 SKU，`received_audit.out_of_sample=0`（`not_fetched_by_design`）。SC04 的 6 张 received DN 中 1 张在样本内，其余 5 张不在样本内，W1 不抓取。
+主 supply 行带 `doc_qty / received_qty / posting_date / received_source`（`received_source=shipment_signed`，`received_qty=null`）。`doc_qty` 合计 231 在本地 `out/recon.json` 的 `received_audit`，公开文档不展开行级数量。W1 只抓 9 SKU，`received_audit.out_of_sample=0`（`not_fetched_by_design`）。SC04 的 6 张 received DN 中 1 张在样本内，其余 5 张不在样本内，W1 不抓取。
 
 ### 8.6 B_min/B_max 桥接
 
@@ -139,3 +142,27 @@ W1 只抓 9 SKU，`received_audit.out_of_sample=0`（`not_fetched_by_design`）�
 - 行级分类：`on_hand` 54 + `po_open` 8 + `shipped_in_transit` 4（全部通途来源、无 UOM）；行级清单见本地 `out/sc14_findings.csv`（不进公开仓库）。
 - exceptions 1 行与 unknown 4 行都带 `uom=个`，不产生 UOM warning。
 - 136（68×2）来自旧的 **provisional-live** 轮次（as_of 10-23、live 库存 10-26、232 行），行级 CSV 未保留，不能逐行回溯；正式基准以 10-22 冻结轮为准。
+
+## 9. Q10 整改对照（2026-10-26）
+
+| Q10 | 状态 | 落地 |
+|---|---|---|
+| 阻塞：行级 JSON | ✅ | `frozen_20261022.json` / `wo_audit_20261022.json` 已移出 git，值在本地 `local/`（gitignore）；公开侧只留 `frozen_20261022.schema.json`、`frozen_20261022.sha256`、`wo_audit_20261022.summary.json`；新增 `--config` / `--wo-audit` |
+| #2 SC14 skip | ✅ | `tests/test_sc14_sync.py` 优先读 `SC14_CANONICAL_DIR`，否则从 `origin/docs/jack-w1-channel` 读取 canonical（缺失时 `git fetch --depth=1`）；CI/`SC14_SYNC_REQUIRE=1` 下缺失即失败；19 passed / 0 skip |
+| #3 WO 时点 | ✅ | `wo_state_as_of` / `jc_as_of` / `modified_after_as_of` 落到 WO 行与 exception；03110、03664 标 true；conflict 仍保守不计 |
+| #4 per-PO 桥接 | ✅ | `out/b_bridge_po.csv`（本地逐 PO）；`recon.json.b_bridge_po_summary` 聚合：6 行 / 914 / 全部 `same_batch_suspected` + 无 ETA → `po_not_counted` |
+| #5 received 字段 | ✅ | 主 supply 行带 `doc_qty / received_qty / posting_date / received_source` |
+| #6 contract pin | ✅ | `run_sc14.py` 从 `sc14/SOURCE.json` 读取 `contract_source_commit` 与 sha256 |
+
+### 9.4 逐 PO 桥接（公开视图，不含 open_qty）
+
+| PO | po_status | overlap_status | date_confidence | B_min 排除原因 |
+|---|---|---|---|---|
+| PO021716 | 0 | same_batch_suspected | unknown | po_not_counted |
+| PO021727 | 0 | same_batch_suspected | unknown | po_not_counted |
+| PO021717（C/Linen） | 0 | same_batch_suspected | unknown | po_not_counted |
+| PO021705 | 0 | same_batch_suspected | unknown | po_not_counted |
+| PO021717（C/Cord-White） | 0 | same_batch_suspected | unknown | po_not_counted |
+| PO021733 | 0 | same_batch_suspected | unknown | po_not_counted |
+
+6 行合计 914，全部因 `same_batch_suspected` 且无 ETA（`date_confidence=unknown`）不进 B_min，不是数量为 0；`open_qty` 逐行在本地 `out/b_bridge_po.csv`。

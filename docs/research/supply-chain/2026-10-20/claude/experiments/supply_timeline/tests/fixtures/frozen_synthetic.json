@@ -1,0 +1,14 @@
+{
+  "version": "synthetic",
+  "source": "synthetic fixture for tests (no business data)",
+  "note": "Fake values; not a real snapshot.",
+  "stock": [
+    {"sku": "TEST-SKU", "warehouse": "TEST-WH", "available": 10, "intransit": 2, "waiting": 1, "defects": 0}
+  ],
+  "po": [
+    {"sku": "TEST-SKU", "warehouse": "TEST-WH", "ponum": "TEST-PO-1", "quantity": 5, "in_quantity": 1, "status": "0"}
+  ],
+  "wo": [
+    {"sku": "TEST-SKU", "item_code": "TEST-ITEM", "wo": "TEST-WO-1", "qty": 8, "produced_qty": 3, "status": "In Process"}
+  ]
+}

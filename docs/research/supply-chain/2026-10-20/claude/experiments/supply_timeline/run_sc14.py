@@ -74,6 +74,7 @@ def main() -> int:
     error_rows = sorted({f.row for f in findings if f.severity == "error" and f.row >= 0})
     warning_rows = sorted({f.row for f in findings if f.severity == "warning" and f.row >= 0})
     warning_rows_by_stage = Counter(rows[i].get("stage", "") for i in warning_rows if 0 <= i < len(rows))
+    source = json.loads((HERE / "sc14" / "SOURCE.json").read_text(encoding="utf-8"))
     counts = {
         "rows": len(rows),
         "findings": len(findings),
@@ -84,7 +85,8 @@ def main() -> int:
         "finding_rows": len({f.row for f in findings if f.row >= 0}),
         "warning_rows": len(warning_rows),
         "warning_rows_by_stage": dict(warning_rows_by_stage),
-        "contract_source_commit": "197901f78026c7e9ff1d4193bca19719b397399c",
+        "contract_source_commit": source.get("source_commit", ""),
+        "contract_sha256": source.get("files", {}).get("contract.py", {}).get("sha256_lf", ""),
     }
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
