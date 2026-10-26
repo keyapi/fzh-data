@@ -277,7 +277,8 @@ channel: docs/jack-w1-channel
 | 内容 | 路径 / commit |
 |---|---|
 | 交接文档 | `control/handoffs/2026-10-23-jack-supply-timeline.md`（`e3727028`，PR #300） |
-| 9 SKU 冻结 | `control/reviews/2026-10-23-jack-sample10.md`（`799c13d3`，本地未 push） |
+| 9 SKU 冻结 | `control/reviews/2026-10-23-jack-sample10.md`（`799c13d3`；PR #311） |
+| 履约查询入口 | `EN_API/fulfillment_query.py` + `EN_API/fulfillment/`（#291，合并 `3405ac10`） |
 | SC14 契约 | `control/reviews/2026-10-23-sc14-spec.md`（`dd60da80`）+ `experiments/sc14/contract.py` |
 | SC09 冻结 | `control/reviews/2026-10-23-sc09-trial-pack-v1-frozen.md`（`04b5b630`，`M1-TRIAL-v1`） |
 | 映射证据 | `control/reviews/2026-10-23-map-evidence.md` |
@@ -286,3 +287,15 @@ channel: docs/jack-w1-channel
 | 当前看板 | `control/PROJECT_BOARD.md`（Jack 边界 + SC13/SC14） |
 
 > 本文件只读依据均可复核；数字与冻结版不符时，回到对应报告，不要就地改数。
+
+---
+
+## 8. 补充（2026-10-24）：先读 #291，不要重写查询入口
+
+- **#291 已合并**（`3405ac10`）：`EN_API/fulfillment_query.py` + `EN_API/fulfillment/`（11 模块）；
+  多输入（客户码 / EN 物料码）→ **销售订单 → 生产 → 销售出库（阶段 0–3）**；**JSON 权威**；46 tests passed。
+- 先读 `supply_chain_visibility/AGENT_HANDOFF.md`；关键口径：
+  工序进度取**第一道工序**完成量、**不跨工序求和**；`WO.status/produced_qty` **不可信**；
+  `Closed ≠ 已发完`；出库按 `item_code` 匹配、退货行负数**净额抵扣**；EN `po_no` 不是客户 PO。
+- **W1 应消费它，不要重建平行查询**；若阶段/数量口径与 SC14 冲突，先提 `[W1-Qxx]`。
+- 边界：阶段 0–3；头程/海外仓（4–8）未接入；物料需求/采购/入库 EN 侧基本空白。

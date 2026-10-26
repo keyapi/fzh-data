@@ -81,6 +81,23 @@ rows = con.execute("""
 | 映射三态 | `control/reviews/2026-10-23-map-evidence.md` | 39 DN 的 282 码：58 直接 / 217 可推导 / 7 未映射；0/39 数量级证据 | 组件不是独立 SKU；UOM 未证 |
 | 生产只读闸门 | `experiments/g1_contract/prod_budget.md` | 每批 300 请求 / 32 MiB / 900 秒；403 原子停机 | 不等于可以随意扫全表 |
 
+## 4.5 EN 履约查询统一入口（#291，已合并 `3405ac10`）
+
+- **入口**：`EN_API/fulfillment_query.py`（实现 `EN_API/fulfillment/`，11 模块）。
+  多输入（客户码 / EN 物料码）→ **销售订单 → 生产 → 销售出库（阶段 0–3）**；
+  数量阶梯对账、齐套、异常 §8 + 下一行动；**JSON 为权威输出**，另有控制台与 Excel 9 分区。
+- **事实地图**：`supply_chain_visibility/AGENT_HANDOFF.md`；
+  链路主键 `通途 SKU → Item Customer Detail.ref_code → Sales Order Item.name → {WO, JC, DN}`。
+- **测试系统优先**：
+  ```bash
+  uv run python EN_API/fulfillment_query.py --codes CENKZ1325-Yellow-138 --test --json
+  ```
+  生产默认用 `EN_API/.env`；`--env-file` 可指定。
+- **关键口径**：工序进度取**第一道工序**完成量、**不跨工序求和**；`WO.status/produced_qty` **不可信**；
+  `Closed ≠ 已发完`；出库按 `item_code` 匹配、退货行负数**净额抵扣**；EN 的 `po_no` 不是客户 PO。
+- **边界**：阶段 0–3；头程/海外仓（4–8）未接入；物料需求/采购/入库 EN 侧基本空白。
+- **不要重写**：W1 的 timeline 消费它的阶段/数量口径；若与 SC14 冲突，先提 `[W1-Qxx]`。
+
 ## 5. 冻结产物（不要就地改）
 
 | 产物 | 版本/哈希 | 说明 |

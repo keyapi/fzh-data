@@ -10,7 +10,29 @@ channel: docs/jack-w1-channel
 # Jack W1 阅读清单
 
 > 目标：读完后你能独立回答——**这批货现在在哪、下一段什么时候可用、哪些数量算一次、哪些未知不能填 0**。
-> 如果只有 30 分钟，先读 §1 的 3 篇；其余按需。
+> 如果只有 30 分钟，先读 §0 的入口 + §1 的 3 篇；其余按需。
+
+## 0. 先读：履约查询统一入口（#291，已合并 `3405ac10`）
+
+| 文档/代码 | 为什么读 |
+|---|---|
+| `EN_API/fulfillment_query.py` | 统一入口：多输入（客户码 / EN 物料码）→ SO→生产→销售出库（阶段 0–3）；**JSON 权威** |
+| `EN_API/fulfillment/` | 11 模块：数量阶梯对账、齐套、异常 §8 + 下一行动、控制台/Excel 渲染 |
+| `supply_chain_visibility/AGENT_HANDOFF.md` | 链路事实地图 + 关键口径 + 边界；**最先读这篇** |
+| `supply_chain_visibility/docs/reference/en-supply-chain-map.md` | EN 全链路实体地图（含自定义 app / 建了没用的 doctype） |
+
+**关键口径**：工序进度取**第一道工序**完成量、**不跨工序求和**；`WO.status/produced_qty` **不可信**；
+`Closed ≠ 已发完`；出库按 `item_code` 匹配、退货行负数**净额抵扣**；EN 的 `po_no` 不是客户 PO。
+
+**边界**：阶段 0–3；头程/海外仓（4–8）未接入；物料需求/采购/入库 EN 侧基本空白。
+
+**不要重写**：W1 的 timeline 消费它的阶段/数量口径；若与 SC14 冲突，先提 `[W1-Qxx]`。
+
+示例（测试系统优先）：
+
+```bash
+uv run python EN_API/fulfillment_query.py --codes CENKZ1325-Yellow-138 --test --json
+```
 
 ## 1. 必读（30 分钟）
 

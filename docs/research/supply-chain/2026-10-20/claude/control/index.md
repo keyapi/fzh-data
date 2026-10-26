@@ -30,6 +30,7 @@ date: 2026-10-23
 | 阅读顺序 + 旧版识别 | [handoffs/2026-10-23-jack-reading-list](handoffs/2026-10-23-jack-reading-list.md) |
 | W1/W3 验收契约 | [reviews/2026-10-23-sc14-spec](reviews/2026-10-23-sc14-spec.md) + `experiments/sc14/` |
 | 9 个冻结 SKU | [reviews/2026-10-23-jack-sample10](reviews/2026-10-23-jack-sample10.md) |
+| 履约查询统一入口（#291，已合并 `3405ac10`） | `EN_API/fulfillment_query.py` + `supply_chain_visibility/AGENT_HANDOFF.md` |
 
 > 沟通通道：分支 `docs/jack-w1-channel`；PR 评论用 `[W1-Qxx]` / `[W1-Axx]`。
 > 技术口径可直接对话；业务决策（服务水平/预算/交期假设/采购授权）仍由用户拍板。

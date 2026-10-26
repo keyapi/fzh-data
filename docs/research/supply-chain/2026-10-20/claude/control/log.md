@@ -16,3 +16,5 @@ date: 2026-10-23
 - **新增（2026-10-23 晚）**：建立 Jack W1 只读协作通道 `docs/jack-w1-channel`（docs-only，无业务 CSV）：
   9 个冻结 SKU 更正（替代旧 8+2）、七问答复、数据/背景读取地图、SC14 可执行验收契约。
   行级业务数据仍留本地；公开仓库不放 CSV（D33）。
+- **补充（2026-10-24）**：`docs/jack-w1-channel` 合并 `origin/main`（`3405ac10`，含 #291 履约查询统一入口）；
+  Jack 的必读增加 `EN_API/fulfillment_query.py` 与 `supply_chain_visibility/AGENT_HANDOFF.md`，W1 不重写查询入口。

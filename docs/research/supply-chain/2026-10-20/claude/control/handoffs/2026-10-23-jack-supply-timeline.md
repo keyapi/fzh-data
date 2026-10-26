@@ -40,6 +40,12 @@ sponsor: claude-foreman
 
 现有成果（均在供应链项目内，可直接复用）：
 
+- **#291 履约查询统一入口（2026-10-23 合并 `3405ac10`）**：`EN_API/fulfillment_query.py` + `EN_API/fulfillment/`（11 模块）。
+  多输入（客户码 / EN 物料码）→ 销售订单 → 生产 → 销售出库（阶段 0–3）；数量阶梯对账、齐套、异常 §8 + 下一行动；
+  **JSON 为权威输出**，另有控制台与 Excel 9 分区。**Jack 直接消费它，不要重写一套查询入口**。
+  关键口径：工序进度取**第一道工序**完成量、**不跨工序求和**；`WO.status/produced_qty` **不可信**；`Closed ≠ 已发完`；
+  出库按 `item_code` 匹配、退货行负数**净额抵扣**；EN 的 `po_no` 不是客户 PO。
+  事实地图见 `supply_chain_visibility/AGENT_HANDOFF.md`；边界是阶段 0–3，头程/海外仓（4–8）未接入。
 - **SC03 Shipment**：`59c4e5ec`，301 PASS（D01/D02）。EN Shipment 自带 **11 个状态 + ETA + 轨迹节点**，47/47 命中；按 DN-item-UOM-role 输出向量；`credited_qty` 未验证，不能当入库数量。
 - **SC04 供应阶段守恒**：`228bef77`，39 张 DN 各归一个阶段，三口径闭合；但 ETA/在途逐笔关系仍未全证。
 - **SC02 前向账**：`19fb2c6e`，301 PASS；逐行来源、冻结桶可复算。
@@ -48,7 +54,8 @@ sponsor: claude-foreman
 - **SC10 目录/映射**：`0463f4fa`，1,328 母集与完整目录差集；271 个有库存无近期销售等。
 - **PR310**：通途库存最新/历史落地方案；当前库存只读 DocType、每日历史本地盘；Jack 的 #309 低库存抓取已 approve。
 
-**Jack 的 W1 不是从零开始**：以 SC03/SC04/DN 桥为骨架，补齐“PO/WO/JC→DN→Shipment→入库”的时间线和阶段数量；不要重写已有抽取器，不要复制一套平行口径。
+**Jack 的 W1 不是从零开始**：以 **#291 履约查询入口**（SO→生产→销售出库）+ SC03/SC04/DN 桥为骨架，
+补齐“PO/WO/JC→DN→Shipment→入库”的时间线和阶段数量；不要重写已有抽取器，不要复制一套平行口径。
 
 ---
 

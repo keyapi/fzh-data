@@ -74,6 +74,10 @@ M0 文档已建、工头已确认接收；**接管看板与唯一提交权**。�
 产出一张**可信供应时间线**、**交期/运输方式配置**、**只读供应查询接口**、**完整性巡检**。
 分支 `feature/jack-supply-timeline`（独立 worktree），交接文档 `control/handoffs/2026-10-23-jack-supply-timeline.md`（commit `e3727028`）。
 
+- **现有统一入口（#291，已合并 `3405ac10`）**：`EN_API/fulfillment_query.py` + `EN_API/fulfillment/`（SO→生产→销售出库，阶段 0–3，JSON 权威）。
+  Jack **消费它，不重写查询入口**；事实地图 `supply_chain_visibility/AGENT_HANDOFF.md`。
+- **沟通通道**：docs-only 分支 `docs/jack-w1-channel`（PR #311，draft，不合并）+ Jack 自己的 `feature/jack-supply-timeline` PR。
+
 | Jack 交付 | 与本项目的边界 | 本项目侧动作 |
 |---|---|---|
 | **W1 供应时间线**（阶段互斥、按需日看未来每周可用） | **扩展 SC04**：我们的 SC04 只到 DN 级（39 张 DN/4 阶段）；Jack 补 PO/WO/JC/SE 与入库 | **不再自建平行供给时间线**；SC04 保持 DN 级，等 Jack 的 timeline 接入 |
