@@ -38,4 +38,6 @@ date: 2026-10-23
 - **2026-10-26 A10/Q11**：A10 已收；数量 JSON 清关解除（config 只剩 schema/sha256/summary）。
   `[W1-Q11]`：剩余 2 项必改（仓库 confidence/scope 一致性、SC14 同步默认仍可能 skip）+ 1 项用户决定
   （`sample_skus/warehouse_map` 标识 JSON 是否也移出公开仓库）。
+- **2026-10-26 用户决定**：`sample_skus.json` / `warehouse_map.json` **保留**（无数量/金额，与 sample10 文档同级）；
+  Q11 该项关闭，仍剩 2 项必改（仓库 confidence/scope、SC14 同步默认）。
 

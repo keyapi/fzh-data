@@ -26,7 +26,7 @@ channel: docs/jack-w1-channel
 | **Q08 received** | `received_evidenced` 保持 `qty=null + qty_status='unknown'` 可接受，只进 `supply_unknown`；分 `received_booked`（Stock Entry）与 `received_evidenced`（签收）。9 SKU 覆盖 8/39 DN、1,516/4,279 行是预期，不是 39/39。 |
 | **Q09 复审** | W1 v0 数据口径基本落地；**6 项必改**：代码移到 feature 分支、SC14 不 fork、PO021735 status=4 不写“作废”、WO 过滤可审计、received 28 行拆分、B_min/B_max 桥接表。详见 §2 `[W1-Q09]`。 |
 | **Q10 复审** | A09 大部分通过；**1 个阻塞**：`config/frozen_20261022.json` 是行级业务 JSON 进公开仓库，违反 D33；另有 4 项必改：SC14 同步测试 skip、PR312 body 过期、WO 审计时点、B 桥接 per-PO 明细。详见 §2 `[W1-Q10]`。 |
-| **Q11 复审** | A10 已清关数量 JSON；剩余 2 项必改（仓库 confidence/scope 一致性、SC14 同步默认仍可能 skip）+ 1 项用户决定（`sample_skus/warehouse_map` 标识 JSON 是否也移出公开仓库）。详见 §2 `[W1-Q11]`。 |
+| **Q11 复审** | A10 已清关数量 JSON；用户已决定**保留** `sample_skus/warehouse_map`（无数量）；剩余 2 项必改：仓库 confidence/scope 一致性、SC14 同步默认仍可能 skip。详见 §2 `[W1-Q11]`。 |
 
 ## 2. 轮次记录（只追加）
 
@@ -182,7 +182,7 @@ channel: docs/jack-w1-channel
 
 ### [W1-Q11] 2026-10-26 工头复审：A10
 
-**结论：Q10 的 D33 数量 JSON 阻塞已解除；剩余 2 项需改 + 1 项用户决定，修完可进合并评审。**
+**结论：Q10 的 D33 数量 JSON 阻塞已解除；用户已决定保留标识 JSON；剩余 2 项需改，修完可进合并评审。**
 
 #### 通过
 
@@ -207,16 +207,15 @@ channel: docs/jack-w1-channel
 4. （minor）`W1-RESULTS` §8.6 的 `po` 行排除原因补一句：6 行 / 914 全部 `same_batch_suspected` + 无 ETA；per-PO 明细在本地。
    `sample_skus.json` 的 `as_of=2026-10-23` 与快照 10-22/10-20/10-19 不一致，请注明它是“样本冻结日”。
 
-#### 用户决定（不是 Jack 改）
+#### 用户决定（已关闭）
 
-- `sample_skus.json`（9 SKU 映射，无数量）与 `warehouse_map.json`（仓 ID / EN 映射，无数量）仍在公开仓库。
-  按严格 D33“行级业务明细 JSON 不提交”，它们也应移出；但只有标识/映射、没有数量。
-  **请用户拍板**：保留（视为配置/映射）或移出（schema + sha256 + 本地）。
-  在用户决定前，#312 不合并。
+- **2026-10-26 用户决定：保留** `sample_skus.json` / `warehouse_map.json`。
+  理由：只有标识/映射、没有数量/金额，与已公开的 sample10 文档同级。
+  **此项不再阻塞 #312**；公开仓库仍不放行级数量 JSON。
 
 #### 下一步
 
-- 1/2/3/4 在 #312 修；用户决定 5。
+- 1/2/3/4 在 #312 修；用户决定 5 已关闭（保留）。
 - 修完追加 `[W1-A11]`；#311 / #312 保持 draft。
 
 ## 3. 更早的问答（归档）

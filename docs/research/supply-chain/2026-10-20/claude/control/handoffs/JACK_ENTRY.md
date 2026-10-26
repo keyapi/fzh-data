@@ -88,4 +88,4 @@ git pull
 - **A09 已收**（feature `f63af171` + `40d74491`，draft PR #312）；`[W1-Q10]` 复审：**1 个阻塞**
   （`config/frozen_20261022.json` 行级业务 JSON 进公开仓库，违反 D33）+ 4 项必改。
 - **A10 已收**（feature `62546ea7`）：数量 JSON 已移出、SC14 同步 19/0、WO 时点/per-PO/received 字段已补。
-  `[W1-Q11]`：剩余 2 项必改 + 1 项用户决定（`sample_skus/warehouse_map` 标识 JSON 是否也移出）。
+  `[W1-Q11]`：用户已决定**保留** `sample_skus/warehouse_map`（无数量）；剩余 2 项必改（仓库 confidence/scope、SC14 同步默认）。
