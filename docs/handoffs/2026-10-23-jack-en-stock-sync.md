@@ -175,6 +175,7 @@ df -h /home/frappe
 - PR #308（两条 Windows 线体检）：以后可改为读 EN 的 Run/Parquet。
 - PR #310（调研）：`docs/research/2026-10-23-inventory-history-storage-architecture.md`。
 - 参考脚本：`D:\Work\fzh-stock-backup\stock_daily_backup.py`（分页/重试/run state 逻辑）。
+- 操作手册：`docs/reference/tongtool-stock-en-operations.md`（配置、Run 日志、Latest、Parquet/DuckDB、外部 API）
 
 ## 10. 实现进度（2026-10-23）
 
