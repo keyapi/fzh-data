@@ -10,6 +10,7 @@ tags: [research, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-26 | 钉钉 DWS CLI 读群消息 — 官方 `dws chat +chat-messages` 可读历史；需组织授权 + 应用消息 scope + 重定向 URL（127.0.0.1 / login.dingtalk.com）；含 NEW-API 报错修复与只读试跑 | [2026-10-26-dingtalk-dws-cli-group-messages.md](2026-10-26-dingtalk-dws-cli-group-messages.md) |
 | 2026-10-23 | 通途库存「当前记录 + 每日历史」放哪：EN 只读最新快照 + 上海云盘/OSS 历史 + DuckDB；实测 EN 规格、`/mnt/nas` 非挂载、DFP S3 香港桶存在但跨区、生产 internal 端点超时、Jack PR #309 | [2026-10-23-inventory-history-storage-architecture.md](2026-10-23-inventory-history-storage-architecture.md) |
 | 2026-10-23 | 通途历史库存用于销量预测：断货/停售/退货/手工调整判定；现有 `stockout_observed` 是按仓 `available=0` 的朴素标记；历史数据：EN 10/20–10/23、WX 6/26+7 月检查点+8/24–10/19、PB check0stock 2023-08 至今 | [2026-10-23-stockout-censoring-model.md](2026-10-23-stockout-censoring-model.md) |
 | 2026-10-08 | key_test 生产线 vs 测试线逐文件评审清单 — 22 个冲突文件分档 + 引用关系实测（哪些真在跑/哪些死代码）+ 生产 Error Log 里的真 bug + 已建 `main-new`（以生产为基线）与备份分支 | [2026-10-08-key-test-branch-unification-review.md](2026-10-08-key-test-branch-unification-review.md) |
