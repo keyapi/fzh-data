@@ -204,7 +204,25 @@ df -h /home/frappe
 - **限制**：默认最近 30 天、最多 5,000 行；大批量/全量请 SFTP 拿 `stock.parquet` 或走外部分析服务
 - 已实测：生产 HTTP 200，返回 `message` 数组（10/23 美东 TEST-1 等）
 
-## 12. Jack 开工 checklist
+## 12. 库存变动明细（2026-10-26，app PR #8）
+
+> 目的：区分退货、盘点/报损报溢、调拨、手工改库存和正常发货。
+
+- 每日 **05:47** 抓 14 个启用仓：`erp2_stocks_stockschangedetailquery`，写 `/home/frappe/fzh-inventory/stock_change.parquet`
+- 通途只能回看 **7 天**；窗口从「上次成功结束 - 1 天」开始，漏跑 1–2 天自动补，超过 7 天补不回来
+- 事件级去重（仓+SKU+时间+凭证类型/单号+四桶增减），重跑不翻倍
+- `Tongtool Stock Run` 新增 `job` 字段：`stock_snapshot` / `stock_change`
+- `Tongtool Settings` 新增 `enable_stock_change`、`stock_change_lookback_days`
+- 测试站已 migrate + 手工验证（14 仓 3 天 653 行，重跑不翻倍）；**测试站定时已关**
+- 生产部署后必须显式设置：`enable_stock_change=1`、`stock_change_lookback_days=3`（新增字段不会自动填旧 Single 的默认值）
+- 手动测试：
+  ```bash
+  bench --site erpnext.vilavi.cn execute \
+    tongtool_integration.sync.stock_change_sync.run_stock_change \
+    --kwargs '{"warehouses": "美东-CENTRADE", "source": "manual", "lookback_days": 1}'
+  ```
+
+## 13. Jack 开工 checklist
 
 - [x] 测试站建目录/权限（`/home/frappe/fzh-inventory`，`frappe:frappe`）。
 - [x] 生产建目录/权限（你有权限，Jack 没有）。
@@ -219,6 +237,8 @@ df -h /home/frappe
 - [x] 10/20–10/22 回填测试站与生产（Parquet 现有 4 天）。
 - [x] 合并 main、推生产并实测（14 仓 5,316 行，complete=true）。
 - [x] Windows API 任务已禁用（保留手动回退）；浏览器导出 02:17 保留。
+- [x] 测试站验证 `stock_change`（14 仓 3 天 653 行，重跑不翻倍）；测试站定时关闭。
+- [ ] 生产部署 app PR #8 + migrate，显式设 `enable_stock_change=1`、`stock_change_lookback_days=3`。
 - [ ] 低库存告警复用 PR #309 规则；先 dry-run。
 - [ ] 低库存并入 EN 后，停 Jack 本地 `FZH-StockAlert-daily`。
 - [ ] 连续 3–5 天验收；体检脚本改为读生产 Parquet/Run。

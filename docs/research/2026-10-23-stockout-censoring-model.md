@@ -71,6 +71,7 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 
 - 生产 05:17 定时：10/24、10/25、10/26 连续 3 天 Success，14 仓、5,316 行、`complete=true`，约 14 分钟。
 - 历史 Parquet 10/20–10/26 共 7 天；`get_stock_history` 实测可回读。
+- **库存变动**（app PR #8，测试站已验证、生产待部署）：14 仓 3 天抓 654 条 / 去重后 653 行；事件类型含包裹/订单/拆包/报溢/报损/买家退货；重跑保持 653 行。
 - 原始 WX/PB 文件与 DuckDB 体积大且有业务明细，**不入公开仓库**；仓库只保留方法与结果。
 
 
@@ -183,11 +184,12 @@ sellable_stock(listing, sku, day) =
 - 美中“应该报损/报溢但没操作”的情况，变动明细里没有事件；只能靠销量停止、无货订单、客服反馈识别，标 `stock_unknown`，不能因系统库存 >5 就当作有货。
 
 **必须每天抓**（7 天窗口会过期），落到 `stock_change` 表/Parquet；否则单看每日库存水平，退货和手工调整无法可靠区分。
+✅ 已接入 EN：`tongtool_integration/sync/stock_change_sync.py`，每日 **05:47** 抓 14 仓，写 `/home/frappe/fzh-inventory/stock_change.parquet`；窗口从上次成功 -1 天开始、上限 7 天，事件级去重。测试站 14 仓 3 天实测 653 行（包裹 461 / 订单 117 / 拆包 63 / 报溢 9 / 报损 2 / 买家退货 1），重跑不翻倍。
 
 ## 5. 建议的数据/管道改动
 
 1. **统一库存历史**：把 EN 的 `stock.parquet` 每日并入现有 DuckDB `stock_history`（或让 `stock_history` 直接读 Parquet），不要维护两套历史。
-2. **新增每日库存变动明细**：用 `erp2_stocks_stockschangedetailquery` 抓最近 1–2 天，存 `stock_change`（含凭证类型/单号/操作人/四个桶的 increase）。
+2. **新增每日库存变动明细**：✅ 用 `erp2_stocks_stockschangedetailquery` 每日抓 14 仓（05:47），存单个 `stock_change.parquet`（含凭证类型/单号/操作人/四个桶的 increase）；窗口上限 7 天，从上次成功 -1 天开始，重跑按事件去重。
 3. **新增 `stock_status_daily`**：listing × SKU × day，字段：
    `sellable_stock, low_stock, sales_qty, has_sellable_replenishment, return_qty, manual_adjust, censored, stockout_start, stockout_end, confidence, evidence`。
 4. **保留 unknown**：快照缺失/批次不完整时不要写 0，也不参与删失。
@@ -212,7 +214,7 @@ sellable_stock(listing, sku, day) =
 
 | 阶段 | 做什么 | 验收 |
 |---|---|---|
-| P0 | 每日抓库存变动明细 + 解析 PB `check0stock`/`checked0stock` + WX 历史库存入库 | ✅ WX 38 日期 / 198,363 行入库；✅ PB 68 检查日 / 2,145 阻塞明细 / 35 SKU 入库；⬜ 每日 `stock_change` 尚未接入 |
+| P0 | 每日抓库存变动明细 + 解析 PB `check0stock`/`checked0stock` + WX 历史库存入库 | ✅ WX 38 日期 / 198,363 行；✅ PB 68 检查日 / 2,145 阻塞明细 / 35 SKU；✅ EN 每日 `stock_change`（05:47，测试站 3 天 653 行，重跑不翻倍） |
 | P1 | 建立 listing 级 `sellable_stock` + `stock_status_daily`（美东阈值 5、K=2–3、M=7；美中 `stock_unknown`） | 美东抽 20–30 SKU 用 ≤5/销量停核对；PB 35 SKU 用 `checked0stock` 核对；美中非 PB 用客服/运营反馈 |
 | P2 | 与订单历史 join，先做“剔除 censored 天”的基线预测 | 与不剔除的模型对比，检查断货期预测是否不再被 0 拉低 |
 | P3 | 校准 K/M/阈值；评估 Tobit/删失模型；扩展到其他仓/市场 | 运营认可 + 回测稳定 |

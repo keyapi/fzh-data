@@ -113,4 +113,4 @@ description: docs/research 目录变更历史
   - **PB 零库存订单** → `pb_stockout_history.duckdb`（并附加到 `order_store.duckdb` 的 `pb_stockout` schema）：扫描 1,669 CSV（590 订单导出 / 885 非订单 / 194 NotUsed），去重 12,857 订单行；**81 个 `checked0stock` / 68 个检查日 / 2,145 条阻塞明细**，2023-09-08–2026-10-22；35 个 Vendor Style 全覆盖（24 大号 + 3 Personal + 8 Gap）。脚本 `pb_stockout_ingest.py` + 报告 + 2 项测试通过。
   - **关键口径纠偏**：`checked0stock` 是 `check0stock` 的子集（后者含检查通过的订单），**只有 `checked0stock` 算阻塞证据**；4 个只有 `check0stock` 的日期按 unknown，不生成断货标签。覆盖有 11 个月（2024-08→2025-07）和 8 个月（2025-10→2026-06）空档，空档期不能当“不断货”。
 - **生产每日库存连续 3 天成功**：10/24、10/25、10/26 05:17 定时运行均 Success（14 仓 / 5,316 行 / `complete=true` / 约 14 分钟）；历史 Parquet 10/20–10/26 共 7 天，`get_stock_history` 实测可回读。
-- **未做**：每日 `stock_change`（`erp2_stocks_stockschangedetailquery`，7 天窗口）尚未接入 EN；`stock_status_daily` 待建。
+- **已接入（测试站验证，生产待部署）**：每日 `stock_change`（`erp2_stocks_stockschangedetailquery`，7 天窗口）——app PR #8；05:47 抓 14 仓，写 `stock_change.parquet`，按事件去重；测试站 3 天 653 行，重跑不翻倍。`stock_status_daily` 待建。

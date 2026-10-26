@@ -21,6 +21,8 @@ tags: [tongtool, inventory, erpnext, operations, runbook, duckdb, parquet]
 | 看异常堆栈 | Desk → **Error Log**；或 `/home/frappe/frappe-bench/logs/` |
 | 看调度记录 | Desk → **Scheduled Job Log** |
 | 手动补跑 | `bench --site erpnext.vilavi.cn execute ...run_stock_snapshot --kwargs '{"source":"manual"}'` |
+| 查库存变动（退货/盘点/调拨） | `/home/frappe/fzh-inventory/stock_change.parquet`；`Tongtool Stock Run` 里 `job = stock_change` |
+| 手动补跑变动 | `...run_stock_change --kwargs '{"source":"manual","lookback_days":3}'` |
 | 查历史（外部） | `GET /api/method/tongtool_integration.sync.stock_sync.get_stock_history` |
 | 拿全量历史文件 | SFTP/SSH `/home/frappe/fzh-inventory/stock.parquet`，用 DuckDB 读 |
 
@@ -31,10 +33,12 @@ tags: [tongtool, inventory, erpnext, operations, runbook, duckdb, parquet]
 | 部分 | 在哪 | 作用 |
 |---|---|---|
 | 每日任务 | EN 生产，`tongtool_integration` app，05:17 | 抓 14 个启用仓，写当前表/运行日志/Parquet |
-| 失败重试 | 06:17 / 07:17 | 当天 Run 不 complete 才重跑；文件锁防并发 |
+| 库存变动 | EN（app PR #8 合并后），同一 app，05:47 | 抓 14 仓的库存变动明细（退货/盘点/调拨/包裹），写 `stock_change.parquet` |
+| 失败重试 | 06:17 / 07:17（快照）；变动靠 7 天窗口自愈 | 当天 Run 不 complete 才重跑；文件锁防并发 |
 | 当前视图 | MariaDB DocType `Tongtool Stock Latest` | 每仓×SKU 一行，约 5.3k 行 |
-| 运行日志 | MariaDB DocType `Tongtool Stock Run` | 每次运行一行，结构化 log |
+| 运行日志 | MariaDB DocType `Tongtool Stock Run` | 每次运行一行；`job` 区分 `stock_snapshot` / `stock_change` |
 | 历史 | `/home/frappe/fzh-inventory/stock.parquet` | 单个 Parquet；不写 EN 数据库 |
+| 库存变动 | `/home/frappe/fzh-inventory/stock_change.parquet` | 单个 Parquet；事件级，按事件去重；保留 7 天内可补 |
 | 外部查询 | Frappe REST + whitelist history API | 当前/运行走 REST；历史走 DuckDB 读 Parquet |
 
 **EN 数据库里没有“每日历史表”**。当前/运行是 MariaDB；历史是 Parquet。DuckDB 只是读 Parquet 的查询引擎（bench env 里的 Python 包），不是独立服务。
@@ -53,6 +57,8 @@ Desk → **Tongtool Settings**（Single）→ **Stock Sync** 区：
 | `stock_low_threshold` | 默认 5 | 预留给低库存告警；v1 尚未并入 |
 | `stock_snapshot_page_size` | 100 | 通途服务端上限 |
 | `stock_snapshot_interval` | 13 | 每次 API 调用间隔秒数（商户级 5 次/分钟） |
+| `enable_stock_change` | 默认 **1**（旧 Single 需手工设） | 05:47 是否抓库存变动明细 |
+| `stock_change_lookback_days` | 默认 **3**（旧 Single 需手工设） | 首次/无成功记录时回看天数；有成功记录时从上次结束-1 天开始，最多 7 天 |
 
 修改权限：`Tongtool Settings` 由 System Manager 维护。改完不需要重启；05:17 任务运行时会读最新值。
 
@@ -96,10 +102,18 @@ ls -lh /home/frappe/fzh-inventory
 ### 3.4 异常日志
 
 - Desk → **Error Log**：搜 `stock sync` / `Tongtool Stock`
-- Desk → **Scheduled Job Log**：确认 05:17/06:17/07:17 是否入队
+- Desk → **Scheduled Job Log**：确认 05:17/06:17/07:17（快照）与 05:47（变动）是否入队
 - 服务器：`ls /home/frappe/frappe-bench/logs/`；`grep -i "stock sync" logs/*.log`
 
-> 当前生产：2026-10-23 已手动全量成功（14 仓 / 5,316 行）。05:17 定时从 **2026-10-24** 开始自动跑；今天没有 05:17 的自动记录。
+### 3.5 库存变动 `stock_change.parquet`
+
+- `Tongtool Stock Run` 过滤 `job = stock_change`，看今天是否 `Success`、`warehouse_count = 14`、`row_count > 0`
+- `data_path = /home/frappe/fzh-inventory/stock_change.parquet`
+- 变动是**事件级**：一行一次库存变动，含 `voucher_type_name`（包裹/拆包/采购单/报损/报溢/买家退货/调拨等）、`voucher_number`、`operator`、四个桶的 `*_increase`
+- **7 天窗口**：通途只允许回看 7 天。任务每天跑，窗口从“上次成功结束 - 1 天”开始；漏跑 1–2 天会在下一次自动补回，超过 7 天无法补
+- 同一事件重复抓取会按事件身份去重（仓+SKU+时间+凭证类型/单号+四桶增减），重跑不会翻倍
+
+> 生产快照：2026-10-23 手动全量成功（14 仓 / 5,316 行）；10/24、10/25、10/26 05:17 定时连续 Success（14 仓 / 5,316 行 / `complete=1`）。
 
 ## 4. 查看最新库存
 
@@ -113,7 +127,7 @@ ls -lh /home/frappe/fzh-inventory
 
 ### 5.1 `Tongtool Stock Run` 字段
 
-`run_id`、`snapshot_date`、`snapshot_at`、`started_at`、`finished_at`、`status`（Success/Partial/Failed）、`complete`、`warehouse_count`、`row_count`、`missing_warehouses`、`error_summary`、`source`（scheduled/retry/manual）、`data_path`、`schema_version`。
+`run_id`、`job`（`stock_snapshot` / `stock_change`）、`snapshot_date`、`snapshot_at`、`started_at`、`finished_at`、`status`（Success/Partial/Failed）、`complete`、`warehouse_count`、`row_count`、`missing_warehouses`、`error_summary`、`source`（scheduled/retry/manual）、`data_path`、`schema_version`。
 
 ### 5.2 其他日志
 
@@ -136,8 +150,9 @@ SQL
 ## 6. 历史库存：Parquet + DuckDB，不在 EN 数据库
 
 - 历史是**单个 Parquet**：`/home/frappe/fzh-inventory/stock.parquet`
-- 现在有 4 天：10/20 5,192、10/21 5,314、10/22 5,314、10/23 5,316（10/20 当天一个仓超时，属部分数据）
+- 现在有 **7 天**：10/20 5,192、10/21 5,314、10/22 5,314、10/23–10/26 各 5,316（10/20 当天一个仓超时，属部分数据）
 - 回填行的 `avg_cost=0`（Windows JSONL 不含成本），`source=backfill_windows`；live 行有成本
+- 库存变动另存 `stock_change.parquet`（见 6.3），**不与日快照混在一张表**
 - **DuckDB 不是独立服务**：它是 bench env 里的 Python 包，用来写/读 Parquet；API 的 history 方法内部用它
 - **EN 目前没有计划把日历史做成 MariaDB 表**；当前/状态在 EN，原始历史在 Parquet。以后若需要 EN 内展示趋势，加一张“状态汇总”小表，完整历史仍留 Parquet
 
@@ -161,6 +176,32 @@ PY
 - 或走下面的 history API（有行数上限）
 - 不要把原始 Parquet 放到 web 目录；不要暴露 SQL 接口
 
+### 6.3 库存变动 `stock_change.parquet`
+
+列：
+
+`operate_time`、`warehouse_name`、`goods_detail_id`、`sku`、`voucher_type`、`voucher_type_name`、`voucher_number`、`operator`、`available_increase`、`defects_increase`、`intransit_increase`、`waiting_shipment_increase`、`available_quantity`、`defects_quantity`、`intransit_quantity`、`waiting_quantity`、`captured_at`、`run_id`、`schema_version`
+
+```bash
+/home/frappe/frappe-bench/env/bin/python - <<'PY'
+import duckdb
+print(duckdb.sql("""
+  SELECT date_trunc('day', operate_time) AS day,
+         voucher_type_name, count(*) AS events, sum(available_increase) AS avail_delta
+  FROM read_parquet('/home/frappe/fzh-inventory/stock_change.parquet')
+  GROUP BY 1,2 ORDER BY 1 DESC, 3 DESC LIMIT 20
+""").fetchall())
+PY
+```
+
+常见用法：
+
+- 退货：`voucher_type_name IN ('买家退货','退货')`
+- 盘点/手工：`voucher_type_name IN ('报损','报溢','库存调整')`，有 `operator`
+- 调拨：`voucher_type_name` 含“调拨”；仓间移动
+- 发货：`voucher_type_name = '包裹'`；拆包为反向
+- 采购入库：`voucher_type_name = '采购单'`
+
 ## 7. 外部查询 API
 
 认证：`Authorization: token <api_key>:<api_secret>`；调用用户需要有 `Tongtool Stock Latest` 读权限（当前 `All` 已读）。
@@ -181,6 +222,7 @@ GET /api/resource/Tongtool Stock Run?order_by=creation desc&limit_page_length=1
 ```
 
 查某天全部运行：`filters=[["snapshot_date","=","2026-10-23"]]`。
+只看库存快照：`filters=[["job","=","stock_snapshot"]]`；只看库存变动：`filters=[["job","=","stock_change"]]`。
 
 ### 7.3 历史（Parquet + DuckDB）
 
@@ -243,11 +285,22 @@ bench --site erpnext.vilavi.cn execute \
 bench --site erpnext.vilavi.cn execute \
   tongtool_integration.sync.stock_sync.run_stock_snapshot \
   --kwargs '{"source": "manual"}'
+
+# 库存变动：单仓 1 天（约 1–2 分钟）
+bench --site erpnext.vilavi.cn execute \
+  tongtool_integration.sync.stock_change_sync.run_stock_change \
+  --kwargs '{"warehouses": "美东-CENTRADE", "source": "manual", "lookback_days": 1}'
+
+# 库存变动：全量 14 仓 3 天（约 10–20 分钟）
+bench --site erpnext.vilavi.cn execute \
+  tongtool_integration.sync.stock_change_sync.run_stock_change \
+  --kwargs '{"source": "manual", "lookback_days": 3}'
 ```
 
-- 输出是一个 dict：`run_id / warehouses / rows / complete / data_path / requests`
-- 同一天重跑会替换当天的 Parquet 行和 Latest，不重复累加
-- 文件锁会阻止与定时任务并发
+- 快照输出：`run_id / warehouses / rows / complete / data_path / requests`
+- 变动输出：`run_id / status / window_from / warehouses / fetched_rows / parquet_rows / missing / errors`
+- 同一天重跑会替换当天的 Parquet 行（快照）或按事件去重（变动），不重复累加
+- 文件锁会阻止与定时任务并发（`.stock_sync.lock` / `.stock_change.lock`）
 
 ## 10. 常见问题
 
@@ -258,6 +311,9 @@ bench --site erpnext.vilavi.cn execute \
 | `status=Partial` | 某个仓失败；看 `error_summary`；手动重跑全量 |
 | `Latest` 是旧时间 | 看最新 Run；手动重跑；确认 `run_id` 一致 |
 | `stock.parquet` 没更新 | 检查目录权限（`frappe:frappe`）、磁盘、`duckdb` 是否安装 |
+| 没有 `job=stock_change` 的 Run | 检查 `enable_stock_change`、Scheduled Job Log 的 05:47；手动跑一次 |
+| 变动 `row_count=0` | 可能是周末/无作业；看 3 天窗口是否有事件；`window_from` 是否过窄 |
+| 变动漏了 1–2 天 | 下次运行自动从“上次成功 -1 天”补；**超过 7 天无法补**（通途 API 限制） |
 | 526 限流 | 确认测试站定时关闭、Windows API 任务禁用；只保留生产；等退避 |
 | API 403 | 调用用户缺少 `Tongtool Stock Latest` 读权限 |
 | history API 空 | 日期范围不对（默认 30 天）或 Parquet 不存在 |
