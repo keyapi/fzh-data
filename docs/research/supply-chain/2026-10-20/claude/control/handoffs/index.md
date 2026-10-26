@@ -13,6 +13,7 @@ date: 2026-10-23
 |---|---|---|
 | [**JACK_ENTRY**](JACK_ENTRY.md) | Jack | **唯一入口**：固定必读 4 个、硬规则、提问/答复协议、当前状态 |
 | [**JACK_QA**](JACK_QA.md) | Jack | **唯一问答日志**：当前有效结论速查 + 轮次记录 + 更正 |
+| [2026-10-26-merge-readiness](2026-10-26-merge-readiness.md) | 审核/合并会话 | W1 合并顺序、检查项、业务确认、禁止项 |
 | [2026-10-23-jack-supply-timeline](2026-10-23-jack-supply-timeline.md) | Jack | W1–W4 任务、数据源、输出表、验收、边界 |
 | [2026-10-23-jack-w1-answers](2026-10-23-jack-w1-answers.md) | Jack | 早期七问答复（归档；以 JACK_QA 为准） |
 | [2026-10-23-jack-data-map](2026-10-23-jack-data-map.md) | Jack | 本机 DuckDB/备份/EN 证据读取地图；缺什么 |
