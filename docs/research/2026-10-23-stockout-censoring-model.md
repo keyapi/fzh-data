@@ -15,11 +15,11 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 
 ## 1. 先看数据现实（很关键）
 
-- EN Parquet 历史目前只有 **4 天**：10/20 5,192、10/21 5,314、10/22 5,314、10/23 5,316 行。
+- EN Parquet 历史目前 **7 天**：10/20 5,192、10/21 5,314、10/22 5,314、10/23 5,316、10/24 5,316、10/25 5,316、10/26 5,316 行。10/24–10/26 为生产 05:17 定时自动运行，均 `complete=true`（14 仓，约 14 分钟）。
 - 本地 DuckDB `order_store.duckdb` 的 `stock_history` 只有 **3 天**（10/20–10/22，15,820 行），`stockout_observed=true` 9,933 行（63%）。
 - 现有 `stockout_observed` 定义（`stock_history_ingest.py`）：
   `(batch_complete AND available = 0)` —— **按仓、等于 0**，不聚合、不看销量、不看停售、不看退货/手工调整。
-- 订单历史有 45 个月（407,898 单，PR #290），但**库存历史只有 4 天**。
+- 订单历史有 45 个月（407,898 单，PR #290），但**EN 库存历史只有 7 天**（WX 另有 38 个稀疏检查日）。
   ⇒ 现在无法对过去 45 个月做回溯断货剔除；只能从有库存快照的时点开始标，或找回更早的库存快照（NAS/Excel/赛狐/3PL 报表）再补。
 
 ### 1.1 已找到的历史数据（2026-10-23 核查）
@@ -27,23 +27,51 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 | 数据 | 位置 | 覆盖 | 用途 |
 |---|---|---|---|
 | WX 库存动态 | 本地 WX 历史库存目录 | **8/24–10/19，27 个日期列**，5,083 行；美东/波兰/美中/美中退货/Wayfair Cranbury | 稀疏日度库存；趋势/检查点 |
-| WX 6/26 库存 | 同目录 | 2026-06-26 全量 5,551 行（数据源/美东/波兰/美中/退货/Wayfair） | 6 月检查点 |
-| WX 7 月销售/库存报表 | 同目录 | 7/10、7/16、7/22、7/24、7/28、7/29、7/30、7/31 | 7 月检查点（含销量/库存） |
-| EN 每日快照 | `/home/frappe/fzh-inventory/stock.parquet` | 10/20–10/23（每日） | 之后每日累积 |
-| PB `check0stock` / `checked0stock` | PB orders 本地历史目录 | **2023-08 至今，约 275 个文件；实际出现 35 个 Vendor Style：24 个大号 Wedge + 3 个 Personal Wedge + 8 个 Gap Filler** | PB/美中断货与零库存订单的地面真值（SPS 目录 39 个；Coffee 4 色未在 PB 订单出现） |
+| WX 6/26 库存 | 同目录 | 2026-06-26 全量 5,550 行（数据源/美东/波兰/美中/退货/Wayfair） | 6 月检查点 |
+| WX 6/9、6/11 + 7 月销售/库存报表 | 同目录 | 6/9、6/11、7/10、7/16、7/22、7/24、7/28、7/29、7/30、7/31 | 6–7 月检查点（含销量/库存） |
+| EN 每日快照 | `/home/frappe/fzh-inventory/stock.parquet` | 10/20–10/26（每日，7 天） | 之后每日累积 |
+| PB `check0stock` / `checked0stock` | PB orders 本地历史目录 | **2023-09-08 至 2026-10-22，81 个 `checked0stock` CSV / 68 个检查日 / 2,145 条阻塞明细；35 个 Vendor Style：24 个大号 Wedge + 3 个 Personal Wedge + 8 个 Gap Filler** | PB/美中断货与零库存订单的地面真值（SPS 目录 39 个；Coffee 4 色未在 PB 订单出现） |
 | PB 无货通知链 | 订单 → 中国运营 → 美中 → 中国运营 → 你 | 事件驱动 | 美中/PB 实际无货信号 |
 | 钉钉盘点群 | 钉钉群 | — | **当前无读取/搜索权限，暂不可用** |
 
 - WX 的“库存动态”是 **27 个日期列**（8/24、8/26、8/28…10/19），不是连续每日；6/26 和 7 月是检查点。
-- PB 的 `check0stock`/`checked0stock` 是**订单级**零库存记录，不是库存水平；用实际 35 个 PB SKU 过滤后，可生成断货窗口/受影响订单。
-- 现有 DuckDB `stock_history` 只有 3 天，尚未导入 WX 这些文件；需要先做一次性入库。
+- PB 的 `check0stock`/`checked0stock` 是**订单级**零库存记录，不是库存水平。经配对核验：**`checked0stock` 是 `check0stock` 的子集**（前者才是真正没通过库存检查的订单；后者还包含已通过检查的订单），因此**只把 `checked0stock` 当阻塞证据**，`check0stock` 只用于补 SKU 清单。
+- 4 个检查日只有 `check0stock`、没有 `checked0stock`（2024-04-09、2024-07-09、2024-08-14、2025-07-17），这 4 天**不产生断货标签**（无法区分“没货”与“检查通过”），按 `unknown` 处理。
+- 现有 DuckDB `stock_history` 只有 3 天（10/20–10/22）；WX/PB 历史已按独立 schema 入库（见 1.3），**不覆盖也不补齐** 每日 `stock_history`。
 
 ### 1.2 SPS Item Sourcing × PB 实际订单（2026-10-25）
 
 - SPS 目录 **39 个**：28 个大号 `Wedge Pillow, Linen` + 3 个 `Personal Wedge Pillow`（60cm）+ 8 个 `Gap Filler Pillow`（2026-03 起新增楔形）。
 - 2023-08 至今真实 PB 订单出现 **35 个 Vendor Style**：24 个大号 Wedge（**Coffee 4 色未出现**）+ 3 个 Personal + 8 个 Gap。
-- 结论：PB 实际销售 SKU = **35**；Coffee 4 色只在 SPS 目录、历史订单没有；是否纳入由运营确认。
+- 结论：以 **35 个实际销售 SKU** 为准。Coffee 4 色只在 SPS 目录、历史订单没有，**暂不纳入**（没有历史需求可拟合；如运营确认要卖，作为新品单独处理）。
 - 8 个 Gap Filler 的 SKU/断货窗口已在 `楔形枕 补货决策信息包 20261016.md/xlsx`。
+
+### 1.3 P0 一次性入库结果（2026-10-26）
+
+**WX 历史库存**（`wx_inventory_history.duckdb`，已附加到 `order_store.duckdb` 的 `wx_inventory` schema）
+
+- 12 个 xlsx、**38 个日期**、198,363 条观测：6/9、6/11、6/26；7/10、7/16、7/22、7/24、7/28、7/29、7/30、7/31；8/24–10/19 的 27 个日期列。
+- **两套仓库口径，不能直接合并**：
+  - 6–7 月：12 个明细仓（CENTRADE、FZH-DANEEY 成品/半成品/皮壳/退货、FZHPoland-covers、WayfairCG×3、多渠道、大件云仓、星链海外仓）。
+  - 8–10 月：5 个汇总仓（美东仓、美中仓、美中-FZH-DANEEY-退货产品仓、波兰仓、WayfairCG-Cranbury仓）。
+- 状态：`positive_observed` 54,376；`nonpositive_observed` 130,648；`low_stock_1_3` 12,411；`unknown` 928。**非正库存只代表系统登记值，不等于物理断货。**
+- 脚本 `D:/Work/fzh-order-store/wx_inventory_ingest.py`，报告 `wx_inventory_import_report.json`，测试 `test_wx_inventory_ingest.py`。
+
+**PB 零库存订单**（`pb_stockout_history.duckdb`，已附加到 `order_store.duckdb` 的 `pb_stockout` schema）
+
+- 扫描 1,669 个 CSV：590 个订单导出（471 普通订单 / 81 `checked0stock` / 38 `check0stock`），885 个非订单导出，194 个 `NotUsed` 跳过。
+- 去重后 **12,857 条不同订单行**，覆盖 **35 个 Vendor Style**（24 大号 + 3 Personal + 8 Gap），与真实订单一致；Coffee 4 色未出现。
+- **2,145 条阻塞明细**（另折叠同一天重复导出 462 条），落在 **68 个检查日**、2023-09-08 至 2026-10-22；按年：2023 100、2024 735、2025 469、2026 841。
+- 阻塞量：大号 Wedge 1,756 条 / 1,831 件；Personal 286 / 328 件；Gap 103 / 108 件。**每张 PB 订单多为 1–2 件**，订单数比件数更有信息量。
+- **覆盖不连续（关键限制）**：2024-08-19 → 2025-07-14 约 11 个月空档；2025-10-08 → 2026-06-15 约 8 个月空档。这些区间**没有零库存检查记录**，不能推断“没断货”。
+- `stockout_windows` 共 159 段（同一 SKU 在连续检查日出现、且相邻检查日间隔 ≤7 天才并段）；**窗口只表示“这些检查日观察到阻塞”，不表示区间内连续断货**。
+- 脚本 `D:/Work/fzh-order-store/pb_stockout_ingest.py`，报告 `pb_stockout_import_report.json`，测试 `test_pb_stockout_ingest.py`（2 项通过）。
+
+**EN 每日库存（截至 2026-10-26）**
+
+- 生产 05:17 定时：10/24、10/25、10/26 连续 3 天 Success，14 仓、5,316 行、`complete=true`，约 14 分钟。
+- 历史 Parquet 10/20–10/26 共 7 天；`get_stock_history` 实测可回读。
+- 原始 WX/PB 文件与 DuckDB 体积大且有业务明细，**不入公开仓库**；仓库只保留方法与结果。
 
 
 ## 2. 业务规则（已确认）
@@ -165,9 +193,9 @@ sellable_stock(listing, sku, day) =
 4. **保留 unknown**：快照缺失/批次不完整时不要写 0，也不参与删失。
 5. **运营日志**：请美东/中国运营把下架/恢复/盘点调整记到共享表；盘点群消息可请中国运营转发/导出。没有日志时先用“销量停止 + ≤5”推断。
 6. **Listing ↔ 仓 ↔ 时期映射**：美东 → 美东-CENTRADE；美中 → 美中-FZH-DANEEY；PB 2023–2024 → 美东，2024+ → 美中 USTX；Wayfair CG 暂忽略。
-7. **PB 无货标签**：解析 `check0stock` / `checked0stock` 2023-08 至今约 275 个文件（实际 35 个 Vendor Style：24 大号 Wedge + 3 Personal + 8 Gap），按实际 35 个 PB SKU（24 大号 Wedge + 3 Personal + 8 Gap；Coffee 4 未销售）过滤，生成断货窗口/受影响订单；作为 PB/美中的地面真值。
+7. **PB 无货标签**：✅ 已解析 `checked0stock`（`check0stock` 的超集关系已核验）→ 68 个检查日 / 2,145 条阻塞明细 / 35 个 Vendor Style（24 大号 Wedge + 3 Personal + 8 Gap；Coffee 4 未销售）；生成 `blocked_observations` / `sku_block_daily` / `stockout_windows`，作为 PB/美中的地面真值。**空档期不外推。**
 8. **美中非 PB**：没有稳定无货信号时按 `stock_unknown`，不能因系统库存 >5 就当有货；有客服/运营反馈再标。
-9. **WX 历史库存入库**：6/26、7 月报表、库存动态 8/24–10/19（27 个日期列）→ `stock_checkpoint` / 长表；统一仓库名（美东仓 → 美东-CENTRADE 等），与 EN 10/20–23 对齐；6 月以前没有。
+9. **WX 历史库存入库**：✅ 已把 6/9、6/11、6/26、7 月 8 个检查点、库存动态 8/24–10/19（27 个日期列）共 38 个日期 / 198,363 条观测入 `wx_inventory` schema；两套仓库命名（6–7 月 12 明细仓 / 8–10 月 5 汇总仓）**尚未合并**，需按 `美东仓 → 美东-CENTRADE` 等映射后再与 EN 10/20–26 对齐。
 10. **钉钉**：`qyapi_chat_read` 只读群信息/成员，**不返回消息历史**；当前没有群消息读取/搜索权限，不纳入自动化；需要时请运营导出或记共享表。会话存档是另一套企业能力，暂不启动。
 
 ## 6. 预测里怎么用
@@ -184,15 +212,15 @@ sellable_stock(listing, sku, day) =
 
 | 阶段 | 做什么 | 验收 |
 |---|---|---|
-| P0 | 每日抓库存变动明细 + 解析 PB `check0stock`/`checked0stock` + WX 历史库存入库 | 每天有 `stock_change`；PB 28 SKU 有断货窗口；WX 6/26、7 月、8/24–10/19 有 `stock_checkpoint` |
-| P1 | 建立 listing 级 `sellable_stock` + `stock_status_daily`（美东阈值 5、K=2–3、M=7；美中 `stock_unknown`） | 美东抽 20–30 SKU 用 ≤5/销量停核对；PB 28 SKU 用 `check0stock` 核对；美中非 PB 用客服/运营反馈 |
+| P0 | 每日抓库存变动明细 + 解析 PB `check0stock`/`checked0stock` + WX 历史库存入库 | ✅ WX 38 日期 / 198,363 行入库；✅ PB 68 检查日 / 2,145 阻塞明细 / 35 SKU 入库；⬜ 每日 `stock_change` 尚未接入 |
+| P1 | 建立 listing 级 `sellable_stock` + `stock_status_daily`（美东阈值 5、K=2–3、M=7；美中 `stock_unknown`） | 美东抽 20–30 SKU 用 ≤5/销量停核对；PB 35 SKU 用 `checked0stock` 核对；美中非 PB 用客服/运营反馈 |
 | P2 | 与订单历史 join，先做“剔除 censored 天”的基线预测 | 与不剔除的模型对比，检查断货期预测是否不再被 0 拉低 |
 | P3 | 校准 K/M/阈值；评估 Tobit/删失模型；扩展到其他仓/市场 | 运营认可 + 回测稳定 |
 
 ## 8. 重要限制
 
-- **库存历史**：EN 10/20–10/23 每日；WX 8/24–10/19 有 27 个日期列（稀疏）、6/26 + 7 月多个检查点；6 月以前没有。不能回溯修正 45 个月订单。
-- **PB 真值**：`check0stock` / `checked0stock` 2023-08 至今约 275 个文件，是**订单级零库存记录**，不是库存水平；按 28 个 SKU 过滤后用于断货标签。
+- **库存历史**：EN 10/20–10/26 每日（7 天）；WX 38 个日期（6/9–10/19，稀疏）、6/26 + 7 月多个检查点；6 月以前没有。不能回溯修正 45 个月订单。
+- **PB 真值**：81 个 `checked0stock` CSV / 68 个检查日 / 2,145 条阻塞明细，2023-09-08 至 2026-10-22；是**订单级零库存记录**，不是库存水平。覆盖有 11 个月和 8 个月空档，空档期不能当“不断货”。
 - **美中系统库存可能虚高**（入库数量错、应出库未出库、报损/报溢未操作）；**没有统一停售阈值/负责人**，非 PB 只能 `stock_unknown`，不能只用库存水平判断。
 - 美东“≤5 下架”是运营动作，不是系统事件；会有滞后，需人工样本校准。
 - 退货仓使用情况不确定：美东/波兰新设但可能没人入库；美中 9 月改名后不确定是否进正常仓 ⇒ 用变动明细里的**实际仓 + 凭证类型**判断，不要假设退货仓是唯一入口。
@@ -202,8 +230,9 @@ sellable_stock(listing, sku, day) =
 
 ## 9. 相关
 
-- `docs/research/supply-chain/2026-10-20/claude/control/reviews/2026-10-21-stock-daily-diagnosis.md` — 现有入库/完整性/断货判定限制
-- `docs/research/supply-chain/2026-10-20/claude/experiments/g1_contract/stock_history_ingest.py` — `stockout_observed=(batch_complete AND available=0)`
-- `docs/research/supply-chain/2026-10-20/claude/experiments/business_phase/build_plan.py` — 现有模型把删失当需求缺口
-- `docs/reference/tongtool-stock-en-operations.md` — EN 每日同步操作手册
-- `docs/solutions/architecture-patterns/order-history-duckdb-store.md` — 45 个月订单 DuckDB
+- `docs/reference/tongtool-stock-en-operations.md` — EN 每日同步操作手册（配置、Run/Latest、Parquet、历史 API）
+- `docs/handoffs/2026-10-23-jack-en-stock-sync.md` — EN 通途库存每日同步落地清单
+- `docs/research/2026-10-23-inventory-history-storage-architecture.md` — 当前/历史库存存储架构
+- 现有入库与模型（在 supply-chain 分支，未合入本分支）：`docs/research/supply-chain/2026-10-20/claude/control/reviews/2026-10-21-stock-daily-diagnosis.md`、`.../experiments/g1_contract/stock_history_ingest.py`（`stockout_observed=(batch_complete AND available=0)`）、`.../experiments/business_phase/build_plan.py`
+- 45 个月订单 DuckDB 文档（demand_forecast 分支）：`docs/solutions/architecture-patterns/order-history-duckdb-store.md`
+- P0 入库产物（不入公开仓库，在本机 `D:/Work/fzh-order-store`）：`wx_inventory_ingest.py` / `wx_inventory_history.duckdb` / `wx_inventory_import_report.json`；`pb_stockout_ingest.py` / `pb_stockout_history.duckdb` / `pb_stockout_import_report.json`；两套测试 `test_wx_inventory_ingest.py`、`test_pb_stockout_ingest.py`
