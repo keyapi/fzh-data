@@ -218,6 +218,28 @@ channel: docs/jack-w1-channel
 - 1/2/3/4 在 #312 修；用户决定 5 已关闭（保留）。
 - 修完追加 `[W1-A11]`；#311 / #312 保持 draft。
 
+### [W1-A11] 2026-10-26 Jack 答复：Q11 两项已落地
+
+> 代码：`feature/jack-supply-timeline`（`e15b1b91`），draft PR #312；#311 保持 docs-only / draft。
+
+| Q11 | 状态 | 落地与证据 |
+|---|---|---|
+| #1 仓库 confidence/scope | ✅ | `warehouse_map.json` 增加 `warehouse_scope_basis=operator`：`warehouse_scope` 表示运营方（own/3pl/fba），不是库存所有权；in_house 库存所有权均为我方。波兰仓 confidence 由 confirmed 降为 assumed（EN 映射无独立证据）；CENTRADE/DANEEY 保留 confirmed 并写 `warehouse_confidence_basis`（DN customer + en_finished 交叉印证）。数量口径不变。 |
+| #2 SC14 默认 skip | ✅ | `tests/test_sc14_sync.py` 改为纯离线：`SC14_CANONICAL_DIR` → `local/sc14_canonical` → `../sc14`；都没有时 skip（离线预期）。网络 fetch 移到 `tests/run_canonical_tests.py`，该入口 fetch 后以 `SC14_SYNC_REQUIRE=1` 运行，19 passed / 0 skip。 |
+| #3 PR body | ✅ | 已更新：明确“无行级数量 JSON；sample_skus/warehouse_map 仍含标识/映射，已由用户确认保留”；SC14 离线 skip 为预期。 |
+| #4 minor | ✅ | §8.6 补 `po` 行说明；`sample_skus.json` 增加 `as_of_note`（样本冻结日；快照 10-22/10-20/10-19）。 |
+
+**验证（10-22 冻结基准）**
+
+- W1 233 行；B_min 1,212；B_max 2,762 + 433 个；桥接断言通过。
+- SC14 21/21；0 error / 132 warning（66 行；54/8/4）。
+- SC04 39 DN / 47 号 / 4,279 行 / FBA 17，差 0。
+- 单测：`tests/run_canonical_tests.py` → 19 passed / 0 skip；离线 unittest 无 canonical 时 1 skip（预期）。
+
+**未合并**
+
+- #311、#312 保持 draft；行级 JSON 清关前不合并。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

@@ -40,4 +40,7 @@ date: 2026-10-23
   （`sample_skus/warehouse_map` 标识 JSON 是否也移出公开仓库）。
 - **2026-10-26 用户决定**：`sample_skus.json` / `warehouse_map.json` **保留**（无数量/金额，与 sample10 文档同级）；
   Q11 该项关闭，仍剩 2 项必改（仓库 confidence/scope、SC14 同步默认）。
+- **2026-10-26 Jack 答复 Q11**：`[W1-A11]` 已写入 `JACK_QA.md`；仓库 scope 语义（operator）、波兰仓 confidence→assumed、
+  SC14 离线同步 + `tests/run_canonical_tests.py`、`sample_skus.json` as_of_note 已落地。代码 `e15b1b91`；draft PR #312。
+  验证：233 行 / SC14 21/21 + 132 warning / SC04 差 0 / B_min 1,212 / B_max 2,762+433 / 19 passed 0 skip。
 
