@@ -133,7 +133,8 @@ tags: [supply-chain, receipt, reconciliation, integration, po, in-transit]
 - **P1 已实现**：`supply_chain_visibility/supply_row.py` 提供统一行 dataclass 与校验（未知不写 0、未知日期不可用、`not_collected`/未知数量/未证 UOM 不得进 B_min/B_max）。
 - **P2 已实现**：`supply_chain_visibility/receipt_bridge.py` 输出 PO 剩余 / 库存 / 入库三数与差额，分类 `before_snapshot` / `after_snapshot` / `uncertain` / `unknown_time` / `not_collected`，并给 `po_remaining_may_include_receipts`、`receipts_may_be_in_inventory`、`timezone_unverified` 等 flags；不自动调整库存或在途。
 - **P3 已实现**：`supply_chain_visibility/overlap_gates.py` 对 PO/在途同批、DN trace、外部 FBA、未映射、未知 UOM、cover 转换做有序 gate；`receipt_bridge.py` 增加 `transit_qty` / `overlap_status` / `same_batch_suspected`。B_min 只留一侧，B_max 两侧保留。
-- P4–P5 待做：报表展示、性能与发布。
+- **P4 已实现（数据层）**：`supply_chain_visibility/supply_integration.py` 组装 canonical rows + gates + bridge + 聚合；`report_only()` 只返回聚合/flag，供报表调用；未改 key_test 入口。
+- P5 待做：性能与发布。
 
 ## Open Decisions（需业务/证据）
 
