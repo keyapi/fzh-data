@@ -238,7 +238,7 @@ df -h /home/frappe
 - [x] 合并 main、推生产并实测（14 仓 5,316 行，complete=true）。
 - [x] Windows API 任务已禁用（保留手动回退）；浏览器导出 02:17 保留。
 - [x] 测试站验证 `stock_change`（14 仓 3 天 653 行，重跑不翻倍）；测试站定时关闭。
-- [ ] 生产部署 app PR #8 + migrate，显式设 `enable_stock_change=1`、`stock_change_lookback_days=3`。
+- [x] 生产部署 app PR #8 + migrate，已设 `enable_stock_change=1`、`stock_change_lookback_days=3`；生产 3 天回填 653 行。
 - [ ] 低库存告警复用 PR #309 规则；先 dry-run。
 - [ ] 低库存并入 EN 后，停 Jack 本地 `FZH-StockAlert-daily`。
 - [ ] 连续 3–5 天验收；体检脚本改为读生产 Parquet/Run。

@@ -33,7 +33,7 @@ tags: [tongtool, inventory, erpnext, operations, runbook, duckdb, parquet]
 | 部分 | 在哪 | 作用 |
 |---|---|---|
 | 每日任务 | EN 生产，`tongtool_integration` app，05:17 | 抓 14 个启用仓，写当前表/运行日志/Parquet |
-| 库存变动 | EN（app PR #8 合并后），同一 app，05:47 | 抓 14 仓的库存变动明细（退货/盘点/调拨/包裹），写 `stock_change.parquet` |
+| 库存变动 | EN 生产，同一 app，05:47 | 抓 14 仓的库存变动明细（退货/盘点/调拨/包裹），写 `stock_change.parquet` |
 | 失败重试 | 06:17 / 07:17（快照）；变动靠 7 天窗口自愈 | 当天 Run 不 complete 才重跑；文件锁防并发 |
 | 当前视图 | MariaDB DocType `Tongtool Stock Latest` | 每仓×SKU 一行，约 5.3k 行 |
 | 运行日志 | MariaDB DocType `Tongtool Stock Run` | 每次运行一行；`job` 区分 `stock_snapshot` / `stock_change` |
@@ -114,6 +114,7 @@ ls -lh /home/frappe/fzh-inventory
 - 同一事件重复抓取会按事件身份去重（仓+SKU+时间+凭证类型/单号+四桶增减），重跑不会翻倍
 
 > 生产快照：2026-10-23 手动全量成功（14 仓 / 5,316 行）；10/24、10/25、10/26 05:17 定时连续 Success（14 仓 / 5,316 行 / `complete=1`）。
+> 生产变动：2026-10-26 部署 app PR #8，单仓验证 + 14 仓 3 天回填 **653 行**（654 条抓取，1 条重复折叠）；`enable_stock_change=1`，05:47 起每日增量。
 
 ## 4. 查看最新库存
 
@@ -352,5 +353,5 @@ bench restart
 
 - `docs/handoffs/2026-10-23-jack-en-stock-sync.md` — 实现/交接清单
 - `docs/research/2026-10-23-inventory-history-storage-architecture.md` — 存储选型调研
-- app PR #5（基础同步）、#6（重试 + 历史 API）
-- 私有仓 `tongtool_integration` 的 `sync/stock_sync.py`
+- app PR #5（基础同步）、#6（重试 + 历史 API）、#8（库存变动明细）
+- 私有仓 `tongtool_integration` 的 `sync/stock_sync.py`、`sync/stock_change_sync.py`

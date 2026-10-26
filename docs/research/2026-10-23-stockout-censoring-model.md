@@ -63,15 +63,20 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 - 去重后 **12,857 条不同订单行**，覆盖 **35 个 Vendor Style**（24 大号 + 3 Personal + 8 Gap），与真实订单一致；Coffee 4 色未出现。
 - **2,145 条阻塞明细**（另折叠同一天重复导出 462 条），落在 **68 个检查日**、2023-09-08 至 2026-10-22；按年：2023 100、2024 735、2025 469、2026 841。
 - 阻塞量：大号 Wedge 1,756 条 / 1,831 件；Personal 286 / 328 件；Gap 103 / 108 件。**每张 PB 订单多为 1–2 件**，订单数比件数更有信息量。
-- **覆盖不连续（关键限制）**：2024-08-19 → 2025-07-14 约 11 个月空档；2025-10-08 → 2026-06-15 约 8 个月空档。这些区间**没有零库存检查记录**，不能推断“没断货”。
+- **覆盖空档 = 没有报告断货（负证据），不是 unknown**。业务流程：怀疑断货 → 订单发美中 → 美中通知 → 在下次来货前持续 `check0stock`；来货后停止检查。因此：
+  - 有 `checked0stock` 阻塞记录 = 当天观察到断货；
+  - 没有检查记录 = 没有怀疑/没有报告断货；
+  - 4 个只有 `check0stock`、没有 `checked0stock` 的日期（2024-04-09、2024-07-09、2024-08-14、2025-07-17）是**检查跑了但结果文件缺失**，标 `check_result_missing`，不当作断货也不当作有货；
+  - 2023-09-08 之前没有数据，不外推。
 - `stockout_windows` 共 159 段（同一 SKU 在连续检查日出现、且相邻检查日间隔 ≤7 天才并段）；**窗口只表示“这些检查日观察到阻塞”，不表示区间内连续断货**。
+- `shortage_calendar`（35 SKU × 1,141 天 = 39,935 行）：`reported_shortage` 938 个 SKU-日（68 个检查日）；`no_reported_shortage` 38,857；`check_result_missing` 140（35 × 4 个结果缺失日）。**没有检查记录的日期按业务口径归入“没有报告断货”。**
 - 脚本 `D:/Work/fzh-order-store/pb_stockout_ingest.py`，报告 `pb_stockout_import_report.json`，测试 `test_pb_stockout_ingest.py`（2 项通过）。
 
 **EN 每日库存（截至 2026-10-26）**
 
 - 生产 05:17 定时：10/24、10/25、10/26 连续 3 天 Success，14 仓、5,316 行、`complete=true`，约 14 分钟。
 - 历史 Parquet 10/20–10/26 共 7 天；`get_stock_history` 实测可回读。
-- **库存变动**（app PR #8，测试站已验证、生产待部署）：14 仓 3 天抓 654 条 / 去重后 653 行；事件类型含包裹/订单/拆包/报溢/报损/买家退货；重跑保持 653 行。
+- **库存变动**（app PR #8，**2026-10-26 已部署生产**）：生产单仓验证通过后，14 仓 3 天回填 **653 行**（与测试站一致）；事件类型包裹 461 / 订单 117 / 拆包 63 / 报溢 9 / 报损 2 / 买家退货 1；`enable_stock_change=1`，05:47 起每日增量。
 - 原始 WX/PB 文件与 DuckDB 体积大且有业务明细，**不入公开仓库**；仓库只保留方法与结果。
 
 
@@ -121,7 +126,10 @@ sellable_stock(listing, sku, day) =
 |---|---|
 | `observed_sale` | 当天销量 > 0；即使库存 0/≤5 也先算“观察到销售”，不删失 |
 | `low_stock` | 0 < sellable_stock ≤ threshold；**美东 threshold=5**；美中 0/待确认 |
-| `stock_unknown` | 美中系统库存 >5 但销量=0 / 无货订单/客服反馈；**不能因库存 >5 就判定有货** |
+| `reported_shortage` | PB：当天有 `checked0stock` 阻塞记录（订单级地面真值） |
+| `no_reported_shortage` | PB：当天没有阻塞记录。按业务流程（怀疑断货才 check，来货后停止）视为**没有报告断货**，不是 unknown |
+| `check_result_missing` | PB：当天有 `check0stock`、没有 `checked0stock`（检查跑了但结果缺失） |
+| `stock_unknown` | **仅美中非 PB**：系统库存 >5 但销量=0 / 无货订单/客服反馈；**不能因库存 >5 就判定有货** |
 | `likely_unavailable` | 美东：sellable ≤5 + 销量=0；美中：销量=0 +（sellable≤0 或无货订单/客服/运营确认） |
 | `censored` | `likely_unavailable` 持续 ≥ K 天（K=2–3） |
 | `prolonged_stockout` | `censored` 连续 ≥ M 天（M=7 或 14，按业务） |
@@ -151,6 +159,11 @@ sellable_stock(listing, sku, day) =
    - 只有可售库存持续 > 阈值 K 天且销量恢复，才结束断货。
 6. **在途/采购**
    - 在途不是可售；但可作为“即将恢复”的信号，避免把恢复前的空窗误标为长期断货（或在报表里单独标注）。
+7. **PB 用“有没有检查记录”做负证据**
+   - 有 `checked0stock` 阻塞记录 = `reported_shortage`；
+   - 没有检查记录 = `no_reported_shortage`（业务流程决定：怀疑断货才 check，来货后不再 check）；
+   - 只有 `check0stock`、没有结果文件 = `check_result_missing`，不参与需求拟合；
+   - 该负证据只适用于 PB；**美中非 PB 仍按 `stock_unknown`**。
 
 ## 4. 如何侦测退货/手工调整
 
@@ -195,7 +208,7 @@ sellable_stock(listing, sku, day) =
 4. **保留 unknown**：快照缺失/批次不完整时不要写 0，也不参与删失。
 5. **运营日志**：请美东/中国运营把下架/恢复/盘点调整记到共享表；盘点群消息可请中国运营转发/导出。没有日志时先用“销量停止 + ≤5”推断。
 6. **Listing ↔ 仓 ↔ 时期映射**：美东 → 美东-CENTRADE；美中 → 美中-FZH-DANEEY；PB 2023–2024 → 美东，2024+ → 美中 USTX；Wayfair CG 暂忽略。
-7. **PB 无货标签**：✅ 已解析 `checked0stock`（`check0stock` 的超集关系已核验）→ 68 个检查日 / 2,145 条阻塞明细 / 35 个 Vendor Style（24 大号 Wedge + 3 Personal + 8 Gap；Coffee 4 未销售）；生成 `blocked_observations` / `sku_block_daily` / `stockout_windows`，作为 PB/美中的地面真值。**空档期不外推。**
+7. **PB 无货标签**：✅ 已解析 `checked0stock`（`check0stock` 的超集关系已核验）→ 68 个检查日 / 2,145 条阻塞明细 / 35 个 Vendor Style（24 大号 Wedge + 3 Personal + 8 Gap；Coffee 4 未销售）；生成 `blocked_observations` / `sku_block_daily` / `stockout_windows`。**空档期按业务口径 = 没有报告断货（负证据），不是 unknown；4 个只有 check0stock 的日期标 `check_result_missing`。**
 8. **美中非 PB**：没有稳定无货信号时按 `stock_unknown`，不能因系统库存 >5 就当有货；有客服/运营反馈再标。
 9. **WX 历史库存入库**：✅ 已把 6/9、6/11、6/26、7 月 8 个检查点、库存动态 8/24–10/19（27 个日期列）共 38 个日期 / 198,363 条观测入 `wx_inventory` schema；两套仓库命名（6–7 月 12 明细仓 / 8–10 月 5 汇总仓）**尚未合并**，需按 `美东仓 → 美东-CENTRADE` 等映射后再与 EN 10/20–26 对齐。
 10. **钉钉**：`qyapi_chat_read` 只读群信息/成员，**不返回消息历史**；当前没有群消息读取/搜索权限，不纳入自动化；需要时请运营导出或记共享表。会话存档是另一套企业能力，暂不启动。
@@ -222,7 +235,7 @@ sellable_stock(listing, sku, day) =
 ## 8. 重要限制
 
 - **库存历史**：EN 10/20–10/26 每日（7 天）；WX 38 个日期（6/9–10/19，稀疏）、6/26 + 7 月多个检查点；6 月以前没有。不能回溯修正 45 个月订单。
-- **PB 真值**：81 个 `checked0stock` CSV / 68 个检查日 / 2,145 条阻塞明细，2023-09-08 至 2026-10-22；是**订单级零库存记录**，不是库存水平。覆盖有 11 个月和 8 个月空档，空档期不能当“不断货”。
+- **PB 真值**：81 个 `checked0stock` CSV / 68 个检查日 / 2,145 条阻塞明细，2023-09-08 至 2026-10-22；是**订单级零库存记录**，不是库存水平。**没有检查记录的日期按业务流程视为“没有报告断货”**（怀疑断货才 check，来货后停止）；4 个只有 `check0stock` 的日期结果缺失，按 `check_result_missing`；2023-09-08 之前无数据。
 - **美中系统库存可能虚高**（入库数量错、应出库未出库、报损/报溢未操作）；**没有统一停售阈值/负责人**，非 PB 只能 `stock_unknown`，不能只用库存水平判断。
 - 美东“≤5 下架”是运营动作，不是系统事件；会有滞后，需人工样本校准。
 - 退货仓使用情况不确定：美东/波兰新设但可能没人入库；美中 9 月改名后不确定是否进正常仓 ⇒ 用变动明细里的**实际仓 + 凭证类型**判断，不要假设退货仓是唯一入口。
