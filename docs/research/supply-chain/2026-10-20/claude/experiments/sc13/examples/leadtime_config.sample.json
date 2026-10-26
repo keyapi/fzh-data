@@ -1,0 +1,66 @@
+{
+  "version": "2026-10-23.0-SAMPLE",
+  "effective_from": "2026-10-23",
+  "profiles": [
+    {
+      "route_id": "CN->US-WEST",
+      "warehouse": "美中-FZH-DANEEY",
+      "mode": "slow_boat",
+      "segments": {"order_to_departure": 14, "departure_to_arrival": 30, "arrival_to_stock": 7},
+      "source": "assumed",
+      "sample_size": 0,
+      "owner": "business",
+      "notes": "示例占位，不是业务已批准参数；待 Jack W2 实测/业务确认后整体替换"
+    },
+    {
+      "route_id": "CN->US-WEST",
+      "warehouse": "美中-FZH-DANEEY",
+      "mode": "fast_boat",
+      "segments": {"order_to_departure": 10, "departure_to_arrival": 18, "arrival_to_stock": 5},
+      "source": "assumed",
+      "sample_size": 0,
+      "owner": "business",
+      "notes": "示例占位，不是业务已批准参数；待 Jack W2 实测/业务确认后整体替换"
+    },
+    {
+      "route_id": "CN->US-WEST",
+      "warehouse": "美中-FZH-DANEEY",
+      "mode": "air",
+      "segments": {"order_to_departure": 5, "departure_to_arrival": 4, "arrival_to_stock": 3},
+      "source": "assumed",
+      "sample_size": 0,
+      "owner": "business",
+      "notes": "示例占位，不是业务已批准参数；待 Jack W2 实测/业务确认后整体替换"
+    },
+    {
+      "route_id": "CN->US-WEST",
+      "warehouse": "美中-FZH-DANEEY",
+      "mode": "3pl",
+      "segments": {"order_to_departure": 3, "departure_to_arrival": 5, "arrival_to_stock": 2},
+      "source": "assumed",
+      "sample_size": 0,
+      "owner": "business",
+      "notes": "示例占位，不是业务已批准参数；待 Jack W2 实测/业务确认后整体替换"
+    },
+    {
+      "route_id": "CN->PL",
+      "warehouse": "波兰-FZHPoland-covers",
+      "mode": "slow_boat",
+      "segments": {"order_to_departure": 12, "departure_to_arrival": 35, "arrival_to_stock": 5},
+      "source": "assumed",
+      "sample_size": 0,
+      "owner": "business",
+      "notes": "示例占位，不是业务已批准参数；待 Jack W2 实测/业务确认后整体替换"
+    },
+    {
+      "route_id": "CN->PL",
+      "warehouse": "波兰-FZHPoland-covers",
+      "mode": "air",
+      "segments": {"order_to_departure": 5, "departure_to_arrival": 6, "arrival_to_stock": 3},
+      "source": "assumed",
+      "sample_size": 0,
+      "owner": "business",
+      "notes": "示例占位，不是业务已批准参数；待 Jack W2 实测/业务确认后整体替换"
+    }
+  ]
+}
