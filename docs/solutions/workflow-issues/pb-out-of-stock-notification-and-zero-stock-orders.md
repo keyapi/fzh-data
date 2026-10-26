@@ -453,6 +453,7 @@ Acknowledgement = EDI **855（PO Acknowledgment）**。重发动作在 **SPS 门
 
 ## Related
 
+- [pb-cancel-request-email-closed-loop.md](pb-cancel-request-email-closed-loop.md) — **顾客取消（CANCEL）邮件**怎么定位、核实从未发货、回原线程填 Vendor Comment、写 Notion
 - `pb_orders/docs/reference/workflow.md` **§10** — 重复建单加后缀的**实现**（`--reorder` / `--history-dir`）与规范
 - `pb_orders/AGENT_HANDOFF.md` **坑 40** — 同上，改代码前必读
 - `pb_reconciliation/docs/reference/ups-delivery-check.md` — UPS 交付核查（判迟发 vs PB 漏结算）

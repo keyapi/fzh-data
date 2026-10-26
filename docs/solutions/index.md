@@ -13,6 +13,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-26 | 从 Claude Code CLI 直接调用 Notion MCP —— 复用 Claude-3p 的 OAuth 缓存 | [developer-experience/notion-mcp-direct-access.md](developer-experience/notion-mcp-direct-access.md) |
+| 2026-10-26 | PB 顾客取消（CANCEL）邮件闭环 —— 定位、核实、回复与 Notion 登记 | [workflow-issues/pb-cancel-request-email-closed-loop.md](workflow-issues/pb-cancel-request-email-closed-loop.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-10-08 | key_test 应用的两个结构性隐患：每次登录写元数据 + 打核心报表猴补丁，且生产/测试分支割裂 | [workflow-issues/key-test-login-hook-and-prod-test-divergence.md](workflow-issues/key-test-login-hook-and-prod-test-divergence.md) |
 | 2026-09-24 | 知识库防腐三件套 — 孤儿检测 / 生成式索引 / 链接图 | [best-practices/knowledge-base-anti-rot.md](best-practices/knowledge-base-anti-rot.md) |

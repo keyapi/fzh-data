@@ -537,6 +537,12 @@ Amazon 财务数据两种口径：**结算报告（settlement）= 打款(payout)
 - **PB 账期 (Pottery Barn settlement cycle)**: 按 PB 付款日起 **19 号 ~ 次月 18 号**（美国中部时间）切分，与 Amazon 的「4 号 ~ 下月 3 号」**不是同一套窗口**，不能混用。PB 通过 SPS 下单/发货，付款日 ≈ 仓库**实际交给承运商**（UPS "We Have Your Package"）后约 30 天——不是发票日、也不是建标日；因此同一批订单的实际付款会跨账期错位，一个账期不完全付清是常态。
 - **双开票（SPS 双 invoice 号）**: SPS 里有时一个订单创建了 **2 个 invoice 号**，发票 CSV 只保留其中一个，而 PB 可能按另一个号付款。对账时必须把付款行归一到 CSV 留用的号再比对，否则会误报「对账单上有、台账里没有」= 漏记。台账要在备注列留下「弃用 A 留用 B」的痕迹，供下轮和财务追溯。
 
+## PB 订单履约
+
+- **WSI WISMO/Cancel Request/CHAD**: PB 采购对接人发来的请求邮件，主题固定带 `- 5806 Centrade Inc <日期>`；正文表格每行一个请求，最后一列 `Vendor Comment` 由供应商填。`CANCEL` = 顾客取消；`WISMO` = 问货到哪了；`CHAD` = 改地址；`FORCE BILL` / `Partial RP` = 已收货未开票 / 部分补发。要求 24 小时内回复。
+- **Vendor Comment**: 上述邮件表格的供应商回复列。取消类常用值：`Cancel accepted`（确认从未发货）或 `Cancel not accepted - already shipped`（已发货，需给追踪号）。
+- **汇总提醒邮件**: 采购对接人会用新日期再发一封，把尚未闭环的 PO 合并重复列出；只回最初那封、漏掉汇总邮件，会让对方跟踪表一直显示未答复。
+
 ## 群晖 NAS 外网访问
 
 ### QuickConnect 统一入口

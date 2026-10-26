@@ -39,3 +39,4 @@ tags: [workflow-issues, index]
 | [cargo-location-tracking-source-reliability.md](cargo-location-tracking-source-reliability.md) | 「货物到哪了」查询方法：四个数据源可靠性分级 |
 | [amazon-account-period-late-submission-audit.md](amazon-account-period-late-submission-audit.md) | Amazon&新平台账期「提交异常/迟交」审计方法与规则 |
 | [workflow-copy-prod-to-test.md](workflow-copy-prod-to-test.md) | 从生产系统复制 Purchase Receipt 工作流 V3 到测试系统 |
+| [pb-cancel-request-email-closed-loop.md](pb-cancel-request-email-closed-loop.md) | PB 顾客取消（CANCEL）邮件闭环：找邮件、核实未发货、回原线程、填 Vendor Comment、写 Notion |
