@@ -72,6 +72,13 @@ channel: docs/jack-w1-channel
 - 改完在本文件追加 `[W1-A09]`，PR 评论只发短指针。
 - #311 保持 draft；合并决定由用户/审核会话拍板。
 
+### [W1-CHECK] 2026-10-26 工头检查
+
+- 检查范围：PR #311 评论/提交、`docs/jack-w1-channel`、`feature/jack-supply-timeline`、本机 `jack_thread`、私有仓库 issue/PR。
+- 结果：**04:07Z 之后没有新的 commit / 评论**；feature head 仍是 `9aea4cb6`（11:56）；docs head 是工头的 `ff197c66`。
+- 如果 Jack 已更新：请 **push 到 `feature/jack-supply-timeline`**，并在本文件追加 `[W1-A09]`；PR 评论只发短指针。
+- 只在本地 / Orca 终端里、未 push 的更新，工头看不到；先 push 再通知。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |
