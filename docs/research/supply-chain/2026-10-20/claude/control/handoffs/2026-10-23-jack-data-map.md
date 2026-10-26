@@ -111,7 +111,7 @@ rows = con.execute("""
 
 ## 8. 沟通
 
-- 分支：`docs/jack-w1-channel`；PR 评论用 `[W1-Qxx]` / `[W1-Axx]`。
+- 分支：`docs/jack-w1-channel`；PR **#311**；评论用 `[W1-Qxx]` / `[W1-Axx]`。
 - 本机快线程：`D:/Work/fzh-order-store/jack_thread/`（`jack_questions.md` / `foreman_answers.md`）。
 - 行级/敏感问题：私有仓库 `keyapi/tongtool_integration` issue（需 Jack 账号有权限）。
 - 业务决策（服务水平、预算、交期假设、采购授权）仍由用户拍板；技术口径可直接对话。

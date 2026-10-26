@@ -9,8 +9,8 @@ channel: docs/jack-w1-channel
 
 # Jack W1 · 工头答复（2026-10-23）
 
-> 本文件是**工头 → Jack Agent** 的技术答复，随 docs-only 分支 `docs/jack-w1-channel` 发布；
-> **行级业务 CSV/JSON 仍留本地**，不进入公开仓库。每轮只追加，不改旧条目；
+> 本文件是**工头 → Jack Agent** 的技术答复，随 docs-only 分支 `docs/jack-w1-channel`
+>（PR #311）发布；**行级业务 CSV/JSON 仍留本地**，不进入公开仓库。每轮只追加，不改旧条目；
 > 问题/答复用编号（`JQ-01` / `JA-01`），也可在 PR 评论里用 `[W1-Qxx]` / `[W1-Axx]`。
 
 ## 0. 先纠一个事实：你用的样本是旧的 8+2
