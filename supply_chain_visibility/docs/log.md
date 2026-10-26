@@ -6,6 +6,10 @@ title: supply_chain_visibility 变更日志
 
 # 变更日志
 
+## 2026-10-26
+- 原生筛选报表与库存证据入口仅部署测试站；PO 只读适配器与窗口对账核心完成，75 项本地测试、39 项测试服务器报表测试通过。交 Jack 的完整记录位于 `docs/research/supply-chain/2026-10-20/claude/control/handoffs/2026-10-26-codex-native-report-handoff.md`；完整 PO/WO/DN/入库整合仍待后续，未改生产。
+- 新增原生供应链报表计划：只读核实生产库存 DocType、七日 Parquet、BOM V2 Prepared Report 与 SO 报表单次执行基线；纠正把本机停用任务等同生产同步停用的判断，明确原生过滤查询、后台报表与业务预计算的分工。
+
 ## 2026-10-13
 - **Stage 1 v35（出库按 DN 归组）**：修「N单」误报 —— 原按 `Delivery Note Item` **明细行**计数，一张 DN 拆多行会显示成「5单」。改为**按出库单归组**（`dns=[{dn,date,status,docstatus,is_return,qty,lines[]}]`），摘要「N单」= **DN 张数**；明细表加「行数」列，`>1` 行时列出 `q1 + q2 + … = 合计`。生产 SO-26-00101 实测：`DM-153-IVORY` 22 行 → **1单·已发200**；真有 2 张 DN 的 `HLR-140-GREY` → **2单**(DN-26-00071+DN-26-00089)。⚠️ 过程踩坑：归组后 `dns` 变 dict，`d.qty` 必须改 `d["qty"]`（否则 `AttributeError`→500），已在**测试机拦下**（未到生产）。
 - **Stage 1 v34（报工/入库 两列 + 列宽）**：把「已生产」**拆成「报工」「入库」**，不一致标黄。`so_chain.py` 每工单加 `last_op_done`（末道必经工序报工，**去重 `max(整批卡[无菲号],逐菲号卡)`**，护栏=取有卡的最大 sequence 必经工序）、每行输出 `reported/instock/report_note`；**成品(KS)行无工序 → 报工取子装配件(皮壳/内胆)齐套(取较慢)**（用户选定）。列宽拖拽改**总宽模型**：拖宽→**整表总宽变、下方出横向滚动条**，**不再压缩首列**（对齐 AG Grid/Excel）；表头右缘**始终可见分隔条** + 悬停主色 + `col-resize` 光标，**双击=自适应内容**。测试 SO-26-00026/00025 验证（列/黄标/拖拽 qty 54→144 且首列 209 不变/双击 115→159）；生产 `6fc2ef7` 部署，SO-25-00169(82 行) 一屏放下、0 报错。详见 [docs/reference/en-produced-qty-vs-jobcard.md](reference/en-produced-qty-vs-jobcard.md)。

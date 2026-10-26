@@ -24,6 +24,8 @@
 
 ## 2. 状态
 
+> 本节以下为 2026-10-13 早期验证记录；既有功能已经生产发布，详见 §13–14。2026-10-26 新增过滤/权限与供应查询仍走 feature 分支测试，尚未生产发布。
+
 - ✅ **测试机（`上海测试-阿里云-FZH-ERPNext-frappe`，站点 `erpnext.vilavi.cn`）已部署并验证（2026-10-13）**：
   - `so_chain.py` 语法 OK；`sales_order.js` 190→250 行；备份 `/tmp/sales_order.js.bak_*`。
   - `bench --site erpnext.vilavi.cn clear-cache`。
@@ -32,7 +34,7 @@
   - **JS 挂载验证**：`GET /api/method/frappe.desk.form.load.getdoctype?doctype=Sales Order`
     → `__js` 含 `so-chain-summary` 与 `so_chain.get_so_chain` ✅。
   - ⏳ **浏览器视觉未验证**（需登录 desk）；建议人工开一张 Sales Order 确认区块渲染。
-- ⏳ **生产（`阿里云-FZH-ERPNext-frappe`）未部署**。
+- ✅ **既有版本生产已部署**：见 §13 的发布记录与 §14 的后续修复；新增 feature 功能单独验收。
 
 ## 3. 部署到生产（需确认后执行）
 
@@ -68,7 +70,7 @@ ssh $H "cd /home/frappe/frappe-bench && sudo -n -u frappe bench --site erpnext.v
 ### 状态
 - ✅ **测试机已部署并验证（2026-10-13）**：`query_report.run` 返回 **10 列 / 107 行 / KPI / 柱图**（耗时 0.10s）。
   文件已搬到正确路径；`bench restart` 后生效。
-- ⏳ 生产未部署。
+- ✅ 既有版本生产已部署（见 §13）；新增 feature 功能不随本状态自动获发布许可。
 
 ### 生产部署补丁（Stage 2）
 ```bash

@@ -1,0 +1,57 @@
+---
+okf: v0.1
+type: Reference
+title: 通途 PO 入库时间与库存快照对账
+date: 2026-10-26
+module: tongtool_api
+tags: [purchase-stock, receipt, snapshot, reconciliation]
+---
+
+# PO Receipt Time
+
+## Verified Interface
+
+只读工具 `erp2_purchase_purchasestockquery`：必填 `warehousingDateFrom`、`warehousingDateTo`；可选 `purchaseOrderCode`、`pageNo`、`pageSize`。
+实测按已知 PO 与其到货附近的小日期窗口查询成功，返回 2 行；近两日和近一周查询均成功但返回空页，不能把空窗口解释为接口不存在或所有历史均无入库。
+原始业务响应只保存在仓库外临时文件，不提交公开仓库。
+
+| 字段 | 已观察含义与限制 |
+|---|---|
+| purchaseDate / createdDate | PO 查询头部的采购、创建时间，样本精确到分钟 |
+| purchaseArrivalDate | PO 头部到货时间，样本精确到分钟；不等同于逐条实际入库时间 |
+| warehousingDate | 入库查询中的时间，样本精确到秒；时间字符串未带时区，适配器显式标记来源时区待确认 |
+| purchaseOrderCode / purchaseOrderId | 采购单关联键 |
+| goodsDetailId / sku | 货品标识 |
+| warehouseId / warehouseName | 入库仓库 |
+| warehousingNum | 适配器名 reported_receipt_quantity，保留源字段名；不可把 quantity、金额或单价当成本次入库量 |
+| quantity | 独立保留为订单数量来源，不混到 warehousingNum |
+| receipt_id / line_id / uom | 本次响应未提供；不得伪造稳定事件 ID 或静默猜单位 |
+
+EN 的 Delivery Note 按钮将 logistic_number 放进 PO externalNumber，创建成功后写回 custom_tongtool_purchase_order 与 custom_tongtool_po_created_on。
+后者是 EN 创建/写回时间，不是入库时间；手动 PO 不保证具有上述关联，不因无 EN 按钮记录就排除。
+
+## Time Reconciliation
+
+05:17 是当前库存批次开始时刻，而不是所有仓库的精确读取时刻；有每仓采集窗口时优先使用，没有时采用整个批次开始/完成区间。
+
+| 事件位置 | 处理 |
+|---|---|
+| 严格早于采集开始 | 标记 before；可能已反映在库存，但仍需确认入库生效/接口延迟语义 |
+| 严格晚于采集完成 | 标记 after，仅作 receipt_delta_candidate |
+| 等于边界或处于采集区间 | 标记 uncertain |
+| 时间、身份、单位或仓库窗口缺失 | 原行保留为 unknown，不填 0 |
+
+例：09:00 已入库、库存仍是 05:17 批次，但 PO 当前剩余量已减少，会产生漏计；把完整 PO 与包含入库的库存直接相加，又会重复计入。
+因此，不能混用库存批次时点与当前 PO 剩余量后宣称数量完整。
+不直接把 receipt 候选增量加到 available：库存可用桶还受出库、占用/释放、退货及手工调整影响。
+生产已有 stock_change_sync.py 与 stock_change.parquet，含 operate_time、凭证类型/号和各库存桶增量，应复用作辅助核对，但不把其全部事件当作采购入库。
+
+## Implementation
+
+- `tongtool_api/purchase_receipts.py`：注入已有 MCP caller 的只读适配器；有界分页、13 秒相邻请求节流、严格错误与分页回显检查、显式 truncated 标志；无重试风暴。节流只约束本调用方，商户多 App 仍共享 5 次/分钟。
+- `supply_chain_visibility/receipt_reconciliation.py`：无网络的时间对账核心；强身份重放去重、冲突隔离、按 SKU×仓×单位分开汇总。输入数＝已分类唯一行＋重复行＋冲突行＋未知行。
+- 真实响应缺强身份时保持弱身份，不按相同内容去重；不将这个适配器当作已经具备精准自动库存回放的证明。
+- 查询窗口按上海业务时区格式化；来源事件字符串本身未带时区，保留 unverified，调用者必须核实来源时区后再送入要求 aware timestamp 的对账核心。
+- 单元测试只用合成 fixture；自动通途 PO 入库、调度改点和库存写回不在本次范围。
+
+相关：[原生报表计划](../../../supply_chain_visibility/docs/research/2026-10-26-en-native-report-plan.md)、[PO API](purchase-orders.md)。

@@ -14,3 +14,4 @@ timestamp: 2026-08-13
 - ERP2 tool catalog: erp2-tool-catalog.md
 - Orders and packages: orders-packages.md
 - Purchase orders: purchase-orders.md
+- PO receipt time and stock snapshots: [purchase-receipts.md](purchase-receipts.md)
