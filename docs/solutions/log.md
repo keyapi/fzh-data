@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-26（PB 顾客取消邮件闭环 + Notion CLI 调用补录）
+
+- **新增**: `workflow-issues/pb-cancel-request-email-closed-loop.md` —— PB CANCEL 业务闭环。IMAP 检索机制与读信脚本**复用** `sps_api/docs/reference/tencent-imap.md` / `read_sps_mail.py`（只补多文件夹、HTML 原表、发信后 APPEND）；新增的是：Buyer SKU → 我方 SKU、用「shipment/invoice/通途订单/Notion 台账」四项交叉判断**从未发货**、回原线程填 Vendor Comment、**汇总提醒邮件也要回**、Notion 行备注追加。实据：2026-10-22/23 两封单行 CANCEL + 10-26 汇总重复两行，均核实未发货并回复。
+- **更新**: `docs/lessons/notion-mcp-setup.md` §六 —— 补「当前会话没有 MCP 工具时，从 CLI 直接调用已授权 Notion MCP」。原 `developer-experience/notion-mcp-direct-access.md` 草稿已删除，避免与既有 3P 接入文档重复；只保留独有部分（REST 401 ≠ MCP 不可用、缓存 token 位置、JSON-RPC/SSE/`User-Agent`、`update-page` 属性键名与回读）。
+- **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` + `pb_orders/AGENT_HANDOFF.md` —— 补 CANCEL 分支的入口链接，避免从断货文档找不到取消流程。
+
 ## 2026-10-08（PB 无货件：UPS 才算真发 + 重复建单加后缀）
 - **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`（`last_updated: 2026-10-08`）—— 三处补料：**① §2.1.1 新增「重复建单也占 `-N`」**：通途不允许重复订单号；`-N` 与拆单后缀是**同一命名空间**（同批多行占 `-1…-M`、跨批补发继续排），所以**下一个可用 = 该 PO 已用过的最大 `-N` + 1**，不是固定 `-2`（用户纠正：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」）。两种查法都实测：**离线扫历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（286 个文件，结果与「`PBUS-<PO>` 存不存在」完全吻合）或通途模糊搜 `PBUS-{PO}`；注意导入 xlsx 里存的是**光号**（`137770200-1`），`PBUS-` 是通途侧店铺码。已在 `pb_orders` 落地成 `--reorder`/`--history-dir`。**② §6.1 补「通途 `orderStatus=despatched` 同样不等于真发」**：它和 ASN/面单一样只证明「建了单/建了标」，判定「真发」只有 **UPS 取件**一个口径。**③ §6.6 新增 2026-10-08 无货件复核实测**（10 个 PO：真发 2 —— `137770200-1` 与 `137974027` 的有货行 `-194`；只建标未取件 8），并记下本次**先拿 shipment/ASN 反推「已发货」、把 7 行改成已发、被用户纠正**的教训 —— ASN 与通途状态都替代不了 UPS。
 

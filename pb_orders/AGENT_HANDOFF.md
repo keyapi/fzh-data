@@ -631,8 +631,29 @@ uv run pytest tests/ -q
 - [ ] EN 测试服务器上累计了十几条 `actor=验收测试` 的任务（含刻意造的错误路径用例），清理属破坏性操作，等用户确认
 - [x] 数据行末尾多出的**空**字段已能读（2026-09-24 真实批次：表头 147 / H 146 / D 148）；非空的额外字段仍拒绝。见坑 34-35
 
+## 11. 顾客取消（CANCEL）邮件闭环
+
+PB 采购对接人会发 `WSI WISMO/Cancel Request/CHAD - 5806 Centrade Inc <日期>`，正文是一张 HTML 表，
+最后一列 `Vendor Comment` 空着，要求 24 小时内回复。
+
+**接受取消的唯一判据是「从未发货」**，四项交叉：
+
+1. 批次目录 `shipment*.csv` 里没有该 PO（没有 ASN）；
+2. `invoice*.csv` 里没有该 PO 的 H 行；
+3. 通途 `erp2_orders_ordersquery`（`accountCode=PBUS`、`orderId=PBUS-<PO>`）查不到；
+4. Notion「PB 无货未发」台账该行 `打单=未打单`、`通途建单=未勾`、`invoice=不适用`。
+
+任意一项显示已发/已开票就不能填 `Cancel accepted`，应填 `Cancel not accepted - already shipped`
+并给追踪号。回复必须**挂在原线程**（`In-Reply-To`/`References` 填原 `Message-ID`），保留她的 HTML 表格，
+把最后一列填好；SMTP 发完还要 `IMAP APPEND` 到 `Sent Messages`。新日期的**汇总提醒邮件**（把前几天的
+PO 重复列出）也要回，否则她的跟踪表会一直显示未答复。最后把过程追加到 Notion 对应 PO 行的备注。
+
+完整口径见 `docs/solutions/workflow-issues/pb-cancel-request-email-closed-loop.md`。
+
 ## 相关经验（docs/solutions）
 
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
+- `docs/solutions/workflow-issues/pb-cancel-request-email-closed-loop.md` —— PB 顾客取消（CANCEL）邮件闭环 — 找邮件、核实未发货、回原线程、填 Vendor Comment、写 Notion
+- `docs/lessons/notion-mcp-setup.md` §六 —— CLI 会话没有 `notion-personal` 工具时，复用 Claude-3p OAuth 缓存直接调 Notion MCP（写台账用）

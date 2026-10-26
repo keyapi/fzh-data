@@ -266,7 +266,7 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 
 | 类别 | 篇数 | 什么时候读 |
 |------|-----|-----------|
-| `workflow-issues/` | 30 | 账期对账、迟交/错位、跨期结算、批处理流程 |
+| `workflow-issues/` | 31 | 账期对账、迟交/错位、跨期结算、批处理流程 |
 | `integration-issues/` | 21 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
 | `architecture-patterns/` | 18 | 「这个管道/系统为什么这样设计」 |
 | `tooling-decisions/` | 12 | 脚本、工具选型、产出校验 |

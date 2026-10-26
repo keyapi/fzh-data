@@ -8,6 +8,15 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-10-26（顾客取消邮件闭环成文）
+
+- **文档**：新增 `docs/solutions/workflow-issues/pb-cancel-request-email-closed-loop.md`，并在
+  `AGENT_HANDOFF.md` 第 11 节补入口。覆盖：按日期范围扫 IMAP 全部文件夹、Buyer SKU → 我方 SKU 映射、
+  「从未发货」四项交叉（shipment / invoice / 通途 `PBUS-<PO>` / Notion 台账）、回原线程并保留 HTML 表格填
+  `Vendor Comment`、SMTP 后 IMAP APPEND、汇总提醒邮件也要回、Notion 行备注追加与状态改 `顾客取消`。
+- **实据**：2026-10-22 / 10-23 两封单行 CANCEL（PO `137999043`、`138136920`）核实均未发货；
+  10-26 汇总邮件重复两行，三封均已回复并归档。
+
 ## 2026-10-08（第二十轮：通途导入 Excel 支持「重复建单自动加后缀」）
 
 - **需求**：通途不允许重复订单号；同一 PO 分两次建单（部分缺货，有货先发、缺货到货后补发）
