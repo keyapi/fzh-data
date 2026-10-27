@@ -222,7 +222,16 @@ df -h /home/frappe
     --kwargs '{"warehouses": "美东-CENTRADE", "source": "manual", "lookback_days": 1}'
   ```
 
-## 13. Jack 开工 checklist
+## 13. 盘中快照（12:00 欧洲 / 18:00 美国，app PR #10）
+
+- 12:00 只抓波兰；18:00 只抓美东+美中；写独立 `stock_intraday.parquet`（`slot=eu/us`），按 `(日期, slot)` 覆盖。
+- **05:17 的 `stock.parquet` 不变**，日快照仍是每天一份。
+- `Tongtool Settings` 新增：`enable_stock_intraday`（默认 0）、`stock_intraday_eu_warehouses`、`stock_intraday_us_warehouses`；**时间固定写在 `hooks.py`**，改时间改两行 cron + restart，slot 名不变。
+- `Tongtool Stock Run`：`job=stock_intraday_eu` / `stock_intraday_us`；`data_path` 指向 `stock_intraday.parquet`。
+- 测试站实测：EU 1,371 行 / 15 请求 / 3m03；US 3,096 行 / 34 请求 / 6m58；EU 复跑仍 1,371（不追加）；`stock.parquet` mtime 未变。
+- 生产部署后显式设 `enable_stock_intraday=1`（旧 Single 不会自动填默认）。
+
+## 14. Jack 开工 checklist
 
 - [x] 测试站建目录/权限（`/home/frappe/fzh-inventory`，`frappe:frappe`）。
 - [x] 生产建目录/权限（你有权限，Jack 没有）。

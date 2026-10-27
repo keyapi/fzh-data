@@ -58,7 +58,10 @@ Desk → **Tongtool Settings**（Single）→ **Stock Sync** 区：
 | `stock_snapshot_page_size` | 100 | 通途服务端上限 |
 | `stock_snapshot_interval` | 13 | 每次 API 调用间隔秒数（商户级 5 次/分钟） |
 | `enable_stock_change` | 默认 **1**（旧 Single 需手工设） | 05:47 是否抓库存变动明细 |
-| `stock_change_lookback_days` | 默认 **3**（旧 Single 需手工设） | 首次/无成功记录时回看天数；有成功记录时从上次结束-1 天开始，最多 7 天 |
+| `stock_change_lookback_days` | 默认 **3**（旧 Single 需手工设） | 首次/无成功记录时回看天数；有成功记录时从上次结束-1 天开始，最多 **6 天**（通途严格 7 天） |
+| `enable_stock_intraday` | 默认 **0** | 是否启用 12:00 欧洲 / 18:00 美国盘中快照 |
+| `stock_intraday_eu_warehouses` | `波兰-FZHPoland-covers` | 12:00 欧洲槽仓库 |
+| `stock_intraday_us_warehouses` | `美东-CENTRADE` + `美中-FZH-DANEEY` | 18:00 美国槽仓库 |
 
 修改权限：`Tongtool Settings` 由 System Manager 维护。改完不需要重启；05:17 任务运行时会读最新值。
 
@@ -115,6 +118,14 @@ ls -lh /home/frappe/fzh-inventory
 
 > 生产快照：2026-10-23 手动全量成功（14 仓 / 5,316 行）；10/24、10/25、10/26 05:17 定时连续 Success（14 仓 / 5,316 行 / `complete=1`）。
 > 生产变动：2026-10-26 部署 app PR #8，单仓验证 + 14 仓 3 天回填 **653 行**（654 条抓取，1 条重复折叠）；`enable_stock_change=1`，05:47 起每日增量。
+
+### 3.6 盘中快照 `stock_intraday.parquet`
+
+- **12:00 欧洲（波兰）/ 18:00 美国（美东+美中）**各一次，只读，写独立的 `/home/frappe/fzh-inventory/stock_intraday.parquet`
+- `Tongtool Stock Run` 过滤 `job = stock_intraday_eu` / `stock_intraday_us`；`data_path` 指向该文件
+- **不改 05:17 的 `stock.parquet`**；两个文件分开，日快照仍是每天一份
+- 时间固定写在 `hooks.py`；要改时间改两行 cron + `bench restart`（slot 名仍是 `eu`/`us`，不随时间变）
+- 手动补跑见 §9
 
 ## 4. 查看最新库存
 
@@ -202,6 +213,24 @@ PY
 - 调拨：`voucher_type_name` 含“调拨”；仓间移动
 - 发货：`voucher_type_name = '包裹'`；拆包为反向
 - 采购入库：`voucher_type_name = '采购单'`
+
+### 6.4 盘中快照 `stock_intraday.parquet`
+
+列：`snapshot_date, slot, snapshot_at, warehouse_id, warehouse_name, sku, available, intransit, waiting_shipment, defects, avg_cost, source, run_id, schema_version`
+
+- `slot = eu`（12:00 欧洲）/ `us`（18:00 美国）；按 `(snapshot_date, slot)` 覆盖，重跑不重复
+- 与 `stock.parquet` 独立；日快照仍只有 05:17 一份
+
+```bash
+/home/frappe/frappe-bench/env/bin/python - <<'PY'
+import duckdb
+print(duckdb.sql("""
+  SELECT slot, snapshot_date, warehouse_name, count(*) rows, sum(available) available
+  FROM read_parquet('/home/frappe/fzh-inventory/stock_intraday.parquet')
+  GROUP BY 1,2,3 ORDER BY 2 DESC, 1
+""").fetchall())
+PY
+```
 
 ## 7. 外部查询 API
 
@@ -296,6 +325,16 @@ bench --site erpnext.vilavi.cn execute \
 bench --site erpnext.vilavi.cn execute \
   tongtool_integration.sync.stock_change_sync.run_stock_change \
   --kwargs '{"source": "manual", "lookback_days": 3}'
+
+# 盘中：欧洲槽（默认波兰，12:00 槽）
+bench --site erpnext.vilavi.cn execute \
+  tongtool_integration.sync.stock_intraday.run_stock_intraday \
+  --kwargs '{"slot": "eu", "source": "manual"}'
+
+# 盘中：美国槽（默认美东+美中，18:00 槽）
+bench --site erpnext.vilavi.cn execute \
+  tongtool_integration.sync.stock_intraday.run_stock_intraday \
+  --kwargs '{"slot": "us", "source": "manual"}'
 ```
 
 - 快照输出：`run_id / warehouses / rows / complete / data_path / requests`
@@ -314,7 +353,9 @@ bench --site erpnext.vilavi.cn execute \
 | `stock.parquet` 没更新 | 检查目录权限（`frappe:frappe`）、磁盘、`duckdb` 是否安装 |
 | 没有 `job=stock_change` 的 Run | 检查 `enable_stock_change`、Scheduled Job Log 的 05:47；手动跑一次 |
 | 变动 `row_count=0` | 可能是周末/无作业；看 3 天窗口是否有事件；`window_from` 是否过窄 |
-| 变动漏了 1–2 天 | 下次运行自动从“上次成功 -1 天”补；**超过 7 天无法补**（通途 API 限制） |
+| 变动漏了 1–2 天 | 下次运行自动从“上次成功 -1 天”补；**超过 6 天无法补**（通途严格 7 天） |
+| 没有 `job=stock_intraday_eu/us` 的 Run | 检查 `enable_stock_intraday`、Scheduled Job Log 的 12:00/18:00；手动跑一次 |
+| `stock_intraday.parquet` 没更新 | 同上；确认 `stock_snapshot_dir` 权限和 `enable_stock_intraday` |
 | 526 限流 | 确认测试站定时关闭、Windows API 任务禁用；只保留生产；等退避 |
 | API 403 | 调用用户缺少 `Tongtool Stock Latest` 读权限 |
 | history API 空 | 日期范围不对（默认 30 天）或 Parquet 不存在 |
