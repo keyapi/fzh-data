@@ -130,9 +130,10 @@ def _write_xlsx(path, result):
     columns = {
         "lines": list(result["lines"][0].keys()) if result["lines"] else [],
         "stage_balances": ["so", "so_line_id", "item_code", "warehouse", "uom", "stage",
-                           "stage_detail", "qty", "qty_status", "qty_basis", "batch_key",
-                           "source_record", "exclusion_reason", "included_in_stock",
-                           "demand_status", "scope", "role"],
+                           "stage_detail", "qty", "qty_status", "qty_basis",
+                           "cumulative_excess_qty", "batch_key", "source_record",
+                           "exclusion_reason", "included_in_stock", "demand_status",
+                           "scope", "role"],
         "milestones": ["so", "so_line_id", "item_code", "uom", "node", "baseline_planned_at",
                        "committed_due_at", "latest_expected_at", "actual_at", "qty",
                        "qty_status", "date_precision", "timezone_status", "observed_at",

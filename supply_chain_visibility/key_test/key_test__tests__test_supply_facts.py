@@ -467,19 +467,60 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(sum(1 for r in stages if r["stage"] == self.facts.STAGE_UNKNOWN
                              and r["qty"] is not None), 1)
 
-    def test_unattributable_return_collapses_to_one_net_row(self):
+    def test_unattributable_return_is_reported_without_netting(self):
         dns = [_dn(qty=40.0, warehouse="WH-A", dn_item="row-a"),
                _dn(qty=60.0, warehouse="WH-B", dn_item="row-b"),
                _dn(name="DN-R", qty=-10.0, is_return=1, return_against="DN-1",
                    warehouse="WH-C")]
         stages = self.facts.build_stage_balances(_line(), _ctx(dns=dns))
-        self.assertFalse([r for r in stages if r["stage"] == self.facts.STAGE_IN_TRANSIT])
-        unknown = sorted(r["qty"] for r in stages
-                         if r["stage"] == self.facts.STAGE_UNKNOWN and r["qty"] is not None)
-        self.assertEqual(unknown, [10.0, 90.0])
+        transit = {r["warehouse"]: r["qty"] for r in stages
+                   if r["stage"] == self.facts.STAGE_IN_TRANSIT}
+        self.assertEqual(transit, {"WH-A": 40.0, "WH-B": 60.0})
+        returned = [r for r in stages if r["stage"] == self.facts.STAGE_RETURNED]
+        self.assertEqual(len(returned), 1)
+        self.assertEqual(returned[0]["qty"], 10.0)
+        self.assertIn("归属", returned[0]["exclusion_reason"])
+        self.assertFalse([r for r in stages
+                          if r["stage"] == self.facts.STAGE_UNKNOWN and r["qty"] is not None])
         self.assertAlmostEqual(sum(r["qty"] for r in stages if r["qty"] is not None
                                    and r["stage"] not in (self.facts.STAGE_RETURNED,
                                                           self.facts.STAGE_DRAFT)), 100.0)
+
+    def test_return_beyond_item_capacity_keeps_other_rows(self):
+        dns = [_dn(qty=40.0, warehouse="WH-A", dn_item="row-a"),
+               _dn(qty=60.0, warehouse="WH-B", dn_item="row-b"),
+               _dn(name="DN-R", qty=-50.0, is_return=1, return_against="DN-1",
+                   dn_item="row-r", dn_detail="row-a", warehouse="WH-C")]
+        stages = self.facts.build_stage_balances(_line(), _ctx(dns=dns))
+        transit = {r["warehouse"]: r["qty"] for r in stages
+                   if r["stage"] == self.facts.STAGE_IN_TRANSIT}
+        self.assertEqual(transit, {"WH-B": 60.0})
+        returned = [r for r in stages if r["stage"] == self.facts.STAGE_RETURNED]
+        self.assertEqual(sorted(r["qty"] for r in returned), [10.0, 40.0])
+        excess = next(r for r in returned if r["qty"] == 10.0)
+        self.assertIn("超退", excess["exclusion_reason"])
+        matched = next(r for r in returned if r["qty"] == 40.0)
+        self.assertIn("抵扣", matched["exclusion_reason"])
+        unknown = [r for r in stages if r["stage"] == self.facts.STAGE_UNKNOWN
+                   and r["qty"] is not None]
+        self.assertEqual([r["qty"] for r in unknown], [40.0])
+        self.assertAlmostEqual(sum(r["qty"] for r in stages if r["qty"] is not None
+                                   and r["stage"] not in (self.facts.STAGE_RETURNED,
+                                                          self.facts.STAGE_DRAFT)), 100.0)
+
+    def test_explicit_detail_mismatch_is_not_single_row_fallback(self):
+        dns = [_dn(qty=100.0, warehouse="WH-A", dn_item="row-a"),
+               _dn(name="DN-R", qty=-10.0, is_return=1, return_against="DN-1",
+                   dn_item="row-r", dn_detail="OTHER-ROW", warehouse="WH-B")]
+        stages = self.facts.build_stage_balances(_line(), _ctx(dns=dns))
+        transit = [r for r in stages if r["stage"] == self.facts.STAGE_IN_TRANSIT]
+        self.assertEqual(len(transit), 1)
+        self.assertEqual(transit[0]["qty"], 100.0)
+        returned = [r for r in stages if r["stage"] == self.facts.STAGE_RETURNED]
+        self.assertEqual(returned[0]["qty"], 10.0)
+        self.assertIn("冲突", returned[0]["exclusion_reason"])
+        self.assertFalse([r for r in stages
+                          if r["stage"] == self.facts.STAGE_UNKNOWN and r["qty"] is not None])
 
     def test_partial_waybill_status_is_not_arrived(self):
         numbers = {"DN-1": [{"number": "A"}, {"number": "B"}]}
@@ -614,6 +655,7 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(by_stage[self.facts.STAGE_PRODUCED_PENDING]["qty"], 100.0)
         excess = by_stage[self.facts.STAGE_OVER_PRODUCED]
         self.assertEqual(excess["qty"], 50.0)
+        self.assertEqual(excess["cumulative_excess_qty"], 50.0)
         self.assertEqual(excess["demand_status"], "excess")
         self.assertIn("150", excess["stage_detail"])
         self.assertAlmostEqual(self._sum_executed(stages), 100.0)
@@ -626,6 +668,18 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(start["qty"], 150.0)
         self.assertEqual(end["qty"], 150.0)
         self.assertIn("订单", end["note"])
+
+    def test_over_produced_current_balance_excludes_shipped(self):
+        ctx = _ctx(wos=[_wo(qty=150.0, produced=150.0)], dns=[_dn(qty=120.0)])
+        stages = self.facts.build_stage_balances(_line(), ctx)
+        over = next(r for r in stages if r["stage"] == self.facts.STAGE_OVER_PRODUCED)
+        self.assertEqual(over["qty"], 30.0)
+        self.assertEqual(over["cumulative_excess_qty"], 50.0)
+        self.assertEqual(over["demand_status"], "excess")
+        self.assertIn("150", over["stage_detail"])
+        self.assertIn("50", over["stage_detail"])
+        self.assertFalse([t for t in self.facts.build_availability(_line(), ctx, stages)
+                          if t["stage"] == self.facts.STAGE_OVER_PRODUCED])
 
     def test_cancelled_order_still_records_over_production(self):
         stages = self.facts.build_stage_balances(

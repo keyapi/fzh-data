@@ -24,6 +24,7 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 | `so`, `so_line_id`, `item_code`, `warehouse`, `uom` | 订单行身份 |
 | `stage` | `not_planned` / `in_production` / `produced_pending_dn` / `shipped_in_transit` / `arrived_not_sellable` / `delivered_sellable` / `cancelled` / `returned` / `draft_dn` / `over_produced` / `unknown` |
 | `qty`, `qty_status`, `qty_basis` | 数量、证据状态（known/estimated/unknown）、依据（job_card_first_op / wo_produced_qty / dn_submitted / …） |
+| `cumulative_excess_qty` | 仅 `over_produced` 行：累计超订单完工量（异常指标）；该行 `qty` 为当前超订单现存实物 |
 | `batch_key`, `source_record` | DN / 工单 / 来源单据 |
 | `exclusion_reason`, `included_in_stock` | 不可计入原因、是否已含库存（未证一律 unknown） |
 | `demand_status` | `active` / `cancelled` / `excess`（`excess`=超订单完工的未分配实物，不计入本订单余额与可售供给） |
@@ -31,12 +32,12 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 
 规则：
 - 同一订单行的已执行片段互斥；历史累计完工/出库**不**再相加；草稿 DN 只列数量为空的提示行；差额进 `unknown` 并给原因。
-- **超产**：订单内分配最多按订单量；来源完工量超过订单量的部分单独输出 `over_produced`（`demand_status=excess`），保留来源完工总量与超出量，不计入订单阶段守恒与可售供给；取消订单同样保留。`milestones` 的开工/完工节点数量保留来源数量，并在 `note` 标注超出订单量。
+- **超产**：订单内分配最多按订单量；`over_produced` 的 `qty` 表示**当前超订单实物现存**（来源完工 − max(已出库, 订单量)），`cumulative_excess_qty` 保留累计超订单完工量（来源完工 − 订单量），二者分开；`demand_status=excess`，不计入订单阶段守恒与可售供给，取消订单同样保留；无现存实物时仍保留该异常行（qty=0 + 累计字段）。`milestones` 的开工/完工节点数量保留来源数量，并在 `note` 标注超出订单量。
 - **阶段分配**：工单覆盖量 `wo_coverage=min(Σ工单数量, 订单量)`；实际在产只按有开工证据的工单计算（工序卡有实际开工时间或已完工），`在产量=min(余额, max(0, 已开工覆盖-已完工))`；已下达但无开工记录的工单覆盖只证明计划，进 `unknown`；超出覆盖的余额进 `not_planned`。工单单位与订单单位不一致时完工量不可归一，生产类阶段整体进 `unknown`。已提交生产计划（同物料）覆盖但尚未建工单的部分进 `unknown`（不判为未计划）；计划不可读时同样进 `unknown`；计划单位缺失或与订单单位不一致时不计覆盖量，剩余余额整体进 `unknown`（不计算未覆盖差额）。
 - **行级权限**：SO/DN/WO/PP/Shipment 均先取当前用户可读单据集合再取数；受限来源写入 `coverage.restricted` 并置 `partial=true`；因受限无法判断的阶段一律 `unknown`，不得解释为「没有」。
 - **单位**：出库单位与订单单位不一致**或缺失**且无换算证据时，不归一运算；输出「数量归属未知」+ 原单位实物片段；缺失单位标 `qty_status=unknown`。`milestones` 与 `links` 中的派生数量同样只在来源单位与订单单位一致时输出，否则 qty=null 并给原因。
 - **到货判定**：只有全部关联运单状态齐全且均为到港/签收/POD 时才判 `arrived_not_sellable`；任一运单缺状态时保留在途并标注原因，不按已知子集判定整单到港。
-- **退货**：按 `return_against` 锁定原出库单，再按原出库明细（`Delivery Note Item.dn_detail`）抵扣到具体行；读取时不同原明细的退货行不合并（保留逐明细数量）；缺明细关联且原单仅一行时按该行抵扣；仍无法归属时不摊到仓库，只保留一条 `unknown`（DN 净额），不得同时保留毛额再补差。`returned` 行按来源拆分：实际抵扣量、超退量（退货超过原出库，标「超退」且无原单可抵）、未关联原单量；三者之和等于退货原值，不得把超退描述为已抵扣。退货缺口 `min(退货量, 需求余额)` 记 `unknown`，不得推断为「待出库」或「在产」，扣除后余额再分配在产/未计划。
+- **退货**：按 `return_against` 锁定原出库单，再**按原出库明细（`dn_detail`）逐条校验身份与剩余可抵扣量**，匹配量汇总到 DN；读取时不同原明细的退货行不合并。`dn_detail` 指向的明细不存在于原单 → **明细引用冲突**，不抵扣、不做单行兜底，单独报冲突；`dn_detail` 缺失且原单仅一行 → 按该行剩余容量兜底；缺失且原单多行 → 无法归属，不抵扣、不摊量，退货行标记归属未知。未参与冲突的其他明细保留已证净额。`returned` 行按来源拆分：实际抵扣、超退（超出该明细可抵扣量）、明细引用冲突、未关联原单 / 无法归属；各项之和等于退货原值，不得把超退或冲突描述为已抵扣。退货缺口 `min(退货量, 需求余额)` 记 `unknown`，不得推断为「待出库」或「在产」，扣除后余额再分配在产/未计划。
 - **取消**：需求取消与已生产/已发实物分开记录；实物片段带 `demand_status=cancelled`，不随订单状态删除。
 - **as_of**：服务端只支持当前快照；历史 `as_of` 直接拒绝（HTTP 错误），不能由客户端校验替代。
 - **空结果**：无匹配/全部受限也保留 `coverage`、`external_sources`、`empty_reason`，`partial=true`，不得声称完整；`empty_reason` 区分 `no_matching_lines`（无匹配）与 `all_restricted`（有匹配但全部不可读）。
@@ -110,7 +111,7 @@ SO Chain Overview 的链条弹窗新增「数量阶段 / 节点 / 分批可售�
 
 ## 5. 验收（测试站）
 
-- 契约单测：41 项（8 类案例 + 草稿 + estimated + 单位校验/继承 + 退货原明细归属/单行兜底/无法归属/超退拆分 + 退货逐明细读取贯穿 + 工单覆盖/开工证据 + 生产计划覆盖/单位校验 + 超产异常 + 取消实物 + 片段仓库/ID + 运单状态齐全性 + 出库节点拆分 + 行级权限 + 全部受限 + 版本字段 + 历史 as_of 拒绝 + 空结果完整性），另有 7 项批次合并/版本一致性测试；本地全绿。
+- 契约单测：44 项（8 类案例 + 草稿 + estimated + 单位校验/继承 + 退货原明细归属/容量校验/超退/引用冲突/无法归属 + 退货逐明细读取贯穿 + 工单覆盖/开工证据 + 生产计划覆盖/单位校验 + 超产现存与累计 + 取消实物 + 片段仓库/ID + 运单状态齐全性 + 出库节点拆分 + 行级权限 + 全部受限 + 版本字段 + 历史 as_of 拒绝 + 空结果完整性），另有 7 项批次合并/版本一致性测试；本地全绿。
 - 单 SO `SO-26-00026`：3 行 / 8 阶段余额 / 16 里程碑 / 6 可售片段 / 17 关联；查询约 0.8s。
   三行阶段余额守恒 10 / 5 / 8（草稿不计数量；KS 无工序卡时用 produced_qty 标 estimated）。
 - 全范围（含取消订单）：292 行 / 308 阶段余额 / 656 里程碑 / 287 片段 / 404 关联；查询 0.30s，总计 0.85s。

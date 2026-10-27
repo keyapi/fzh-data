@@ -15,8 +15,8 @@ from frappe.utils import getdate, now_datetime, today
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v1"
-RULE_VERSION = "2026-10-27.5"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.5"
+RULE_VERSION = "2026-10-27.6"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.6"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -63,7 +63,7 @@ def _qty_status(qty, uom):
 
 def _balance(line, stage, qty, uom, detail="", batch_key="", source="",
              reason="", in_stock="unknown", qty_status=None, qty_basis="",
-             demand_status="active", warehouse=None):
+             demand_status="active", warehouse=None, cumulative_excess_qty=None):
     status = qty_status or _qty_status(qty, uom)
     return {
         "so": line.get("so"), "so_line_id": line.get("so_line"),
@@ -72,6 +72,8 @@ def _balance(line, stage, qty, uom, detail="", batch_key="", source="",
         "uom": uom, "stage": stage, "stage_detail": detail,
         "qty": None if qty is None else round(_num(qty), 6),
         "qty_status": status, "qty_basis": qty_basis,
+        "cumulative_excess_qty": (None if cumulative_excess_qty is None
+                                  else round(_num(cumulative_excess_qty), 6)),
         "batch_key": batch_key, "source_record": source,
         "exclusion_reason": reason, "included_in_stock": in_stock,
         "demand_status": demand_status,
@@ -131,42 +133,88 @@ def build_stage_balances(line, ctx):
                     warehouse=dn.get("warehouse"), demand_status=demand_status))
         return rows
 
-    allocated = defaultdict(float)
-    allocated_by_item = defaultdict(float)
     unallocated = []
     dn_names = {d.get("dn") for d in nonreturns}
-    for ret in returns:
-        against = ret.get("return_against")
-        amount = -_num(ret.get("qty"))
-        if against and against in dn_names:
-            allocated[against] += amount
-            item = ret.get("dn_detail")
-            if item:
-                allocated_by_item[item] += amount
-        else:
-            unallocated.append(ret)
-    gross_by_dn = defaultdict(float)
+    grouped_dns = defaultdict(list)
     for dn in nonreturns:
-        gross_by_dn[dn.get("dn")] += _num(dn.get("qty"))
+        grouped_dns[dn.get("dn")].append(dn)
+
+    def item_capacity(dn, name):
+        item_qty = dn.get("item_qty") or {}
+        if name in item_qty:
+            return _num(item_qty[name])
+        names = [n for n in (dn.get("dn_items") or [dn.get("dn_item")]) if n]
+        return _num(dn.get("qty")) if name in names else None
+
+    matched_by_group = defaultdict(float)
+    matched_by_item = defaultdict(float)
+    matched_by_dn = defaultdict(float)
     matched_total = 0.0
     excess_total = 0.0
-    for dn_name, amount in allocated.items():
+    conflict_total = 0.0
+    unattributed_total = 0.0
+    for ret in returns:
+        amount = -_num(ret.get("qty"))
         if amount <= 0:
             continue
-        gross = gross_by_dn.get(dn_name, 0.0)
-        matched_total += min(amount, gross)
-        excess_total += max(0.0, amount - gross)
+        against = ret.get("return_against")
+        if not against or against not in dn_names:
+            unallocated.append(ret)
+            continue
+        dn_rows = grouped_dns[against]
+        detail = ret.get("dn_detail")
+        matched_here = 0.0
+        if detail:
+            found = False
+            for idx, dn in enumerate(dn_rows):
+                capacity = item_capacity(dn, detail)
+                if capacity is None:
+                    continue
+                remaining = max(0.0, capacity - matched_by_item[(against, detail)])
+                take = min(amount, remaining)
+                matched_by_item[(against, detail)] += take
+                matched_by_group[(against, idx)] += take
+                matched_here += take
+                amount -= take
+                found = True
+                break
+            if found:
+                excess_total += amount
+            else:
+                conflict_total += amount
+        elif len(dn_rows) == 1:
+            remaining = max(0.0, _num(dn_rows[0].get("qty"))
+                            - matched_by_group[(against, 0)])
+            take = min(amount, remaining)
+            matched_by_group[(against, 0)] += take
+            matched_here += take
+            amount -= take
+            excess_total += amount
+        else:
+            unattributed_total += amount
+        matched_total += matched_here
+        matched_by_dn[against] += matched_here
     unallocated_total = sum(-_num(r.get("qty")) for r in unallocated)
     returned_total = sum(-_num(r.get("qty")) for r in returns)
     if matched_total > 1e-9:
         rows.append(_balance(line, STAGE_RETURNED, matched_total, uom,
-                             detail="销售退货（已按原出库单抵扣）",
-                             reason="已按原出库单抵扣",
+                             detail="销售退货（已按原出库明细抵扣）",
+                             reason="已按原出库明细抵扣",
                              demand_status=demand_status))
     if excess_total > 1e-9:
         rows.append(_balance(line, STAGE_RETURNED, excess_total, uom,
-                             detail="超退：退货超过原出库数量",
-                             reason="超出原出库的可抵扣量，超退部分无原单可抵",
+                             detail="超退：超出原出库明细可抵扣量",
+                             reason="超出原出库明细的可抵扣量，超退部分无原明细可抵",
+                             demand_status=demand_status))
+    if conflict_total > 1e-9:
+        rows.append(_balance(line, STAGE_RETURNED, conflict_total, uom,
+                             detail="退货明细引用冲突（dn_detail 不匹配原出库明细）",
+                             reason="明细引用冲突，未抵扣，待核实",
+                             demand_status=demand_status))
+    if unattributed_total > 1e-9:
+        rows.append(_balance(line, STAGE_RETURNED, unattributed_total, uom,
+                             detail="退货明细缺失且原单多行，无法归属",
+                             reason="退货明细缺失且原出库单多行，未抵扣（归属未知）",
                              demand_status=demand_status))
     if unallocated_total > 1e-9:
         rows.append(_balance(line, STAGE_RETURNED, unallocated_total, uom,
@@ -178,38 +226,16 @@ def build_stage_balances(line, ctx):
     shipment_by_number = ctx.get("shipment_by_number") or {}
     shipped_physical = 0.0
     shipped_net = 0.0
-    grouped_dns = defaultdict(list)
-    for dn in nonreturns:
-        grouped_dns[dn.get("dn")].append(dn)
     for dn_name, dn_rows in grouped_dns.items():
         gross_total = sum(_num(r.get("qty")) for r in dn_rows)
-        ret_total = min(allocated.get(dn_name, 0.0), gross_total)
-        net_total = max(0.0, gross_total - ret_total)
+        net_total = max(0.0, gross_total - min(matched_by_dn.get(dn_name, 0.0),
+                                               gross_total))
         shipped_physical += gross_total
         shipped_net += net_total
-        row_allocs = []
-        for dn in dn_rows:
-            names = dn.get("dn_items") or [dn.get("dn_item")]
-            alloc = sum(allocated_by_item.get(n, 0.0) for n in names if n)
-            row_allocs.append(min(alloc, _num(dn.get("qty"))))
-        leftover = ret_total - sum(row_allocs)
-        if leftover > 1e-9 and len(dn_rows) == 1:
-            room = max(0.0, _num(dn_rows[0].get("qty")) - row_allocs[0])
-            absorbed = min(leftover, room)
-            row_allocs[0] += absorbed
-            leftover -= absorbed
-        if leftover > 1e-9:
-            if net_total > 1e-9:
-                rows.append(_balance(
-                    line, STAGE_UNKNOWN, net_total, uom,
-                    detail="退货无原出库明细归属，分仓数量未知",
-                    reason="退货无法归属到原出库明细，仅保留 DN 净额，不摊到具体仓库",
-                    batch_key=dn_name, source=dn_name,
-                    demand_status=demand_status))
-            continue
-        for dn, row_alloc in zip(dn_rows, row_allocs):
+        for idx, dn in enumerate(dn_rows):
             gross_qty = _num(dn.get("qty"))
-            net_qty = max(0.0, gross_qty - row_alloc)
+            net_qty = max(0.0, gross_qty - min(matched_by_group[(dn_name, idx)],
+                                               gross_qty))
             if net_qty <= 1e-9:
                 continue
             dn_numbers = [n["number"] for n in numbers.get(dn_name, [])]
@@ -267,15 +293,20 @@ def build_stage_balances(line, ctx):
                              qty_basis="wo_produced_qty" if produced_estimated
                              else "job_card_first_op",
                              demand_status=demand_status))
-    over_produced = max(0.0, produced_total - produced_capped)
-    if over_produced > 1e-9:
+    cumulative_excess = max(0.0, produced_total - produced_capped)
+    excess_physical = max(0.0, produced_total - max(shipped_physical, produced_capped))
+    if cumulative_excess > 1e-9:
         rows.append(_balance(
-            line, STAGE_OVER_PRODUCED, over_produced, uom,
-            detail="超订单完工（来源完工 %g / 订单 %g）" % (produced_total, _num(qty)),
+            line, STAGE_OVER_PRODUCED, excess_physical, uom,
+            detail="超订单完工现存（来源完工 %g / 订单 %g / 累计超产 %g）" % (
+                produced_total, _num(qty), cumulative_excess),
             source=",".join(w.get("wo") for w in own_wos),
-            reason="超订单完工未分配至本订单；不计入订单阶段余额与可售供给",
+            reason=("超订单实物现存，不计入本订单阶段余额与可售供给"
+                    if excess_physical > 1e-9
+                    else "累计超产异常；当前无超产实物余额，证据保留在累计字段"),
             qty_status="estimated" if produced_estimated else "known",
             qty_basis="wo_produced_qty" if produced_estimated else "job_card_first_op",
+            cumulative_excess_qty=cumulative_excess,
             demand_status="excess"))
     if not cancelled and remaining > 1e-9:
         return_gap = min(returned_total, remaining)
@@ -828,9 +859,12 @@ def load_dns(lines):
             grouped[key] = frappe._dict(row)
             grouped[key]["qty"] = 0.0
             grouped[key]["dn_items"] = []
+            grouped[key]["item_qty"] = {}
         grouped[key]["qty"] += _num(row.qty)
         if row.dn_item:
             grouped[key]["dn_items"].append(row.dn_item)
+            grouped[key]["item_qty"][row.dn_item] = (
+                grouped[key]["item_qty"].get(row.dn_item, 0.0) + _num(row.qty))
     for row in grouped.values():
         row["dn_item"] = ",".join(sorted(set(row["dn_items"])))
     out = defaultdict(list)
