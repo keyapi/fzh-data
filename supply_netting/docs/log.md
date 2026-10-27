@@ -166,3 +166,13 @@ updated: 2026-10-27
 - 下一项 ASSET-REUSE-AUDIT 已确认资产位置：`experiments/business_phase/inventory_policy.py`
   （e3727683）、`sc08_conformal.py`（9624b248）、`experiments/sc13/leadtime_config.py`。
 - 测试 296 通过。
+
+## 2026-10-28 — 资产复用审计（只读）
+
+- 对照 frepple digest §1 核查 4 个资产：inventory_policy / sc08_conformal /
+  sc13/leadtime_config / supply_netting。
+- 结论：inventory_policy 的 base-stock 回放被 frontier/frontier_v2 重写（A1），
+  frontier 报告还误称资产不存在（A2，检索未覆盖 git 历史）；服务缓冲用正态 CV，
+  与 sc08 的比率经验分位不同、且 sc08 已证名义 95% 实际 0.54–0.70（A3）；
+  交期分段硬编码、sc13 合约零接线（A4，最高优先）；本仓库内部缓冲公式有两份（A5）。
+- 未改任何代码；报告与 CSV 在 asset-reuse-audit-2026-10-28/。
