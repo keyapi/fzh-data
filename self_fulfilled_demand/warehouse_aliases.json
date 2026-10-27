@@ -1,0 +1,72 @@
+{
+  "version": "v1_2026-10-27",
+  "policy": "只合并有文档/主数据证据的旧名→新名；子仓、备用仓、未映射仓保持独立并写原因，不按名称相似合并。",
+  "aliases": {
+    "CENTRADE": {
+      "canonical": "美东-CENTRADE",
+      "status": "alias_confirmed",
+      "evidence": "CONCEPTS.md：通途自发货主仓加分公司前缀 CENTRADE→美东-CENTRADE"
+    },
+    "FZH-DANEEY": {
+      "canonical": "美中-FZH-DANEEY",
+      "status": "alias_confirmed",
+      "evidence": "CONCEPTS.md：通途自发货主仓加分公司前缀 FZH-DANEEY→美中-FZH-DANEEY"
+    },
+    "FZHPoland-covers": {
+      "canonical": "波兰-FZHPoland-covers",
+      "status": "alias_confirmed",
+      "evidence": "CONCEPTS.md：通途自发货主仓加分公司前缀 FZHPoland-covers→波兰-FZHPoland-covers"
+    }
+  },
+  "declared": {
+    "美东-CENTRADE": "warehouse_map v3：美东分公司仓（operator=3pl，库存所有权我方）",
+    "美中-FZH-DANEEY": "warehouse_map v3：美中分公司仓",
+    "波兰-FZHPoland-covers": "warehouse_map v3：波兰分公司仓（EN 映射 assumed）",
+    "FZH-DANEEY-皮壳仓库": "通途主数据中的子仓；保留独立规范名",
+    "FZH-DANEEY-成品仓": "通途主数据中的子仓；保留独立规范名",
+    "FZH-DANEEY-半成品仓": "通途主数据中的子仓；保留独立规范名",
+    "FZH-DANEEY-退货产品仓": "通途主数据中的子仓；保留独立规范名",
+    "美中-FZH-DANEEY-退货产品仓": "EN/通途新名退货仓；保留独立规范名",
+    "美中-FZH-DANEEY-皮壳仓库": "EN/通途新名皮壳子仓；保留独立规范名",
+    "FZHPoland-finished": "财务成本表：波兰成品仓（HEAD-EUHWC），与 covers 成本来源不同，不合并"
+  },
+  "third_party": {
+    "WayfairCG-Cranbury仓": "warehouse_map v3：3PL 仓（assumed）；不与自有仓合并",
+    "枫筝海外仓-多伦多-代发仓": "名称含「代发仓」",
+    "枫筝海外仓-温哥华-代发仓": "名称含「代发仓」"
+  },
+  "not_merged": {
+    "FZH-DANEEY-皮壳仓库": {
+      "parent_candidate": "美中-FZH-DANEEY-皮壳仓库",
+      "reason": "未找到子仓加前缀重命名的独立证据；不按名称相似合并"
+    },
+    "FZH-DANEEY-成品仓": {
+      "parent_candidate": "美中-FZH-DANEEY",
+      "reason": "子仓与主仓库存口径不同，未证可合并"
+    },
+    "FZH-DANEEY-半成品仓": {
+      "parent_candidate": "美中-FZH-DANEEY",
+      "reason": "子仓与主仓库存口径不同，未证可合并"
+    },
+    "FZH-DANEEY-退货产品仓": {
+      "parent_candidate": "美中-FZH-DANEEY-退货产品仓",
+      "reason": "旧名/新名疑似对应，但无独立重命名证据"
+    },
+    "FZHPoland-finished": {
+      "parent_candidate": "波兰-FZHPoland-covers",
+      "reason": "成品仓与皮壳仓成本来源不同（HEAD-EUHWC vs HEAD-PL），不合并"
+    }
+  },
+  "unknown_warehouses": [
+    "休斯顿1号仓",
+    "休斯顿1号备用仓库",
+    "海外仓美西仓库备用仓",
+    "海外仓美中仓库备用仓",
+    "多渠道仓库",
+    "星链海外仓",
+    "北美之路-NJ02",
+    "北美之路-LA01",
+    "大件云仓",
+    "扬州仓库"
+  ]
+}

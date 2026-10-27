@@ -15,6 +15,7 @@ updated: 2026-10-27
 |---|---|
 | EN 订单真实 schema、字段填充率、分页坑 | [reference/en-order-schema.md](reference/en-order-schema.md) |
 | 旧 GS 407,898 行 + 10 月增量怎么拼 | [reference/consumer-interface.md](reference/consumer-interface.md) |
+| 规范 SKU×仓×UOM、净额资格、b08acc05 接口 | [reference/canonical-demand.md](reference/canonical-demand.md) |
 | 本次验收结果、数量对账、剩余阻塞 | [acceptance-report-2026-10-27.md](acceptance-report-2026-10-27.md) |
 | 变更时间线 | [log.md](log.md) |
 

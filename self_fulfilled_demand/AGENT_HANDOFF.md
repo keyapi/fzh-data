@@ -19,6 +19,7 @@ EN 终端订单（含未发货需求）的只读增量，并给旧 GS 一个统�
 | 快照 + `CURRENT` 指针，失败批次不冒充成功 | `store.ParquetStore` |
 | 旧 GS + EN 拼接、行级覆盖、quarantine | `consumer.build_demand` |
 | 收编旧根目录 + 独立计数审计 | `python -m self_fulfilled_demand.finalize_store` |
+| 规范 SKU×仓×UOM + 净额资格 | `python -m self_fulfilled_demand.canonical` |
 | 离线 fixture 测试（21 个） | `uv run pytest self_fulfilled_demand/tests -q` |
 
 ## 3. 必须守住的不变量
@@ -35,6 +36,8 @@ EN 终端订单（含未发货需求）的只读增量，并给旧 GS 一个统�
    旧单取消/改量 → `superseded_cancelled` / `superseded_qty_change` 覆盖（EN 必须在本次增量窗口）。
 8. **partial 不推进水位**：分页预算耗尽、子表失败、写盘失败、计数审计不符都标 partial。
 9. **UOM 未知不猜**：`uom=null`、`uom_status=unknown`；聚合保留 SKU×仓×日。
+10. **规范层不任取映射**：一对多 SKU 标 ambiguous 并阻断净额；子仓无证据不合并；
+    `netting_allowed=false` 的行不得直接与供应相减。
 
 ## 4. 运行与验证
 

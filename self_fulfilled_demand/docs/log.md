@@ -25,3 +25,14 @@ updated: 2026-10-27
 - 初次采集由修复前进程启动；用 `finalize_store` 收编快照并按独立计数（6,800 / 27,503）
   与 9 月末 1,816 行交集（数量差 0）离线验证，manifest 标 `validation_status=passed`。
 - 离线测试 22 个通过。
+
+## 2026-10-27（续）规范需求适配层
+
+- 新增 `canonical.py` + `warehouse_aliases.json`：全历史 GS 与 EN 增量统一到
+  `canonical_sku × canonical_warehouse × uom`，给供应分桶 b08acc05 消费。
+- 实跑 2022-12-01→2026-10-31：413,561 行 / 440,179 件输入；可净额 402,494 行 / 428,576 件；
+  阻断 11,067 行 / 11,603 件；FBA 排除 2,453 行，3PL 保留 5,419 行。
+- 仓库旧名合并 288,836 行（CENTRADE/FZHPoland-covers/FZH-DANEEY）；子仓 5 类未证合并保持独立。
+- EN `Item.stock_uom` 有界补建 1,627 个物料（1,622 个 + 5 套），零缺失。
+- GS 历史 18,317 行通过唯一 EN 行匹配补齐发货形态；其余保持 unknown。
+- 离线测试新增 10 个 canonical 用例（共 31 个）。

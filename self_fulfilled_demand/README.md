@@ -55,6 +55,8 @@ D:/Work/fzh-order-store/en-demand-v1/
 - GS 是发货口径：9 月下单 10 月发货、旧单取消/改量由 EN 补入或覆盖（行级，可审计）。
 - UOM 未知保留 null，不猜；补货聚合已按 SKU×仓×日给出。
 
+规范层：SKU→EN 物料、仓库旧名/子仓、EN Item.stock_uom；未知保持原因并阻断净额。
 详细文档：[docs/index.md](docs/index.md) ·
+[canonical](docs/reference/canonical-demand.md) ·
 [EN schema](docs/reference/en-order-schema.md) ·
 [消费接口](docs/reference/consumer-interface.md)
