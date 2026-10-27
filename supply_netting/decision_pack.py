@@ -267,6 +267,7 @@ def _decide(row) -> dict:
         opening_lower_bound=(None if row.opening_lower_bound is None
                              or pd.isna(row.opening_lower_bound) else float(row.opening_lower_bound)),
         horizon_demand=float(demand), protect_demand=_num(row.protect_demand),
+        protect_gap=_num(row.protect_gap),
         gap_today=float(gap), gap_date=gap_date,
         qty_low=qty_low, qty_high=qty_high,
         qty_current=qty_current, qty_higher=qty_higher, extra_holding=extra,
@@ -305,6 +306,8 @@ def _reconcile(result: pd.DataFrame, inputs: Inputs) -> dict:
                   .agg(keys=("canonical_sku", "size")))
     by_uom = by_uom.merge(by_uom_all, on="canonical_uom", how="outer").fillna(0)
     gap_total = float(suggest["gap_today"].fillna(0).sum())
+    protect_gap_total = float(suggest["protect_gap"].fillna(0).sum())
+    protect_gap_keys = int((suggest["protect_gap"].fillna(0) > 0).sum())
     qty_current = float(suggest["qty_current"].fillna(0).sum())
     qty_higher = float(suggest["qty_higher"].fillna(0).sum())
     scenarios = [
@@ -327,6 +330,8 @@ def _reconcile(result: pd.DataFrame, inputs: Inputs) -> dict:
         reconciliation_ok=total == universe,
         suggest_keys=int(len(suggest)),
         gap_today_total=round(gap_total, 6),
+        protect_gap_total=round(protect_gap_total, 6),
+        protect_gap_keys=protect_gap_keys,
         suggest_qty_current=qty_current,
         suggest_qty_higher=qty_higher,
         extra_holding=round(qty_higher - qty_current, 6),
