@@ -82,3 +82,12 @@ updated: 2026-10-27
 - F6：qty_low_counterfactual + 语义列；F7：first_gap_bucket_start/end + gap_today_note。
 - 新包 `decision-pack-2026-10-29-r2`（原包不覆盖）；代码 `9f3285e3`（git_dirty=false）；
   测试 192 通过（新增 14 条）。
+
+## 2026-10-27 — 同日快照 runbook（R1）
+
+- 新增 `scripts/run_same_day.py`：一条命令串起 快照校验/冻结 → 需求净额 → 供应净额 →
+  决策包 → 动作层；暂存目录成功才提升，失败归档 `.failed-*` 且不动 `latest.json`。
+- 10-26 快照演练成功：129.9s（净额 58.4s / 决策包 16.2s / 动作 55.1s），
+  产出 `run-2026-10-26-r1`、`decision-pack-2026-10-26-r1`、`pack-...-r1`、`actions-...-r1`；
+  失败演练（错误预测版本）未产生正式目录、指针保持 r1。
+- 文档：`docs/runbook-same-day.md`（前置条件/命令/校验/命名/回滚/演练记录/限制）。

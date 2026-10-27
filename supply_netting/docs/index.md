@@ -24,6 +24,7 @@ updated: 2026-10-27
 | **10-29 广范围补货决策包**（去向对账 / 两档情景 / 审核清单） | [decision-pack-2026-10-29.md](decision-pack-2026-10-29.md) |
 | 决策包终审返修 r2（F1–F7：null/JSON/UOM/对账/锁定/反事实/桶起点） | [decision-pack-2026-10-29-r2.md](decision-pack-2026-10-29-r2.md) |
 | 引入的上游组件及来源 commit | [../../supply_chain_visibility/docs/reference/upstream-port.md](../../supply_chain_visibility/docs/reference/upstream-port.md) |
+| **同日快照一条命令 runbook**（快照→需求→净额→决策包→动作） | [runbook-same-day.md](runbook-same-day.md) |
 | 变更时间线 | [log.md](log.md) |
 
 ## 产物路径（本地，不进 git）
