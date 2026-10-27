@@ -298,6 +298,17 @@ channel: docs/jack-w1-channel
 - 本轮 app 提交：`c34fa53`（PR #2 draft）；只提交修复，不部署测试站/生产。此前测试站的 Git HEAD/文件覆盖状态仍按上一条部署记录，后续发布应由已批准的 Git 版本和有权限的重启流程完成。
 - 业务未证项仍为 unknown：入库本次/累计、UOM、来源绝对时区、stock_change 覆盖、PO status=4、部分/替代入库归属。它们不被本次技术修复自行确认。
 
+### [P0-TEST-DEPLOY-2026-10-27] 测试系统已同步本轮修复
+
+用户明确授权更新测试系统。测试域名为 ensh.vilavi.cn；该测试 bench 内站点名为 erpnext.vilavi.cn，操作未连接生产主机。
+
+- key_test 从 Git HEAD `135131d` 快进到已提交的 `c34fa53`，分支仍为 feature/so-chain-report-filters。通过本机从 origin 获取并验证的 Git bundle 同步；两个功能 .py 及测试文件均来自提交版本，服务器工作区干净，结束先前“文件覆盖但 Git 未更新”的状态。
+- 两个功能文件：`key_test/supply_timeline_query.py`、`key_test/key_test/report/supply_timeline/supply_timeline.py`。旧文件和 manifest 保存在测试机 `/tmp/supply-timeline-pre-c34fa53-4sxs_72e/`；原覆盖内容另存 Git stash，未删除。
+- 测试机现有 dev01 账号获准以 frappe 运行完整路径 `/usr/local/bin/bench`。已成功执行 `sudo -n -u frappe /usr/local/bin/bench restart`，web/worker 均重启成功，并对测试 bench 站点 clear-cache。
+- 测试机执行 `env/bin/python -m unittest discover -s apps/key_test/key_test/tests -p "test_supply*.py" -v`：41 tests / OK。服务器没有 pytest，本次复用标准库 unittest，不额外修改 bench 依赖。
+- 真实测试站 REST：样本 SKU 返回 17 行，evidence_qty_status 新列存在，qty_status/证据状态契约均通过，B 资格仍全部 false；不存在的仓库返回 1 条 not_reported，未伪装成库存记录；报表页面 HTTP 200。只保留这些聚合验收结果，不提交业务行级响应。
+- 本次仅部署已审报表修复，不把 fzh-data 的纯函数数据层接入运行中的完整供应链。生产未改动，#314/#2 仍 draft，不合并。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

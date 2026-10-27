@@ -217,3 +217,8 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 ## 2026-10-26 复审后的库存证据字段
 
 Supply Timeline 的 qty_status 仅描述 qty；原始数量状态在 evidence_qty_status，未上报与仓库范围未知使用各自 source_layer。当前仍只读取库存证据，所有 B 资格为 false；无实时通途 API 调用，也不接入本仓库纯函数供给汇总。app 与扁平副本同时提交，测试站以已提交版本核对；生产不发布。本轮完整修复和测试记录见 JACK_QA 的 P0-REVIEW-FIX-2026-10-26。
+
+
+## 2026-10-27 测试部署已完成
+
+用户已授权同步测试系统：key_test 测试分支 Git HEAD 为 c34fa53，两个报表功能 .py 与提交一致、工作区干净。测试机已通过定向 sudo 权限执行完整路径 `/usr/local/bin/bench restart` 和 clear-cache。服务器标准库 unittest 的 41 项测试通过，真实 REST 验证 evidence_qty_status、qty_status 与缺失来源均已生效；报表页面 HTTP 200。生产未更新，PR 保持 draft。备份与回滚凭据路径、聚合验收记录见 JACK_QA 的 P0-TEST-DEPLOY-2026-10-27。
