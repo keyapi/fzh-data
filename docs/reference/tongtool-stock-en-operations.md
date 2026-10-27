@@ -34,7 +34,7 @@ tags: [tongtool, inventory, erpnext, operations, runbook, duckdb, parquet]
 |---|---|---|
 | 每日任务 | EN 生产，`tongtool_integration` app，05:17 | 抓 14 个启用仓，写当前表/运行日志/Parquet |
 | 库存变动 | EN 生产，同一 app，05:47 | 抓 14 仓的库存变动明细（退货/盘点/调拨/包裹），写 `stock_change.parquet` |
-| 失败重试 | 06:17 / 07:17（快照）；变动靠 7 天窗口自愈 | 当天 Run 不 complete 才重跑；文件锁防并发 |
+| 失败重试 | 06:17 / 07:17（快照）；变动靠 6 天窗口自愈 | 当天 Run 不 complete 才重跑；文件锁防并发 |
 | 当前视图 | MariaDB DocType `Tongtool Stock Latest` | 每仓×SKU 一行，约 5.3k 行 |
 | 运行日志 | MariaDB DocType `Tongtool Stock Run` | 每次运行一行；`job` 区分 `stock_snapshot` / `stock_change` |
 | 历史 | `/home/frappe/fzh-inventory/stock.parquet` | 单个 Parquet；不写 EN 数据库 |
@@ -110,7 +110,7 @@ ls -lh /home/frappe/fzh-inventory
 - `Tongtool Stock Run` 过滤 `job = stock_change`，看今天是否 `Success`、`warehouse_count = 14`、`row_count > 0`
 - `data_path = /home/frappe/fzh-inventory/stock_change.parquet`
 - 变动是**事件级**：一行一次库存变动，含 `voucher_type_name`（包裹/拆包/采购单/报损/报溢/买家退货/调拨等）、`voucher_number`、`operator`、四个桶的 `*_increase`
-- **7 天窗口**：通途只允许回看 7 天。任务每天跑，窗口从“上次成功结束 - 1 天”开始；漏跑 1–2 天会在下一次自动补回，超过 7 天无法补
+- **6 天窗口**：通途严格要求 `updatedDateFrom` 在 7 天内（正好 7 天会报 **527**），代码留 1 天余量按 **6 天**。任务每天跑，窗口从“上次成功结束 - 1 天”开始；漏跑 1–2 天会在下一次自动补回，超过 6 天无法补
 - 同一事件重复抓取会按事件身份去重（仓+SKU+时间+凭证类型/单号+四桶增减），重跑不会翻倍
 
 > 生产快照：2026-10-23 手动全量成功（14 仓 / 5,316 行）；10/24、10/25、10/26 05:17 定时连续 Success（14 仓 / 5,316 行 / `complete=1`）。

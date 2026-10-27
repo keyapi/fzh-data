@@ -209,7 +209,7 @@ df -h /home/frappe
 > 目的：区分退货、盘点/报损报溢、调拨、手工改库存和正常发货。
 
 - 每日 **05:47** 抓 14 个启用仓：`erp2_stocks_stockschangedetailquery`，写 `/home/frappe/fzh-inventory/stock_change.parquet`
-- 通途只能回看 **7 天**；窗口从「上次成功结束 - 1 天」开始，漏跑 1–2 天自动补，超过 7 天补不回来
+- 通途严格要求 **7 天内**（正好 7 天会报 `527`），代码按 **6 天** 回看；窗口从「上次成功结束 - 1 天」开始，漏跑 1–2 天自动补，超过 6 天补不回来
 - 事件级去重（仓+SKU+时间+凭证类型/单号+四桶增减），重跑不翻倍
 - `Tongtool Stock Run` 新增 `job` 字段：`stock_snapshot` / `stock_change`
 - `Tongtool Settings` 新增 `enable_stock_change`、`stock_change_lookback_days`
