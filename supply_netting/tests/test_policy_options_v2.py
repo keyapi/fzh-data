@@ -101,5 +101,28 @@ def test_evidence_discloses_zero_sales_and_eligibility(tmp_path):
 def test_reconcile_dimensions_present(tmp_path):
     manifest, _ = run(tmp_path)
     dims = {row["维度"] for row in manifest["reconcile_with_policy_reconcile"]}
-    assert dims == {"预测误差", "库存基线", "母集"}
+    # F5：第一维从「预测误差」改为「误差链」（措辞与 policy-reconcile v2 对齐）
+    assert dims == {"误差链", "库存基线", "母集"}
     assert manifest["status"] == "pending"
+
+
+def test_f5_no_error_free_claims_and_evidence_split(tmp_path):
+    manifest, out = run(tmp_path)
+    memo = (out / "memo.md").read_text(encoding="utf-8")
+    assert "机制上限" not in memo and "无预测误差" not in memo
+    assert "未接入模型误差链" in memo and "不是可证明上限" in memo
+    # 18 格理想合成 vs 6 格真实含误差 分列
+    families = {row["证据族"]: row for row in manifest["evidence_table"]}
+    assert families["理想合成网格"]["格数"] == 18
+    assert families["真实数据（含误差）"]["格数"] == 6
+    assert "是" in families["真实数据（含误差）"]["误差链"]
+    assert "未接入" in families["v2 回放（本表）"]["误差链"]
+
+
+def test_f5_fields_align_with_policy_reconcile(tmp_path):
+    manifest, out = run(tmp_path)
+    fields = {row["字段"]: row for row in manifest["fields_aligned_with_policy_reconcile"]}
+    assert set(fields) == {"目标档位 τ", "预测乘数", "库存比值", "目标倍数"}
+    assert "不产生" in fields["预测乘数"]["v2"]
+    assert "相对本表 1×" in fields["库存比值"]["v2"]
+    assert manifest["memo_sha256"]

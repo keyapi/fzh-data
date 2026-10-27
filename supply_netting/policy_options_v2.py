@@ -130,20 +130,38 @@ def build(v1_policy_dir: str | Path, by_key_path: str | Path, out_dir: str | Pat
     relock = _relock_inputs(v1_manifest, Path(by_key_path), out / "_inputs")
     evidence = _evidence_block(out, by_key, Path(frontier_manifest))
 
+    evidence_table = [
+        dict(证据族="理想合成网格", 格数=18, 误差链="否（假设预测准确）",
+             β与档位="按目标反解，β=目标档位", 用途="成本下限/理论参照",
+             来源="annex §2.1"),
+        dict(证据族="真实数据（含误差）", 格数=6, 误差链="是",
+             β与档位="τ90 0.61–0.90；τ95 0.67–0.99（1/6 ≥95%）；τ99 0.78–1.00（5/6 ≥95%）",
+             用途="可实现服务与代价", 来源="annex §2.2"),
+        dict(证据族="v2 回放（本表）", 格数=1, 误差链="**未接入**",
+             β与档位="0.7561 / 0.9235 / 0.9635（三档，目标倍数 1.0/1.5/2.0）",
+             用途="另一套历史经验分位政策的情景结果", 来源="policy-options-v2"),
+    ]
+    fields = [
+        dict(字段="目标档位 τ", 既有="经验分位 90–95% / 99%", v2="97 天分位目标（分位点，不是倍数）"),
+        dict(字段="预测乘数", 既有="1.6–4.5× / 2.2–13.8× / 4.3–57×", v2="**不产生**"),
+        dict(字段="库存比值", 既有="相对现行规则 0.9–4.6× / 1.3–14.2× / 2.3–41×（路径① 2.4–4.6×）",
+             v2="相对本表 1×：1.00 / 1.80 / 2.73×"),
+        dict(字段="目标倍数", 既有="—", v2="1.0 / 1.5 / 2.0"),
+    ]
     reconcile = [
-        dict(维度="预测误差", 政策选项="回放用**观测销售本身**，无预测误差",
-             政策对账="带预测误差（q95 2.0–4.7、q99 13–47）",
-             影响="本表的 fill 是机制上限，不是可实现服务"),
+        dict(维度="误差链", 政策选项="**未接入模型误差链**（需求输入为历史观测路径）",
+             政策对账="接入真实预测误差（q95 2.0–4.7、q99 13–47）",
+             影响="历史观测路径模拟，**不是可证明上限**，也不是可实现服务"),
         dict(维度="库存基线", 政策选项="相对「同交期同单位 1×」的件数增量",
-             政策对账="相对现行正态规则的平均库存倍数（2.4–4.6×、8.8–40×）",
-             影响="倍数基不同，不能直接比"),
+             政策对账="相对现行规则 2.4–4.6×（路径①）/ 8.8–40×（仅部分高成本格）",
+             影响="分母不同（现行规则 vs 本表 1×），不能直接比"),
         dict(维度="母集", 政策选项=f"{evidence['replayed_keys']} 个可评分键（需求加权）",
              政策对账="18 格合成 + 6 个真实模型格", 影响="样本性质不同"),
     ]
 
     generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
     write_memo(out / "memo.md", frame, meta, evidence, relock, reconcile,
-               generated_at)
+               generated_at, evidence_table, fields)
     manifest = dict(
         schema="policy-options/v2", generated_at=generated_at, git_commit=_git_commit(),
         status="pending", acceptance_status="v2 待复审",
@@ -152,7 +170,10 @@ def build(v1_policy_dir: str | Path, by_key_path: str | Path, out_dir: str | Pat
         inputs=relock,
         evidence=evidence,
         reconcile_with_policy_reconcile=reconcile,
+        evidence_table=evidence_table,
+        fields_aligned_with_policy_reconcile=fields,
         workbook_sha256=_sha256(out / "policy_options.csv"),
+        memo_sha256=_sha256(out / "memo.md"),
         caveats=["政策选项是 τ 目标档，不是 95% 承诺", "缺缺货损失/成本/资金数据前不推荐默认政策",
                  "交期敏感性需运费/产能证据", "478 = 557 − 79，零销量键库存成本未含"],
     )
@@ -162,7 +183,9 @@ def build(v1_policy_dir: str | Path, by_key_path: str | Path, out_dir: str | Pat
 
 
 def write_memo(path: Path, frame: pd.DataFrame, meta: dict, evidence: dict, relock: dict,
-               reconcile: list[dict], generated_at: str) -> None:
+               reconcile: list[dict], generated_at: str,
+               evidence_table: list[dict] | None = None,
+               fields: list[dict] | None = None) -> None:
     piece = frame[frame["单位"] == "个"]
     lines = [
         "# 政策选项 v2（按复审 reject 返修）",
@@ -216,6 +239,28 @@ def write_memo(path: Path, frame: pd.DataFrame, meta: dict, evidence: dict, relo
     ]
     for row in reconcile:
         lines.append(f"| {row['维度']} | {row['政策选项']} | {row['政策对账']} | {row['影响']} |")
+    lines += [
+        "",
+        "## β/τ 证据分列（18 格理想合成 vs 6 格真实含误差）",
+        "",
+        "| 证据族 | 格数 | 误差链 | β 与档位 | 用途 |",
+        "|---|---:|---|---|---|",
+    ]
+    for row in (evidence_table or []):
+        lines.append(f"| {row['证据族']} | {row['格数']} | {row['误差链']} | "
+                     f"{row['β与档位']} | {row['用途']} |")
+    lines += [
+        "",
+        "> 本表（v2 回放）不属于合成网格，也不属于误差链结果；它评价的是"
+        "**另一套历史经验分位政策**在观测销售路径上的表现。",
+        "",
+        "## 与 policy-reconcile v2 对齐的字段与分母",
+        "",
+        "| 字段 | 既有结论 | v2 |",
+        "|---|---|---|",
+    ]
+    for row in (fields or []):
+        lines.append(f"| {row['字段']} | {row['既有']} | {row['v2']} |")
     lines += [
         "",
         "## F3 交期敏感性（假设，不是结论）",
