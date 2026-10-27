@@ -254,6 +254,77 @@ channel: docs/jack-w1-channel
 - 待业务确认（不阻塞技术合并）：PO `status=4` 语义；FZH-DANEEY 子仓运营方（own/3pl）。
 - #311/#312 仍 draft；等用户/审核会话批准。
 
+### [P0-CODEX-2026-10-26] 原生报表与 PO 入库时间交接
+
+用户要求额度收尾后交 Jack。见 [完整交接](2026-10-26-codex-native-report-handoff.md)：原生报表测试实现与 PO 入库只读适配器已审、75 项本地测试通过；完整七阶段/PO 去重整合尚未完成，禁止把库存证据入口当成可承诺供给。生产库存/Parquet 已运行，本次不改生产、不自动通途入库。后续优先核实 warehousingDate、部分入库、稳定事件身份、时区及采集窗口；#311 已合并，#312 独立评审。
+
+### [P0-A-2026-10-26] Jack 接手进展：入库证据 → 采集/对账 → 数据层 → 报表 UI
+
+> 代码：fzh-data `feature/en-native-supply-report-plan` @ `f5bf3dcc`（PR #314 draft）；key_test `feature/so-chain-report-filters` @ `e7a4f6d`（PR #2 draft）。生产未改动。
+
+**已完成**
+
+- 核对 app 与扁平副本：key_test `135131d` 的 12 个文件逐字节一致（`so_chain.py` 也一致；扁平 `sales_order_chain_append.js` 无对应分支文件）。
+- 入库证据：`PO021704` 头 10-14，实际 **38 行 10-14 + 12 行 10-19**；按头日期 ±1.5 天漏 12/50。`PO021694` 全收 26 行 1:1，`warehousingNum == quantity`。10-01–10-26 全量 102 行 / 8 PO，无同一 PO×SKU 多批行；`warehousingNum` 本次/累计、UOM、绝对时区、库存桶覆盖仍未证。
+- 采集：新增 `receipt_collector.py` + `collect_receipts_cli.py`，重叠窗口 + 仓库外缓存 + 显式弱键/截断。09-01–10-26（14 天窗/2 天重叠）：**166 输入 → 150 唯一 + 16 重叠重复**；12 PO / 113 SKU；无截断。
+- 对账/覆盖：`receipt_coverage.py`；150 条唯一行全部 `unknown`（`missing_stable_id`），全部无 UOM/时区；`not_collected=0`；未自动抵扣。
+- 设计：`supply_chain_visibility/docs/research/2026-10-26-receipt-supply-integration.md`（8 条不变量、来源表、时间桥接、重叠/单位 gate、验收测试）。
+- 数据层：P1 `supply_row.py`；P2 `receipt_bridge.py`；P3 `overlap_gates.py`；P4 `supply_integration.py`（`report_only()` 只返回聚合/flag）；P5 `scripts/bench_supply_integration.py` + 发布清单。
+- 报表 UI：Supply Timeline 增加 `source_layer / qty_status / uom_proven / timezone_status / identity_confidence / B_min/B_max 资格 / exclusion_reason`；文案明确库存证据、UOM 未证不进 B_min、不构成可承诺供给。
+
+**验证**
+
+- 扁平副本/数据层：**113 passed / 2 subtests**。
+- key_test app：**22 passed**。
+- 性能基线（合成）：4k/20k/40k 行 **0.76/3.63/7.90 秒**，peak 12.6/62.4/124.6 MB；不代表生产延迟。
+- 命令：`uv run python -m pytest ... -q`；`python supply_chain_visibility/scripts/bench_supply_integration.py --sizes 1000,5000,10000`。
+
+**未做 / 待决**
+
+- 测试站已**文件级更新**：`8.133.254.66` 的 key_test 两个 `.py` 已备份（`/tmp/supply_timeline_query.py.bak_20261026_175147`、`/tmp/supply_timeline_report.py.bak_20261026_175147`）并覆盖；哈希与本地一致、语法通过；REST 查询已返回新列、页面 200。`bench restart` 因 dev01 无 sudo 未执行（报表端点已加载新代码）；如需全量重启，请 frappe 用户执行 `sudo -u frappe bench restart`。浏览器视觉验收待登录后确认；#314/#2 保持 draft。
+- 报表实时数据源仍只有库存快照；PO/入库桥接需要预计算/采集产物或服务层接入，未接入。
+- 业务/证据待确认：PO `status=4`、`warehousingNum` 本次/累计、绝对时区、`stock_change.parquet` 桶覆盖、部分入库/换货归属、是否发布“可承诺供给”。
+- 生产只读；未自动入库、未改主数据/调度。
+
+### [P0-REVIEW-FIX-2026-10-26] 复审修复与再次审核
+
+用户授权持续修复并复审。原审 8 个反例已收入 `supply_chain_visibility/tests/test_supply_safety.py`，全部通过；后续复审补充已证批次/冲突、来源版本/重放、时点混合、弱键内容冲突、缓存陈旧/隔离与 UI 契约用例。
+
+- 数据层：SourceProof 默认未证；单位字符串不自动变成证据；status=4 仍仅 B_max 情景；缺映射/身份/完整源/单位时不计数量。distinct 需已证独立批次；同批同量不重复，同批异量隔离。逐 receipt 用自己的 PO 时点，缺 PO/库存为 null；两种时间错配分别标 gap/overlap 风险，不自动修正。
+- 采集：保留最大观测重数，弱键内容冲突或键不完整保留疑似重复，dedup_assumed 传递；实际完整请求窗参与 coverage，业务覆盖仍未证。缓存必须账号隔离，live 刷新开放窗口/历史 TTL，frozen 仅显式重放。
+- App：qty_status 描述 qty；另增 evidence_qty_status；未上报/仓库范围未知来源单独标记，B 资格仍全部 false。未接入完整七阶段，不自动下单/入库/抵扣、不改生产。
+- 2026-10-27 收尾回归：160 passed / 2 subtests；app 两份报表 41 passed（Python 3.10）。原始业务数据和 W1 本地残留均不提交。生产没有写操作。
+- 复审后的 4k/20k/40k 合成基线：1.13/6.23/13.68 秒，peak 20.6/102.4/204.6 MB；4k 约 1.1 秒，仅本机含新增证据校验的测量，不代表生产 SLA。
+- 本轮 app 提交：`c34fa53`（PR #2 draft）；只提交修复，不部署测试站/生产。此前测试站的 Git HEAD/文件覆盖状态仍按上一条部署记录，后续发布应由已批准的 Git 版本和有权限的重启流程完成。
+- 业务未证项仍为 unknown：入库本次/累计、UOM、来源绝对时区、stock_change 覆盖、PO status=4、部分/替代入库归属。它们不被本次技术修复自行确认。
+
+### [P0-TEST-DEPLOY-2026-10-27] 测试系统已同步本轮修复
+
+用户明确授权更新测试系统。测试域名为 ensh.vilavi.cn；该测试 bench 内站点名为 erpnext.vilavi.cn，操作未连接生产主机。
+
+- key_test 从 Git HEAD `135131d` 快进到已提交的 `c34fa53`，分支仍为 feature/so-chain-report-filters。通过本机从 origin 获取并验证的 Git bundle 同步；两个功能 .py 及测试文件均来自提交版本，服务器工作区干净，结束先前“文件覆盖但 Git 未更新”的状态。
+- 两个功能文件：`key_test/supply_timeline_query.py`、`key_test/key_test/report/supply_timeline/supply_timeline.py`。旧文件和 manifest 保存在测试机 `/tmp/supply-timeline-pre-c34fa53-4sxs_72e/`；原覆盖内容另存 Git stash，未删除。
+- 测试机现有 dev01 账号获准以 frappe 运行完整路径 `/usr/local/bin/bench`。已成功执行 `sudo -n -u frappe /usr/local/bin/bench restart`，web/worker 均重启成功，并对测试 bench 站点 clear-cache。
+- 测试机执行 `env/bin/python -m unittest discover -s apps/key_test/key_test/tests -p "test_supply*.py" -v`：41 tests / OK。服务器没有 pytest，本次复用标准库 unittest，不额外修改 bench 依赖。
+- 真实测试站 REST：样本 SKU 返回 17 行，evidence_qty_status 新列存在，qty_status/证据状态契约均通过，B 资格仍全部 false；不存在的仓库返回 1 条 not_reported，未伪装成库存记录；报表页面 HTTP 200。只保留这些聚合验收结果，不提交业务行级响应。
+- 本次仅部署已审报表修复，不把 fzh-data 的纯函数数据层接入运行中的完整供应链。生产未改动，#314/#2 仍 draft，不合并。
+
+### [P0-PROD-DEPLOY-2026-10-27] key_test #2 生产部署
+
+**结论：key_test #2（`c34fa53`）已合并到 main，并完成生产 pull + migrate + clear-cache + restart；冒烟通过。**
+
+- 合并：key_test PR #2 **MERGED**；origin/main = `c34fa53`；fzh-data #314 仍 open draft（docs/handoff，不影响生产）。
+- 生产 preflight：branch `main`，工作区干净；部署前 HEAD `f7ea65a`；备份分支 `backup/pre-c34fa53-20261027`。
+- 部署：`git pull --ff-only origin main`（`f7ea65a..c34fa53`）→ `bench --site erpnext.vilavi.cn migrate` → `clear-cache` → `bench restart`。
+- 环境：`duckdb 1.5.6`；`Tongtool Stock Latest` 存在；无新增必需 pip 依赖。
+- 冒烟（生产 REST）：
+  - Report 记录存在：`Supply Timeline`、`SO Chain Overview`。
+  - SO Chain Overview：`SO-26-00132` → 2 行 / 14 列；`SO-26-00110` → 199 行 / 14 列。
+  - Supply Timeline：157 行 / 33 列；message 提示仅库存证据、B 资格 false、仓库范围未知（预期）。
+- 备注：migrate 同时重放既有 report patches / Work Order·Item 自定义字段（既有 hook，不是 #2 引入）；无错误。
+- 回滚：`checkout backup/pre-c34fa53-20261027` + clear-cache + restart；未改写历史。
+- 待办：key_test #2 body 与 fzh-data #314 仍写“draft / 不合并 / 生产未部署”，已过时；Jack 需更正记录。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

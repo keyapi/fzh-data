@@ -20,12 +20,16 @@
 **必须记住的口径**：工序进度取**第一道工序**完成量、**不跨工序求和**；`WO.status/produced_qty` **不可信**；
 `Closed ≠ 已发完`；出库按 `item_code` 匹配、退货行负数**净额抵扣**；EN 的 `po_no` 不是客户 PO。
 
-## 3. 已落地产物（`key_test/`，测试机已验证，**生产未部署**）
+## 3. 已落地产物（`key_test/`，既有表单/报表已生产部署；2026-10-27 同步 `c34fa53`）
+
+生产发布与后续修复见 `key_test/AGENT_HANDOFF.md` §13–14。**2026-10-27** 已按用户授权把生产 `key_test` 同步到
+`c34fa53`（PR #2：新增过滤 + Supply Timeline），并完成 `migrate` + `clear-cache` + `bench restart`；
+冒烟通过。新增功能以本次生产部署为准；详见 `JACK_QA.md` 的 `P0-PROD-DEPLOY-2026-10-27`。
 
 | Stage | 产物 | 部署 |
 |---|---|---|
-| 1 嵌入单据 | `key_test/so_chain.py`（whitelist 方法）+ 追加进 `key_test/public/js/sales_order.js` | 测试机 ✅ |
-| 2 原生报表 | `key_test/key_test__report__so_chain_overview__*`（Script Report） | 测试机 ✅ |
+| 1 嵌入单据 | `key_test/so_chain.py`（whitelist 方法）+ 追加进 `key_test/public/js/sales_order.js` | 测试机 ✅ / 生产 ✅ |
+| 2 原生报表 | `key_test/key_test/report/so_chain_overview/` + `supply_timeline/`（Script Report） | 测试机 ✅ / 生产 ✅ |
 | 3 独立屏 | 仅设计 | 未做 |
 
 **部署/回滚/移植步骤**：见 [key_test/AGENT_HANDOFF.md](key_test/AGENT_HANDOFF.md)。
