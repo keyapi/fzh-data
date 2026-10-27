@@ -77,8 +77,33 @@ uv run python -m supply_netting \
 ## 验证
 
 ```bash
-uv run pytest supply_netting/tests -q          # 35 个用例（8 条净额场景 + 契约 §7 8 例 + 真实案例）
+uv run pytest supply_netting/tests -q          # 58 个用例（8 条净额场景 + 契约 §7 8 例 + 输入层 12 + 决策包 11 + 真实案例）
 uv run pytest supply_chain_visibility/tests -q # 23 个（引入的上游组件）
 ```
+
+## P1 条件决策包
+
+```bash
+uv run python -m supply_netting.pack \
+  --run    "D:/Work/fzh-order-store/en-demand-v1/supply-netting/run-2026-10-23-r2" \
+  --demand "D:/Work/fzh-order-store/en-demand-v1/canonical-r2/demand_netting.parquet" \
+  --stock  "<库存快照 parquet>" \
+  --blocked "D:/Work/fzh-order-store/en-demand-v1/canonical-r2/demand_blocked.parquet" \
+  --out    "D:/Work/fzh-order-store/en-demand-v1/supply-netting/pack-2026-10-23-r2"
+```
+
+产物（行级数据只落本地）：
+
+| 文件 | 内容 |
+|---|---|
+| `unmapped_top20_inventory.csv` / `_demand.csv` | 未映射 SKU 候选、证据、置信度、建议（map / map_after_confirm / manual / manual_or_skip） |
+| `service_level_scenarios.csv` | A98/B95/C90 + flat95 情景；buffer = z×σ_daily×√14，**未含提前期** |
+| `conditional_decision_pack.csv` / `.xlsx` | 每个 SKU×仓：需求、期初、已证到货、条件供给、缺口、服务档、建议（补 / 观察 / 数据不足） |
+| `pack_manifest.json` | 计数、口径、引用的 run_id/as_of/partial |
+
+匹配分级（越靠前证据越硬，低置信不硬绑）：`R1_sibling_suffix`（去后缀命中）→
+`R1b_sibling_of_registered_variant`（靠已登记的 `-Foam`/`-Cover`/`-0` 兄弟继承）→
+`R1c_sibling_conflict`（兄弟指向多个物料，low）→ `R2_model_unique`（型号唯一，medium）→
+`R3_model_family`（型号下多物料，low）→ `none`（需运营补登）。
 
 细节：[`docs/index.md`](docs/index.md)｜Agent 入口：[`AGENT_HANDOFF.md`](AGENT_HANDOFF.md)
