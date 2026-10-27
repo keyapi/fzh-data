@@ -19,6 +19,7 @@
 | `engine.py` | `build_buckets` / `net_target` / `net_all`；两种情景；调用上游 gate 与分桶 |
 | `legacy_ledger.py` | `bucket_gaps` / `assert_bucket_identities` / `allocate_so`（原样引入） |
 | `facts.py` | A 阶段余额 / B 里程碑 / C 可售 tranche 的结构、校验与守恒 |
+| `forecast.py` | 刷新预测入口：CURRENT/manifest 校验、窗口 p50 摊桶、预测资格与去向 |
 | `artifacts.py` | Parquet + manifest + Excel 工作簿 |
 | `__main__.py` | CLI |
 
@@ -51,6 +52,14 @@
     不得再加成新供应；订单差额单列，不塞进任何阶段。
 11. **tranche 不是第二份供应**：可售计划由阶段余额派生，已含期初的不得补入；拆分必须
     精确等于原余额（`split_balance` 会拒绝凑数）。
+12. **期初也要过 gate**：`opening_basis` 只看已证、非重放、自由库存；FBA/重放期初排除留证；
+    无法判定时 `opening=null`，绝不写 0。
+13. **证明随行传递**：阶段→tranche→SupplyRow 的 identity/warehouse/source_complete 原样传，
+    转换层不得抬升资格。
+14. **同批只计一次**：已证 `batch_key` 跨阶段保留最靠后阶段；重复 `balance_id` 抛错；
+    阶段校验在写产物之前，失败不落盘。
+15. **预测与需求两套资格**：`netting_eligible` ≠ `netting_allowed`；实际订单优先于预测；
+    预测只覆盖通过资格的键，未覆盖部分不填 0。
 
 ## 4. 两种情景
 
@@ -65,7 +74,7 @@
 ## 5. 跑与验
 
 ```bash
-uv run pytest supply_netting/tests -q           # 35
+uv run pytest supply_netting/tests -q           # 124
 uv run pytest supply_chain_visibility/tests -q  # 23（上游组件）
 uv run python -m supply_netting --help
 ```

@@ -54,6 +54,10 @@ uv run python -m supply_netting \
 `--backlog` 可选：未履约 SO 余额（csv/parquet，四列键 + quantity）；不传时未来桶需求为 0，
 不得据此推断「没有需求」。`--po-tongtool` 可选：通途采购单 JSONL（`purchaseOrderQuery` 落地）。
 
+未来桶需求来自刷新预测：`--forecast-root`（读 `CURRENT`）、`--forecast-run-id`
+（必须与 CURRENT 一致，否则报错）、`--forecast-lead-days`（默认 60）。
+历史与需求资格仍来自 `demand_netting`；`--no-forecast` 只回放历史，manifest 会标注。
+
 ## 产物
 
 | 文件 | 内容 |
@@ -77,7 +81,7 @@ uv run python -m supply_netting \
 ## 验证
 
 ```bash
-uv run pytest supply_netting/tests -q          # 58 个用例（8 条净额场景 + 契约 §7 8 例 + 输入层 12 + 决策包 11 + 真实案例）
+uv run pytest supply_netting/tests -q          # 124 个用例（净额/契约/输入层/决策包/预测/F1–F4 回归/真实案例）
 uv run pytest supply_chain_visibility/tests -q # 23 个（引入的上游组件）
 ```
 

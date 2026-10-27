@@ -16,11 +16,14 @@ updated: 2026-10-27
 | 引擎口径、两种情景、未知怎么保留 | [reference/netting-engine.md](reference/netting-engine.md) |
 | 阶段余额 / 里程碑 / 可售 tranche 结构 | [reference/supply-facts-contract.md](reference/supply-facts-contract.md) |
 | 输出字段、文件路径、manifest 结构 | [reference/output-schema.md](reference/output-schema.md) |
+| 刷新预测怎么接入、资格怎么分 | [reference/forecast-input.md](reference/forecast-input.md) |
 | 本次真实数据对账、案例、剩余阻塞 | [acceptance-report-2026-10-27.md](acceptance-report-2026-10-27.md) |
+| 独立复审 F1–F4 返修与 r5 结果 | [review-fix-r5-2026-10-27.md](review-fix-r5-2026-10-27.md) |
 | 引入的上游组件及来源 commit | [../../supply_chain_visibility/docs/reference/upstream-port.md](../../supply_chain_visibility/docs/reference/upstream-port.md) |
 | 变更时间线 | [log.md](log.md) |
 
 ## 产物路径（本地，不进 git）
 
 - 输出根：`D:/Work/fzh-order-store/en-demand-v1/supply-netting/<run>/`
-- 本次样例：`run-2026-10-21/`（`as_of=2026-10-21T00:00+08:00`，快照 `2026-10-20`）
+- 历史样例：`run-2026-10-21/`（`as_of=2026-10-21T00:00+08:00`，快照 `2026-10-20`）
+- 当前样例：`run-2026-10-26-r5/` + `pack-2026-10-26-r5/`（快照 2026-10-26，预测 forecast-20261027-r2）
