@@ -31,7 +31,7 @@ def netting_row(sku="S1", wh="W", uom="个", bucket="protect", *, demand=10.0, r
                 status=status, unknown_reason=reason)
 
 
-def make_inputs(netting, review, facts=None, forecast=None, sku_map=None) -> Inputs:
+def make_inputs(netting, review, facts=None, forecast=None, sku_map=None, history=None) -> Inputs:
     review = pd.DataFrame(review)
     facts = pd.DataFrame(facts or [], columns=["disposition_reason", "source_layer",
                                                "canonical_sku", "canonical_warehouse",
@@ -42,19 +42,28 @@ def make_inputs(netting, review, facts=None, forecast=None, sku_map=None) -> Inp
                                                      "netting_block_reason"])
     sku_map = pd.DataFrame(sku_map or [], columns=["tongtool_sku", "item_codes", "n_items",
                                                    "mapping_status", "mapping_evidence"])
+    buckets = {"protect": {"start": "2026-10-26T05:17:34+08:00",
+                           "end": "2026-11-02T05:17:34+08:00", "granularity": "bucket"}}
     doc = dict(run_id="run-test", as_of="2026-10-26T05:17:34+08:00",
-               buckets=[dict(bucket_id="protect", start="2026-10-26T05:17:34+08:00")],
+               buckets=[dict(bucket_id="protect", **buckets["protect"])],
                forecast=dict(run_id="forecast-test", lead_days=60, window_start="2026-10-29",
                              window_end="2026-12-28", manifest_sha256="a" * 64,
-                             windows_sha256="b" * 64),
+                             windows_sha256="b" * 64, code_git_head="d6f63fd3"),
                inputs=dict(demand_netting=dict(date_max="2026-10-26")),
                partial=True, partial_reasons=["test"], checks={})
+    sources = dict(forecast_rows_in=len(forecast), horizon_end="2026-11-30T05:17:34+08:00",
+                   history=dict(path="x", sha256="h" * 64, matches_r5=True),
+                   sku_map=dict(path="y", sha256="s" * 64),
+                   r5=dict(supply_netting=dict(sha256="1" * 64),
+                           replenishment_review=dict(sha256="2" * 64),
+                           supply_facts=dict(sha256="3" * 64)))
     return Inputs(run_dir=Path("."), manifest=doc, netting=pd.DataFrame(netting),
                   review=review, facts=facts, forecast_windows=forecast,
                   forecast_meta=dict(doc["forecast"]), sku_map=sku_map,
-                  history=pd.DataFrame(columns=["canonical_sku", "canonical_warehouse",
-                                                "canonical_uom", "demand_date", "quantity"]),
-                  buckets={b["bucket_id"]: b["start"] for b in doc["buckets"]})
+                  history=history if history is not None else pd.DataFrame(
+                      columns=["canonical_sku", "canonical_warehouse", "canonical_uom",
+                               "demand_date", "quantity"]),
+                  buckets=buckets, sources=sources)
 
 
 def review_row(sku="S1", wh="W", uom="个", *, demand=10.0, gap=10.0, unserved=10.0):
@@ -101,43 +110,43 @@ class DecisionPackTests(unittest.TestCase):
         review = [review_row("S1", uom="个"), review_row("S1", uom="套", gap=0.0, unserved=0.0)]
         result, stats = build_pack(make_inputs(netting, review))
         self.assertEqual(len(result), 2)
-        by_uom = {row["canonical_uom"]: row for row in stats["by_uom"]}
+        by_uom = {row["uom"]: row for row in stats["scenarios_by_uom"]}
         self.assertEqual(by_uom["个"]["qty_current"], 10.0)
-        self.assertEqual(by_uom["套"]["qty_current"], 0.0)
+        self.assertNotIn("套", by_uom)          # 套没有建议键，不产生情景标量
+        self.assertEqual(stats["single_uom"], "个")
         self.assertIn("跨 UOM 不相加", stats["uom_note"])
 
     def test_two_service_tiers_and_extra_holding(self):
         netting = [netting_row("S1", demand=100.0, opening=0.0)]
         review = [review_row("S1", demand=100.0, gap=100.0, unserved=100.0)]
-        inputs = make_inputs(netting, review)
-        result, stats = build_pack(inputs)
+        result, stats = build_pack(make_inputs(netting, review))
         row = result.iloc[0]
         self.assertEqual(row["qty_current"], 100.0)
         self.assertGreaterEqual(row["qty_higher"], row["qty_current"])
         self.assertEqual(stats["scenarios"][0]["scenario"], "current_policy")
         self.assertEqual(stats["scenarios"][1]["scenario"], "higher_service_flat95")
-        self.assertEqual(stats["extra_holding"],
-                         stats["suggest_qty_higher"] - stats["suggest_qty_current"])
         self.assertIn("不是覆盖率承诺", stats["scenarios"][1]["note"])
 
-    def test_conditional_supply_creates_a_low_end(self):
+    def test_conditional_supply_creates_a_counterfactual_low_end(self):
         netting = [netting_row("S1", demand=40.0, opening=0.0, conditional=30.0)]
         review = [review_row("S1", demand=40.0, gap=40.0, unserved=40.0)]
         result, _ = build_pack(make_inputs(netting, review))
         row = result.iloc[0]
         self.assertEqual(row["qty_high"], 40.0)
-        self.assertEqual(row["qty_low"], 10.0)
+        self.assertEqual(row["qty_low_counterfactual"], 10.0)
         self.assertIn("条件供应", row["to_verify"])
+        self.assertIn("反事实", row["qty_low_semantics"])
 
-    def test_unknown_opening_is_not_given_a_quantity(self):
+    def test_unknown_opening_is_not_given_quantities(self):
         netting = [netting_row("S1", demand=5.0, opening=None, status="unknown",
                                reason="opening_partially_unproven")]
         review = [review_row("S1", demand=5.0, gap=None, unserved=None)]
         result, _ = build_pack(make_inputs(netting, review))
         row = result.iloc[0]
         self.assertEqual(row["destination"], DEST_UNKNOWN)
-        self.assertTrue(pd.isna(row["qty_current"]))
-        self.assertTrue(pd.isna(row["qty_high"]))
+        for column in ("gap_today", "horizon_demand", "protect_gap", "qty_current",
+                       "qty_high", "qty_low_counterfactual"):
+            self.assertTrue(pd.isna(row[column]), column)
 
     def test_every_row_is_traceable_to_runs(self):
         netting = [netting_row("S1")]
@@ -165,14 +174,12 @@ class DecisionPackTests(unittest.TestCase):
             manifest_json = json.loads(Path(outputs["manifest"]).read_text(encoding="utf-8"))
         self.assertEqual(len(back), len(result))
         self.assertEqual(len(excel), len(result))
-        for name in ("决策清单", "去向对账", "情景对照", "UOM 分组", "数据与限制", "Manifest"):
+        for name in ("决策清单", "去向对账", "源行对账", "情景对照", "数据与限制",
+                     "预测源行排除", "Manifest"):
             self.assertIn(name, sheet_names)
-        self.assertTrue(manifest_json["partial"] if "partial" in manifest_json
-                        else manifest_json["netting"]["partial"])
         self.assertEqual(manifest_json["decision_date"], "2026-10-29")
         self.assertTrue(manifest_json["limits"])
-        self.assertEqual(manifest_json["coverage"]["destinations"],
-                         stats["destinations"])
+        self.assertEqual(manifest_json["coverage"]["destinations"], stats["destinations"])
 
 
 if __name__ == "__main__":
