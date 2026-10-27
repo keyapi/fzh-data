@@ -25,6 +25,7 @@ updated: 2026-10-27
 | 决策包终审返修 r2（F1–F7：null/JSON/UOM/对账/锁定/反事实/桶起点） | [decision-pack-2026-10-29-r2.md](decision-pack-2026-10-29-r2.md) |
 | 引入的上游组件及来源 commit | [../../supply_chain_visibility/docs/reference/upstream-port.md](../../supply_chain_visibility/docs/reference/upstream-port.md) |
 | **同日快照一条命令 runbook**（快照→需求→净额→决策包→动作） | [runbook-same-day.md](runbook-same-day.md) |
+| **180 天视界 vs 35 天**（r4 预测、春节统计） | [horizon-180-vs-35-2026-10-29.md](horizon-180-vs-35-2026-10-29.md) |
 | 变更时间线 | [log.md](log.md) |
 
 ## 产物路径（本地，不进 git）

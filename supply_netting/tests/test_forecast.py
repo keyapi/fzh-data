@@ -100,6 +100,43 @@ class ForecastTests(ForecastFixture):
         with self.assertRaises(ForecastContractError):
             self.build([window()], expected="forecast-20261027-r2")
 
+    def test_unpromoted_candidate_requires_explicit_flag(self):
+        # 候选版本未提升到 CURRENT：默认拒绝，显式 allow_unpromoted 才可消费并记录 promoted=False
+        from supply_netting.forecast import load_forecast
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "forecast"
+        run_dir = root / "fx"
+        run_dir.mkdir(parents=True)
+        (root / "CURRENT").write_text("fx", encoding="utf-8")
+        pd.DataFrame([window()]).to_parquet(
+            run_dir / "forecast_sku_warehouse_windows.parquet", index=False)
+        import hashlib
+        sha = hashlib.sha256((run_dir / "forecast_sku_warehouse_windows.parquet").read_bytes()).hexdigest()
+        (run_dir / "forecast_manifest.json").write_text(json.dumps({
+            "schema_version": "en-demand-forecast-v1", "run_id": "fx",
+            "run": {"decision_date": "2026-10-29", "data_cutoff": "2026-10-26"},
+            "code": {"git_head": "x"},
+            "outputs": [{"file": "forecast_sku_warehouse_windows.parquet",
+                         "rows": 1, "sha256": sha}],
+        }), encoding="utf-8")
+        # 另一个 run 目录作为“候选”
+        candidate = root / "cand"
+        candidate.mkdir()
+        for name in ("forecast_manifest.json", "forecast_sku_warehouse_windows.parquet"):
+            (candidate / name).write_bytes((run_dir / name).read_bytes())
+        manifest = json.loads((candidate / "forecast_manifest.json").read_text(encoding="utf-8"))
+        manifest["run_id"] = "cand"
+        (candidate / "forecast_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        cand_sha = hashlib.sha256((candidate / "forecast_manifest.json").read_bytes()).hexdigest()
+        with self.assertRaises(ForecastContractError):
+            load_forecast(root, expected_run_id="cand", expected_manifest_sha256=cand_sha)
+        forecast = load_forecast(root, expected_run_id="cand", expected_manifest_sha256=cand_sha,
+                                 allow_unpromoted=True)
+        self.assertFalse(forecast.promoted)
+        self.assertEqual(forecast.current_run_id, "fx")
+        self.assertEqual(forecast.run_id, "cand")
+
     def test_windows_hash_mismatch_is_refused(self):
         # R3：上游声明的窗口哈希与实测不符 → 拒绝消费
         with self.assertRaises(ForecastContractError):

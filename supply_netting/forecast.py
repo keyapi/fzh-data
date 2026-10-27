@@ -63,6 +63,9 @@ class ForecastInput:
     # #2：只有「传入了预期哈希且实际匹配」才算 pinned；没 pin 就不许声称已验证。
     manifest_pinned: bool = False
     pinned_sha256: str | None = None
+    # 显式消费未提升的候选版本（CURRENT 未指向它）；默认禁止，必须调用方显式开启。
+    promoted: bool = True
+    current_run_id: str | None = None
     rows: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
@@ -94,7 +97,8 @@ def _declared_rows(declared: dict, filename: str) -> int:
 
 def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
                   lead_days: int = 60,
-                  expected_manifest_sha256: str | None = None) -> ForecastInput:
+                  expected_manifest_sha256: str | None = None,
+                  allow_unpromoted: bool = False) -> ForecastInput:
     root = Path(root)
     current = root / "CURRENT"
     if not current.exists():
@@ -102,9 +106,12 @@ def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
     run_id = current.read_text(encoding="utf-8").strip()
     if not run_id:
         raise ForecastContractError("预测 CURRENT 为空")
-    if expected_run_id and run_id != expected_run_id:
+    if expected_run_id and run_id != expected_run_id and not allow_unpromoted:
         raise ForecastContractError(
-            f"预测版本不符：CURRENT={run_id}，要求 {expected_run_id}；拒绝静默换版本")
+            f"预测版本不符：CURRENT={run_id}，要求 {expected_run_id}；拒绝静默换版本"
+            "（确需消费候选版本请显式加 --allow-unpromoted-forecast）")
+    requested_run_id, current_run_id = expected_run_id or run_id, run_id
+    run_id = requested_run_id
     run_dir = root / run_id
     manifest_path = run_dir / "forecast_manifest.json"
     windows_path = run_dir / "forecast_sku_warehouse_windows.parquet"
@@ -120,7 +127,7 @@ def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
         raise ForecastContractError(f"预测 schema 不符：{manifest.get('schema_version')}")
     if manifest.get("run_id") != run_id:
         raise ForecastContractError(
-            f"预测 manifest.run_id={manifest.get('run_id')} 与 CURRENT={run_id} 不一致")
+            f"预测 manifest.run_id={manifest.get('run_id')} 与请求的 run_id={run_id} 不一致")
 
     # R3：消费前必须对照上游 manifest 声明校验窗口文件哈希（缺失/重复/错配都拒绝）。
     declared = _declared_output(manifest, windows_path.name)
@@ -156,6 +163,8 @@ def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
         manifest_pinned=bool(expected_manifest_sha256),
         pinned_sha256=(expected_manifest_sha256.strip().lower()
                        if expected_manifest_sha256 else None),
+        promoted=(run_id == current_run_id),
+        current_run_id=current_run_id,
         window_start=str(frame["window_start"].min()),
         window_end=str(frame["window_end"].max()),
         rows=frame,
@@ -279,6 +288,8 @@ def forecast_demand_rows(forecast: ForecastInput, sku_map: pd.DataFrame, *,
         windows_path=str(forecast.windows_path),
         windows_sha256=forecast.windows_sha256,
         windows_sha256_verified=True,
+        forecast_promoted=bool(forecast.promoted),
+        forecast_current_run_id=forecast.current_run_id,
         # #2：没传 pin 时只记录了「当前文件哈希」，不能冒充已与外部期望核验
         manifest_sha256_verified=bool(forecast.manifest_pinned),
         manifest_sha256_pinned=forecast.pinned_sha256,

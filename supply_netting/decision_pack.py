@@ -727,13 +727,15 @@ def _sheet(writer, frame: pd.DataFrame, name: str) -> None:
     sheet.freeze_panes = "A2"
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="2026-10-29 广范围补货决策包")
     parser.add_argument("--run", required=True, help="r5 净额 run 目录")
     parser.add_argument("--forecast-root",
                         default="D:/Work/fzh-order-store/en-demand-v1/forecast")
     parser.add_argument("--demand", required=True, help="demand_netting.parquet（算历史波动）")
     parser.add_argument("--sku-map", default=DEFAULT_SKU_MAP)
+    parser.add_argument("--forecast-lead-days", type=int, default=60,
+                        help="预测窗口口径（须与净额 run 的 lead_days 一致，如 180）")
     parser.add_argument("--sku-map-sha256", default=FROZEN_SKU_MAP_SHA256,
                         help="冻结的 sku_map 哈希；不符即拒绝。传空字符串可跳过（仅调试）")
     parser.add_argument("--supersedes",
@@ -741,10 +743,15 @@ def main(argv=None) -> int:
                         help="原包目录（只读取哈希，不覆盖）")
     parser.add_argument("--test-count", type=int, default=None)
     parser.add_argument("--out", required=True)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
 
     inputs = load_inputs(args.run, forecast_root=args.forecast_root,
                          demand_netting=args.demand, sku_map_path=args.sku_map,
+                         forecast_lead_days=args.forecast_lead_days,
                          expected_sku_map_sha256=(args.sku_map_sha256 or None))
     result, stats = build_pack(inputs)
     from .__main__ import _git_meta

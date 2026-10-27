@@ -106,6 +106,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--forecast-run-id", default=None,
                         help="要求的预测 run_id；与 CURRENT 不一致直接报错，不静默换版本")
     parser.add_argument("--forecast-lead-days", type=int, default=60)
+    parser.add_argument("--allow-unpromoted-forecast", action="store_true",
+                        help="允许消费 CURRENT 未指向的候选预测版本（manifest 会记录 promoted=false）")
     parser.add_argument("--forecast-manifest-sha256", default=None,
                         help="固定上游 forecast_manifest.json 的哈希；不符直接报错")
     parser.add_argument("--no-forecast", action="store_true",
@@ -133,7 +135,8 @@ def main(argv=None) -> int:
         forecast = load_forecast(args.forecast_root,
                                  expected_run_id=args.forecast_run_id,
                                  lead_days=args.forecast_lead_days,
-                                 expected_manifest_sha256=args.forecast_manifest_sha256)
+                                 expected_manifest_sha256=args.forecast_manifest_sha256,
+                                 allow_unpromoted=args.allow_unpromoted_forecast)
         covered = overlap_keys(default_rows, forecast.window_start, as_of.tzinfo)
         forecast_rows, forecast_evidence, forecast_meta = forecast_demand_rows(
             forecast, load_sku_map(args.sku_map), buckets=buckets, as_of=as_of,

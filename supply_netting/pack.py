@@ -384,7 +384,9 @@ def main(argv=None) -> int:
         raw = pd.DataFrame([json.loads(line) for line in
                             Path(args.so_rows).read_text(encoding="utf-8").splitlines() if line.strip()])
         as_of = pd.Timestamp(manifest["as_of"]).date()
-        so_frame = build_so_backlog(raw, as_of=as_of)
+        from .so_backlog import SPRING_FESTIVAL_ANCHOR
+        so_frame = build_so_backlog(raw, as_of=as_of,
+                                    festival_anchor=SPRING_FESTIVAL_ANCHOR)
         so_summary = summarize_backlog(so_frame)
         so_summary["raw"] = summarize_raw(so_frame)   # 与业务报数对账用：未分类前全量开放行
         so_frame.to_csv(out_dir / "so_backlog_rows.csv", index=False, encoding="utf-8-sig")
