@@ -11,8 +11,9 @@ from pathlib import Path
 import pandas as pd
 
 from supply_netting import decision_pack as dp
-from supply_netting.decision_pack import (_reconcile, _strict_json, _verify_r5_outputs,
-                                          build_pack, load_inputs, manifest, write_outputs)
+from supply_netting.decision_pack import (FROZEN_SKU_MAP_SHA256, _reconcile, _strict_json,
+                                          _verify_r5_outputs, build_pack, load_inputs,
+                                          manifest, write_outputs)
 from supply_netting.tests.test_decision_pack import (KEY, make_inputs, netting_row,
                                                      review_row)
 
@@ -243,7 +244,8 @@ class F5InputLocking(unittest.TestCase):
     def test_manifest_records_history_and_sku_map_hashes(self):
         run_dir, forecast_root = _fake_run(self.root, dp._sha(self.history))
         inputs = load_inputs(run_dir, forecast_root=forecast_root,
-                             demand_netting=self.history, sku_map_path=self.sku_map)
+                             demand_netting=self.history, sku_map_path=self.sku_map,
+                             expected_sku_map_sha256=None)
         self.assertEqual(inputs.sources["history"]["sha256"], dp._sha(self.history))
         self.assertEqual(inputs.sources["sku_map"]["sha256"], dp._sha(self.sku_map))
         result, stats = build_pack(inputs)
@@ -259,13 +261,30 @@ class F5InputLocking(unittest.TestCase):
         run_dir, forecast_root = _fake_run(self.root, "0" * 64)
         with self.assertRaises(ValueError):
             load_inputs(run_dir, forecast_root=forecast_root,
+                        demand_netting=self.history, sku_map_path=self.sku_map,
+                        expected_sku_map_sha256=None)
+
+    def test_frozen_sku_map_hash_is_enforced(self):
+        run_dir, forecast_root = _fake_run(self.root, dp._sha(self.history))
+        # 默认参数就是冻结哈希；临时 sku_map 必然不符 → 拒绝
+        with self.assertRaises(ValueError):
+            load_inputs(run_dir, forecast_root=forecast_root,
                         demand_netting=self.history, sku_map_path=self.sku_map)
+        # 显式关闭（仅调试/测试）时记录为未校验，不冒充已验证
+        inputs = load_inputs(run_dir, forecast_root=forecast_root,
+                             demand_netting=self.history, sku_map_path=self.sku_map,
+                             expected_sku_map_sha256=None)
+        self.assertFalse(inputs.sources["sku_map"]["verified"])
+        self.assertIsNone(inputs.sources["sku_map"]["expected_sha256"])
+        self.assertEqual(FROZEN_SKU_MAP_SHA256,
+                         "7da3dfd62969c2c06f5b01ce752ccd1bc8d26c46c693eaca22cacaad4d13d42e")
 
     def test_r5_output_hash_mismatch_is_refused(self):
         run_dir, forecast_root = _fake_run(self.root, dp._sha(self.history), corrupt_r5=True)
         with self.assertRaises(ValueError):
             load_inputs(run_dir, forecast_root=forecast_root,
-                        demand_netting=self.history, sku_map_path=self.sku_map)
+                        demand_netting=self.history, sku_map_path=self.sku_map,
+                        expected_sku_map_sha256=None)
 
 
 class F6Counterfactual(unittest.TestCase):

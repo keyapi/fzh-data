@@ -58,6 +58,8 @@ COUNTERFACTUAL_NOTE = (
 )
 
 DEFAULT_SKU_MAP = "D:/Work/fzh-order-store/sku_map.tsv"
+# F5：sku_map 是键集合的直接输入，重跑必须对上冻结哈希，不能只看「当前文件能读」。
+FROZEN_SKU_MAP_SHA256 = "7da3dfd62969c2c06f5b01ce752ccd1bc8d26c46c693eaca22cacaad4d13d42e"
 KEY = ["canonical_sku", "canonical_warehouse", "canonical_uom"]
 
 
@@ -98,7 +100,8 @@ def _verify_r5_outputs(run_dir: Path, manifest: dict) -> dict:
 
 def load_inputs(run_dir: str | Path, *, forecast_root: str | Path,
                 demand_netting: str | Path, forecast_lead_days: int = 60,
-                sku_map_path: str | Path = DEFAULT_SKU_MAP) -> Inputs:
+                sku_map_path: str | Path = DEFAULT_SKU_MAP,
+                expected_sku_map_sha256: str | None = FROZEN_SKU_MAP_SHA256) -> Inputs:
     run_dir = Path(run_dir)
     manifest = json.loads((run_dir / "supply_netting_manifest.json").read_text(encoding="utf-8"))
     r5_sources = _verify_r5_outputs(run_dir, manifest)
@@ -150,7 +153,13 @@ def load_inputs(run_dir: str | Path, *, forecast_root: str | Path,
     history_meta["verified"] = history_meta["matches_r5"]
 
     sku_path = Path(sku_map_path)
-    sku_meta = dict(path=str(sku_path), sha256=_sha(sku_path))
+    sku_sha = _sha(sku_path)
+    if expected_sku_map_sha256 and sku_sha.lower() != expected_sku_map_sha256.strip().lower():
+        raise ValueError(
+            f"sku_map 与冻结哈希不符：实测 {sku_sha}，要求 {expected_sku_map_sha256}")
+    sku_meta = dict(path=str(sku_path), sha256=sku_sha,
+                    expected_sha256=expected_sku_map_sha256,
+                    verified=bool(expected_sku_map_sha256))
 
     bucket_ends = {b["bucket_id"]: b["end"] for b in manifest.get("buckets", [])}
     buckets = {b["bucket_id"]: {
@@ -584,7 +593,7 @@ def manifest(inputs: Inputs, stats: dict, *, out_dir: Path, data_cutoff: str,
             forecast_windows_match_r5=inputs.forecast_meta.get("windows_verified"),
             forecast_manifest_match_r5=inputs.forecast_meta.get("manifest_verified"),
             history_matches_r5=inputs.sources["history"].get("matches_r5"),
-            sku_map_recorded=True,
+            sku_map_verified=inputs.sources["sku_map"].get("verified", False),
         ),
         inputs=dict(
             supply_netting=inputs.sources["r5"]["supply_netting"]["sha256"],
@@ -725,6 +734,8 @@ def main(argv=None) -> int:
                         default="D:/Work/fzh-order-store/en-demand-v1/forecast")
     parser.add_argument("--demand", required=True, help="demand_netting.parquet（算历史波动）")
     parser.add_argument("--sku-map", default=DEFAULT_SKU_MAP)
+    parser.add_argument("--sku-map-sha256", default=FROZEN_SKU_MAP_SHA256,
+                        help="冻结的 sku_map 哈希；不符即拒绝。传空字符串可跳过（仅调试）")
     parser.add_argument("--supersedes",
                         default="D:/Work/fzh-order-store/en-demand-v1/supply-netting/decision-pack-2026-10-29",
                         help="原包目录（只读取哈希，不覆盖）")
@@ -733,7 +744,8 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     inputs = load_inputs(args.run, forecast_root=args.forecast_root,
-                         demand_netting=args.demand, sku_map_path=args.sku_map)
+                         demand_netting=args.demand, sku_map_path=args.sku_map,
+                         expected_sku_map_sha256=(args.sku_map_sha256 or None))
     result, stats = build_pack(inputs)
     from .__main__ import _git_meta
     doc = manifest(inputs, stats, out_dir=Path(args.out),
