@@ -20,6 +20,8 @@ class FakeFrappe(types.ModuleType):
         self.so_rows = []
         self.permitted_sos = []
         self.total_sos = 0
+        self.dn_rows = []
+        self.permitted_dns = []
         self.db = types.SimpleNamespace(
             sql=self.sql, count=self.count, has_column=lambda *a, **k: True,
             table_exists=lambda *a, **k: True)
@@ -28,6 +30,9 @@ class FakeFrappe(types.ModuleType):
         if "select so.name as so" in query:
             allowed = set((values or {}).get("permitted") or [])
             return [row for row in self.so_rows if row.so in allowed]
+        if "from `tabDelivery Note Item`" in query:
+            allowed = set((values or {}).get("lines") or [])
+            return [row for row in self.dn_rows if row.so_line in allowed]
         return []
 
     def count(self, doctype, filters=None):
@@ -36,6 +41,8 @@ class FakeFrappe(types.ModuleType):
     def get_list(self, doctype, filters=None, fields=None, limit_page_length=0):
         if doctype == "Sales Order":
             return [types.SimpleNamespace(name=name) for name in self.permitted_sos]
+        if doctype == "Delivery Note":
+            return [types.SimpleNamespace(name=name) for name in self.permitted_dns]
         return []
 
     def has_permission(self, doctype, ptype, doc=None):
@@ -518,6 +525,61 @@ class SupplyFactsContractTest(unittest.TestCase):
         by_stage = {r["stage"]: r["qty"] for r in stages if r["qty"] is not None}
         self.assertEqual(by_stage[self.facts.STAGE_UNKNOWN], 30.0)
         self.assertEqual(by_stage[self.facts.STAGE_NOT_PLANNED], 70.0)
+
+    def test_load_dns_preserves_return_item_identity_and_warehouses(self):
+        def dn_row(**overrides):
+            row = {"date": "2026-10-16", "status": "", "docstatus": 1, "is_return": 0,
+                   "return_against": None, "so_line": "SOI-1", "dn_detail": None,
+                   "uom": "个"}
+            row.update(overrides)
+            return _AttrDict(row)
+        self.fake.dn_rows = [
+            dn_row(dn="DN-1", dn_item="row-a", qty=40.0, warehouse="WH-A"),
+            dn_row(dn="DN-1", dn_item="row-b", qty=60.0, warehouse="WH-B"),
+            dn_row(dn="DN-R", dn_item="row-r1", dn_detail="row-a", qty=-10.0,
+                   warehouse="WH-C", is_return=1, return_against="DN-1"),
+            dn_row(dn="DN-R", dn_item="row-r2", dn_detail="row-b", qty=-10.0,
+                   warehouse="WH-C", is_return=1, return_against="DN-1"),
+        ]
+        self.fake.permitted_dns = ["DN-1", "DN-R"]
+        dns, restricted = self.facts.load_dns([_AttrDict(_line())])
+        self.assertFalse(restricted)
+        rows = dns["SOI-1"]
+        self.assertEqual(sum(1 for r in rows if r["is_return"]), 2)
+        ctx = _ctx(dns=rows)
+        stages = self.facts.build_stage_balances(_line(), ctx)
+        transit = {r["warehouse"]: r["qty"] for r in stages
+                   if r["stage"] == self.facts.STAGE_IN_TRANSIT}
+        self.assertEqual(transit, {"WH-A": 30.0, "WH-B": 50.0})
+        tranches = self.facts.build_availability(_line(), ctx, stages)
+        self.assertEqual({t["warehouse"]: t["qty"] for t in tranches},
+                         {"WH-A": 30.0, "WH-B": 50.0})
+        self.assertEqual(len({t["tranche_id"] for t in tranches}), 2)
+
+    def test_plan_unit_mismatch_blocks_coverage_allocation(self):
+        pp = {"pp": "PP-1", "ppi": "PPI-1", "item_code": "SKU-1",
+              "planned_qty": 2.0, "stock_uom": "箱", "pp_date": "2026-10-01"}
+        stages = self.facts.build_stage_balances(_line(), _ctx(pps=[pp]))
+        by_stage = {r["stage"]: r for r in stages if r["qty"] is not None}
+        self.assertEqual(by_stage[self.facts.STAGE_UNKNOWN]["qty"], 100.0)
+        self.assertIn("单位", by_stage[self.facts.STAGE_UNKNOWN]["exclusion_reason"])
+        self.assertNotIn(self.facts.STAGE_NOT_PLANNED, by_stage)
+        stages = self.facts.build_stage_balances(
+            _line(), _ctx(pps=[pp], wos=[_wo(qty=40.0, produced=0.0)]))
+        by_stage = {r["stage"]: r["qty"] for r in stages if r["qty"] is not None}
+        self.assertEqual(by_stage[self.facts.STAGE_IN_PRODUCTION], 40.0)
+        self.assertEqual(by_stage[self.facts.STAGE_UNKNOWN], 60.0)
+        self.assertNotIn(self.facts.STAGE_NOT_PLANNED, by_stage)
+
+    def test_manifest_carries_rule_and_implementation_versions(self):
+        self.fake.so_rows = []
+        self.fake.permitted_sos = []
+        self.fake.total_sos = 0
+        result = self.facts.get_supply_facts({})
+        self.assertEqual(result["manifest"]["rule_version"], self.facts.RULE_VERSION)
+        self.assertEqual(result["manifest"]["implementation_version"],
+                         self.facts.IMPLEMENTATION_VERSION)
+        self.assertEqual(result["implementation_version"], self.facts.IMPLEMENTATION_VERSION)
 
     def test_case8_rebuild_is_stable_and_partial_is_explicit(self):
         ctx = _ctx(wos=[_wo()], dns=[_dn()])

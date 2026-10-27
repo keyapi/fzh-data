@@ -17,7 +17,7 @@ def _empty_target():
             "availability_schedule": [], "links": [], "partial": False,
             "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
             "restricted": {}, "external_sources": {},
-            "notes": [], "rule_version": "", "as_of": ""}
+            "notes": [], "rule_version": "", "implementation_version": "", "as_of": ""}
 
 
 def _batch(**coverage):
@@ -63,6 +63,14 @@ class MergeSemanticsTest(unittest.TestCase):
         target = _empty_target()
         self.exporter._merge(target, _batch(empty_reason="no_matching_lines"))
         self.assertEqual(target["coverage"]["empty_reason"], "no_matching_lines")
+
+    def test_implementation_version_is_carried(self):
+        target = _empty_target()
+        batch = _batch()
+        batch["manifest"]["implementation_version"] = "key_test.supply_facts@2026-10-27.3"
+        self.exporter._merge(target, batch)
+        self.assertEqual(target["implementation_version"],
+                         "key_test.supply_facts@2026-10-27.3")
 
 
 if __name__ == "__main__":

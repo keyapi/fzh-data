@@ -15,7 +15,8 @@ from frappe.utils import getdate, now_datetime, today
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v1"
-RULE_VERSION = "2026-10-27.2"
+RULE_VERSION = "2026-10-27.3"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.3"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -217,7 +218,10 @@ def build_stage_balances(line, ctx):
 
     own_wos = [w for w in (ctx.get("wos") or []) if w.get("item_code") == line.get("item_code")]
     own_pps = [p for p in (ctx.get("pps") or []) if p.get("item_code") == line.get("item_code")]
-    pp_coverage = min(sum(_num(p.get("planned_qty")) for p in own_pps), _num(qty))
+    pp_units = {p.get("stock_uom") or "" for p in own_pps}
+    pp_units_ok = not own_pps or pp_units == {uom}
+    pp_coverage = (min(sum(_num(p.get("planned_qty")) for p in own_pps), _num(qty))
+                   if pp_units_ok else 0.0)
     pp_ok = ctx.get("production_plan_permission", True)
     wo_units_ok = all((w.get("stock_uom") or "") == uom for w in own_wos)
     produced_estimated = any(w.get("produced_basis") == "wo_produced_qty" for w in own_wos)
@@ -272,7 +276,12 @@ def build_stage_balances(line, ctx):
                             demand_status=demand_status))
                         leftover -= plan_only
                     if leftover > 1e-9:
-                        if not pp_ok:
+                        if own_pps and not pp_units_ok:
+                            rows.append(_balance(
+                                line, STAGE_UNKNOWN, leftover, uom,
+                                reason="生产计划单位与订单单位不一致或缺失，计划覆盖量未归一",
+                                demand_status=demand_status))
+                        elif not pp_ok:
                             rows.append(_balance(
                                 line, STAGE_UNKNOWN, leftover, uom,
                                 reason="无生产计划读取权限（含行级受限），阶段未知",
@@ -536,6 +545,7 @@ def build_manifest(*, as_of, scope, lines, facts, coverage, counts, partial, not
     return {
         "schema_version": SCHEMA_VERSION,
         "rule_version": RULE_VERSION,
+        "implementation_version": IMPLEMENTATION_VERSION,
         "run_id": uuid.uuid4().hex,
         "as_of": _iso(as_of),
         "generated_at": _iso(now_datetime()),
@@ -750,7 +760,7 @@ def load_dns(lines):
         if row.dn not in permitted:
             continue
         key = (row.so_line, row.dn, int(row.docstatus or 0), int(row.is_return or 0),
-               row.uom, row.warehouse)
+               row.uom, row.warehouse, row.dn_detail)
         if key not in grouped:
             grouped[key] = frappe._dict(row)
             grouped[key]["qty"] = 0.0
@@ -845,6 +855,7 @@ def get_supply_facts(filters=None):
         manifest["observed_at"] = _iso(observed_at)
         return {
             "schema_version": SCHEMA_VERSION, "rule_version": RULE_VERSION,
+            "implementation_version": IMPLEMENTATION_VERSION,
             "as_of": str(as_of), "lines": [], "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [], "manifest": manifest,
         }
@@ -935,6 +946,7 @@ def get_supply_facts(filters=None):
     manifest["observed_at"] = _iso(observed_at)
     return {
         "schema_version": SCHEMA_VERSION, "rule_version": RULE_VERSION,
+        "implementation_version": IMPLEMENTATION_VERSION,
         "as_of": str(as_of),
         "lines": [f["line"] for f in facts],
         "stage_balances": [r for f in facts for r in f["stage_balances"]],

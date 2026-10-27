@@ -83,6 +83,8 @@ def _merge(target, batch):
             target["notes"].append(note)
     if not target["rule_version"] and manifest.get("rule_version"):
         target["rule_version"] = manifest["rule_version"]
+    if not target["implementation_version"] and manifest.get("implementation_version"):
+        target["implementation_version"] = manifest["implementation_version"]
     if not target["as_of"] and manifest.get("as_of"):
         target["as_of"] = manifest["as_of"]
 
@@ -189,7 +191,8 @@ def main(argv=None):
               "availability_schedule": [], "links": [], "partial": False,
               "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
               "restricted": {}, "external_sources": {},
-              "notes": [], "rule_version": "", "as_of": args.as_of or ""}
+              "notes": [], "rule_version": "", "implementation_version": "",
+              "as_of": args.as_of or ""}
     today_str = time.strftime("%Y-%m-%d")
     if args.as_of and args.as_of != today_str:
         print("✗ 历史 as_of 未实现：只能导出当前快照，拒绝 --as-of %s" % args.as_of,
@@ -257,6 +260,7 @@ def main(argv=None):
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "rule_version": result["rule_version"],
+            "implementation_version": result["implementation_version"],
             "run_id": run_id,
             "as_of": result["as_of"],
             "as_of_kind": "current_snapshot",
@@ -298,6 +302,8 @@ def main(argv=None):
         "run_id": run_id, "run_dir": str(run_dir),
         "manifest": str(run_dir / "manifest.json"),
         "as_of": result["as_of"],
+        "rule_version": result["rule_version"],
+        "implementation_version": result["implementation_version"],
         "truncated": terminated_by == "page_limit",
         "termination_reason": terminated_by,
         "last_success_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
