@@ -102,7 +102,7 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 | `stock_status.daily` | 每日期×仓×SKU 一行，按 EN > PJ > WX 优先级取一条 |
 | `stock_status.pb_daily` | PB `shortage_calendar`（35 个 Vendor Style × 日期） |
 
-**`stock_status.daily` 关键列**：`d, warehouse, sku, source, stock_state, available, waiting_shipment, intransit, current_status, prior_status, sales_qty, sales_7d, sales_30d, confidence, evidence, warehouse_role, likely_unavailable, review_candidate, pb_reported_shortage, low_stock`。
+**`stock_status.daily` 关键列**：`d, warehouse, sku, source, stock_state, available, waiting_shipment, intransit, physical_on_hand, current_status, prior_status, sales_qty, sales_7d, sales_30d, confidence, evidence, warehouse_role, likely_unavailable, review_candidate, pb_reported_shortage, low_stock`。
 
 **规模（2026-10-26 实测）**：
 
@@ -112,6 +112,7 @@ tags: [supply-chain, inventory, stockout, censoring, demand-forecast, tongtool, 
 - **`likely_unavailable` 46,355**：EN 24,307 + PJ 22,048；**WX 不计入**（宽表 0 多为“不在该仓”）。
 - **`review_candidate` 127,342**：WX 的 0，只作低置信复核。
 - **`pb_reported_shortage` 162 行**：仅加在美中-FZH-DANEEY 行，PB 渠道级证据。
+- **`physical_on_hand` 77,743 行**：`available + waiting_shipment`，**不含 defects**（次品发不了货）；WX 缺 waiting 列为 NULL。
 - **`low_stock` 16,496 行**：美东-CENTRADE 可用 ≤5，只算 EN/PJ；WX 的低置信 0 不计入。**K 天删失 / M 天 prolonged 还没算**。
 - 仓角色：`primary_sellable` 220,336；`returns` 29,557；`components` 29,055；`other` 8,326。
 
@@ -140,6 +141,22 @@ ORDER BY d, warehouse;
 ```
 
 脚本 `D:/Work/fzh-order-store/build_stock_status.py`，报告 `stock_status_report.json`。
+
+### 1.5 Wayfair CG 数据源（2026-10-23）
+
+通途里的 `WayfairCG-Cranbury/Perris/Romeoville` 数量不准；同事 YTQ 从 Wayfair 后台导出的 `AllInventoryExport_2026-10-23` 更完整：
+
+- 文件：`D:/Work/尹/wayfair/AllInventoryExport_2026-10-23 (1)(1).csv`
+- 2,333 行、**1,009 个 Part Number**（就是通途 SKU）、11 个仓：
+  - 2 个 Dropship：CENTRADE INC. NJ 07936 / TX 77099（各 1,009 行，是公司自有 dropship，不是 CG）
+  - 9 个 **Castlegate**（CG）：NJ-Cranbury 103、FL-Jacksonville 45、GA-McDonough 38、TX-Lancaster 36、IL-Romeoville 29、MD-Aberdeen 23、CA-Lathrop 16、CA-Perris 14、GA-Port Wentworth 11
+- Castlegate 合计 **315 行 / 103 SKU / 可用 401 件**。
+- 对比通途 10/23：Cranbury 92 SKU / 860 件、Perris 4 / 0、Romeoville 2 / 0；SKU 交集只有 **56**，Wayfair 独有 47、通途独有 36。**通途 CG 不能作为可信来源。**
+- 已入库：`wayfair_cg.inventory`（明细，仅供审计）+ `wayfair_cg.sku_daily`（**按 SKU 汇总所有 Castlegate 仓**：`available_castlegate` / `in_stock_castlegate`），在 `order_store.duckdb`。
+- **CG 像 FBA 多仓，不按单仓细分**：业务上一个 SKU 汇总所有 Castlegate 仓即可；明细表保留单仓只是为了核对。Dropship 行（CENTRADE NJ/TX）是自有仓，不要混进 CG。
+- 局限：这是**单日快照**；Wayfair 的 `In Stock Update` 是每行更新时间（跨度数月），不是导出时间。后续需要 YTQ 定期导出（每周/每天）或走 Wayfair API。
+
+
 
 
 
