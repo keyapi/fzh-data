@@ -17,13 +17,16 @@ def _empty_target():
             "availability_schedule": [], "links": [], "partial": False,
             "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
             "restricted": {}, "external_sources": {},
-            "notes": [], "rule_version": "", "implementation_version": "", "as_of": ""}
+            "notes": [], "schema_version": "", "rule_version": "",
+            "implementation_version": "", "as_of": ""}
 
 
 def _batch(**coverage):
     return {"lines": [], "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [],
-            "manifest": {"partial": True, "coverage": coverage,
+            "manifest": {"schema_version": "supply-facts/v1",
+                         "implementation_version": "impl-v1",
+                         "partial": True, "coverage": coverage,
                          "notes": ["note"], "counts": {"input": 1},
                          "rule_version": "v1", "as_of": "2026-10-27"}}
 
@@ -71,6 +74,34 @@ class MergeSemanticsTest(unittest.TestCase):
         self.exporter._merge(target, batch)
         self.assertEqual(target["implementation_version"],
                          "key_test.supply_facts@2026-10-27.3")
+
+    def test_mixed_implementation_version_is_rejected(self):
+        target = _empty_target()
+        self.exporter._merge(target, _batch())
+        batch = _batch()
+        batch["manifest"]["implementation_version"] = "impl-v2"
+        with self.assertRaises(self.exporter.BatchVersionError):
+            self.exporter._merge(target, batch)
+        self.assertEqual(target["implementation_version"], "impl-v1")
+        self.assertEqual(target["lines"], [])
+
+    def test_mixed_rule_schema_or_as_of_is_rejected(self):
+        target = _empty_target()
+        self.exporter._merge(target, _batch())
+        for key, value in (("rule_version", "v2"), ("schema_version", "supply-facts/v2"),
+                           ("as_of", "2026-10-28T00:00:00")):
+            bad = _batch()
+            bad["manifest"][key] = value
+            with self.assertRaises(self.exporter.BatchVersionError):
+                self.exporter._merge(target, bad)
+
+    def test_batch_missing_version_is_rejected(self):
+        target = _empty_target()
+        for key in ("schema_version", "rule_version", "implementation_version", "as_of"):
+            bad = _batch()
+            del bad["manifest"][key]
+            with self.assertRaises(self.exporter.BatchVersionError):
+                self.exporter._merge(target, bad)
 
 
 if __name__ == "__main__":

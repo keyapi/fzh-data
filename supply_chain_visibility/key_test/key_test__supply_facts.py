@@ -15,8 +15,8 @@ from frappe.utils import getdate, now_datetime, today
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v1"
-RULE_VERSION = "2026-10-27.3"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.3"
+RULE_VERSION = "2026-10-27.4"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.4"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -230,6 +230,11 @@ def build_stage_balances(line, ctx):
     produced_capped = min(produced_total, _num(qty))
     wo_coverage = (min(sum(_num(w.get("qty")) for w in own_wos), _num(qty))
                    if wo_units_ok else 0.0)
+    started_wos = [w for w in own_wos
+                   if w.get("jc_start") or _num(w.get("produced")) > 1e-9]
+    started_names = {w.get("wo") for w in started_wos}
+    started_coverage = (min(sum(_num(w.get("qty")) for w in started_wos), _num(qty))
+                        if wo_units_ok else 0.0)
     open_net = _num(qty) - shipped_net
     produced_pending = max(0.0, min(produced_capped - shipped_physical, open_net))
     remaining = max(0.0, open_net - produced_pending)
@@ -257,15 +262,27 @@ def build_stage_balances(line, ctx):
                                      reason="工单单位与订单单位不一致，完工/在产数量未归一",
                                      demand_status=demand_status))
             else:
-                production_gap = max(0.0, wo_coverage - produced_capped)
+                production_gap = max(0.0, started_coverage - produced_capped)
                 in_production = min(remaining, production_gap)
                 if in_production > 1e-9:
                     rows.append(_balance(
                         line, STAGE_IN_PRODUCTION, in_production, uom,
                         detail="在产/部分完工",
-                        source=",".join(w.get("wo") for w in own_wos),
+                        source=",".join(w.get("wo") for w in started_wos),
                         demand_status=demand_status))
                 leftover = remaining - in_production
+                if leftover > 1e-9:
+                    wo_plan_only = min(leftover,
+                                       max(0.0, wo_coverage - started_coverage))
+                    if wo_plan_only > 1e-9:
+                        rows.append(_balance(
+                            line, STAGE_UNKNOWN, wo_plan_only, uom,
+                            detail="工单已下达，无实际开工记录",
+                            reason="工单覆盖只能证明计划，缺开工证据，不判为在产",
+                            source=",".join(w.get("wo") for w in own_wos
+                                            if w.get("wo") not in started_names),
+                            demand_status=demand_status))
+                        leftover -= wo_plan_only
                 if leftover > 1e-9:
                     plan_only = min(leftover, max(0.0, pp_coverage - wo_coverage))
                     if plan_only > 1e-9:
@@ -376,14 +393,17 @@ def build_milestones(line, ctx):
 
     submitted = [d for d in (ctx.get("dns") or []) if int(d.get("docstatus") or 0) == 1]
     nonreturns = [d for d in submitted if not int(d.get("is_return") or 0)]
-    if nonreturns:
-        dn_units = {d.get("uom") or "" for d in nonreturns}
+    by_dn = {}
+    for dn in nonreturns:
+        by_dn.setdefault(dn.get("dn"), []).append(dn)
+    for dn_name, dn_rows in by_dn.items():
+        dn_units = {d.get("uom") or "" for d in dn_rows}
         dn_units_ok = dn_units == {order_uom}
         add("dispatch",
-            actual=min((d["date"] for d in nonreturns if d.get("date")), default=None),
-            qty=(sum(_num(d.get("qty")) for d in nonreturns) if dn_units_ok else None),
-            source="Delivery Note.posting_date",
-            note=join_notes("过账不等于实际起运",
+            actual=min((d["date"] for d in dn_rows if d.get("date")), default=None),
+            qty=(sum(_num(d.get("qty")) for d in dn_rows) if dn_units_ok else None),
+            source="Delivery Note %s.posting_date" % dn_name,
+            note=join_notes("过账不等于实际起运；数量为该单过账数量，退货在阶段余额中净额抵扣",
                             "" if dn_units_ok else unit_note(dn_units)))
 
     shipments = list((ctx.get("shipment_by_number") or {}).values())

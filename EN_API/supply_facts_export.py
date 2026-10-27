@@ -46,10 +46,37 @@ def _call(base_url, key, secret, filters):
     return message
 
 
+class BatchVersionError(Exception):
+    """Batch manifest is missing or conflicts with already merged data."""
+
+
+VERSION_FIELDS = ("schema_version", "rule_version", "implementation_version", "as_of")
+
+
+def _check_batch_version(target, manifest):
+    incoming = {
+        "schema_version": (manifest.get("schema_version") or "").strip(),
+        "rule_version": (manifest.get("rule_version") or "").strip(),
+        "implementation_version": (manifest.get("implementation_version") or "").strip(),
+        "as_of": (manifest.get("as_of") or "")[:10],
+    }
+    missing = [key for key, value in incoming.items() if not value]
+    if missing:
+        raise BatchVersionError("批次缺少版本/快照字段: " + ", ".join(missing))
+    for key, value in incoming.items():
+        current = (target.get(key) or "")[:10] if key == "as_of" else (target.get(key) or "")
+        if not current:
+            target[key] = value
+        elif current != value:
+            raise BatchVersionError(
+                "批次 %s 不一致: 收到 %s，已合并 %s" % (key, value, current))
+
+
 def _merge(target, batch):
+    manifest = batch.get("manifest") or {}
+    _check_batch_version(target, manifest)
     for key in DATASETS:
         target[key].extend(batch.get(key) or [])
-    manifest = batch.get("manifest") or {}
     target["partial"] = target["partial"] or bool(manifest.get("partial"))
     for key, value in (manifest.get("counts") or {}).items():
         target["counts"][key] = target["counts"].get(key, 0) + int(value or 0)
@@ -81,12 +108,6 @@ def _merge(target, batch):
     for note in manifest.get("notes") or []:
         if note not in target["notes"]:
             target["notes"].append(note)
-    if not target["rule_version"] and manifest.get("rule_version"):
-        target["rule_version"] = manifest["rule_version"]
-    if not target["implementation_version"] and manifest.get("implementation_version"):
-        target["implementation_version"] = manifest["implementation_version"]
-    if not target["as_of"] and manifest.get("as_of"):
-        target["as_of"] = manifest["as_of"]
 
 
 def _resolve_sos(codes, base_url, key, secret):
@@ -191,8 +212,8 @@ def main(argv=None):
               "availability_schedule": [], "links": [], "partial": False,
               "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
               "restricted": {}, "external_sources": {},
-              "notes": [], "rule_version": "", "implementation_version": "",
-              "as_of": args.as_of or ""}
+              "notes": [], "schema_version": "", "rule_version": "",
+              "implementation_version": "", "as_of": args.as_of or ""}
     today_str = time.strftime("%Y-%m-%d")
     if args.as_of and args.as_of != today_str:
         print("✗ 历史 as_of 未实现：只能导出当前快照，拒绝 --as-of %s" % args.as_of,
@@ -234,7 +255,7 @@ def main(argv=None):
                 terminated_by = "page_limit"
                 print("  ! 达到 200 页上限，结果可能截断（manifest.truncated=true）",
                       file=sys.stderr)
-    except iss.QueryError as exc:
+    except (iss.QueryError, BatchVersionError) as exc:
         print("✗ 导出失败，未写入新版本: %s" % exc, file=sys.stderr)
         return 1
 
@@ -258,7 +279,7 @@ def main(argv=None):
                                        "rows": len(result[name])}
         generated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         manifest = {
-            "schema_version": SCHEMA_VERSION,
+            "schema_version": result["schema_version"] or SCHEMA_VERSION,
             "rule_version": result["rule_version"],
             "implementation_version": result["implementation_version"],
             "run_id": run_id,
@@ -302,6 +323,7 @@ def main(argv=None):
         "run_id": run_id, "run_dir": str(run_dir),
         "manifest": str(run_dir / "manifest.json"),
         "as_of": result["as_of"],
+        "schema_version": result["schema_version"],
         "rule_version": result["rule_version"],
         "implementation_version": result["implementation_version"],
         "truncated": terminated_by == "page_limit",

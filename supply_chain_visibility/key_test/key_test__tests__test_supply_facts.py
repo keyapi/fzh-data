@@ -581,6 +581,31 @@ class SupplyFactsContractTest(unittest.TestCase):
                          self.facts.IMPLEMENTATION_VERSION)
         self.assertEqual(result["implementation_version"], self.facts.IMPLEMENTATION_VERSION)
 
+    def test_dispatch_milestones_split_quantity_and_date_per_dn(self):
+        ctx = _ctx(dns=[_dn("DN-1", qty=20.0, date="2026-10-01"),
+                        _dn("DN-2", qty=80.0, date="2026-10-10")])
+        rows = [r for r in self.facts.build_milestones(_line(), ctx)
+                if r["node"] == "dispatch"]
+        self.assertEqual(sorted((r["actual_at"], r["qty"]) for r in rows),
+                         [("2026-10-01", 20.0), ("2026-10-10", 80.0)])
+        self.assertTrue(all(r["qty_status"] == "known" for r in rows))
+        self.assertTrue(all(r["source_record"] for r in rows))
+
+    def test_wo_without_start_evidence_is_unknown_not_in_production(self):
+        for docstatus in (0, 1):
+            wo = _wo(qty=100.0, produced=0.0, docstatus=docstatus,
+                     jc_start=None, jc_end=None)
+            stages = self.facts.build_stage_balances(_line(), _ctx(wos=[wo]))
+            by_stage = {r["stage"]: r for r in stages if r["qty"] is not None}
+            self.assertNotIn(self.facts.STAGE_IN_PRODUCTION, by_stage)
+            self.assertEqual(by_stage[self.facts.STAGE_UNKNOWN]["qty"], 100.0)
+            self.assertIn("开工", by_stage[self.facts.STAGE_UNKNOWN]["exclusion_reason"])
+            self.assertNotIn(self.facts.STAGE_NOT_PLANNED, by_stage)
+        started = _wo(qty=100.0, produced=0.0, docstatus=0)
+        stages = self.facts.build_stage_balances(_line(), _ctx(wos=[started]))
+        self.assertEqual(sum(r["qty"] for r in stages
+                             if r["stage"] == self.facts.STAGE_IN_PRODUCTION), 100.0)
+
     def test_case8_rebuild_is_stable_and_partial_is_explicit(self):
         ctx = _ctx(wos=[_wo()], dns=[_dn()])
         first = self.facts.build_line_facts(_line(), ctx)
