@@ -15,7 +15,7 @@ status: verified
 `decision-pack-2026-10-29-r2/`，manifest 记录原包 manifest 哈希
 `aeacad90a2f3fe57fcc2ac2a24cd1e2598a12ea2eaa4f365972e29894234b84f`（supersedes）。
 
-代码提交：`9f3285e3`（`git_dirty=false`）；测试 **192 通过**（新增 14 条 F1–F7 回归）。
+代码提交：`cd114d34`（`git_dirty=false`）；测试 **193 通过**（F1–F7 回归 14 条 + sku_map 冻结校验 1 条）。
 
 ## 1. 逐项修复
 
@@ -26,6 +26,7 @@ status: verified
 | **F3** | `_per_uom_buffers` / `_reconcile` | ABC 与全部数量汇总按 `canonical_uom` 分组；多 UOM 时顶层情景标量为 `null`，只给 `scenarios_by_uom`；组内第一名恒为 A | `test_mixed_uom_has_no_unscaled_scalar`（10 个 + 3 套 → 不出现 13）、`test_abc_tiers_are_computed_within_each_uom` |
 | **F4** | `_reconcile` / `_map_forecast_keys` | 独立重建规范化输入键集合，与唯一输出键集合比对（missing/unexpected/duplicate），失败抛错；输出 255 行无法规范化预测源行明细（CSV + sheet + manifest 账） | `test_missing_input_key_fails_reconciliation`、`test_forecast_source_rows_are_fully_accounted` |
 | **F5** | `_verify_r5_outputs` / `load_inputs` | 消费前核验 r5 三个产物哈希；预测窗口/manifest 与 r5 冻结值不符即拒绝；记录并校验历史需求与 `sku_map.tsv` 的路径+sha256；`forecast_generated_by` 与 `reviewed_commit` 分列；`verified=true` 只用于实际校验通过项 | `test_manifest_records_history_and_sku_map_hashes`、`test_history_hash_mismatch_is_refused`、`test_r5_output_hash_mismatch_is_refused` |
+| **F5-minor** | `FROZEN_SKU_MAP_SHA256` / `load_inputs` / CLI | sku_map 不只是「记录哈希」：默认硬校验冻结值 `7da3dfd6…d42e`，不符即拒绝；`--sku-map-sha256` 可显式覆盖（空串跳过，仅调试）；`manifest.verification.sku_map_recorded` 收窄为 `sku_map_verified`（只有实际校验通过才 true），`sources.sku_map` 记录 `expected_sha256` 与 `verified` | `test_frozen_sku_map_hash_is_enforced` |
 | **F6** | `_decide` | 改名 `qty_low_counterfactual`，并写 `qty_low_semantics`（“假设无 ETA 条件供应可用，未获证据前不可采用”）；`qty_high` 不扣条件供应 | `test_qty_high_ignores_conditional_and_low_is_marked` |
 | **F7** | `build_pack` / `_decide` | `first_gap_bucket_start` + `first_gap_bucket_end` + `bucket_granularity`；`gap_today_note` 明示“净额视界末累计未满足量，不是某天缺口” | `test_bucket_fields_and_notes` |
 
@@ -48,6 +49,7 @@ status: verified
 | `qty_low_counterfactual` 合计 | 340（个，反事实口径，不用于决策） |
 | 预测源行 | 4,518 = 规范化 4,263 + 排除 255（全部 `sku_mapping_missing_or_ambiguous`） |
 | 严格 JSON | 0 个 `NaN`/`Infinity` 标记，`parse_constant` 严格解析通过 |
+| sku_map 冻结校验 | `7da3dfd6…d42e` 实测一致；不一致时 `load_inputs` 直接拒绝（回归覆盖） |
 
 ## 3. 产物
 
@@ -57,7 +59,7 @@ status: verified
 |---|---|
 | `decision_pack_2026-10-29.parquet` | `f489aa4fac3e` |
 | `decision_pack_2026-10-29.json` | `375ff16c657c` |
-| `decision_pack_2026-10-29.xlsx` | `7cbcde1b331e` |
+| `decision_pack_2026-10-29.xlsx` | `2517fa56a30d` |
 | `forecast_source_excluded.csv` | `a32bab34c835` |
 | `decision_pack_manifest.json` | 见文件 |
 
