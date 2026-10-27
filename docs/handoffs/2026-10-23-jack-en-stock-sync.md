@@ -229,7 +229,9 @@ df -h /home/frappe
 - `Tongtool Settings` 新增：`enable_stock_intraday`（默认 0）、`stock_intraday_eu_warehouses`、`stock_intraday_us_warehouses`；**时间固定写在 `hooks.py`**，改时间改两行 cron + restart，slot 名不变。
 - `Tongtool Stock Run`：`job=stock_intraday_eu` / `stock_intraday_us`；`data_path` 指向 `stock_intraday.parquet`。
 - 测试站实测：EU 1,371 行 / 15 请求 / 3m03；US 3,096 行 / 34 请求 / 6m58；EU 复跑仍 1,371（不追加）；`stock.parquet` mtime 未变。
+- **生产 2026-10-27 已部署并启用**：EU 手工冒烟 1,371 行 / 3m04；18:00 美国槽首次自动运行；`stock.parquet` 未被改动。
 - 生产部署后显式设 `enable_stock_intraday=1`（旧 Single 不会自动填默认）。
+- **周一建议（暂不实施）**：若 18:00 仍赶不上周一的量，可后续加 `0 19 * * 1` 美国槽；当前统一 18:00。
 
 ## 14. Jack 开工 checklist
 

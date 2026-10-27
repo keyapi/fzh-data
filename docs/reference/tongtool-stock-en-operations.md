@@ -34,11 +34,13 @@ tags: [tongtool, inventory, erpnext, operations, runbook, duckdb, parquet]
 |---|---|---|
 | 每日任务 | EN 生产，`tongtool_integration` app，05:17 | 抓 14 个启用仓，写当前表/运行日志/Parquet |
 | 库存变动 | EN 生产，同一 app，05:47 | 抓 14 仓的库存变动明细（退货/盘点/调拨/包裹），写 `stock_change.parquet` |
+| 盘中快照 | EN 生产，同一 app，12:00 / 18:00 | 12:00 只抓波兰；18:00 只抓美东+美中；独立 `stock_intraday.parquet`（slot=eu/us） |
 | 失败重试 | 06:17 / 07:17（快照）；变动靠 6 天窗口自愈 | 当天 Run 不 complete 才重跑；文件锁防并发 |
 | 当前视图 | MariaDB DocType `Tongtool Stock Latest` | 每仓×SKU 一行，约 5.3k 行 |
 | 运行日志 | MariaDB DocType `Tongtool Stock Run` | 每次运行一行；`job` 区分 `stock_snapshot` / `stock_change` |
 | 历史 | `/home/frappe/fzh-inventory/stock.parquet` | 单个 Parquet；不写 EN 数据库 |
-| 库存变动 | `/home/frappe/fzh-inventory/stock_change.parquet` | 单个 Parquet；事件级，按事件去重；保留 7 天内可补 |
+| 库存变动 | `/home/frappe/fzh-inventory/stock_change.parquet` | 单个 Parquet；事件级，按事件去重；保留 6 天内可补（通途严格 7 天） |
+| 盘中快照 | `/home/frappe/fzh-inventory/stock_intraday.parquet` | 单个 Parquet；`slot=eu/us`；按 `(日期, slot)` 覆盖 |
 | 外部查询 | Frappe REST + whitelist history API | 当前/运行走 REST；历史走 DuckDB 读 Parquet |
 
 **EN 数据库里没有“每日历史表”**。当前/运行是 MariaDB；历史是 Parquet。DuckDB 只是读 Parquet 的查询引擎（bench env 里的 Python 包），不是独立服务。
@@ -125,6 +127,8 @@ ls -lh /home/frappe/fzh-inventory
 - `Tongtool Stock Run` 过滤 `job = stock_intraday_eu` / `stock_intraday_us`；`data_path` 指向该文件
 - **不改 05:17 的 `stock.parquet`**；两个文件分开，日快照仍是每天一份
 - 时间固定写在 `hooks.py`；要改时间改两行 cron + `bench restart`（slot 名仍是 `eu`/`us`，不随时间变）
+- **生产 2026-10-27 已部署并启用**：EU 手工冒烟 1,371 行 / 3m04；18:00 美国槽首次自动运行；`stock.parquet` 未被改动
+- **周一建议（暂不实施）**：若 18:00 仍赶不上周一的量，可后续加 `0 19 * * 1` 美国槽；当前统一 18:00
 - 手动补跑见 §9
 
 ## 4. 查看最新库存
