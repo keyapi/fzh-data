@@ -133,7 +133,48 @@ def sha256_of(path: str | Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def join_actions(wide: pd.DataFrame, pack: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def tag_baseline(merged: pd.DataFrame, baseline: pd.DataFrame | None) -> pd.DataFrame:
+    """标出「上一版就建议补货」与「本版新增建议」的键，便于对照动作变化。"""
+    if baseline is None or not len(baseline):
+        merged["baseline_group"] = ""
+        return merged
+    cols = [c for c in JOIN_KEY]
+    base = baseline[baseline["destination"] == DEST_REPLENISH]
+    base_keys = set(map(tuple, base[cols].values))
+    labels = []
+    for row in merged.itertuples(index=False):
+        key = tuple(getattr(row, c) for c in cols)
+        if str(getattr(row, "destination")) != DEST_REPLENISH:
+            labels.append("")
+        elif key in base_keys:
+            labels.append("original")
+        else:
+            labels.append("new")
+    merged["baseline_group"] = labels
+    return merged
+
+
+def _group_stats(merged: pd.DataFrame) -> dict:
+    out = {}
+    for group in ("original", "new"):
+        subset = merged[merged["baseline_group"] == group]
+        if not len(subset):
+            continue
+        out[group] = dict(
+            keys=int(len(subset)),
+            qty_current=round(float(pd.to_numeric(subset.get("qty_current"), errors="coerce")
+                                    .fillna(0).sum()), 3),
+            actions={str(k): int(v) for k, v in subset["action"].value_counts().items()},
+            action_qty=round(float(pd.to_numeric(subset.get("action_qty"), errors="coerce")
+                                   .fillna(0).sum()), 3),
+            residual=round(float(pd.to_numeric(subset.get("residual_gap"), errors="coerce")
+                                 .fillna(0).sum()), 3),
+        )
+    return out
+
+
+def join_actions(wide: pd.DataFrame, pack: pd.DataFrame,
+                 baseline: pd.DataFrame | None = None) -> tuple[pd.DataFrame, dict]:
     """返回 (带动作的宽表, join 统计)。原列顺序与数量列不变。"""
     base = wide.copy()
     original_columns = list(base.columns)
@@ -176,9 +217,12 @@ def join_actions(wide: pd.DataFrame, pack: pd.DataFrame) -> tuple[pd.DataFrame, 
         applicability.append(HAS_EVIDENCE)
         merged.at[index, "missing_evidence"] = ""
         if dest == DEST_NOT_COMPUTABLE:
-            merged.at[index, "action"] = ACTION_NOT_COMPUTABLE
+            # 不可算：动作留空（不给补单，也不假装有动作），原因留在 basis
+            merged.at[index, "action"] = ""
             merged.at[index, "action_qty"] = None
             merged.at[index, "residual_gap"] = None
+            merged.at[index, "action_basis"] = (
+                f"净额不可算（{row.get('destination_reason') or 'no_snapshot_basis'}），不给出动作")
             continue
         if dest == DEST_NO_NEED:
             merged.at[index, "action"] = ACTION_NO_NEED
@@ -197,6 +241,7 @@ def join_actions(wide: pd.DataFrame, pack: pd.DataFrame) -> tuple[pd.DataFrame, 
             merged.at[index, "action_basis"] = basis
             merged.at[index, "action_confidence"] = confidence
     merged["action_applicability"] = applicability
+    merged = tag_baseline(merged, baseline)
 
     stats = dict(
         rows_wide=int(len(base)),
@@ -218,6 +263,7 @@ def join_actions(wide: pd.DataFrame, pack: pd.DataFrame) -> tuple[pd.DataFrame, 
                                           & (~merged["action"].astype(str).isin(REPLENISH_ACTIONS))).sum()),
         # 诊断：动作层原判“无需补”的行数（重算前），用于证明口径差已消除
         legacy_action_layer_mismatches=int(conflicts),
+        baseline_groups=_group_stats(merged),
         replenish_action_values=sorted({str(a) for a, d in
                                         zip(merged["action"], destination)
                                         if d == DEST_REPLENISH}),
@@ -265,6 +311,10 @@ def main(argv=None) -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--previous", default=None,
                         help="上一版 actions 目录（仅记录 lineage，不读其数据）")
+    parser.add_argument("--baseline-actions", default=None,
+                        help="上一版（如 r2）actions parquet，用于标出 original/new 建议键")
+    parser.add_argument("--versions-note", default=None,
+                        help="自由文本：本版宽表对应的净额版本标签（如 h180 / r6）")
     args = parser.parse_args(argv)
 
     wide_path, pack_path, out_dir = Path(args.wide), Path(args.pack), Path(args.out)
@@ -272,7 +322,8 @@ def main(argv=None) -> int:
     wide = pd.read_parquet(wide_path)
     pack = pd.read_csv(pack_path, encoding="utf-8-sig")
 
-    merged, stats = join_actions(wide, pack)
+    baseline = pd.read_parquet(args.baseline_actions) if args.baseline_actions else None
+    merged, stats = join_actions(wide, pack, baseline=baseline)
 
     parquet_path = out_dir / "decision_pack_2026-10-29_actions.parquet"
     csv_path = out_dir / "decision_pack_2026-10-29_actions.csv"
@@ -296,6 +347,17 @@ def main(argv=None) -> int:
         },
         join=dict(key=JOIN_KEY, how="left", validate="one_to_one", **stats),
         lineage=_lineage(args.previous),
+        versions=dict(
+            note=args.versions_note or "宽表为 h180 版（180 天视界）；动作层沿用 r5 键集",
+            wide_sha256=sha256_of(wide_path),
+            action_layer_sha256=sha256_of(pack_path),
+            baseline_actions_sha256=(sha256_of(Path(args.baseline_actions))
+                                     if args.baseline_actions else None),
+            netting_run_id=sorted({str(v) for v in wide.get("netting_run_id", pd.Series(dtype=str))
+                                   .dropna().unique()}) if "netting_run_id" in wide else [],
+            horizon_end=sorted({str(v) for v in wide.get("netting_horizon_end", pd.Series(dtype=str))
+                                .dropna().unique()}) if "netting_horizon_end" in wide else [],
+        ),
         rules={
             "待核": "动作留空，action_applicability=no_supply_evidence，不写补单",
             "不可算": "action=不可算",

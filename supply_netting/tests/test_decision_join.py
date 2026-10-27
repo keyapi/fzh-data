@@ -94,7 +94,9 @@ def test_no_need_and_not_computable_follow_destination():
     )
     by_sku = frame.set_index("canonical_sku")
     assert by_sku.loc["S1", "action"] == ACTION_NO_NEED
-    assert by_sku.loc["S2", "action"] == ACTION_NOT_COMPUTABLE
+    # 不可算：动作留空，但原因写进 action_basis（h180 口径）
+    assert str(by_sku.loc["S2", "action"]) == ""
+    assert "不可算" in str(by_sku.loc["S2", "action_basis"])
     assert by_sku.loc["S1", "action_applicability"] == HAS_EVIDENCE
 
 
@@ -151,3 +153,28 @@ def test_duplicate_join_keys_in_pack_are_rejected():
     duplicate = pack([pack_row("S1", ACTION_BUY), pack_row("S1", ACTION_SHIP)])
     with pytest.raises(ValueError):
         join_actions(wide([row("S1", ACTION_REPLENISH, "模型化缺口 > 0", qty=1.0)]), duplicate)
+
+
+def test_baseline_grouping_splits_original_and_new_keys():
+    wide_frame = wide([row("S1", ACTION_REPLENISH, "模型化缺口 > 0", qty=4.0),
+                       row("S2", ACTION_REPLENISH, "模型化缺口 > 0", qty=6.0),
+                       row("S3", ACTION_PENDING, "预测键未过资格", qty=None)])
+    pack_frame = pack([pack_row("S1", ACTION_SHIP, produced=9.0),
+                       pack_row("S2", ACTION_BUY)])
+    baseline = pd.DataFrame([dict(canonical_sku="S1", canonical_warehouse="W",
+                                  canonical_uom="个", destination=ACTION_REPLENISH)])
+    frame, stats = join_actions(wide_frame, pack_frame, baseline=baseline)
+    groups = frame.set_index("canonical_sku")["baseline_group"].to_dict()
+    assert groups == {"S1": "original", "S2": "new", "S3": ""}
+    assert stats["baseline_groups"]["original"]["keys"] == 1
+    assert stats["baseline_groups"]["new"]["keys"] == 1
+    assert stats["destination_action_conflicts"] == 0
+
+
+def test_all_suggested_actions_stay_within_five_and_pending_stay_empty():
+    wide_frame = wide([row("S1", ACTION_REPLENISH, "模型化缺口 > 0", qty=10.0),
+                       row("S2", ACTION_PENDING, "预测键未过资格", qty=None)])
+    frame, stats = join_actions(wide_frame, pack([pack_row("S1", ACTION_BUY)]))
+    assert set(frame.loc[frame.destination == ACTION_REPLENISH, "action"]) <= set(REPLENISH_ACTIONS)
+    assert stats["destination_action_conflicts"] == 0
+    assert str(frame.loc[frame.destination == ACTION_PENDING, "action"].iloc[0]) == ""
