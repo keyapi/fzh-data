@@ -15,8 +15,8 @@ from frappe.utils import getdate, now_datetime, today
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v1"
-RULE_VERSION = "2026-10-27.4"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.4"
+RULE_VERSION = "2026-10-27.5"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.5"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -28,6 +28,7 @@ STAGE_CANCELLED = "cancelled"
 STAGE_RETURNED = "returned"
 STAGE_DRAFT = "draft_dn"
 STAGE_UNKNOWN = "unknown"
+STAGE_OVER_PRODUCED = "over_produced"
 
 ARRIVED_STATUSES = {
     "已到港", "清关中", "已清关", "已转运", "派送中", "已签收", "已上传POD",
@@ -144,12 +145,33 @@ def build_stage_balances(line, ctx):
                 allocated_by_item[item] += amount
         else:
             unallocated.append(ret)
+    gross_by_dn = defaultdict(float)
+    for dn in nonreturns:
+        gross_by_dn[dn.get("dn")] += _num(dn.get("qty"))
+    matched_total = 0.0
+    excess_total = 0.0
+    for dn_name, amount in allocated.items():
+        if amount <= 0:
+            continue
+        gross = gross_by_dn.get(dn_name, 0.0)
+        matched_total += min(amount, gross)
+        excess_total += max(0.0, amount - gross)
+    unallocated_total = sum(-_num(r.get("qty")) for r in unallocated)
     returned_total = sum(-_num(r.get("qty")) for r in returns)
-    if returned_total > 1e-9:
-        rows.append(_balance(line, STAGE_RETURNED, returned_total, uom,
-                             detail="销售退货（%d 张）" % len(returns),
-                             reason=("退货未关联原出库单，实物去向未证"
-                                     if unallocated else "已按原出库单抵扣"),
+    if matched_total > 1e-9:
+        rows.append(_balance(line, STAGE_RETURNED, matched_total, uom,
+                             detail="销售退货（已按原出库单抵扣）",
+                             reason="已按原出库单抵扣",
+                             demand_status=demand_status))
+    if excess_total > 1e-9:
+        rows.append(_balance(line, STAGE_RETURNED, excess_total, uom,
+                             detail="超退：退货超过原出库数量",
+                             reason="超出原出库的可抵扣量，超退部分无原单可抵",
+                             demand_status=demand_status))
+    if unallocated_total > 1e-9:
+        rows.append(_balance(line, STAGE_RETURNED, unallocated_total, uom,
+                             detail="销售退货（未关联原出库单）",
+                             reason="退货未关联原出库单，实物去向未证",
                              demand_status=demand_status))
 
     numbers = ctx.get("numbers_by_dn") or {}
@@ -245,6 +267,16 @@ def build_stage_balances(line, ctx):
                              qty_basis="wo_produced_qty" if produced_estimated
                              else "job_card_first_op",
                              demand_status=demand_status))
+    over_produced = max(0.0, produced_total - produced_capped)
+    if over_produced > 1e-9:
+        rows.append(_balance(
+            line, STAGE_OVER_PRODUCED, over_produced, uom,
+            detail="超订单完工（来源完工 %g / 订单 %g）" % (produced_total, _num(qty)),
+            source=",".join(w.get("wo") for w in own_wos),
+            reason="超订单完工未分配至本订单；不计入订单阶段余额与可售供给",
+            qty_status="estimated" if produced_estimated else "known",
+            qty_basis="wo_produced_qty" if produced_estimated else "job_card_first_op",
+            demand_status="excess"))
     if not cancelled and remaining > 1e-9:
         return_gap = min(returned_total, remaining)
         if return_gap > 1e-9:
@@ -321,7 +353,8 @@ def build_stage_balances(line, ctx):
 
     known = sum(r["qty"] for r in rows
                 if r["qty"] is not None
-                and r["stage"] not in (STAGE_RETURNED, STAGE_DRAFT, STAGE_CANCELLED))
+                and r["stage"] not in (STAGE_RETURNED, STAGE_DRAFT, STAGE_CANCELLED,
+                                       STAGE_OVER_PRODUCED))
     diff = round(_num(qty) - known, 6)
     if diff > 1e-6:
         rows.append(_balance(line, STAGE_UNKNOWN, diff, uom,
@@ -361,6 +394,13 @@ def build_milestones(line, ctx):
         return "来源单位 %s 与订单单位 %s 不一致或缺失，数量未归一" % (
             "/".join(sorted(u or "缺失" for u in units)) or "缺失", order_uom or "缺失")
 
+    def over_note(total):
+        order_qty = _num(line.get("qty"))
+        if total > order_qty + 1e-9:
+            return "来源数量 %g 超过订单量 %g，超额部分见阶段余额 over_produced" % (
+                total, order_qty)
+        return ""
+
     add("order_placed", actual=line.get("transaction_date"), qty=line.get("qty"),
         source="Sales Order.transaction_date")
     add("promised_delivery", baseline=line.get("delivery_date"), latest=line.get("delivery_date"),
@@ -376,19 +416,21 @@ def build_milestones(line, ctx):
         jc_ends = [w["jc_end"] for w in own_wos if w.get("jc_end")]
         wo_units = {w.get("stock_uom") or "" for w in own_wos}
         wo_units_ok = wo_units == {order_uom}
+        start_total = sum(_num(w.get("qty")) for w in own_wos)
+        end_total = sum(_num(w.get("produced")) for w in own_wos)
         add("production_start", baseline=min(starts, default=None),
             latest=min(starts, default=None), actual=min(jc_starts, default=None),
-            qty=(min(sum(_num(w.get("qty")) for w in own_wos), _num(line.get("qty")))
-                 if wo_units_ok else None),
+            qty=start_total if wo_units_ok else None,
             source="Work Order/JC",
             note=join_notes("有计划无报工时不填实际",
+                            over_note(start_total) if wo_units_ok else "",
                             "" if wo_units_ok else unit_note(wo_units)))
         add("production_end", baseline=max(ends, default=None),
             latest=max(ends, default=None), actual=max(jc_ends, default=None),
-            qty=(min(sum(_num(w.get("produced")) for w in own_wos), _num(line.get("qty")))
-                 if wo_units_ok else None),
+            qty=end_total if wo_units_ok else None,
             source="Work Order/JC",
             note=join_notes("实际完工取工序卡；计划仅供延期分析",
+                            over_note(end_total) if wo_units_ok else "",
                             "" if wo_units_ok else unit_note(wo_units)))
 
     submitted = [d for d in (ctx.get("dns") or []) if int(d.get("docstatus") or 0) == 1]
@@ -452,7 +494,8 @@ def build_availability(line, ctx, stage_rows):
         dn_items[(dn.get("dn"), dn.get("warehouse"), dn.get("uom"))] = dn.get("dn_item") or ""
     rows = []
     for stage_row in stage_rows:
-        if stage_row["stage"] in (STAGE_CANCELLED, STAGE_UNKNOWN, STAGE_RETURNED, STAGE_DRAFT):
+        if stage_row["stage"] in (STAGE_CANCELLED, STAGE_UNKNOWN, STAGE_RETURNED,
+                                  STAGE_DRAFT, STAGE_OVER_PRODUCED):
             continue
         if stage_row.get("demand_status") == "cancelled":
             continue

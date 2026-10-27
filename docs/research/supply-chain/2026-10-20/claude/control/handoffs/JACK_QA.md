@@ -332,7 +332,7 @@ channel: docs/jack-w1-channel
 - 契约与字段：`supply_chain_visibility/docs/reference/supply-facts-contract.md`（stage_balances / milestones / availability_schedule / links / manifest）。
 - 代码：key_test `key_test/supply_facts.py`（whitelist `get_supply_facts`）；本地批量入口 `EN_API/supply_facts_export.py`（JSON+Excel+sha256+latest 原子指针）。
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口同一方法。
-- 验收：单 SO `SO-26-00026` → 3 行、三行阶段余额守恒 10/5/8，查询约 0.8s；测试站全范围（含取消订单）292 行 → 308 余额 / 656 里程碑 / 287 片段 / 404 关联，0.85s；契约单测 38 项 + 合并/版本一致性 7 项全绿。
+- 验收：单 SO `SO-26-00026` → 3 行、三行阶段余额守恒 10/5/8，查询约 0.8s；测试站全范围（含取消订单）292 行 → 308 余额 / 656 里程碑 / 287 片段 / 404 关联，0.85s；契约单测 41 项 + 合并/版本一致性 7 项全绿。
 - 审核整改（2026-10-27 第一轮）：行级权限按 `get_list` 可读集合取数；出库单位不一致不归一；退货按 `return_against` 抵扣；取消订单保留实物片段；片段 ID 加订单行前缀；manifest 相对路径、`observed_at`/`as_of` 分离、200 页上限标 `truncated`、显式 `external_sources`。
 - 审核整改（2026-10-27 第二轮）：可售片段继承阶段单位；退货不再生成「待出库」供给；受限来源（含行级）无法判断的阶段置 unknown；历史 `as_of` 服务端拒绝；批次合并 `restricted` 按 OR、`sources` 按 AND、外部来源保守保留 `not_integrated`；空结果保留 `empty_reason`/`partial=true`。
 - 审核整改（2026-10-27 第三轮）：在产按 `min(Σ工单量, 订单量)` 覆盖量分配，超出覆盖进未计划；退货缺口先记 unknown 再分配，不再制造虚假在产；milestones/links 与阶段余额统一单位校验（缺失/不一致不归一、工单单位不一致→unknown）；片段 ID 加仓库+DN 明细行身份并保留实际出库仓库；全部授权过滤时 `empty_reason=all_restricted`。`RULE_VERSION=2026-10-27.2`。
@@ -343,6 +343,7 @@ channel: docs/jack-w1-channel
 - 第四轮测试站验收（2026-10-27，key_test `a619801`）：服务端 92 项 unittest OK；单 SO `SO-26-00026` → 3 行 / 9 余额 / 16 里程碑 / 7 片段 / 17 关联（守恒 10/5/8，0.80s）；全范围 292 行 → 310 余额 / 656 里程碑 / 280 片段 / 404 关联（0.33s，`exhausted`）；片段 ID 无重复、非取消行全部守恒；manifest 与 `latest.json` 均携带 `rule_version=2026-10-27.3`、`implementation_version=key_test.supply_facts@2026-10-27.3`。现网无「多仓同 DN」与「计划单位不一致」样本，这两类由 `load_dns → 阶段 → 片段` 贯穿测试覆盖。
 - 审核整改（2026-10-27 第五轮）：`dispatch` 里程碑按出库单拆分（日期=该单过账日、数量=该单过账量，退货在阶段余额净额），不再把多张单数量累加到最早日期；在产必须有开工证据（工序卡实际开工或已完工），草稿/无开工工单只算计划覆盖并进 unknown；批量导出合并前校验 `schema_version`/`rule_version`/`implementation_version`/`as_of`，不一致拒绝该批次、不写新版本、`latest.json` 保持上次成功版本。`RULE_VERSION`/`IMPLEMENTATION_VERSION` 升到 `2026-10-27.4`。
 - 第五轮测试站验收（2026-10-27，key_test `ce662d6`）：服务端 94 项 unittest OK；单 SO `SO-26-00026` → 3 行 / 9 余额 / 16 里程碑 / 6 片段 / 17 关联（守恒 10/5/8，0.78s）；全范围 292 行 → 310 余额 / 656 里程碑 / 259 片段 / 404 关联（0.58s，`exhausted`）；片段 ID 无重复、非取消行全部守恒；3 条 `dispatch` 节点逐单核对日期/数量与 `shipped_by` 链接一致；28 条在产中 21 条因缺开工证据转为 unknown（现网草稿工单较多）；manifest 与 `latest.json` 均携带 `schema_version=supply-facts/v1`、`rule_version=2026-10-27.4`、`implementation_version=key_test.supply_facts@2026-10-27.4`。
+- 审核整改（2026-10-27 第六轮）：超订单完工不再截断——订单分配仍按订单量，但新增 `over_produced` 阶段保留来源完工总量与超出量（`demand_status=excess`，不计入订单守恒/可售供给，取消订单同样保留）；开工/完工节点数量改回来源数量并在 `note` 标注超额。超退不再整笔标记为已抵扣——`returned` 行拆为实际抵扣 / 超退 / 未关联原单三部分（之和等于退货原值），超退标「无原单可抵」。`RULE_VERSION`/`IMPLEMENTATION_VERSION` 升到 `2026-10-27.5`；SO 链条视图新增「超产未分配」标签（需 clear-cache + 浏览器缓存刷新）。
 - 9 SKU：生产只读解析出 99 张 SO；测试站无该样本（0 张），生产未部署新模块（本任务不授权生产部署），**待授权后验收**。
 - 边界：到仓/上架无 EN 证据 → `delivered_sellable` 不产出、`eligible=false`；多运单不摊量；无独立承诺字段；时区未证；PO/入库/预留/新鲜度未并入 EN 事实。
 - 生产未部署；#314 仍 open，由 #318 接管。PR 评论只发本段短指针。

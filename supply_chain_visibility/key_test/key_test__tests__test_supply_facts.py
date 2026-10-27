@@ -606,6 +606,50 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(sum(r["qty"] for r in stages
                              if r["stage"] == self.facts.STAGE_IN_PRODUCTION), 100.0)
 
+    def test_over_production_keeps_source_and_records_excess(self):
+        wo = _wo(qty=150.0, produced=150.0)
+        ctx = _ctx(wos=[wo])
+        stages = self.facts.build_stage_balances(_line(), ctx)
+        by_stage = {r["stage"]: r for r in stages if r["qty"] is not None}
+        self.assertEqual(by_stage[self.facts.STAGE_PRODUCED_PENDING]["qty"], 100.0)
+        excess = by_stage[self.facts.STAGE_OVER_PRODUCED]
+        self.assertEqual(excess["qty"], 50.0)
+        self.assertEqual(excess["demand_status"], "excess")
+        self.assertIn("150", excess["stage_detail"])
+        self.assertAlmostEqual(self._sum_executed(stages), 100.0)
+        tranches = self.facts.build_availability(_line(), ctx, stages)
+        self.assertFalse([t for t in tranches
+                          if t["stage"] == self.facts.STAGE_OVER_PRODUCED])
+        miles = self.facts.build_milestones(_line(), ctx)
+        start = next(r for r in miles if r["node"] == "production_start")
+        end = next(r for r in miles if r["node"] == "production_end")
+        self.assertEqual(start["qty"], 150.0)
+        self.assertEqual(end["qty"], 150.0)
+        self.assertIn("订单", end["note"])
+
+    def test_cancelled_order_still_records_over_production(self):
+        stages = self.facts.build_stage_balances(
+            _line(so_docstatus=2), _ctx(wos=[_wo(qty=150.0, produced=150.0)]))
+        by_stage = {r["stage"]: r["qty"] for r in stages if r["qty"] is not None}
+        self.assertEqual(by_stage[self.facts.STAGE_OVER_PRODUCED], 50.0)
+        self.assertEqual(by_stage[self.facts.STAGE_CANCELLED], 100.0)
+
+    def test_over_return_keeps_original_and_flags_excess(self):
+        dns = [_dn(qty=20.0),
+               _dn(name="DN-R", qty=-30.0, is_return=1, return_against="DN-1")]
+        stages = self.facts.build_stage_balances(_line(), _ctx(dns=dns))
+        returned = [r for r in stages if r["stage"] == self.facts.STAGE_RETURNED]
+        self.assertEqual(sorted(r["qty"] for r in returned), [10.0, 20.0])
+        excess = next(r for r in returned if r["qty"] == 10.0)
+        self.assertIn("超退", excess["exclusion_reason"])
+        matched = next(r for r in returned if r["qty"] == 20.0)
+        self.assertIn("抵扣", matched["exclusion_reason"])
+        self.assertFalse([r for r in stages
+                          if r["stage"] == self.facts.STAGE_IN_TRANSIT])
+        self.assertAlmostEqual(sum(r["qty"] for r in stages if r["qty"] is not None
+                                   and r["stage"] not in (self.facts.STAGE_RETURNED,
+                                                          self.facts.STAGE_DRAFT)), 100.0)
+
     def test_case8_rebuild_is_stable_and_partial_is_explicit(self):
         ctx = _ctx(wos=[_wo()], dns=[_dn()])
         first = self.facts.build_line_facts(_line(), ctx)
