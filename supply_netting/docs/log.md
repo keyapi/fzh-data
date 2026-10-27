@@ -51,3 +51,11 @@ updated: 2026-10-27
 - R3：预测入口按上游 manifest 校验窗口 sha256 与行数，新增 --forecast-manifest-sha256。
 - r5 复算：代码 d4fc0862（git_dirty=false），数字与上一轮完全一致；预测哈希已验证。
 - 测试 159 通过（supply_netting 136 + 上游 23）。
+
+## 2026-10-27 — 第三轮复审 R3 元数据收口
+
+- 行数契约：`outputs[].rows` 必须是显式正整数；缺失/null/bool/小数/字符串/≤0
+  一律 `ForecastContractError`，并与未筛选完整表行数比较。
+- 验证状态：`manifest_sha256_verified` 只在传了预期哈希且匹配时为 true，
+  否则标 `unpinned`；新增 `manifest_sha256_pinned` / `manifest_sha256_verification`。
+- 测试 163 通过（supply_netting 140 + 上游 23）；r5 数字不变，预测量仍是 2,378.272644。

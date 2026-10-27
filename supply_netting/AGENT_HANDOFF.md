@@ -64,8 +64,11 @@
     只有同一额度跨阶段重放才去重；拆分合计≠父余额直接报错。
 17. **期初未知就是未知**：混合已知+未证期初 → `opening=null` 并给 `opening_lower_bound`，
     不能用精确小计隐含未知为零。
-18. **预测哈希**：消费前按上游 manifest 的 `outputs` 校验窗口 sha256 与行数；
-    缺失/重复/错配一律 `ForecastContractError`。
+18. **预测哈希**：消费前按上游 manifest 的 `outputs` 校验窗口 sha256 与**正整数**行数；
+    缺失/重复/错配/null/小数/字符串一律 `ForecastContractError`。
+19. **验证状态不冒充**：`manifest_sha256_verified=true` 只在传入
+    `--forecast-manifest-sha256` 且匹配时成立；否则 `unpinned`。窗口哈希只证明
+    「文件=上游声明」，不证明「manifest=期望版本」。
 
 ## 4. 两种情景
 

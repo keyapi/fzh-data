@@ -22,9 +22,25 @@ status: implemented
 | `schema_version == en-demand-forecast-v1` | 否则报错 |
 | CLI `--forecast-run-id` 与 CURRENT 一致 | 不一致报错，静默换版本被禁止 |
 | 窗口表必需列 | 缺列报错 |
+| 窗口文件 sha256 与 `outputs` 声明一致 | 缺失/重复/错配报错 |
+| `outputs[].rows` 是显式正整数 | 缺失/null/bool/小数/字符串/≤0 一律报错 |
+| `outputs[].rows` 与未筛选的完整表行数一致 | 不符报错 |
+| `--forecast-manifest-sha256`（可选） | 给出时必须匹配；不给则 manifest 标 `unpinned` |
 
 manifest 至少记录：run_id、manifest/窗口文件 sha256、decision_date、data_cutoff、
 窗口起止、lead_days、使用/排除行数、预测总量、摊分规则、预测代码 commit。
+
+### 验证状态（不冒充）
+
+| 场景 | `manifest_sha256_verified` | `manifest_sha256_verification` |
+|---|---|---|
+| 传了预期哈希且匹配 | `true` | `pinned_match` |
+| 传了预期哈希但不匹配 | 直接 `ForecastContractError`，不产出 | — |
+| 没传预期哈希 | `false` | `unpinned` |
+
+窗口文件哈希是**每次都对照上游 `outputs` 声明**校验的，因此
+`windows_sha256_verified` 恒为 `true`；它只证明「文件 = 上游声明」，
+不证明「上游 manifest 就是调用方期望的那一版」——后者只有 pin 才能证明。
 
 ## 2. 资格：预测 ≠ 需求净额
 
