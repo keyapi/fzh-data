@@ -36,3 +36,14 @@ updated: 2026-10-27
 - EN `Item.stock_uom` 有界补建 1,627 个物料（1,622 个 + 5 套），零缺失。
 - GS 历史 18,317 行通过唯一 EN 行匹配补齐发货形态；其余保持 unknown。
 - 离线测试新增 10 个 canonical 用例（共 31 个）。
+
+## 2026-10-27（审核返修 da4fa1e6）
+
+- 五类未证合并子仓（FZH-DANEEY 半成品/成品/皮壳/退货、FZHPoland-finished）保留原行但
+  阻断净额（`subwarehouse_identity_unproven`）；90,286 行 / 98,068 件从可净额移出。
+- 新增 `demand_netting.parquet`（四列唯一，已过滤资格）与 `demand_blocked.parquet`（阻断账）；
+  `demand_canonical.parquet` 明确为明细聚合，禁止 upsert/按行连接供应。
+- 整次构建固定同一 EN 快照；manifest 记录 `en_snapshot` 的 commit_id 与 orders/lines 哈希。
+- 新增 21 个审核回归（共 52 个）：完整构建守恒、四列键、五类子仓、未知/空仓、FBA 端到端、
+  GS 形态、UOM 缺失/空白、复合原因、空输入/缺日期/无效数量、SKU TSV 空字段、快照切换、供应目标过滤。
+- 修复后：可净额 312,208 行 / 330,508 件；阻断 101,353 行 / 109,671 件；四列重复 0。

@@ -194,9 +194,14 @@ def build_demand(
     scopes: Sequence[str] = (config.SCOPE_SELF,),
     legacy_cutover: str = config.DEFAULT_LEGACY_CUTOVER,
     legacy_despatch_cutover: str = "2026-09-30",
+    store: ParquetStore | None = None,
 ) -> dict[str, pd.DataFrame]:
-    """返回 demand / demand_non_fba / deferred / fba / quarantine / returns / overlap / summary。"""
-    store = ParquetStore(store_root)
+    """返回 demand / demand_non_fba / deferred / fba / quarantine / returns / overlap / summary。
+
+    ``store`` 可传入已打开的快照对象；调用方（canonical）用它把 orders/lines
+    与后续读取固定在同一个快照上。
+    """
+    store = store or ParquetStore(store_root)
     # 固定在同一快照目录：orders/lines 必须来自同一次提交
     with store.pinned():
         en_all = _en_frame(store)

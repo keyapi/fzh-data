@@ -56,6 +56,8 @@ D:/Work/fzh-order-store/en-demand-v1/
 - UOM 未知保留 null，不猜；补货聚合已按 SKU×仓×日给出。
 
 规范层：SKU→EN 物料、仓库旧名/子仓、EN Item.stock_uom；未知保持原因并阻断净额。
+净额只用四列唯一的 `demand_netting.parquet`；阻断量在 `demand_blocked.parquet`；
+未证合并子仓保留原行但阻断（`subwarehouse_identity_unproven`）。
 详细文档：[docs/index.md](docs/index.md) ·
 [canonical](docs/reference/canonical-demand.md) ·
 [EN schema](docs/reference/en-order-schema.md) ·

@@ -36,8 +36,13 @@ EN 终端订单（含未发货需求）的只读增量，并给旧 GS 一个统�
    旧单取消/改量 → `superseded_cancelled` / `superseded_qty_change` 覆盖（EN 必须在本次增量窗口）。
 8. **partial 不推进水位**：分页预算耗尽、子表失败、写盘失败、计数审计不符都标 partial。
 9. **UOM 未知不猜**：`uom=null`、`uom_status=unknown`；聚合保留 SKU×仓×日。
-10. **规范层不任取映射**：一对多 SKU 标 ambiguous 并阻断净额；子仓无证据不合并；
+10. **规范层不任取映射**：一对多 SKU 标 ambiguous 并阻断净额；子仓无证据不合并，
+    并在身份证据补齐前阻断净额（`subwarehouse_identity_unproven`）；
     `netting_allowed=false` 的行不得直接与供应相减。
+11. **净额接口四列唯一**：只用 `demand_netting.parquet`；`demand_canonical.parquet` 是明细聚合，
+    四列不唯一，禁止 upsert/按行连接供应；阻断量只在 `demand_blocked.parquet`。
+12. **构建固定快照**：整次 canonical 构建共用同一个 EN `commit_id`；manifest 记录
+    orders/lines 哈希，快照切换不得混读。
 
 ## 4. 运行与验证
 

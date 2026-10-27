@@ -56,6 +56,7 @@ def load_sku_map(path: str | Path) -> pd.DataFrame:
         header=None,
         dtype=str,
         quoting=3,
+        keep_default_na=False,
         names=["item_code", "tongtool_sku", "customer_name"],
     )
     df["item_code"] = df["item_code"].astype(str).str.strip()
@@ -206,9 +207,12 @@ def ensure_uom_cache(
     return existing
 
 
-def en_kind_lookup(store_root: str | Path) -> pd.Series:
-    """(en_doc_name, tongtool_sku) → 唯一非 unknown 的 demand_kind 集合。"""
-    store = ParquetStore(store_root)
+def en_kind_lookup(store_or_root: ParquetStore | str | Path) -> pd.Series:
+    """(en_doc_name, tongtool_sku) → 唯一非 unknown 的 demand_kind 集合。
+
+    传 ParquetStore 时沿用调用方已固定的快照，避免与需求读取跨提交。
+    """
+    store = store_or_root if isinstance(store_or_root, ParquetStore) else ParquetStore(store_or_root)
     with store.pinned():
         lines = store.load_lines()
     if not len(lines):
@@ -217,6 +221,40 @@ def en_kind_lookup(store_root: str | Path) -> pd.Series:
         lambda x: frozenset(k for k in set(x) if k and k != config.DSHIP_UNKNOWN)
     )
     return grouped
+
+
+def snapshot_identity(store: ParquetStore) -> dict:
+    """记录本次构建读取的 EN 快照身份与 orders/lines 文件哈希。
+
+    快照身份从**固定目录**里的 commit.json 读取，而不是再看 CURRENT，
+    否则构建期间发生提交会把 A 的数据标成 B 的身份。
+    """
+    with store.pinned():
+        paths = store.current_files()
+        directory = paths["orders"].parent
+        marker_path = directory / "commit.json"
+        if marker_path.exists():
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            commit_id = marker.get("commit_id")
+            status = marker.get("status")
+            committed_at = marker.get("committed_at")
+        else:
+            current = store.read_current()
+            commit_id = current.get("commit_id")
+            status = current.get("status")
+            committed_at = current.get("committed_at")
+        identity = {
+            "commit_id": commit_id,
+            "status": status,
+            "committed_at": committed_at,
+            "orders_path": str(paths["orders"]),
+            "lines_path": str(paths["lines"]),
+            "orders_sha256": _sha256(paths["orders"]),
+            "lines_sha256": _sha256(paths["lines"]),
+            "orders_rows": int(len(store.load_orders())),
+            "lines_rows": int(len(store.load_lines())),
+        }
+    return identity
 
 
 def _uom_status(uom, item_found: bool) -> tuple[str, str]:
@@ -312,7 +350,13 @@ def canonicalize(
         ("uom_missing", df["uom_status"].eq("missing")),
         ("uom_not_piece", df["uom_status"].eq("not_piece")),
         ("warehouse_identity_unknown", df["warehouse_status"].eq("unknown")),
+        ("subwarehouse_identity_unproven", df["warehouse_merge_status"].eq("not_merged_no_evidence")),
         ("scope_unknown", df["fulfillment_scope"].eq(config.SCOPE_UNKNOWN)),
+        (
+            "quantity_invalid",
+            pd.to_numeric(df["quantity"], errors="coerce").isna()
+            | pd.to_numeric(df["quantity"], errors="coerce").le(0),
+        ),
     ]
     blocked_any = pd.Series(False, index=df.index)
     for _, mask in reason_masks:
@@ -331,6 +375,77 @@ def canonicalize(
     df["netting_allowed"] = ~blocked_any
     df["in_default_series"] = df["fulfillment_scope"].eq(config.SCOPE_SELF)
     return df
+
+
+NETTING_KEY = ["demand_date", "canonical_sku", "canonical_warehouse", "canonical_uom"]
+
+
+def _mix(values) -> str:
+    return ",".join(sorted({str(v) for v in values if v is not None and not pd.isna(v)}))
+
+
+def build_netting_views(disp: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """把行级去向拆成「四列唯一可净额表」与「阻断账」。
+
+    - 可净额表只汇总 ``netting_allowed=true`` 的行；四列键唯一，先过滤资格再聚合，
+      不任取任何一行资格，也不会把同一份供应重复扣减。
+    - 阻断账保留每条原因组合与数量，单独建账，不与可净额量混在一起。
+    """
+    allowed = disp[disp["netting_allowed"]].copy()
+    allowed["qty_default"] = allowed["quantity"].where(allowed["in_default_series"], 0)
+    allowed["qty_third_party"] = allowed["quantity"].where(
+        allowed["fulfillment_scope"].eq(config.SCOPE_THIRD_PARTY), 0
+    )
+    netting = (
+        allowed.groupby(NETTING_KEY, dropna=False)
+        .agg(
+            quantity=("quantity", "sum"),
+            quantity_default=("qty_default", "sum"),
+            quantity_third_party=("qty_third_party", "sum"),
+            order_count=("order_key", "nunique"),
+            line_count=("order_key", "count"),
+            demand_kind_mix=("demand_kind", _mix),
+            scope_mix=("fulfillment_scope", _mix),
+            source_mix=("source", _mix),
+            coverage_status_mix=("coverage_status", _mix),
+        )
+        .reset_index()
+    )
+    netting["netting_allowed"] = True
+    netting["in_default_series"] = netting["quantity_default"].gt(0)
+
+    blocked_rows = disp[~disp["netting_allowed"]].copy()
+    blocked = (
+        blocked_rows.groupby(
+            NETTING_KEY + ["netting_block_primary", "netting_block_reason"], dropna=False
+        )
+        .agg(
+            quantity=("quantity", "sum"),
+            order_count=("order_key", "nunique"),
+            line_count=("order_key", "count"),
+        )
+        .reset_index()
+    )
+    blocked["netting_allowed"] = False
+    return netting, blocked
+
+
+def supply_targets(netting: pd.DataFrame) -> pd.DataFrame:
+    """供应适配器入口：只接受已过滤且 sku/仓/uom 均非 <unknown> 的净额目标。"""
+    out = netting[
+        netting["canonical_uom"].astype("string").fillna("<unknown>").ne("<unknown>")
+        & netting["canonical_warehouse"].astype("string").fillna("<unknown>").ne("<unknown>")
+        & pd.to_numeric(netting["quantity"], errors="coerce").gt(0)
+    ].copy()
+    cols = NETTING_KEY + [
+        "quantity",
+        "quantity_default",
+        "quantity_third_party",
+        "order_count",
+        "demand_kind_mix",
+        "scope_mix",
+    ]
+    return out[cols].reset_index(drop=True)
 
 
 def _coverage(disp: pd.DataFrame, input_rows: int, input_qty: float) -> pd.DataFrame:
@@ -489,17 +604,22 @@ def build_canonical(
     fetch_uom: bool = True,
     max_uom_items: int = 6000,
 ) -> dict:
-    frames = build_demand(
-        store_root,
-        gs_path,
-        start,
-        end,
-        scopes=(config.SCOPE_SELF, config.SCOPE_THIRD_PARTY),
-    )
-    demand = frames["demand_non_fba"].copy()
+    store = ParquetStore(store_root)
+    # 整次构建固定同一个 EN 快照：需求读取、GS 形态补证、快照身份都来自同一 commit
+    with store.pinned():
+        frames = build_demand(
+            store_root,
+            gs_path,
+            start,
+            end,
+            scopes=(config.SCOPE_SELF, config.SCOPE_THIRD_PARTY),
+            store=store,
+        )
+        demand = frames["demand_non_fba"].copy()
+        kind_lookup = en_kind_lookup(store)
+        en_snapshot = snapshot_identity(store)
     sku_map = load_sku_map(sku_map_path)
     wh_cfg = load_warehouse_config(warehouse_config_path)
-    kind_lookup = en_kind_lookup(store_root)
 
     sku_index = sku_map.set_index("tongtool_sku")["item_codes"]
     mapped_codes = demand["tongtool_sku"].map(sku_index)
@@ -542,6 +662,11 @@ def build_canonical(
     )
     agg["in_default_series"] = agg["fulfillment_scope"].eq(config.SCOPE_SELF)
 
+    netting, blocked_ledger = build_netting_views(disp)
+    four_key_duplicates = int(netting.duplicated(NETTING_KEY).sum())
+    subwarehouse_rows = disp[disp["warehouse_merge_status"].eq("not_merged_no_evidence")]
+    subwarehouse_blocked = subwarehouse_rows[~subwarehouse_rows["netting_allowed"]]
+
     coverage = _coverage(disp, int(len(disp)), float(pd.to_numeric(disp["quantity"], errors="coerce").sum()))
     ambiguities = _ambiguities(disp, sku_map, wh_cfg)
 
@@ -549,6 +674,8 @@ def build_canonical(
     out.mkdir(parents=True, exist_ok=True)
     disp.to_parquet(out / "demand_line_disposition.parquet", index=False, compression="zstd")
     agg.to_parquet(out / "demand_canonical.parquet", index=False, compression="zstd")
+    netting.to_parquet(out / "demand_netting.parquet", index=False, compression="zstd")
+    blocked_ledger.to_parquet(out / "demand_blocked.parquet", index=False, compression="zstd")
     coverage.to_parquet(out / "sku_coverage.parquet", index=False, compression="zstd")
     ambiguities.to_parquet(out / "ambiguity_list.parquet", index=False, compression="zstd")
     _write_cases(out / "cases.md", disp)
@@ -559,8 +686,14 @@ def build_canonical(
         "window": {"start": start, "end": end},
         "interface": {
             "consumer": "supply bucketing b08acc05",
-            "primary_key": ["demand_date", "canonical_sku", "canonical_warehouse", "canonical_uom"],
-            "netting_rule": "netting_allowed=false 不得直接净额相减；unknown 保持原因",
+            "primary_dataset": "demand_netting.parquet",
+            "primary_key": NETTING_KEY,
+            "primary_key_unique": four_key_duplicates == 0,
+            "detailed_dataset": "demand_canonical.parquet",
+            "detailed_note": "13 列明细聚合（含 demand_kind/source/scope/资格）；四列键不唯一，禁止 upsert/按行连接供应",
+            "blocked_dataset": "demand_blocked.parquet",
+            "filter_rule": "只消费 demand_netting；它已过滤 netting_allowed=true。默认自发货再筛 in_default_series=true；3PL 保留但 default=false；阻断量只在 demand_blocked。",
+            "unknown_rule": "canonical_uom/canonical_warehouse 的 <unknown> 不得进入供应目标",
             "fba": "excluded from demand",
             "third_party": "retained; in_default_series=false",
         },
@@ -577,12 +710,24 @@ def build_canonical(
                 "rows": int(len(uom_cache)),
             },
             "gs_orders": {"path": str(gs_path), "sha256": _sha256(gs_path)},
+            "en_snapshot": en_snapshot,
         },
         "counts": {
             "input_rows": int(len(disp)),
             "input_qty": float(pd.to_numeric(disp["quantity"], errors="coerce").sum()),
             "canonical_rows": int(len(agg)),
             "canonical_qty": float(agg["quantity"].sum()),
+            "netting_rows": int(len(netting)),
+            "netting_qty": float(netting["quantity"].sum()),
+            "blocked_ledger_rows": int(len(blocked_ledger)),
+            "blocked_ledger_qty": float(blocked_ledger["quantity"].sum()),
+            "four_key_duplicates_in_netting": four_key_duplicates,
+            "subwarehouse_rows": int(len(subwarehouse_rows)),
+            "subwarehouse_qty": float(pd.to_numeric(subwarehouse_rows["quantity"], errors="coerce").sum()),
+            "subwarehouse_blocked_rows": int(len(subwarehouse_blocked)),
+            "subwarehouse_blocked_qty": float(
+                pd.to_numeric(subwarehouse_blocked["quantity"], errors="coerce").sum()
+            ),
             "ready_rows": int(disp["netting_allowed"].sum()),
             "ready_qty": float(pd.to_numeric(disp.loc[disp["netting_allowed"], "quantity"], errors="coerce").sum()),
             "blocked_rows": int((~disp["netting_allowed"]).sum()),
@@ -618,7 +763,9 @@ def build_canonical(
         "ambiguity_counts": ambiguities["ambiguity_type"].value_counts().to_dict() if len(ambiguities) else {},
         "notes": [
             "UOM 为 EN Item.stock_uom 证据；非件类单位阻断净额，缺失保持 null。",
-            "仓库只按有证据的旧名→新名合并；子仓不合并。",
+            "仓库只按有证据的旧名→新名合并；5 类子仓未证身份，保留原行但阻断净额。",
+            "demand_canonical 是明细聚合；净额请用四列唯一的 demand_netting。",
+            "整次构建固定同一 EN 快照，manifest 记录 commit_id 与 orders/lines 哈希。",
             "SKU 一对多不任取；未映射保留 unmapped:<sku>。",
             "GS 历史发货形态仅在唯一 EN 行匹配时沿用。",
         ],

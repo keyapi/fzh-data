@@ -12,13 +12,20 @@ import pytest
 from self_fulfilled_demand import config
 from self_fulfilled_demand.canonical import (
     _coverage,
+    build_canonical,
+    build_netting_views,
     canonicalize,
+    en_kind_lookup,
     ensure_uom_cache,
     load_sku_map,
     load_uom_cache,
     load_warehouse_config,
     resolve_warehouse,
+    snapshot_identity,
+    supply_targets,
 )
+from self_fulfilled_demand.normalize import normalize_order
+from self_fulfilled_demand.store import ParquetStore
 
 
 def demand_df(rows: list[dict]) -> pd.DataFrame:
@@ -104,6 +111,13 @@ def test_warehouse_alias_merges_but_subwarehouse_does_not(wh_cfg):
     assert sub["warehouse_parent_candidate"] == "美中-FZH-DANEEY-皮壳仓库"
     assert sub["warehouse_merge_status"] == "not_merged_no_evidence"
     assert resolve_warehouse("星链海外仓", wh_cfg)["warehouse_status"] == "unknown"
+
+    demand = demand_df([])
+    demand.loc[demand.index[0], "warehouse_name"] = "FZH-DANEEY-皮壳仓库"
+    out = canonicalize(demand, sku_map([("TT-1", ("KS-OK",))]), uom_cache([("KS-OK", "个")]), wh_cfg)
+    row = out.iloc[0]
+    assert bool(row["netting_allowed"]) is False
+    assert "subwarehouse_identity_unproven" in row["netting_block_reason"]
 
 
 def test_uom_unknown_and_not_piece_block(wh_cfg):
