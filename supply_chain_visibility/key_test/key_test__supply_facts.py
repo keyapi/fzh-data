@@ -60,7 +60,8 @@ def _qty_status(qty, uom):
 
 
 def _balance(line, stage, qty, uom, detail="", batch_key="", source="",
-             reason="", in_stock="unknown", qty_status=None, qty_basis=""):
+             reason="", in_stock="unknown", qty_status=None, qty_basis="",
+             demand_status="active"):
     status = qty_status or _qty_status(qty, uom)
     return {
         "so": line.get("so"), "so_line_id": line.get("so_line"),
@@ -70,6 +71,7 @@ def _balance(line, stage, qty, uom, detail="", batch_key="", source="",
         "qty_status": status, "qty_basis": qty_basis,
         "batch_key": batch_key, "source_record": source,
         "exclusion_reason": reason, "included_in_stock": in_stock,
+        "demand_status": demand_status,
         "scope": line.get("scope") or "in_house",
         "role": line.get("role") or "finished",
     }
@@ -81,32 +83,70 @@ def build_stage_balances(line, ctx):
     uom = line.get("uom")
     if qty is None or not uom:
         return [_balance(line, STAGE_UNKNOWN, qty, uom, reason="订单数量或单位未证")]
-    if int(line.get("so_docstatus") or 0) == 2:
-        return [_balance(line, STAGE_CANCELLED, qty, uom,
-                         detail="销售订单已取消", source=line.get("so"),
-                         reason="取消不删除已生产实物，实物另列")]
+    cancelled = int(line.get("so_docstatus") or 0) == 2
+    demand_status = "cancelled" if cancelled else "active"
     if not ctx.get("dn_permission"):
-        return [_balance(line, STAGE_UNKNOWN, qty, uom, reason="无出库单读取权限")]
+        return [_balance(line, STAGE_UNKNOWN, qty, uom, reason="无出库单读取权限",
+                         demand_status=demand_status)]
 
     dns = ctx.get("dns") or []
     submitted = [d for d in dns if int(d.get("docstatus") or 0) == 1]
     drafts = [d for d in dns if int(d.get("docstatus") or 0) == 0]
-    shipped_gross = sum(_num(d.get("qty")) for d in submitted if not int(d.get("is_return") or 0))
-    returned = max(0.0, sum(-_num(d.get("qty")) for d in submitted if int(d.get("is_return") or 0)))
-    shipped_net = shipped_gross - returned
-
     rows = []
+
     open_drafts = [d for d in drafts if not int(d.get("is_return") or 0)]
     if open_drafts:
         rows.append(_balance(line, STAGE_DRAFT, None, uom,
                              detail="草稿出库 %d 张（未执行，不计入余额）" % len(open_drafts),
-                             reason="草稿不是已执行出库，数量不重复计入"))
+                             reason="草稿不是已执行出库，数量不重复计入",
+                             demand_status=demand_status))
+
+    returns = [d for d in submitted if int(d.get("is_return") or 0)]
+    dn_names = {d.get("dn") for d in submitted if not int(d.get("is_return") or 0)}
+    allocated = defaultdict(float)
+    unallocated = []
+    for ret in returns:
+        against = ret.get("return_against")
+        if against and against in dn_names:
+            allocated[against] += -_num(ret.get("qty"))
+        else:
+            unallocated.append(ret)
+    returned_total = sum(-_num(r.get("qty")) for r in returns)
+    if returned_total > 1e-9:
+        rows.append(_balance(line, STAGE_RETURNED, returned_total, uom,
+                             detail="销售退货（%d 张）" % len(returns),
+                             reason=("退货未关联原出库单，实物去向未证"
+                                     if unallocated else "已按原出库单抵扣"),
+                             demand_status=demand_status))
+
+    mismatched = [d for d in submitted
+                  if not int(d.get("is_return") or 0)
+                  and d.get("uom") and d.get("uom") != uom]
+    if mismatched:
+        rows.append(_balance(line, STAGE_UNKNOWN, None, uom,
+                             reason="出库单位与订单单位不一致，无换算证据，数量归属未知",
+                             demand_status=demand_status))
+        for dn in submitted:
+            if int(dn.get("is_return") or 0):
+                continue
+            rows.append(_balance(line, STAGE_IN_TRANSIT, _num(dn.get("qty")),
+                                 dn.get("uom") or uom,
+                                 detail="出库单位 %s（未换算）" % (dn.get("uom") or "?"),
+                                 batch_key=dn.get("dn"), source=dn.get("dn"),
+                                 reason="单位与订单不一致，未归一",
+                                 demand_status=demand_status))
+        return rows
 
     numbers = ctx.get("numbers_by_dn") or {}
     shipment_by_number = ctx.get("shipment_by_number") or {}
+    shipped_gross = 0.0
     for dn in submitted:
         if int(dn.get("is_return") or 0):
             continue
+        net_qty = max(0.0, _num(dn.get("qty")) - allocated.get(dn.get("dn"), 0.0))
+        if net_qty <= 1e-9:
+            continue
+        shipped_gross += net_qty
         dn_numbers = [n["number"] for n in numbers.get(dn.get("dn"), [])]
         statuses = [((shipment_by_number.get(number) or {}).get("status11") or "")
                     for number in dn_numbers]
@@ -124,19 +164,16 @@ def build_stage_balances(line, ctx):
             detail, reason = "运单状态未知（未匹配 Shipment）", "缺运单状态证据"
         if not ctx.get("shipment_permission"):
             detail, reason = "状态未知（无 Shipment 读取权限）", "缺 Shipment 权限"
-        rows.append(_balance(line, stage, _num(dn.get("qty")), uom, detail=detail,
-                             batch_key=dn.get("dn"), source=dn.get("dn"), reason=reason))
-
-    if returned:
-        rows.append(_balance(line, STAGE_RETURNED, returned, uom,
-                             detail="销售退货（净额抵扣）", reason="退货实物去向未证"))
+        rows.append(_balance(line, stage, net_qty, uom, detail=detail,
+                             batch_key=dn.get("dn"), source=dn.get("dn"), reason=reason,
+                             demand_status=demand_status))
 
     produced_total = sum(_num(w.get("produced")) for w in (ctx.get("wos") or [])
                          if w.get("item_code") == line.get("item_code"))
     own_wos = [w for w in (ctx.get("wos") or []) if w.get("item_code") == line.get("item_code")]
     produced_estimated = any(w.get("produced_basis") == "wo_produced_qty" for w in own_wos)
     produced_capped = min(produced_total, _num(qty))
-    open_net = _num(qty) - shipped_net
+    open_net = _num(qty) - shipped_gross
     produced_pending = max(0.0, min(produced_capped - shipped_gross, open_net))
     remaining = max(0.0, open_net - produced_pending)
     if produced_pending > 1e-9:
@@ -144,28 +181,38 @@ def build_stage_balances(line, ctx):
                              detail="合格完工待出库", reason="缺出库单",
                              qty_status="estimated" if produced_estimated else "known",
                              qty_basis="wo_produced_qty" if produced_estimated
-                             else "job_card_first_op"))
-    if remaining > 1e-9:
+                             else "job_card_first_op",
+                             demand_status=demand_status))
+    if not cancelled and remaining > 1e-9:
         if own_wos:
             rows.append(_balance(line, STAGE_IN_PRODUCTION, remaining, uom,
                                  detail="在产/部分完工",
-                                 source=",".join(w.get("wo") for w in own_wos)))
+                                 source=",".join(w.get("wo") for w in own_wos),
+                                 demand_status=demand_status))
         elif not ctx.get("work_order_permission"):
             rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom,
-                                 reason="无工单读取权限"))
+                                 reason="无工单读取权限", demand_status=demand_status))
         else:
             rows.append(_balance(line, STAGE_NOT_PLANNED, remaining, uom,
-                                 detail="无工单/生产计划"))
+                                 detail="无工单/生产计划", demand_status=demand_status))
+
+    if cancelled:
+        rows.append(_balance(line, STAGE_CANCELLED, qty, uom,
+                             detail="需求已取消（实物见同组 physical 片段）",
+                             source=line.get("so"),
+                             reason="取消不删除已生产/已发实物，实物单独保留",
+                             demand_status="cancelled"))
+        return rows
 
     known = sum(r["qty"] for r in rows
                 if r["stage"] in EXECUTED_STAGES and r["qty"] is not None)
     diff = round(_num(qty) - known, 6)
     if diff > 1e-6:
         rows.append(_balance(line, STAGE_UNKNOWN, diff, uom,
-                             reason="数量阶段证据不足，未归属"))
+                             reason="数量阶段证据不足，未归属", demand_status=demand_status))
     elif diff < -1e-6:
         rows.append(_balance(line, STAGE_UNKNOWN, -diff, uom,
-                             reason="超发或重复证据，待核实"))
+                             reason="超发或重复证据，待核实", demand_status=demand_status))
     return rows
 
 
@@ -235,9 +282,9 @@ def build_milestones(line, ctx):
 
 def _tranche(line, tranche_id, qty, uom, *, stage, available_date=None, eta=None,
              scenario="unknown", reason="", batch_key="", source="", date_kind="unknown",
-             qty_status=None, qty_basis=""):
+             qty_status=None, qty_basis="", demand_status="active"):
     return {
-        "tranche_id": tranche_id,
+        "tranche_id": "%s::%s" % (line.get("so_line"), tranche_id),
         "so": line.get("so"), "so_line_id": line.get("so_line"),
         "item_code": line.get("item_code"), "warehouse": line.get("warehouse"),
         "uom": uom, "qty": None if qty is None else round(_num(qty), 6),
@@ -248,6 +295,7 @@ def _tranche(line, tranche_id, qty, uom, *, stage, available_date=None, eta=None
         "date_confidence": "unknown" if not available_date else "estimated",
         "scenario": scenario, "eligible": False, "exclusion_reason": reason,
         "batch_key": batch_key, "source_record": source, "rule_version": RULE_VERSION,
+        "demand_status": demand_status,
     }
 
 
@@ -259,6 +307,8 @@ def build_availability(line, ctx, stage_rows):
     rows = []
     for stage_row in stage_rows:
         if stage_row["stage"] in (STAGE_CANCELLED, STAGE_UNKNOWN, STAGE_RETURNED, STAGE_DRAFT):
+            continue
+        if stage_row.get("demand_status") == "cancelled":
             continue
         if stage_row["stage"] in (STAGE_IN_TRANSIT, STAGE_ARRIVED):
             dn = stage_row["batch_key"]
@@ -282,7 +332,7 @@ def build_availability(line, ctx, stage_rows):
         elif stage_row["stage"] in (STAGE_PRODUCED_PENDING, STAGE_IN_PRODUCTION,
                                     STAGE_NOT_PLANNED, STAGE_DELIVERED):
             rows.append(_tranche(
-                line, "%s::%s" % (line.get("so_line"), stage_row["stage"]),
+                line, "%s::%s" % (stage_row["stage"], stage_row.get("batch_key") or ""),
                 stage_row["qty"], uom, stage=stage_row["stage"],
                 scenario="unknown", reason="缺生产/完工/入库日期证据",
                 qty_status=stage_row.get("qty_status"),
@@ -373,21 +423,38 @@ def build_manifest(*, as_of, scope, lines, facts, coverage, counts, partial, not
 # ── EN loading (batched; doctype permissions checked before child reads) ────
 
 def load_lines(filters):
-    conditions = ["so.docstatus < 2"]
+    conditions = ["so.docstatus <= 2"]
     values = {}
-    for field, column in (("sales_order", "so.name"), ("customer", "so.customer"),
-                          ("item_code", "soi.item_code")):
+    so_filters = [["docstatus", "<=", 2]]
+    for field, column in (("sales_order", "name"), ("customer", "customer")):
+        if filters.get(field):
+            so_filters.append([column, "=", filters[field]])
+            conditions.append("so.%s = %%(%s)s" % (column, field))
+            values[field] = filters[field]
+    child_filters = (("item_code", "soi.item_code"), ("customer_item_code",
+                                                     "soi.customer_item_code"),
+                     ("warehouse", "soi.warehouse"))
+    for field, column in child_filters:
         if filters.get(field):
             conditions.append("%s = %%(%s)s" % (column, field))
             values[field] = filters[field]
     if filters.get("from_date"):
+        so_filters.append(["transaction_date", ">=", filters.from_date])
         conditions.append("so.transaction_date >= %(from_date)s")
         values["from_date"] = filters.from_date
     if filters.get("to_date"):
+        so_filters.append(["transaction_date", "<=", filters.to_date])
         conditions.append("so.transaction_date <= %(to_date)s")
         values["to_date"] = filters.to_date
     if not filters.get("include_delivered"):
         conditions.append("(soi.qty - soi.delivered_qty) > 0")
+    permitted = [row.name for row in frappe.get_list(
+        "Sales Order", filters=so_filters, fields=["name"], limit_page_length=0)]
+    if not permitted:
+        return [], False
+    restricted = frappe.db.count("Sales Order", filters=so_filters) > len(permitted)
+    conditions.append("so.name in %(permitted)s")
+    values["permitted"] = tuple(permitted)
     fba_expr = ("ifnull(soi.custom_fba_sku, '')"
                 if frappe.db.has_column("Sales Order Item", "custom_fba_sku") else "''")
     order = "order by so.name, soi.idx"
@@ -395,7 +462,7 @@ def load_lines(filters):
         order += " limit %(limit)s offset %(offset)s"
         values["limit"] = int(filters.limit)
         values["offset"] = int(filters.get("offset") or 0)
-    return frappe.db.sql(
+    rows = frappe.db.sql(
         f"""select so.name as so, so.status as so_status, so.docstatus as so_docstatus,
                    so.customer as customer, so.customer_name as customer_name,
                    so.transaction_date as transaction_date,
@@ -407,12 +474,13 @@ def load_lines(filters):
             join `tabSales Order Item` soi on soi.parent = so.name
             where {' and '.join(conditions)}
             {order}""", values, as_dict=True)
+    return rows, restricted
 
 
 def load_pps(lines):
     line_ids = [l.so_line for l in lines]
     if not line_ids:
-        return {}
+        return {}, False
     rows = frappe.db.sql(
         """select ppi.sales_order_item as so_line, ppi.name as ppi, ppi.parent as pp,
                   pp.posting_date as pp_date, ppi.planned_qty, ppi.pending_qty
@@ -420,10 +488,16 @@ def load_pps(lines):
            join `tabProduction Plan` pp on pp.name = ppi.parent
            where pp.docstatus = 1 and ppi.sales_order_item in %(lines)s""",
         {"lines": tuple(line_ids)}, as_dict=True)
+    candidates = {row.pp for row in rows}
+    permitted = {r.name for r in frappe.get_list(
+        "Production Plan", filters=[["name", "in", sorted(candidates)]],
+        fields=["name"], limit_page_length=0)} if candidates else set()
+    restricted = candidates != permitted
     out = defaultdict(list)
     for row in rows:
-        out[row.so_line].append(row)
-    return out
+        if row.pp in permitted:
+            out[row.so_line].append(row)
+    return out, restricted
 
 
 def _wo_produced(wo_name, ops, cards, corrective, produced_qty):
@@ -444,7 +518,7 @@ def _wo_produced(wo_name, ops, cards, corrective, produced_qty):
 def load_wos(lines, pps):
     line_ids = [l.so_line for l in lines]
     if not line_ids:
-        return {}
+        return {}, False
     ppi_to_line = {p["ppi"]: line for line, rows in pps.items() for p in rows}
     values = {"lines": tuple(line_ids)}
     conditions = ["w.sales_order_item in %(lines)s", "w.fg_sales_order_item in %(lines)s"]
@@ -458,6 +532,12 @@ def load_wos(lines, pps):
             from `tabWork Order` w
             where w.docstatus in (0, 1) and ({' or '.join(conditions)})""",
         values, as_dict=True)
+    wo_names = [w.wo for w in wos]
+    permitted = {row.name for row in frappe.get_list(
+        "Work Order", filters=[["name", "in", wo_names], ["docstatus", "in", (0, 1)]],
+        fields=["name"], limit_page_length=0)} if wo_names else set()
+    restricted = set(wo_names) != permitted
+    wos = [w for w in wos if w.wo in permitted]
     wo_names = [w.wo for w in wos]
     ops, jcs, tns = defaultdict(list), defaultdict(list), defaultdict(list)
     if wo_names:
@@ -504,24 +584,33 @@ def load_wos(lines, pps):
                            "wo.fg_sales_order_item" if wo.fg_sales_order_item else
                            "ppi.sales_order_item"),
         })
-    return grouped
+    return grouped, restricted
 
 
 def load_dns(lines):
     line_ids = [l.so_line for l in lines]
     if not line_ids:
-        return {}
+        return {}, False
     rows = frappe.db.sql(
         """select dn.name as dn, dn.posting_date as date, dn.status as status,
                   dn.docstatus as docstatus, ifnull(dn.is_return, 0) as is_return,
+                  dn.return_against as return_against,
                   dni.so_detail as so_line, dni.qty, dni.uom, dni.warehouse
            from `tabDelivery Note Item` dni
            join `tabDelivery Note` dn on dn.name = dni.parent
            where dni.so_detail in %(lines)s and dn.docstatus in (0, 1)
            order by dn.posting_date, dn.name""",
         {"lines": tuple(line_ids)}, as_dict=True)
+    candidates = {row.dn for row in rows}
+    permitted = {r.name for r in frappe.get_list(
+        "Delivery Note", filters=[["name", "in", sorted(candidates)],
+                                  ["docstatus", "in", (0, 1)]],
+        fields=["name"], limit_page_length=0)} if candidates else set()
+    restricted = candidates != permitted
     grouped = {}
     for row in rows:
+        if row.dn not in permitted:
+            continue
         key = (row.so_line, row.dn, int(row.docstatus or 0), int(row.is_return or 0),
                row.uom, row.warehouse)
         if key not in grouped:
@@ -531,25 +620,33 @@ def load_dns(lines):
     out = defaultdict(list)
     for row in grouped.values():
         out[row.so_line].append(row)
-    return out
+    return out, restricted
 
 
 def load_shipments(dn_names):
     numbers = dn_logistic_numbers(dn_names) if dn_names else {}
     all_numbers = sorted({n["number"] for values in numbers.values() for n in values})
     shipments = {}
+    restricted = False
     if all_numbers and frappe.db.has_column("Shipment", "custom_zmt_status11"):
-        for row in frappe.db.sql(
-                """select name as shipment, custom_zmt_logistic_number as number,
-                          custom_zmt_status11 as status11, custom_zmt_status4 as status4,
-                          custom_zmt_eta as eta, custom_zmt_atd as atd,
-                          custom_zmt_ata as ata, custom_zmt_dlvr as dlvr,
-                          custom_zmt_match_status as match_status
-                   from `tabShipment`
-                   where custom_zmt_logistic_number in %(numbers)s and docstatus in (0, 1)""",
-                {"numbers": tuple(all_numbers)}, as_dict=True):
-            shipments[row.number] = row
-    return numbers, shipments
+        candidates = frappe.db.sql(
+            """select name as shipment, custom_zmt_logistic_number as number,
+                      custom_zmt_status11 as status11, custom_zmt_status4 as status4,
+                      custom_zmt_eta as eta, custom_zmt_atd as atd,
+                      custom_zmt_ata as ata, custom_zmt_dlvr as dlvr,
+                      custom_zmt_match_status as match_status
+               from `tabShipment`
+               where custom_zmt_logistic_number in %(numbers)s and docstatus in (0, 1)""",
+            {"numbers": tuple(all_numbers)}, as_dict=True)
+        permitted = {r.name for r in frappe.get_list(
+            "Shipment", filters=[["custom_zmt_logistic_number", "in", all_numbers],
+                                 ["docstatus", "in", (0, 1)]],
+            fields=["name"], limit_page_length=0)}
+        restricted = {c.shipment for c in candidates} != permitted
+        for row in candidates:
+            if row.shipment in permitted:
+                shipments[row.number] = row
+    return numbers, shipments, restricted
 
 
 def _permission_flags():
@@ -575,7 +672,7 @@ def get_supply_facts(filters=None):
     except Exception:
         frappe.throw("as_of must be a date")
     observed_at = now_datetime()
-    lines = load_lines(filters)
+    lines, so_restricted = load_lines(filters)
     if filters.get("so_line"):
         lines = [l for l in lines if l.so_line == filters.so_line]
     if not lines:
@@ -590,15 +687,31 @@ def get_supply_facts(filters=None):
         }
 
     permissions = _permission_flags()
-    pps = load_pps(lines) if permissions["production_plan"] else {}
-    wos = load_wos(lines, pps) if permissions["work_order"] else {}
-    dns = load_dns(lines) if permissions["delivery_note"] else {}
+    pps, pp_restricted = (load_pps(lines) if permissions["production_plan"] else ({}, False))
+    wos, wo_restricted = (load_wos(lines, pps) if permissions["work_order"] else ({}, False))
+    dns, dn_restricted = (load_dns(lines) if permissions["delivery_note"] else ({}, False))
     dn_names = sorted({d.dn for values in dns.values() for d in values})
-    numbers_by_dn, shipment_by_number = (
-        load_shipments(dn_names) if permissions["shipment"] else ({}, {})
+    numbers_by_dn, shipment_by_number, ship_restricted = (
+        load_shipments(dn_names) if permissions["shipment"] else ({}, {}, False)
     )
     if not permissions["shipment"]:
         numbers_by_dn = {dn: [] for dn in dn_names}
+
+    partial_reasons = []
+    if not all(permissions.values()):
+        partial_reasons.append("permissions missing: " + ", ".join(
+            k for k, v in permissions.items() if not v))
+    restricted = {
+        "sales_order": so_restricted, "production_plan": pp_restricted,
+        "work_order": wo_restricted, "delivery_note": dn_restricted,
+        "shipment": ship_restricted,
+    }
+    if any(restricted.values()):
+        partial_reasons.append("row-level restricted: " + ", ".join(
+            k for k, v in restricted.items() if v))
+    partial_reasons.append(
+        "external sources not integrated: tongtool_po, receipt, warehouse_receipt")
+    partial = bool(partial_reasons)
 
     facts = []
     for line in lines:
@@ -629,7 +742,6 @@ def get_supply_facts(filters=None):
             "observed_at": observed_at,
         }))
 
-    partial = not all(permissions.values())
     counts = {
         "input": len(lines), "output": len(facts),
         "stage_balances": sum(len(f["stage_balances"]) for f in facts),
@@ -640,8 +752,21 @@ def get_supply_facts(filters=None):
     coverage = {
         "sales_orders": len({l.so for l in lines}), "so_lines": len(lines),
         "delivery_notes": len(dn_names), "shipments": len(shipment_by_number),
-        "sources": permissions, "source_timestamps": {"sales_order": _iso(observed_at)},
+        "sources": permissions, "restricted": restricted,
+        "source_timestamps": {"sales_order": _iso(observed_at)},
+        "observed_at": _iso(observed_at),
+        "external_sources": {
+            "tongtool_po": "not_integrated",
+            "receipt": "not_integrated",
+            "warehouse_receipt": "not_integrated",
+        },
     }
+    manifest = build_manifest(
+        as_of=as_of, scope={k: v for k, v in filters.items()},
+        lines=[f["line"] for f in facts], facts=facts,
+        coverage=coverage, counts=counts, partial=partial,
+        notes=partial_reasons)
+    manifest["observed_at"] = _iso(observed_at)
     return {
         "schema_version": SCHEMA_VERSION, "rule_version": RULE_VERSION,
         "as_of": str(as_of),
@@ -650,12 +775,7 @@ def get_supply_facts(filters=None):
         "milestones": [r for f in facts for r in f["milestones"]],
         "availability_schedule": [r for f in facts for r in f["availability_schedule"]],
         "links": [r for f in facts for r in f["links"]],
-        "manifest": build_manifest(
-            as_of=as_of, scope={k: v for k, v in filters.items()},
-            lines=[f["line"] for f in facts], facts=facts,
-            coverage=coverage, counts=counts, partial=partial,
-            notes=["permissions missing: " + ", ".join(
-                k for k, v in permissions.items() if not v)] if partial else []),
+        "manifest": manifest,
     }
 
 

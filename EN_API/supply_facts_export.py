@@ -54,10 +54,8 @@ def _merge(target, batch):
     for key, value in (manifest.get("counts") or {}).items():
         target["counts"][key] = target["counts"].get(key, 0) + int(value or 0)
     for key, value in (manifest.get("coverage") or {}).items():
-        if key == "sources":
-            target["sources"].update(value or {})
-        elif key == "source_timestamps":
-            target["source_timestamps"].update(value or {})
+        if key in ("sources", "restricted", "external_sources", "source_timestamps"):
+            target[key].update(value or {})
         elif isinstance(value, int):
             target["coverage"][key] = target["coverage"].get(key, 0) + value
     for note in manifest.get("notes") or []:
@@ -89,17 +87,19 @@ def _write_xlsx(path, result):
     columns = {
         "lines": list(result["lines"][0].keys()) if result["lines"] else [],
         "stage_balances": ["so", "so_line_id", "item_code", "warehouse", "uom", "stage",
-                           "stage_detail", "qty", "qty_status", "batch_key", "source_record",
-                           "exclusion_reason", "included_in_stock", "scope", "role"],
+                           "stage_detail", "qty", "qty_status", "qty_basis", "batch_key",
+                           "source_record", "exclusion_reason", "included_in_stock",
+                           "demand_status", "scope", "role"],
         "milestones": ["so", "so_line_id", "item_code", "uom", "node", "baseline_planned_at",
                        "committed_due_at", "latest_expected_at", "actual_at", "qty",
                        "qty_status", "date_precision", "timezone_status", "observed_at",
                        "source_record", "note", "rule_version"],
         "availability_schedule": ["tranche_id", "so", "so_line_id", "item_code", "warehouse",
-                                  "uom", "qty", "qty_status", "stage", "available_date",
-                                  "latest_expected_at", "date_kind", "date_confidence",
-                                  "scenario", "eligible", "exclusion_reason", "batch_key",
-                                  "source_record", "rule_version"],
+                                  "uom", "qty", "qty_status", "qty_basis", "stage",
+                                  "available_date", "latest_expected_at", "date_kind",
+                                  "date_confidence", "scenario", "eligible",
+                                  "exclusion_reason", "batch_key", "source_record",
+                                  "demand_status", "rule_version"],
         "links": ["so", "so_line_id", "source_doctype", "source_name", "source_line_id",
                   "relation", "target_doctype", "target_name", "qty", "uom", "proof",
                   "allocation"],
@@ -168,7 +168,15 @@ def main(argv=None):
     result = {"lines": [], "stage_balances": [], "milestones": [],
               "availability_schedule": [], "links": [], "partial": False,
               "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
+              "restricted": {}, "external_sources": {},
               "notes": [], "rule_version": "", "as_of": args.as_of or ""}
+    today_str = time.strftime("%Y-%m-%d")
+    if args.as_of and args.as_of != today_str:
+        print("✗ 历史 as_of 未实现：只能导出当前快照，拒绝 --as-of %s" % args.as_of,
+              file=sys.stderr)
+        return 2
+    base_filters = {"as_of": today_str}
+    terminated_by = "exhausted"
     try:
         if args.codes:
             codes = [c.strip() for c in args.codes.replace(";", ",").split(",") if c.strip()]
@@ -178,16 +186,16 @@ def main(argv=None):
             if not sos:
                 raise iss.QueryError("没有命中的销售订单")
             for so in sos:
-                filters = {"sales_order": so, "include_delivered": 1}
+                filters = dict(base_filters, sales_order=so, include_delivered=1)
                 _merge(result, _call(base_url, key, secret, filters))
         elif args.so:
             for so in [s.strip() for s in args.so.split(",") if s.strip()]:
                 _merge(result, _call(base_url, key, secret,
-                                     {"sales_order": so, "include_delivered": 1}))
+                                     dict(base_filters, sales_order=so, include_delivered=1)))
         else:
             offset, page = 0, 0
             while page < 200:
-                filters = {"limit": args.page_size, "offset": offset}
+                filters = dict(base_filters, limit=args.page_size, offset=offset)
                 if args.include_delivered:
                     filters["include_delivered"] = 1
                 batch = _call(base_url, key, secret, filters)
@@ -195,16 +203,22 @@ def main(argv=None):
                 _merge(result, batch)
                 print("  第 %d 页: %d 行（累计 %d）" % (page + 1, rows, len(result["lines"])))
                 if rows < args.page_size:
+                    terminated_by = "exhausted"
                     break
                 offset += rows
                 page += 1
+            if page >= 200:
+                terminated_by = "page_limit"
+                print("  ! 达到 200 页上限，结果可能截断（manifest.truncated=true）",
+                      file=sys.stderr)
     except iss.QueryError as exc:
         print("✗ 导出失败，未写入新版本: %s" % exc, file=sys.stderr)
         return 1
 
     query_seconds = time.perf_counter() - started
-    run_id = hashlib.sha1(json.dumps(
-        [result["as_of"], args.codes, args.so, args.all, len(result["lines"])]).encode()).hexdigest()[:12]
+    run_id = hashlib.sha1(("%s|%s|%s|%s|%s|%s" % (
+        result["as_of"], args.codes, args.so, args.all, len(result["lines"]),
+        time.time_ns())).encode()).hexdigest()[:12]
     out = Path(args.out)
     run_dir = out / "runs" / ("run-%s-%s" % (time.strftime("%Y%m%d_%H%M%S"), run_id))
     tmp_dir = run_dir.with_suffix(".tmp")
@@ -217,33 +231,39 @@ def main(argv=None):
         for name in DATASETS:
             path = tmp_dir / ("%s.json" % name)
             _write_json(path, result[name])
-            files["%s.json" % name] = {"path": str(path), "sha256": _sha256(path),
+            files["%s.json" % name] = {"path": "%s.json" % name, "sha256": _sha256(path),
                                        "rows": len(result[name])}
+        generated_at = time.strftime("%Y-%m-%dT%H:%M:%S")
         manifest = {
             "schema_version": SCHEMA_VERSION,
             "rule_version": result["rule_version"],
             "run_id": run_id,
             "as_of": result["as_of"],
-            "generated_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "as_of_kind": "current_snapshot",
+            "observed_at": generated_at,
+            "generated_at": generated_at,
             "scope": {"codes": args.codes, "so": args.so, "all": args.all,
                       "include_delivered": bool(args.include_delivered)},
             "coverage": result["coverage"],
             "sources": result["sources"],
             "source_timestamps": result["source_timestamps"],
+            "restricted": result["restricted"],
+            "external_sources": result["external_sources"],
             "counts": result["counts"],
             "partial": result["partial"],
             "notes": result["notes"],
+            "truncated": terminated_by == "page_limit",
+            "termination_reason": terminated_by,
             "performance": {"query_seconds": round(query_seconds, 3)},
         }
         if not args.no_excel:
             xlsx = tmp_dir / "supply_facts.xlsx"
             result["manifest"] = manifest
             _write_xlsx(xlsx, result)
-            files["supply_facts.xlsx"] = {"path": str(xlsx), "sha256": _sha256(xlsx),
-                                          "rows": None}
+            files["supply_facts.xlsx"] = {"path": "supply_facts.xlsx",
+                                          "sha256": _sha256(xlsx), "rows": None}
         manifest["files"] = files
-        json_path = tmp_dir / "manifest.json"
-        _write_json(json_path, manifest)
+        _write_json(tmp_dir / "manifest.json", manifest)
         tmp_dir.rename(run_dir)
     except Exception as exc:  # noqa: BLE001
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -255,6 +275,9 @@ def main(argv=None):
     _write_json(pointer_tmp, {
         "run_id": run_id, "run_dir": str(run_dir),
         "manifest": str(run_dir / "manifest.json"),
+        "as_of": result["as_of"],
+        "truncated": terminated_by == "page_limit",
+        "termination_reason": terminated_by,
         "last_success_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "rows": len(result["lines"]),
         "partial": result["partial"],

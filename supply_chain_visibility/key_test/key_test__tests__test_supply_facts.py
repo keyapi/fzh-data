@@ -12,9 +12,26 @@ class FakeFrappe(types.ModuleType):
         self.PermissionError = PermissionError
         self.whitelist = lambda *args, **kwargs: (lambda fn: fn)
         self._dict = lambda value=None: types.SimpleNamespace(**dict(value or {}))
+        self.so_rows = []
+        self.permitted_sos = []
+        self.total_sos = 0
         self.db = types.SimpleNamespace(
-            sql=lambda *a, **k: [], has_column=lambda *a, **k: True,
+            sql=self.sql, count=self.count, has_column=lambda *a, **k: True,
             table_exists=lambda *a, **k: True)
+
+    def sql(self, query, values=None, as_dict=False):
+        if "select so.name as so" in query:
+            allowed = set((values or {}).get("permitted") or [])
+            return [row for row in self.so_rows if row.so in allowed]
+        return []
+
+    def count(self, doctype, filters=None):
+        return self.total_sos
+
+    def get_list(self, doctype, filters=None, fields=None, limit_page_length=0):
+        if doctype == "Sales Order":
+            return [types.SimpleNamespace(name=name) for name in self.permitted_sos]
+        return []
 
     def has_permission(self, doctype, ptype, doc=None):
         return True
@@ -75,6 +92,7 @@ class SupplyFactsContractTest(unittest.TestCase):
         cls.saved = {name: sys.modules.get(name)
                      for name in ("frappe", "frappe.utils", "key_test", "key_test.supply_query")}
         fake = FakeFrappe()
+        cls.fake = fake
         sys.modules["frappe"] = fake
         sys.modules["frappe.utils"] = types.SimpleNamespace(
             getdate=lambda x: x, today=lambda: "2026-10-27",
@@ -180,11 +198,63 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(sorted(t["qty"] for t in tranches), [40.0, 60.0])
 
     def test_case7_cancelled_order_keeps_physical_goods_traceable(self):
-        stages = self.facts.build_stage_balances(_line(so_docstatus=2), _ctx(dns=[_dn()]))
-        self.assertEqual(len(stages), 1)
-        self.assertEqual(stages[0]["stage"], self.facts.STAGE_CANCELLED)
-        self.assertEqual(stages[0]["qty"], 100.0)
-        self.assertIn("实物另列", stages[0]["exclusion_reason"])
+        stages = self.facts.build_stage_balances(
+            _line(so_docstatus=2), _ctx(wos=[_wo(produced=60.0)], dns=[_dn(qty=25.0)]))
+        cancelled = [r for r in stages if r["stage"] == self.facts.STAGE_CANCELLED]
+        self.assertEqual(len(cancelled), 1)
+        self.assertEqual(cancelled[0]["qty"], 100.0)
+        physical = [r for r in stages
+                    if r["stage"] in (self.facts.STAGE_IN_TRANSIT,
+                                      self.facts.STAGE_PRODUCED_PENDING,
+                                      self.facts.STAGE_ARRIVED)]
+        self.assertEqual(round(sum(r["qty"] or 0 for r in physical), 6), 60.0)
+        self.assertTrue(all(r["demand_status"] == "cancelled" for r in stages))
+
+    def test_uom_mismatch_does_not_convert_units(self):
+        stages = self.facts.build_stage_balances(
+            _line(), _ctx(wos=[_wo()], dns=[_dn(qty=2.0, uom="箱")]))
+        self.assertFalse([r for r in stages if r["stage"] == self.facts.STAGE_NOT_PLANNED])
+        unknown = [r for r in stages if r["stage"] == self.facts.STAGE_UNKNOWN]
+        self.assertTrue(unknown)
+        self.assertIsNone(unknown[0]["qty"])
+        self.assertIn("单位", unknown[0]["exclusion_reason"])
+        physical = [r for r in stages if r["uom"] == "箱"]
+        self.assertEqual(physical[0]["qty"], 2.0)
+        self.assertEqual(physical[0]["qty_status"], "known")
+
+    def test_return_against_nets_the_original_dn(self):
+        dns = [_dn(qty=100.0),
+               _dn(name="DN-R", qty=-10.0, is_return=1, return_against="DN-1")]
+        stages = self.facts.build_stage_balances(_line(), _ctx(dns=dns))
+        in_transit = next(r for r in stages if r["stage"] == self.facts.STAGE_IN_TRANSIT)
+        self.assertEqual(in_transit["qty"], 90.0)
+        not_planned = next(r for r in stages if r["stage"] == self.facts.STAGE_NOT_PLANNED)
+        self.assertEqual(not_planned["qty"], 10.0)
+        returned = next(r for r in stages if r["stage"] == self.facts.STAGE_RETURNED)
+        self.assertEqual(returned["qty"], 10.0)
+        self.assertAlmostEqual(self._sum_executed(stages), 100.0)
+
+    def test_tranche_ids_include_so_line(self):
+        dn_ctx = _ctx(dns=[_dn()], numbers_by_dn={"DN-1": [{"number": "A"}]},
+                      shipment_by_number={"A": _ship("A")})
+        line_a = _line(so_line="SOI-A")
+        line_b = _line(so_line="SOI-B")
+        ta = self.facts.build_availability(
+            line_a, dn_ctx, self.facts.build_stage_balances(line_a, dn_ctx))
+        tb = self.facts.build_availability(
+            line_b, dn_ctx, self.facts.build_stage_balances(line_b, dn_ctx))
+        self.assertNotEqual(ta[0]["tranche_id"], tb[0]["tranche_id"])
+        self.assertTrue(ta[0]["tranche_id"].startswith("SOI-A::"))
+
+    def test_row_level_permission_filters_sales_order_lines(self):
+        self.fake.so_rows = [
+            types.SimpleNamespace(so="SO-1", so_line="A"),
+            types.SimpleNamespace(so="SO-2", so_line="B")]
+        self.fake.permitted_sos = ["SO-1"]
+        self.fake.total_sos = 2
+        lines, restricted = self.facts.load_lines({})
+        self.assertEqual([row.so for row in lines], ["SO-1"])
+        self.assertTrue(restricted)
 
     def test_draft_dn_does_not_duplicate_stage_quantity(self):
         stages = self.facts.build_stage_balances(

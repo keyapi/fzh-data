@@ -26,9 +26,15 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 | `qty`, `qty_status`, `qty_basis` | 数量、证据状态（known/estimated/unknown）、依据（job_card_first_op / wo_produced_qty / dn_submitted / …） |
 | `batch_key`, `source_record` | DN / 工单 / 来源单据 |
 | `exclusion_reason`, `included_in_stock` | 不可计入原因、是否已含库存（未证一律 unknown） |
+| `demand_status` | `active` / `cancelled`（取消订单的实物片段仍保留） |
 | `scope`, `role` | `in_house`/`external_fba`、物料角色 |
 
-规则：同一订单行的已执行片段互斥；历史累计完工/出库**不**再相加；草稿 DN 只列数量为空的提示行；差额进 `unknown` 并给原因；取消订单单独成段，实物另列。
+规则：
+- 同一订单行的已执行片段互斥；历史累计完工/出库**不**再相加；草稿 DN 只列数量为空的提示行；差额进 `unknown` 并给原因。
+- **行级权限**：SO/DN/WO/PP/Shipment 均先取当前用户可读单据集合再取数；受限来源写入 `coverage.restricted` 并置 `partial=true`。
+- **单位**：出库单位与订单单位不一致且无换算证据时，不归一运算；输出「数量归属未知」+ 原单位实物片段。
+- **退货**：按 `return_against` 抵扣原出库单；未关联原单的退货单列并标「去向未证」，不以差异行代替归属。
+- **取消**：需求取消与已生产/已发实物分开记录；实物片段带 `demand_status=cancelled`，不随订单状态删除。
 
 ### `milestones`（原计划 / 承诺 / 最新预计 / 实际）
 
@@ -46,7 +52,7 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 
 | 字段 | 说明 |
 |---|---|
-| `tranche_id` | 稳定片段 ID（`DN::单号` 或 `SO行::阶段`） |
+| `tranche_id` | 稳定片段 ID：`<SO行>::<DN>::<单号>` 或 `<SO行>::<阶段>::<批次>`（跨订单行不重复） |
 | `qty`, `qty_status`, `uom` | 片段数量与证据 |
 | `available_date`, `latest_expected_at`, `date_kind`, `date_confidence` | 可售日（当前无入库/上架证据，恒为 null）与 ETA |
 | `scenario` | `conditional` / `unknown` / `allocation_unknown` |
@@ -62,7 +68,7 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 
 ### `manifest`
 
-`schema_version=supply-facts/v1`、`rule_version`、`run_id`、`as_of`、`generated_at`、`scope`、`coverage`（来源/权限）、`counts`（输入/输出/各数据集）、`partial`、`notes`、`files`（sha256）、`performance`。
+`schema_version=supply-facts/v1`、`rule_version`、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`external_sources`）、`counts`、`partial`、`truncated`、`termination_reason`（`exhausted`/`page_limit`）、`notes`、`files`（相对路径 + sha256）、`performance`。
 
 ## 2. 批量入口
 
@@ -99,12 +105,13 @@ SO Chain Overview 的链条弹窗新增「数量阶段 / 节点 / 分批可售�
 
 ## 5. 验收（测试站）
 
-- 契约单测：10 项（8 类案例 + 草稿不重复计量 + `wo_produced_qty` 标 estimated），本地全绿。
-- 单 SO `SO-26-00026`：3 行 / 8 阶段余额 / 16 里程碑 / 6 可售片段 / 17 关联；查询 0.63s。
+- 契约单测：14 项（8 类案例 + 草稿不重复 + estimated 证据 + 单位不一致 + return_against 抵扣 + 取消保留实物 + 片段 ID 唯一 + 行级权限），本地全绿。
+- 单 SO `SO-26-00026`：3 行 / 8 阶段余额 / 16 里程碑 / 6 可售片段 / 17 关联；查询约 0.8s。
   三行阶段余额守恒 10 / 5 / 8（草稿不计数量；KS 无工序卡时用 produced_qty 标 estimated）。
-- 全范围：278 行 / 294 阶段余额 / 628 里程碑 / 287 片段 / 390 关联；查询 0.28s，总计 0.72s。
+- 全范围（含取消订单）：292 行 / 308 阶段余额 / 656 里程碑 / 287 片段 / 404 关联；查询 0.30s，总计 0.85s。
+- manifest：`partial=true`（PO/入库/可售来源未接入）、`external_sources`/`restricted` 可见、`observed_at` 与 `as_of` 分离、文件路径为相对路径且逐个存在、`termination_reason=exhausted`。
 - 9 SKU：生产只读解析出 99 张 SO；测试站无该样本数据，**待生产授权后验收**（本任务未授权生产部署）。
-- 普通角色权限：当前只验证 doctype 级权限（缺源时标 partial）；行级角色/字段权限待补。
+- 普通角色权限：已改为按 `get_list` 可读集合取数，并有受限角色单测；线上普通角色端到端仍待验证。
 
 ## 6. 待业务确认
 
