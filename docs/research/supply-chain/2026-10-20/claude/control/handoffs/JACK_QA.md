@@ -325,6 +325,18 @@ channel: docs/jack-w1-channel
 - 回滚：`checkout backup/pre-c34fa53-20261027` + clear-cache + restart；未改写历史。
 - 待办：key_test #2 body 与 fzh-data #314 仍写“draft / 不合并 / 生产未部署”，已过时；Jack 需更正记录。
 
+### [W1-SUPPLY-FACTS-2026-10-27] 供应事实批量入口 v1（测试站）
+
+**结论：三类事实 + links + manifest 的只读批量入口已在测试站跑通；9 SKU 验收待生产授权。**
+
+- 契约与字段：`supply_chain_visibility/docs/reference/supply-facts-contract.md`（stage_balances / milestones / availability_schedule / links / manifest）。
+- 代码：key_test `key_test/supply_facts.py`（whitelist `get_supply_facts`）；本地批量入口 `EN_API/supply_facts_export.py`（JSON+Excel+sha256+latest 原子指针）。
+- 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口同一方法。
+- 验收：单 SO `SO-26-00026` → 3 行、三行阶段余额守恒 10/5/8，查询 0.63s；测试站全范围 278 行 → 294 余额 / 628 里程碑 / 287 片段 / 390 关联，0.72s；契约单测 10 项（8 类案例）全绿。
+- 9 SKU：生产只读解析出 99 张 SO；测试站无该样本（0 张），生产未部署新模块（本任务不授权生产部署），**待授权后验收**。
+- 边界：到仓/上架无 EN 证据 → `delivered_sellable` 不产出、`eligible=false`；多运单不摊量；无独立承诺字段；时区未证；PO/入库未并入 EN 事实。
+- 生产未部署；#314 仍 open，不合并。PR 评论只发本段短指针。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

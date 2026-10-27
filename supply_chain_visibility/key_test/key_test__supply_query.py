@@ -19,6 +19,46 @@ def _has_read_permission(doctype):
     return frappe.has_permission(doctype, "read")
 
 
+# Canonical order of Shipment.custom_zmt_status11 (14 states).
+STATUS11_ORDER = (
+    "已订舱", "已入仓", "已装柜", "报关中", "已报关", "已离港",
+    "运输中", "已到港", "清关中", "已清关", "已转运", "派送中",
+    "已签收", "已上传POD",
+)
+UNKNOWN_STATUS = "状态未知"
+
+
+def _num(value):
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def fmt_qty(value):
+    """Mirror the SO form's so_chain_num: 3 decimals, trailing zeros stripped."""
+    number = _num(value)
+    if not number:
+        return "0"
+    return ("%.3f" % number).rstrip("0").rstrip(".")
+
+
+def format_head_leg(status_counts):
+    """Render the first-leg summary: 1运单·status / n运单·cA/cB."""
+    counts = {status: int(count) for status, count in (status_counts or {}).items() if count}
+    total = sum(counts.values())
+    if not total:
+        return ""
+    ordered = [(status, counts[status]) for status in STATUS11_ORDER if counts.get(status)]
+    ordered += sorted(
+        ((status, count) for status, count in counts.items() if status not in STATUS11_ORDER),
+        key=lambda item: (item[0] != UNKNOWN_STATUS, -item[1], item[0]),
+    )
+    if total == 1:
+        return "1运单·" + ordered[0][0]
+    return "%d运单·%s" % (total, "/".join("%d%s" % (count, status) for status, count in ordered))
+
+
 def _candidate_delivery_notes(line_ids, filters=None):
     """Find only DNs linked to target SO rows; parent read permission is checked later."""
     if not line_ids:
@@ -72,6 +112,193 @@ def _quantities_with_matching_uom(rows, line_uom, value_field):
     return values, mismatches
 
 
+def _line_dn_scope(rows):
+    line_meta = {}
+    for row in rows:
+        line_meta[row.so_line] = (row.so, row.item_code, row.uom)
+    return line_meta
+
+
+def _map_dn_rows(dn_rows, line_meta, extra=None):
+    """Attach DN item rows to SO lines; blank so_detail maps only when unambiguous."""
+    by_so_item = {}
+    for line, (so, item_code, _uom) in line_meta.items():
+        by_so_item.setdefault((so, item_code), []).append(line)
+    grouped = {}
+    for dn in dn_rows:
+        if dn.so_detail and dn.so_detail in line_meta:
+            grouped.setdefault(dn.so_detail, []).append(dn)
+        elif not dn.so_detail:
+            targets = by_so_item.get((dn.against_sales_order, dn.item_code), [])
+            if len(targets) == 1:
+                grouped.setdefault(targets[0], []).append(dn)
+            elif targets and extra is not None:
+                extra["blank_so_detail_ambiguous_lines"].update(targets)
+    if extra is not None:
+        for line in extra["blank_so_detail_ambiguous_lines"]:
+            extra["dn_unknown_lines"].add(line)
+    return grouped
+
+
+def _dn_rows_for_lines(rows):
+    line_meta = _line_dn_scope(rows)
+    if not line_meta:
+        return []
+    values = {
+        "sos": tuple({row.so for row in rows}),
+        "lines": tuple(line_meta),
+        "items": tuple({row.item_code for row in rows}),
+    }
+    return frappe.db.sql(
+        """select dn.name as dn, dn.docstatus as docstatus, ifnull(dn.is_return, 0) as is_return,
+                  dni.so_detail as so_detail, dni.against_sales_order as against_sales_order,
+                  dni.item_code as item_code, dni.qty as qty, dni.uom as uom
+           from `tabDelivery Note Item` dni
+           join `tabDelivery Note` dn on dn.name = dni.parent
+           where dni.against_sales_order in %(sos)s
+             and (dni.so_detail in %(lines)s
+                  or (ifnull(dni.so_detail, '') = '' and dni.item_code in %(items)s))
+             and dn.docstatus in (0, 1)""",
+        values, as_dict=True,
+    )
+
+
+def _lines_with_dns(rows):
+    """Lines that carry at least one non-cancelled DN; used by include_delivered."""
+    line_meta = _line_dn_scope(rows)
+    by_so_item = {}
+    for line, (so, item_code, _uom) in line_meta.items():
+        by_so_item.setdefault((so, item_code), []).append(line)
+    found = set()
+    for dn in _dn_rows_for_lines(rows):
+        if dn.so_detail in line_meta:
+            found.add(dn.so_detail)
+        elif not dn.so_detail:
+            targets = by_so_item.get((dn.against_sales_order, dn.item_code), [])
+            if len(targets) == 1:
+                found.add(targets[0])
+    return found
+
+
+def dn_logistic_numbers(dn_names):
+    numbers_by_dn = {}
+    seen = set()
+    if dn_names and frappe.db.table_exists("Delivery Note Logistics Number"):
+        child_rows = frappe.db.sql(
+            """select parent as dn, logistic_number as number, ifnull(is_primary, 0) as is_primary
+               from `tabDelivery Note Logistics Number`
+               where parent in %(dns)s and ifnull(logistic_number, '') != ''""",
+            {"dns": tuple(dn_names)}, as_dict=True,
+        )
+        for row in child_rows:
+            key = (row.dn, row.number)
+            if key not in seen:
+                seen.add(key)
+                numbers_by_dn.setdefault(row.dn, []).append(
+                    {"number": row.number, "primary": int(row.is_primary or 0)})
+    if dn_names and frappe.db.has_column("Delivery Note", "logistic_number"):
+        for row in frappe.db.sql(
+            """select name as dn, logistic_number as number
+               from `tabDelivery Note`
+               where name in %(dns)s and ifnull(logistic_number, '') != ''""",
+            {"dns": tuple(dn_names)}, as_dict=True,
+        ):
+            key = (row.dn, row.number)
+            if key not in seen:
+                seen.add(key)
+                numbers_by_dn.setdefault(row.dn, []).append({"number": row.number, "primary": 1})
+    return numbers_by_dn
+
+
+def get_dn_and_logistics(rows):
+    """Per-line DN counts/quantities and first-leg shipment status distribution.
+
+    Returns (dn_summary, logistics_summary, extra); None means not visible.
+    """
+    extra = {
+        "dn_unit_mismatch_lines": set(),
+        "dn_unknown_lines": set(),
+        "shipment_restricted_lines": set(),
+        "blank_so_detail_ambiguous_lines": set(),
+        "has_shipment_permission": True,
+    }
+    if not rows:
+        return {}, {}, extra
+    if not _has_read_permission("Delivery Note"):
+        return None, None, extra
+
+    line_meta = _line_dn_scope(rows)
+    dn_rows = _dn_rows_for_lines(rows)
+    grouped = _map_dn_rows(dn_rows, line_meta, extra)
+
+    dn_names = sorted({dn.dn for dn in dn_rows})
+    permitted = set(_permitted_names(
+        "Delivery Note", [["name", "in", dn_names], ["docstatus", "in", (0, 1)]]))
+    if set(dn_names) != permitted:
+        return None, None, extra
+
+    dn_summary = {}
+    for line, records in grouped.items():
+        uom = line_meta[line][2]
+        if not uom or any(record.uom != uom for record in records):
+            extra["dn_unit_mismatch_lines"].add(line)
+            dn_summary[line] = None
+            continue
+        dn_summary[line] = {
+            "dns": len({record.dn for record in records}),
+            "shipped": sum(_num(record.qty) for record in records
+                           if record.docstatus == 1 and not int(record.is_return or 0)),
+            "returned": sum(_num(record.qty) for record in records
+                            if record.docstatus == 1 and int(record.is_return or 0)),
+        }
+    for line in extra["dn_unknown_lines"]:
+        dn_summary[line] = None
+
+    if not (_has_read_permission("Shipment")
+            and frappe.db.has_column("Shipment", "custom_zmt_logistic_number")):
+        extra["has_shipment_permission"] = False
+        return dn_summary, None, extra
+
+    numbers_by_dn = dn_logistic_numbers(dn_names)
+    all_numbers = sorted({item["number"] for values in numbers_by_dn.values() for item in values})
+    shipment_by_number = {}
+    restricted_numbers = set()
+    if all_numbers:
+        candidates = frappe.db.sql(
+            """select name, custom_zmt_logistic_number as number, custom_zmt_status11 as status11
+               from `tabShipment`
+               where custom_zmt_logistic_number in %(numbers)s and docstatus in (0, 1)""",
+            {"numbers": tuple(all_numbers)}, as_dict=True,
+        )
+        permitted_shipments = set(_permitted_names(
+            "Shipment", [["custom_zmt_logistic_number", "in", all_numbers],
+                         ["docstatus", "in", (0, 1)]]))
+        for candidate in candidates:
+            if candidate.name in permitted_shipments:
+                shipment_by_number[candidate.number] = candidate
+            else:
+                restricted_numbers.add(candidate.number)
+
+    logistics_summary = {}
+    for line, records in grouped.items():
+        numbers = []
+        for dn in sorted({record.dn for record in records}):
+            numbers.extend(item["number"] for item in numbers_by_dn.get(dn, []))
+        numbers = list(dict.fromkeys(numbers))
+        if any(number in restricted_numbers for number in numbers):
+            extra["shipment_restricted_lines"].add(line)
+            logistics_summary[line] = None
+            continue
+        counts = {}
+        for number in numbers:
+            status = (getattr(shipment_by_number.get(number), "status11", None)
+                      or UNKNOWN_STATUS)
+            counts[status] = counts.get(status, 0) + 1
+        logistics_summary[line] = {"numbers": len(numbers), "status_counts": counts}
+
+    return dn_summary, logistics_summary, extra
+
+
 def get_report_data(filters):
     filters = frappe._dict(filters or {})
     visibility = dict(
@@ -95,7 +322,9 @@ def get_report_data(filters):
     if not sales_orders:
         return [], {}, {}, {}, {}, visibility
 
-    sql_filters = ["soi.parent in %(sales_orders)s", "(soi.qty - soi.delivered_qty) > 0"]
+    sql_filters = ["soi.parent in %(sales_orders)s"]
+    if not filters.get("include_delivered"):
+        sql_filters.append("(soi.qty - soi.delivered_qty) > 0")
     values = {"sales_orders": tuple(sales_orders)}
     for field in ("item_code", "customer_item_code"):
         if filters.get(field):
@@ -116,6 +345,15 @@ def get_report_data(filters):
     )
     if not rows:
         return [], {}, {}, {}, {}, visibility
+
+    if filters.get("include_delivered"):
+        # Keep fully delivered lines only when they actually carry a DN; never
+        # expand the report to every historical SO line.
+        with_dns = _lines_with_dns(rows) if visibility["delivery_notes"] else set()
+        rows = [row for row in rows
+                if _num(row.open_qty) > 1e-9 or row.so_line in with_dns]
+        if not rows:
+            return [], {}, {}, {}, {}, visibility
 
     line_ids = list(dict.fromkeys(row.so_line for row in rows))
     line_uom = {row.so_line: row.uom for row in rows}

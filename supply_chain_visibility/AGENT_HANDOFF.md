@@ -45,3 +45,12 @@
 
 - **事实地图要持续更新**：一旦在 EN 上发现新的单据/在用状态（尤其「建了没用」那类），改 `docs/reference/en-supply-chain-map.md` 并记 `docs/log.md`。
 - 本子项目文档遵守 OKF v0.1；改动后跑 `uv run python scripts/update_index.py`。
+
+## 6. 供应事实批量入口（2026-10-27）
+
+- 契约与字段：`docs/reference/supply-facts-contract.md`。
+- 服务端：key_test `supply_facts.py` → whitelist `get_supply_facts`（SO 行 → stage_balances / milestones / availability_schedule / links / manifest）。
+- 本地入口：`EN_API/supply_facts_export.py`（JSON + Excel + sha256 + `latest.json` 原子指针；失败不覆盖最后成功版本）。
+- 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
+- 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
+
