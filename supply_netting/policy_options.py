@@ -140,8 +140,11 @@ def build_options(sensitivity_csv: str | Path, by_key_csv: str | Path) -> tuple[
     main_unit = units[0] if units else ""
     for uom in units:
         for level, multiplier in ((0.95, 1.5), (0.98, 2.0)):
-            l90 = _cell(by_key, 90, level, multiplier, uom=uom)
-            l60 = _cell(by_key, 60, level, multiplier, uom=uom)
+            try:
+                l90 = _cell(by_key, 90, level, multiplier, uom=uom)
+                l60 = _cell(by_key, 60, level, multiplier, uom=uom)
+            except ValueError:
+                continue          # 网格未覆盖该格（部分数据/测试夹具）→ 跳过，不编造
             lever.append(dict(单位=uom, level=level, multiplier=multiplier,
                               inv_l90=round(l90["inventory"], 1),
                               inv_l60=round(l60["inventory"], 1),
