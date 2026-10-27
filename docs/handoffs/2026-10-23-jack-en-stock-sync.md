@@ -250,6 +250,16 @@ df -h /home/frappe
 - [x] Windows API 任务已禁用（保留手动回退）；浏览器导出 02:17 保留。
 - [x] 测试站验证 `stock_change`（14 仓 3 天 653 行，重跑不翻倍）；测试站定时关闭。
 - [x] 生产部署 app PR #8 + migrate，已设 `enable_stock_change=1`、`stock_change_lookback_days=3`；生产 3 天回填 653 行。
+- [x] **06:17 重试注册修复**（PR #9）：Frappe Scheduled Job Type 以 method 为唯一键，06:17 之前实际未跑；06:17 改用独立包装方法。
+- [x] **库存变动回看上限 6 天**（PR #9）：通途严格 7 天，正好 7 天返回 527。
+- [x] **盘中快照**（PR #10）：12:00 波兰 / 18:00 美东+美中 → `stock_intraday.parquet`；生产已启用，EU 冒烟 1,371 行。
 - [ ] 低库存告警复用 PR #309 规则；先 dry-run。
 - [ ] 低库存并入 EN 后，停 Jack 本地 `FZH-StockAlert-daily`。
 - [ ] 连续 3–5 天验收；体检脚本改为读生产 Parquet/Run。
+
+## 15. 相关经验（docs/solutions）
+
+- `docs/solutions/integration-issues/tongtool-stock-change-7day-limit-and-cron-registration.md` — 527 严格 7 天 + Frappe cron 方法名唯一
+- `docs/solutions/architecture-patterns/tongtool-inventory-semantics-and-snapshot-timing.md` — 可用/待发/物理口径与 05:17/12:00/18:00 时点
+- `docs/solutions/tooling-decisions/wayfair-cg-source-of-truth.md` — CG 以后台 AllInventoryExport 为准
+- `docs/solutions/best-practices/stockout-negative-evidence.md` — PB/稀疏报表的断货负证据

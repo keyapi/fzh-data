@@ -10,6 +10,7 @@ timestamp: 2026-07-28
 
 | 标题 | 文件 |
 |------|------|
+| 通途库存口径与分时快照——可用/待发/物理，以及美欧市场的读取时点 | [tongtool-inventory-semantics-and-snapshot-timing.md](tongtool-inventory-semantics-and-snapshot-timing.md) |
 | EN 端到端供应链履约可视化蓝图 | [en-end-to-end-supply-chain-fulfillment-visibility.md](en-end-to-end-supply-chain-fulfillment-visibility.md) |
 | 公开代码仓与私有公司知识分层——兼顾 Agent 检索、同事使用与防泄露 | [public-private-agent-knowledge-split.md](public-private-agent-knowledge-split.md) |
 | 办公室出口拓扑与应急链路（OpenClash ↔ 上海跳板 ↔ 美国 Vultr） | [office-egress-fallback-chain.md](office-egress-fallback-chain.md) |

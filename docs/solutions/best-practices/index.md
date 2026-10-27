@@ -9,6 +9,7 @@ tags: [best-practices, index]
 
 | 你需要... | 读这个 |
 |----------|--------|
+| 用稀疏库存报表/PB 记录判断断货，怕把“没查到”当成 0 | [stockout-negative-evidence.md](stockout-negative-evidence.md) |
 | 知识库越积越多，怕某篇再也找不到 / 索引与磁盘漂移 | [knowledge-base-anti-rot.md](knowledge-base-anti-rot.md) |
 | 写/改靠通配符扫目录取输入的脚本，怕文件被静默漏掉 | [scanner-silent-data-loss-guard.md](scanner-silent-data-loss-guard.md) |
 | ERPNext 工单生产数据异常怎么排查（方法论） | [erpnext-work-order-investigation-methodology.md](erpnext-work-order-investigation-methodology.md) |

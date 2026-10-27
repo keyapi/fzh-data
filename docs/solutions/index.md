@@ -13,6 +13,10 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-27 | 通途库存口径与分时快照——可用/待发/物理，以及美欧市场的读取时点 | [architecture-patterns/tongtool-inventory-semantics-and-snapshot-timing.md](architecture-patterns/tongtool-inventory-semantics-and-snapshot-timing.md) |
+| 2026-10-27 | 通途库存变动任务的两个静默失效点——API 严格 7 天 + Frappe cron 方法名唯一 | [integration-issues/tongtool-stock-change-7day-limit-and-cron-registration.md](integration-issues/tongtool-stock-change-7day-limit-and-cron-registration.md) |
+| 2026-10-27 | 断货负证据——没检查记录/消失的 SKU 什么时候能当 0 | [best-practices/stockout-negative-evidence.md](best-practices/stockout-negative-evidence.md) |
+| 2026-10-27 | Wayfair CG 库存以后台 AllInventoryExport 为准，不用通途 CG | [tooling-decisions/wayfair-cg-source-of-truth.md](tooling-decisions/wayfair-cg-source-of-truth.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-10-08 | key_test 应用的两个结构性隐患：每次登录写元数据 + 打核心报表猴补丁，且生产/测试分支割裂 | [workflow-issues/key-test-login-hook-and-prod-test-divergence.md](workflow-issues/key-test-login-hook-and-prod-test-divergence.md) |
 | 2026-09-24 | 知识库防腐三件套 — 孤儿检测 / 生成式索引 / 链接图 | [best-practices/knowledge-base-anti-rot.md](best-practices/knowledge-base-anti-rot.md) |

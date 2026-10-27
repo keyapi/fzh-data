@@ -37,3 +37,8 @@ CLI / pytest 继续用 `tongtool_api/mcp_http.py`。那是脚本通道，不是�
 - MCP -32602: 工具输入未通过 MCP schema。
 
 当前按同一商户合计最多 5 次 ERP2 业务调用/分钟限流；2026-08-13 已通过双 App MCP 判别实验确认：主 App 的 5 次成功后，第二 App 第 1 次即触发 526。MCP 不会绕开通途 API 限额。完整证据见 tongtool_api/docs/research/2026-08-13-rate-limit-experiment.md。
+
+## 相关经验（docs/solutions）
+
+- `docs/solutions/integration-issues/tongtool-stock-change-7day-limit-and-cron-registration.md` — `updatedDateFrom` 严格 7 天（527）+ Frappe cron 方法名唯一
+- `docs/solutions/architecture-patterns/tongtool-inventory-semantics-and-snapshot-timing.md` — 可用/待发/物理口径与 05:17/12:00/18:00 分时快照

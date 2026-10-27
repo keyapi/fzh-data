@@ -165,6 +165,17 @@ actually started and how far it has progressed — a Work Order's own `status` a
 can lag behind reality, reading `Not Started` while the shop floor has already cleared several
 operations. Genuinely not-started means zero Job Cards and every operation still pending.
 
+## 库存与断货 (tongtool_integration)
+
+### 可用库存 / 待发库存 / 物理在库
+通途四个桶：`available`（可售）、`waiting_shipment`（已分配未出库）、`intransit`（在途）、`defects`（次品）。业务口径 **物理在库 = available + waiting_shipment**，不含次品与在途。订单占用先降 available、升 waiting；发货才降物理。
+
+### 盘中快照 (intraday snapshot)
+在 05:17 日快照之外，按市场收盘追加的只读快照：12:00 波兰（欧洲）、18:00 美东+美中（美国）。写独立 `stock_intraday.parquet`（`slot=eu/us`），**不覆盖**日 `stock.parquet`；用于当天分配后的可用库存，不用于替代日序列。
+
+### 断货负证据 (negative evidence)
+“没有检查记录/报表里消失”能否当 0 取决于 SKU 宇宙：PB 无 `checked0stock` = 没有报告断货；稀疏报表中**以前出现过、后来消失**且最后状态为“在售” = 该仓 likely 0；从未出现、清仓/停售、或只是转到其它仓，都不算断货。
+
 One batch of pieces yields one Job Card *per operation*, so completed quantity must be read per
 operation: the first operation in the routing answers "how many pieces did this batch make", and
 summing `total_completed_qty` (falling back to `for_quantity`) across operations multiplies the batch size by the operation count.
