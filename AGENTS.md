@@ -138,6 +138,7 @@ uv sync
 | `multi-attr` | `multi_attr_saihu/` | ERP 纵向物料 → 赛狐多属性 + 通途配对 |
 | `warehouse-restock` | `warehouse_restock/` | EN BOM → 三成本拆分 → 海外仓备货单 |
 | `self-fulfilled-demand` | `self_fulfilled_demand/` | EN 终端订单只读增量（Tongtool Order → en-demand-v1 Parquet）+ 旧 GS 统一消费接口 + canonical sku×仓×UOM 适配层；不做补货内核 |
+| `supply-netting` | `supply_netting/` | 需求净额 × 库存/供应事实 → 按可售日期分桶净额（保守/预期情景）+ Parquet/manifest + 补货审核工作簿；不预测、不下单 |
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
 | `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（419 端点）+ 连通性测试 |
 | `sellfox-amazon-settlement` | `sellfox_settlement/` | 赛狐结算中心V2 + 紫鸟列式报表自动取回 Amazon 账期；钉钉迟交/错位审计；店名↔渠道账号 |
