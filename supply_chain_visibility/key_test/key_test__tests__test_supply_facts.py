@@ -68,7 +68,7 @@ def _ctx(**overrides):
 
 def _wo(name="WO-1", qty=100.0, produced=60.0, **overrides):
     wo = {"wo": name, "qty": qty, "produced": produced, "status": "In Process",
-          "item_code": "SKU-1",
+          "item_code": "SKU-1", "stock_uom": "个",
           "docstatus": 1, "planned_start_date": "2026-10-02",
           "planned_end_date": "2026-10-15", "jc_start": "2026-10-03",
           "jc_end": "2026-10-14", "tracking_numbers": [],
@@ -320,6 +320,115 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(manifest["coverage"]["empty_reason"], "no_matching_lines")
         self.assertEqual(manifest["coverage"]["external_sources"]["receipt"], "not_integrated")
         self.assertIn("empty_result", " ".join(manifest["notes"]))
+
+    def test_in_production_capped_by_wo_coverage(self):
+        stages = self.facts.build_stage_balances(
+            _line(), _ctx(wos=[_wo(qty=20.0, produced=0.0)]))
+        by_stage = {r["stage"]: r["qty"] for r in stages if r["qty"] is not None}
+        self.assertEqual(by_stage["in_production"], 20.0)
+        self.assertEqual(by_stage["not_planned"], 80.0)
+        self.assertNotIn(self.facts.STAGE_UNKNOWN, by_stage)
+        self.assertAlmostEqual(self._sum_executed(stages), 100.0)
+
+    def test_in_production_uses_unproduced_wo_gap_not_pending(self):
+        stages = self.facts.build_stage_balances(
+            _line(), _ctx(wos=[_wo(qty=40.0, produced=30.0)], dns=[_dn(qty=10.0)]))
+        by_stage = {r["stage"]: r["qty"] for r in stages if r["qty"] is not None}
+        self.assertEqual(by_stage["produced_pending_dn"], 20.0)
+        self.assertEqual(by_stage["in_production"], 10.0)
+        self.assertEqual(by_stage["not_planned"], 60.0)
+        self.assertAlmostEqual(self._sum_executed(stages), 100.0)
+
+    def test_partial_return_does_not_infer_in_production(self):
+        dns = [_dn(qty=80.0),
+               _dn(name="DN-R", qty=-10.0, is_return=1, return_against="DN-1")]
+        stages = self.facts.build_stage_balances(
+            _line(), _ctx(wos=[_wo(qty=100.0, produced=100.0)], dns=dns))
+        by_stage = {r["stage"]: r["qty"] for r in stages if r["qty"] is not None}
+        self.assertEqual(by_stage["shipped_in_transit"], 70.0)
+        self.assertEqual(by_stage["produced_pending_dn"], 20.0)
+        self.assertEqual(by_stage["returned"], 10.0)
+        self.assertEqual(by_stage[self.facts.STAGE_UNKNOWN], 10.0)
+        self.assertNotIn("in_production", by_stage)
+        self.assertAlmostEqual(
+            sum(q for stage, q in by_stage.items() if stage != "returned"), 100.0)
+
+    def test_milestone_dispatch_requires_order_unit(self):
+        ctx = _ctx(dns=[_dn(qty=2.0, uom="箱")])
+        dispatch = next(r for r in self.facts.build_milestones(_line(), ctx)
+                        if r["node"] == "dispatch")
+        self.assertIsNone(dispatch["qty"])
+        self.assertEqual(dispatch["qty_status"], "unknown")
+        self.assertIn("单位", dispatch["note"])
+        ok = next(r for r in self.facts.build_milestones(_line(), _ctx(dns=[_dn(qty=25.0)]))
+                  if r["node"] == "dispatch")
+        self.assertEqual(ok["qty"], 25.0)
+        self.assertEqual(ok["qty_status"], "known")
+
+    def test_wo_unit_mismatch_routes_production_to_unknown(self):
+        wo = _wo(qty=100.0, produced=100.0, stock_uom="箱")
+        stages = self.facts.build_stage_balances(_line(), _ctx(wos=[wo]))
+        stages_by_name = {r["stage"]: r for r in stages if r["qty"] is not None}
+        self.assertNotIn("produced_pending_dn", stages_by_name)
+        self.assertNotIn("in_production", stages_by_name)
+        self.assertNotIn("not_planned", stages_by_name)
+        self.assertEqual(stages_by_name[self.facts.STAGE_UNKNOWN]["qty"], 100.0)
+        self.assertIn("单位", stages_by_name[self.facts.STAGE_UNKNOWN]["exclusion_reason"])
+        milestones = self.facts.build_milestones(_line(), _ctx(wos=[wo]))
+        end = next(r for r in milestones if r["node"] == "production_end")
+        self.assertIsNone(end["qty"])
+        self.assertEqual(end["qty_status"], "unknown")
+        links = self.facts.build_links(_line(), _ctx(wos=[wo]))
+        produced = [l for l in links if l["relation"] == "produced_by"]
+        self.assertTrue(produced)
+        self.assertTrue(all(l["qty"] is None for l in produced))
+
+    def test_planned_by_link_requires_order_unit(self):
+        pp = {"pp": "PP-1", "ppi": "PPI-1", "planned_qty": 100.0, "stock_uom": "箱",
+              "pp_date": "2026-10-01"}
+        planned = next(l for l in self.facts.build_links(_line(), _ctx(pps=[pp]))
+                       if l["relation"] == "planned_by")
+        self.assertIsNone(planned["qty"])
+        ok = next(l for l in self.facts.build_links(
+            _line(), _ctx(pps=[dict(pp, stock_uom="个")])) if l["relation"] == "planned_by")
+        self.assertEqual(ok["qty"], 100.0)
+
+    def test_tranche_ids_unique_per_warehouse_and_keep_dn_warehouse(self):
+        dns = [_dn(name="DN-1", qty=40.0, warehouse="WH-A", dn_item="row-a"),
+               _dn(name="DN-1", qty=60.0, warehouse="WH-B", dn_item="row-b")]
+        ctx = _ctx(dns=dns, numbers_by_dn={"DN-1": [{"number": "A"}]},
+                   shipment_by_number={"A": _ship("A")})
+        stages = self.facts.build_stage_balances(_line(), ctx)
+        transit = [r for r in stages if r["stage"] == self.facts.STAGE_IN_TRANSIT]
+        self.assertEqual(sorted(r["warehouse"] for r in transit), ["WH-A", "WH-B"])
+        self.assertEqual(sorted(r["qty"] for r in transit), [40.0, 60.0])
+        tranches = self.facts.build_availability(_line(), ctx, stages)
+        self.assertEqual(len(tranches), 2)
+        self.assertEqual(len({t["tranche_id"] for t in tranches}), 2)
+        self.assertEqual(sorted(t["warehouse"] for t in tranches), ["WH-A", "WH-B"])
+        self.assertEqual(sorted(t["qty"] for t in tranches), [40.0, 60.0])
+
+    def test_missing_dn_uom_stays_unknown(self):
+        stages = self.facts.build_stage_balances(_line(), _ctx(dns=[_dn(qty=2.0, uom=None)]))
+        physical = [r for r in stages if r["stage"] == self.facts.STAGE_IN_TRANSIT]
+        self.assertEqual(len(physical), 1)
+        self.assertEqual(physical[0]["qty"], 2.0)
+        self.assertIsNone(physical[0]["uom"])
+        self.assertEqual(physical[0]["qty_status"], "unknown")
+        self.assertFalse([r for r in stages if r["qty_status"] == "known"])
+        hint = next(r for r in stages if r["stage"] == self.facts.STAGE_UNKNOWN)
+        self.assertIn("单位", hint["exclusion_reason"])
+
+    def test_all_restricted_orders_report_all_restricted(self):
+        self.fake.so_rows = []
+        self.fake.permitted_sos = []
+        self.fake.total_sos = 3
+        lines, restricted = self.facts.load_lines({})
+        self.assertEqual(lines, [])
+        self.assertTrue(restricted)
+        result = self.facts.get_supply_facts({})
+        self.assertEqual(result["manifest"]["coverage"]["empty_reason"], "all_restricted")
+        self.assertIn("all_restricted", " ".join(result["manifest"]["notes"]))
 
     def test_case8_rebuild_is_stable_and_partial_is_explicit(self):
         ctx = _ctx(wos=[_wo()], dns=[_dn()])

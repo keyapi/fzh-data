@@ -15,7 +15,7 @@ from frappe.utils import getdate, now_datetime, today
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v1"
-RULE_VERSION = "2026-10-27.1"
+RULE_VERSION = "2026-10-27.2"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -61,11 +61,12 @@ def _qty_status(qty, uom):
 
 def _balance(line, stage, qty, uom, detail="", batch_key="", source="",
              reason="", in_stock="unknown", qty_status=None, qty_basis="",
-             demand_status="active"):
+             demand_status="active", warehouse=None):
     status = qty_status or _qty_status(qty, uom)
     return {
         "so": line.get("so"), "so_line_id": line.get("so_line"),
-        "item_code": line.get("item_code"), "warehouse": line.get("warehouse"),
+        "item_code": line.get("item_code"),
+        "warehouse": warehouse if warehouse is not None else line.get("warehouse"),
         "uom": uom, "stage": stage, "stage_detail": detail,
         "qty": None if qty is None else round(_num(qty), 6),
         "qty_status": status, "qty_basis": qty_basis,
@@ -102,13 +103,42 @@ def build_stage_balances(line, ctx):
                              demand_status=demand_status))
 
     returns = [d for d in submitted if int(d.get("is_return") or 0)]
-    dn_names = {d.get("dn") for d in submitted if not int(d.get("is_return") or 0)}
+    nonreturns = [d for d in submitted if not int(d.get("is_return") or 0)]
+
+    unconverted = [d for d in submitted if not d.get("uom") or d.get("uom") != uom]
+    if unconverted:
+        missing = [d for d in unconverted if not d.get("uom")]
+        rows.append(_balance(
+            line, STAGE_UNKNOWN, None, uom,
+            reason=("出库单位缺失，无换算依据，数量归属未知" if missing
+                    else "出库单位与订单单位不一致，无换算证据，数量归属未知"),
+            demand_status=demand_status))
+        for dn in submitted:
+            if int(dn.get("is_return") or 0):
+                rows.append(_balance(
+                    line, STAGE_RETURNED, abs(_num(dn.get("qty"))), dn.get("uom"),
+                    detail="销售退货（单位未归一）", batch_key=dn.get("dn"),
+                    source=dn.get("dn"), reason="退货单位未证，未按原单抵扣",
+                    warehouse=dn.get("warehouse"), demand_status=demand_status))
+            else:
+                rows.append(_balance(
+                    line, STAGE_IN_TRANSIT, _num(dn.get("qty")), dn.get("uom"),
+                    detail="出库单位 %s（未归一）" % (dn.get("uom") or "缺失"),
+                    batch_key=dn.get("dn"), source=dn.get("dn"),
+                    reason="单位与订单不一致或缺失，未归一",
+                    warehouse=dn.get("warehouse"), demand_status=demand_status))
+        return rows
+
     allocated = defaultdict(float)
+    allocated_by_wh = defaultdict(float)
     unallocated = []
+    dn_names = {d.get("dn") for d in nonreturns}
     for ret in returns:
         against = ret.get("return_against")
+        amount = -_num(ret.get("qty"))
         if against and against in dn_names:
-            allocated[against] += -_num(ret.get("qty"))
+            allocated[against] += amount
+            allocated_by_wh[(against, ret.get("warehouse"))] += amount
         else:
             unallocated.append(ret)
     returned_total = sum(-_num(r.get("qty")) for r in returns)
@@ -119,63 +149,55 @@ def build_stage_balances(line, ctx):
                                      if unallocated else "已按原出库单抵扣"),
                              demand_status=demand_status))
 
-    mismatched = [d for d in submitted
-                  if not int(d.get("is_return") or 0)
-                  and d.get("uom") and d.get("uom") != uom]
-    if mismatched:
-        rows.append(_balance(line, STAGE_UNKNOWN, None, uom,
-                             reason="出库单位与订单单位不一致，无换算证据，数量归属未知",
-                             demand_status=demand_status))
-        for dn in submitted:
-            if int(dn.get("is_return") or 0):
-                continue
-            rows.append(_balance(line, STAGE_IN_TRANSIT, _num(dn.get("qty")),
-                                 dn.get("uom") or uom,
-                                 detail="出库单位 %s（未换算）" % (dn.get("uom") or "?"),
-                                 batch_key=dn.get("dn"), source=dn.get("dn"),
-                                 reason="单位与订单不一致，未归一",
-                                 demand_status=demand_status))
-        return rows
-
     numbers = ctx.get("numbers_by_dn") or {}
     shipment_by_number = ctx.get("shipment_by_number") or {}
     shipped_physical = 0.0
     shipped_net = 0.0
-    for dn in submitted:
-        if int(dn.get("is_return") or 0):
-            continue
-        gross_qty = _num(dn.get("qty"))
-        net_qty = max(0.0, gross_qty - allocated.get(dn.get("dn"), 0.0))
-        shipped_physical += gross_qty
-        shipped_net += net_qty
-        if net_qty <= 1e-9:
-            continue
-        dn_numbers = [n["number"] for n in numbers.get(dn.get("dn"), [])]
-        statuses = [((shipment_by_number.get(number) or {}).get("status11") or "")
-                    for number in dn_numbers]
-        known = [s for s in statuses if s]
-        stage, detail, reason = STAGE_IN_TRANSIT, "在途", ""
-        if not dn_numbers:
-            detail, reason = "运单未登记", ""
-        elif known and all(s in RECEIVED_STATUSES for s in known) and len(known) == len(statuses):
-            stage, detail, reason = STAGE_ARRIVED, "已签收/POD（不等于可售）", "缺入库/上架证据"
-        elif known and all(s in ARRIVED_STATUSES for s in known):
-            stage, detail, reason = STAGE_ARRIVED, "到港/清关/派送（未证可售）", "缺入库/上架证据"
-        elif len(dn_numbers) > 1:
-            detail, reason = "多运单，到货分配未知", "多运单未提供数量分配证据"
-        elif not known:
-            detail, reason = "运单状态未知（未匹配 Shipment）", "缺运单状态证据"
-        if not ctx.get("shipment_permission"):
-            detail, reason = "状态未知（无 Shipment 读取权限）", "缺 Shipment 权限"
-        rows.append(_balance(line, stage, net_qty, uom, detail=detail,
-                             batch_key=dn.get("dn"), source=dn.get("dn"), reason=reason,
-                             demand_status=demand_status))
+    grouped_dns = defaultdict(list)
+    for dn in nonreturns:
+        grouped_dns[dn.get("dn")].append(dn)
+    for dn_name, dn_rows in grouped_dns.items():
+        gross_total = sum(_num(r.get("qty")) for r in dn_rows)
+        net_total = max(0.0, gross_total - min(allocated.get(dn_name, 0.0), gross_total))
+        shipped_physical += gross_total
+        shipped_net += net_total
+        for dn in dn_rows:
+            gross_qty = _num(dn.get("qty"))
+            row_alloc = min(allocated_by_wh.get((dn_name, dn.get("warehouse")), 0.0),
+                            gross_qty)
+            net_qty = max(0.0, gross_qty - row_alloc)
+            if net_qty <= 1e-9:
+                continue
+            dn_numbers = [n["number"] for n in numbers.get(dn_name, [])]
+            statuses = [((shipment_by_number.get(number) or {}).get("status11") or "")
+                        for number in dn_numbers]
+            known = [s for s in statuses if s]
+            stage, detail, reason = STAGE_IN_TRANSIT, "在途", ""
+            if not dn_numbers:
+                detail, reason = "运单未登记", ""
+            elif known and all(s in RECEIVED_STATUSES for s in known) and len(known) == len(statuses):
+                stage, detail, reason = STAGE_ARRIVED, "已签收/POD（不等于可售）", "缺入库/上架证据"
+            elif known and all(s in ARRIVED_STATUSES for s in known):
+                stage, detail, reason = STAGE_ARRIVED, "到港/清关/派送（未证可售）", "缺入库/上架证据"
+            elif len(dn_numbers) > 1:
+                detail, reason = "多运单，到货分配未知", "多运单未提供数量分配证据"
+            elif not known:
+                detail, reason = "运单状态未知（未匹配 Shipment）", "缺运单状态证据"
+            if not ctx.get("shipment_permission"):
+                detail, reason = "状态未知（无 Shipment 读取权限）", "缺 Shipment 权限"
+            rows.append(_balance(line, stage, net_qty, uom, detail=detail,
+                                 batch_key=dn_name, source=dn_name, reason=reason,
+                                 warehouse=dn.get("warehouse"),
+                                 demand_status=demand_status))
 
-    produced_total = sum(_num(w.get("produced")) for w in (ctx.get("wos") or [])
-                         if w.get("item_code") == line.get("item_code"))
     own_wos = [w for w in (ctx.get("wos") or []) if w.get("item_code") == line.get("item_code")]
+    wo_units_ok = all((w.get("stock_uom") or "") == uom for w in own_wos)
     produced_estimated = any(w.get("produced_basis") == "wo_produced_qty" for w in own_wos)
+    produced_total = (sum(_num(w.get("produced")) for w in own_wos)
+                      if wo_units_ok else 0.0)
     produced_capped = min(produced_total, _num(qty))
+    wo_coverage = (min(sum(_num(w.get("qty")) for w in own_wos), _num(qty))
+                   if wo_units_ok else 0.0)
     open_net = _num(qty) - shipped_net
     produced_pending = max(0.0, min(produced_capped - shipped_physical, open_net))
     remaining = max(0.0, open_net - produced_pending)
@@ -187,22 +209,38 @@ def build_stage_balances(line, ctx):
                              else "job_card_first_op",
                              demand_status=demand_status))
     if not cancelled and remaining > 1e-9:
-        if returned_total > 1e-9 and produced_pending <= 1e-9:
-            rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom,
-                                 reason="退货实物可用性未证，需求余额不推断为待出库",
+        return_gap = min(returned_total, remaining)
+        if return_gap > 1e-9:
+            rows.append(_balance(line, STAGE_UNKNOWN, return_gap, uom,
+                                 reason="退货实物可用性未证，需求余额不推断为待出库/在产",
                                  demand_status=demand_status))
-        elif not ctx.get("work_order_permission"):
-            rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom,
-                                 reason="无工单读取权限（含行级受限），阶段未知",
-                                 demand_status=demand_status))
-        elif own_wos:
-            rows.append(_balance(line, STAGE_IN_PRODUCTION, remaining, uom,
-                                 detail="在产/部分完工",
-                                 source=",".join(w.get("wo") for w in own_wos),
-                                 demand_status=demand_status))
-        else:
-            rows.append(_balance(line, STAGE_NOT_PLANNED, remaining, uom,
-                                 detail="无工单/生产计划", demand_status=demand_status))
+            remaining -= return_gap
+        if remaining > 1e-9:
+            if not ctx.get("work_order_permission"):
+                rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom,
+                                     reason="无工单读取权限（含行级受限），阶段未知",
+                                     demand_status=demand_status))
+            elif not wo_units_ok:
+                rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom,
+                                     reason="工单单位与订单单位不一致，完工/在产数量未归一",
+                                     demand_status=demand_status))
+            elif wo_coverage <= 1e-9:
+                rows.append(_balance(line, STAGE_NOT_PLANNED, remaining, uom,
+                                     detail="无工单/生产计划", demand_status=demand_status))
+            else:
+                production_gap = max(0.0, wo_coverage - produced_capped)
+                in_production = min(remaining, production_gap)
+                if in_production > 1e-9:
+                    rows.append(_balance(
+                        line, STAGE_IN_PRODUCTION, in_production, uom,
+                        detail="在产/部分完工",
+                        source=",".join(w.get("wo") for w in own_wos),
+                        demand_status=demand_status))
+                uncovered = remaining - in_production
+                if uncovered > 1e-9:
+                    rows.append(_balance(
+                        line, STAGE_NOT_PLANNED, uncovered, uom,
+                        detail="无工单/生产计划覆盖", demand_status=demand_status))
 
     if cancelled:
         rows.append(_balance(line, STAGE_CANCELLED, qty, uom,
@@ -221,12 +259,14 @@ def build_stage_balances(line, ctx):
                              reason="数量阶段证据不足，未归属", demand_status=demand_status))
     elif diff < -1e-6:
         rows.append(_balance(line, STAGE_UNKNOWN, -diff, uom,
-                             reason="超发或重复证据，待核实", demand_status=demand_status))
+                             reason="超发/重复证据或退货无仓级归属，待核实",
+                             demand_status=demand_status))
     return rows
 
 
 def build_milestones(line, ctx):
     observed = _iso(ctx.get("observed_at") or now_datetime())
+    order_uom = line.get("uom")
     rows = []
 
     def add(node, baseline=None, committed=None, latest=None, actual=None, qty=None,
@@ -245,6 +285,13 @@ def build_milestones(line, ctx):
             "note": note, "rule_version": RULE_VERSION,
         })
 
+    def join_notes(*notes):
+        return "；".join(n for n in notes if n)
+
+    def unit_note(units):
+        return "来源单位 %s 与订单单位 %s 不一致或缺失，数量未归一" % (
+            "/".join(sorted(u or "缺失" for u in units)) or "缺失", order_uom or "缺失")
+
     add("order_placed", actual=line.get("transaction_date"), qty=line.get("qty"),
         source="Sales Order.transaction_date")
     add("promised_delivery", baseline=line.get("delivery_date"), latest=line.get("delivery_date"),
@@ -258,21 +305,34 @@ def build_milestones(line, ctx):
         ends = [w["planned_end_date"] for w in own_wos if w.get("planned_end_date")]
         jc_starts = [w["jc_start"] for w in own_wos if w.get("jc_start")]
         jc_ends = [w["jc_end"] for w in own_wos if w.get("jc_end")]
+        wo_units = {w.get("stock_uom") or "" for w in own_wos}
+        wo_units_ok = wo_units == {order_uom}
         add("production_start", baseline=min(starts, default=None),
             latest=min(starts, default=None), actual=min(jc_starts, default=None),
-            qty=min(sum(_num(w.get("qty")) for w in own_wos), _num(line.get("qty"))),
-            source="Work Order/JC", note="有计划无报工时不填实际")
+            qty=(min(sum(_num(w.get("qty")) for w in own_wos), _num(line.get("qty")))
+                 if wo_units_ok else None),
+            source="Work Order/JC",
+            note=join_notes("有计划无报工时不填实际",
+                            "" if wo_units_ok else unit_note(wo_units)))
         add("production_end", baseline=max(ends, default=None),
             latest=max(ends, default=None), actual=max(jc_ends, default=None),
-            qty=min(sum(_num(w.get("produced")) for w in own_wos), _num(line.get("qty"))),
-            source="Work Order/JC", note="实际完工取工序卡；计划仅供延期分析")
+            qty=(min(sum(_num(w.get("produced")) for w in own_wos), _num(line.get("qty")))
+                 if wo_units_ok else None),
+            source="Work Order/JC",
+            note=join_notes("实际完工取工序卡；计划仅供延期分析",
+                            "" if wo_units_ok else unit_note(wo_units)))
 
     submitted = [d for d in (ctx.get("dns") or []) if int(d.get("docstatus") or 0) == 1]
-    if submitted:
+    nonreturns = [d for d in submitted if not int(d.get("is_return") or 0)]
+    if nonreturns:
+        dn_units = {d.get("uom") or "" for d in nonreturns}
+        dn_units_ok = dn_units == {order_uom}
         add("dispatch",
-            actual=min((d["date"] for d in submitted if d.get("date")), default=None),
-            qty=sum(_num(d.get("qty")) for d in submitted if not int(d.get("is_return") or 0)),
-            source="Delivery Note.posting_date", note="过账不等于实际起运")
+            actual=min((d["date"] for d in nonreturns if d.get("date")), default=None),
+            qty=(sum(_num(d.get("qty")) for d in nonreturns) if dn_units_ok else None),
+            source="Delivery Note.posting_date",
+            note=join_notes("过账不等于实际起运",
+                            "" if dn_units_ok else unit_note(dn_units)))
 
     shipments = list((ctx.get("shipment_by_number") or {}).values())
     if shipments:
@@ -291,11 +351,12 @@ def build_milestones(line, ctx):
 
 def _tranche(line, tranche_id, qty, uom, *, stage, available_date=None, eta=None,
              scenario="unknown", reason="", batch_key="", source="", date_kind="unknown",
-             qty_status=None, qty_basis="", demand_status="active"):
+             qty_status=None, qty_basis="", demand_status="active", warehouse=None):
     return {
         "tranche_id": "%s::%s" % (line.get("so_line"), tranche_id),
         "so": line.get("so"), "so_line_id": line.get("so_line"),
-        "item_code": line.get("item_code"), "warehouse": line.get("warehouse"),
+        "item_code": line.get("item_code"),
+        "warehouse": warehouse if warehouse is not None else line.get("warehouse"),
         "uom": uom, "qty": None if qty is None else round(_num(qty), 6),
         "qty_status": qty_status or _qty_status(qty, uom), "qty_basis": qty_basis,
         "stage": stage,
@@ -310,23 +371,30 @@ def _tranche(line, tranche_id, qty, uom, *, stage, available_date=None, eta=None
 
 def build_availability(line, ctx, stage_rows):
     """Sellable tranches; no tranche enters B_min/B_max without receipt evidence."""
-    uom = line.get("uom")
     numbers = ctx.get("numbers_by_dn") or {}
     shipment_by_number = ctx.get("shipment_by_number") or {}
+    dn_items = {}
+    for dn in ctx.get("dns") or []:
+        if int(dn.get("docstatus") or 0) != 1 or int(dn.get("is_return") or 0):
+            continue
+        dn_items[(dn.get("dn"), dn.get("warehouse"), dn.get("uom"))] = dn.get("dn_item") or ""
     rows = []
     for stage_row in stage_rows:
         if stage_row["stage"] in (STAGE_CANCELLED, STAGE_UNKNOWN, STAGE_RETURNED, STAGE_DRAFT):
             continue
         if stage_row.get("demand_status") == "cancelled":
             continue
-        unit = stage_row.get("uom") or uom
+        unit = stage_row.get("uom")
+        warehouse = stage_row.get("warehouse")
         if stage_row["stage"] in (STAGE_IN_TRANSIT, STAGE_ARRIVED):
             dn = stage_row["batch_key"]
+            dn_item = dn_items.get((dn, warehouse, unit), "")
             dn_numbers = [n["number"] for n in numbers.get(dn, [])]
             if len(dn_numbers) > 1:
                 rows.append(_tranche(
-                    line, "%s::multi" % dn, None, unit, stage=stage_row["stage"],
-                    scenario="allocation_unknown", batch_key=dn, source=dn,
+                    line, "%s::%s::%s::multi" % (dn, warehouse or "", dn_item), None, unit,
+                    stage=stage_row["stage"], scenario="allocation_unknown",
+                    batch_key=dn, source=dn, warehouse=warehouse,
                     reason="多运单分配未知，不复制 DN 全量"))
                 continue
             shipment = shipment_by_number.get(dn_numbers[0]) if dn_numbers else {}
@@ -334,10 +402,12 @@ def build_availability(line, ctx, stage_rows):
             reason = ("到货/POD 未证可售" if stage_row["stage"] == STAGE_ARRIVED
                       else "ETA 未经入库/上架验证")
             rows.append(_tranche(
-                line, "%s::%s" % (dn, dn_numbers[0] if dn_numbers else "NO_NUMBER"),
+                line, "%s::%s::%s::%s" % (dn, warehouse or "", dn_item,
+                                          dn_numbers[0] if dn_numbers else "NO_NUMBER"),
                 stage_row["qty"], unit, stage=stage_row["stage"], eta=eta,
                 scenario="conditional" if eta else "unknown", batch_key=dn, source=dn,
-                reason=reason, qty_status=stage_row.get("qty_status"),
+                warehouse=warehouse, reason=reason,
+                qty_status=stage_row.get("qty_status"),
                 qty_basis=stage_row.get("qty_basis", "")))
         elif stage_row["stage"] in (STAGE_PRODUCED_PENDING, STAGE_IN_PRODUCTION,
                                     STAGE_NOT_PLANNED, STAGE_DELIVERED):
@@ -345,7 +415,7 @@ def build_availability(line, ctx, stage_rows):
                 line, "%s::%s" % (stage_row["stage"], stage_row.get("batch_key") or ""),
                 stage_row["qty"], unit, stage=stage_row["stage"],
                 scenario="unknown", reason="缺生产/完工/入库日期证据",
-                qty_status=stage_row.get("qty_status"),
+                warehouse=warehouse, qty_status=stage_row.get("qty_status"),
                 qty_basis=stage_row.get("qty_basis", "")))
     return rows
 
@@ -364,32 +434,43 @@ def build_links(line, ctx):
             "uom": uom, "proof": proof, "allocation": allocation or "unknown",
         })
 
+    order_uom = line.get("uom")
     edge("Sales Order", line.get("so"), line.get("so_line"), "order_line",
-         "Item", line.get("item_code"), qty=line.get("qty"), uom=line.get("uom"),
+         "Item", line.get("item_code"), qty=line.get("qty"), uom=order_uom,
          proof="so_item_fk")
     for pp in ctx.get("pps") or []:
+        pp_uom = pp.get("stock_uom")
+        pp_ok = bool(pp_uom) and pp_uom == order_uom
         edge("Sales Order Item", line.get("so_line"), line.get("so_line"), "planned_by",
-             "Production Plan", pp.get("pp"), qty=pp.get("planned_qty"), uom=line.get("uom"),
+             "Production Plan", pp.get("pp"),
+             qty=pp.get("planned_qty") if pp_ok else None,
+             uom=pp_uom if pp_ok else (pp_uom or None),
              proof="ppi.sales_order_item")
     for wo in ctx.get("wos") or []:
+        wo_uom = wo.get("stock_uom")
+        wo_ok = bool(wo_uom) and wo_uom == order_uom
         edge("Sales Order Item", line.get("so_line"), line.get("so_line"), "produced_by",
-             "Work Order", wo.get("wo"), qty=wo.get("qty"), uom=line.get("uom"),
+             "Work Order", wo.get("wo"), qty=wo.get("qty") if wo_ok else None,
+             uom=wo_uom if wo_ok else (wo_uom or None),
              proof=wo.get("link_proof") or "work_order_fk")
         for tn in wo.get("tracking_numbers") or []:
             edge("Work Order", wo.get("wo"), None, "tracking_number",
                  "Tracking Number", tn, proof="tn.work_order")
     numbers = ctx.get("numbers_by_dn") or {}
     for dn in ctx.get("dns") or []:
+        dn_uom = dn.get("uom")
+        dn_ok = bool(dn_uom) and dn_uom == order_uom
         edge("Sales Order Item", line.get("so_line"), line.get("so_line"), "shipped_by",
-             "Delivery Note", dn.get("dn"), qty=dn.get("qty"), uom=dn.get("uom"),
-             proof="dni.so_detail")
+             "Delivery Note", dn.get("dn"), qty=dn.get("qty") if dn_ok else None,
+             uom=dn_uom or None, proof="dni.so_detail")
         dn_numbers = numbers.get(dn.get("dn"), [])
         for number in dn_numbers:
             shipment = (ctx.get("shipment_by_number") or {}).get(number["number"]) or {}
             allocation = "unknown" if len(dn_numbers) > 1 else "single_waybill"
             edge("Delivery Note", dn.get("dn"), None, "waybill",
                  "Shipment", shipment.get("shipment") or number["number"],
-                 qty=None if len(dn_numbers) > 1 else dn.get("qty"), uom=dn.get("uom"),
+                 qty=None if len(dn_numbers) > 1 or not dn_ok else dn.get("qty"),
+                 uom=dn_uom or None,
                  proof="dn_logistics_number", allocation=allocation)
     return rows
 
@@ -460,9 +541,10 @@ def load_lines(filters):
         conditions.append("(soi.qty - soi.delivered_qty) > 0")
     permitted = [row.name for row in frappe.get_list(
         "Sales Order", filters=so_filters, fields=["name"], limit_page_length=0)]
+    total = frappe.db.count("Sales Order", filters=so_filters)
+    restricted = total > len(permitted)
     if not permitted:
-        return [], False
-    restricted = frappe.db.count("Sales Order", filters=so_filters) > len(permitted)
+        return [], restricted
     conditions.append("so.name in %(permitted)s")
     values["permitted"] = tuple(permitted)
     fba_expr = ("ifnull(soi.custom_fba_sku, '')"
@@ -493,7 +575,8 @@ def load_pps(lines):
         return {}, False
     rows = frappe.db.sql(
         """select ppi.sales_order_item as so_line, ppi.name as ppi, ppi.parent as pp,
-                  pp.posting_date as pp_date, ppi.planned_qty, ppi.pending_qty
+                  pp.posting_date as pp_date, ppi.planned_qty, ppi.pending_qty,
+                  ppi.stock_uom
            from `tabProduction Plan Item` ppi
            join `tabProduction Plan` pp on pp.name = ppi.parent
            where pp.docstatus = 1 and ppi.sales_order_item in %(lines)s""",
@@ -537,8 +620,9 @@ def load_wos(lines, pps):
         values["ppis"] = tuple(ppi_to_line)
     wos = frappe.db.sql(
         f"""select w.name as wo, w.qty, w.produced_qty, w.status, w.docstatus,
-                   w.production_item, w.sales_order_item, w.fg_sales_order_item,
-                   w.production_plan_item, w.planned_start_date, w.planned_end_date
+                   w.production_item, w.stock_uom, w.sales_order_item,
+                   w.fg_sales_order_item, w.production_plan_item, w.planned_start_date,
+                   w.planned_end_date
             from `tabWork Order` w
             where w.docstatus in (0, 1) and ({' or '.join(conditions)})""",
         values, as_dict=True)
@@ -582,7 +666,7 @@ def load_wos(lines, pps):
                                        wo.produced_qty)
         grouped[line].append({
             "wo": wo.wo, "qty": _num(wo.qty),
-            "item_code": wo.production_item,
+            "item_code": wo.production_item, "stock_uom": wo.stock_uom,
             "produced": produced, "produced_basis": basis,
             "status": wo.status, "docstatus": wo.docstatus,
             "planned_start_date": wo.planned_start_date,
@@ -605,7 +689,8 @@ def load_dns(lines):
         """select dn.name as dn, dn.posting_date as date, dn.status as status,
                   dn.docstatus as docstatus, ifnull(dn.is_return, 0) as is_return,
                   dn.return_against as return_against,
-                  dni.so_detail as so_line, dni.qty, dni.uom, dni.warehouse
+                  dni.so_detail as so_line, dni.name as dn_item, dni.qty, dni.uom,
+                  dni.warehouse
            from `tabDelivery Note Item` dni
            join `tabDelivery Note` dn on dn.name = dni.parent
            where dni.so_detail in %(lines)s and dn.docstatus in (0, 1)
@@ -626,7 +711,12 @@ def load_dns(lines):
         if key not in grouped:
             grouped[key] = frappe._dict(row)
             grouped[key]["qty"] = 0.0
+            grouped[key]["dn_items"] = []
         grouped[key]["qty"] += _num(row.qty)
+        if row.dn_item:
+            grouped[key]["dn_items"].append(row.dn_item)
+    for row in grouped.values():
+        row["dn_item"] = ",".join(sorted(set(row["dn_items"])))
     out = defaultdict(list)
     for row in grouped.values():
         out[row.so_line].append(row)

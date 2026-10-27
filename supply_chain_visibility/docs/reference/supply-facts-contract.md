@@ -31,12 +31,13 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 
 规则：
 - 同一订单行的已执行片段互斥；历史累计完工/出库**不**再相加；草稿 DN 只列数量为空的提示行；差额进 `unknown` 并给原因。
+- **阶段分配**：工单覆盖量 `wo_coverage=min(Σ工单数量, 订单量)`；在产量 `=min(余额, max(0, wo_coverage-已完工))`，超出覆盖的余额进 `not_planned`；工单单位与订单单位不一致时完工量不可归一，生产类阶段整体进 `unknown`。
 - **行级权限**：SO/DN/WO/PP/Shipment 均先取当前用户可读单据集合再取数；受限来源写入 `coverage.restricted` 并置 `partial=true`；因受限无法判断的阶段一律 `unknown`，不得解释为「没有」。
-- **单位**：出库单位与订单单位不一致且无换算证据时，不归一运算；输出「数量归属未知」+ 原单位实物片段；**所有派生片段（含可售片段）继承对应阶段的单位**。
-- **退货**：按 `return_against` 抵扣原出库单；未关联原单的退货单列并标「去向未证」；退货实物不得重新生成为「待出库」供给，需求余额记为 `unknown` 并给原因。
+- **单位**：出库单位与订单单位不一致**或缺失**且无换算证据时，不归一运算；输出「数量归属未知」+ 原单位实物片段；缺失单位标 `qty_status=unknown`。`milestones` 与 `links` 中的派生数量同样只在来源单位与订单单位一致时输出，否则 qty=null 并给原因。
+- **退货**：按 `return_against` 抵扣原出库单（优先按同仓库行归属）；未关联原单的退货单列并标「去向未证」；退货缺口 `min(退货量, 需求余额)` 记 `unknown`，不得推断为「待出库」或「在产」，扣除后余额再分配在产/未计划。
 - **取消**：需求取消与已生产/已发实物分开记录；实物片段带 `demand_status=cancelled`，不随订单状态删除。
 - **as_of**：服务端只支持当前快照；历史 `as_of` 直接拒绝（HTTP 错误），不能由客户端校验替代。
-- **空结果**：无匹配/全部受限也保留 `coverage`、`external_sources`、`empty_reason`，`partial=true`，不得声称完整。
+- **空结果**：无匹配/全部受限也保留 `coverage`、`external_sources`、`empty_reason`，`partial=true`，不得声称完整；`empty_reason` 区分 `no_matching_lines`（无匹配）与 `all_restricted`（有匹配但全部不可读）。
 
 ### `milestones`（原计划 / 承诺 / 最新预计 / 实际）
 
@@ -48,13 +49,13 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 | `observed_at`, `date_precision`, `timezone_status` | 观测时间、日精度、时区是否已证 |
 | `source_record`, `note`, `rule_version` | 来源字段、口径说明、规则版本 |
 
-规则：未发生不填实际；ETA 只进 `latest_expected_at`；POD/签收不等于可售；原计划保留供延期分析。
+规则：未发生不填实际；ETA 只进 `latest_expected_at`；POD/签收不等于可售；原计划保留供延期分析；节点数量只在来源单位（DN/工单）与订单单位一致时给出，否则 `qty=null`、`qty_status=unknown` 并在 `note` 说明。
 
 ### `availability_schedule`（分批可售片段）
 
 | 字段 | 说明 |
 |---|---|
-| `tranche_id` | 稳定片段 ID：`<SO行>::<DN>::<单号>` 或 `<SO行>::<阶段>::<批次>`（跨订单行不重复） |
+| `tranche_id` | 稳定片段 ID：`<SO行>::<DN>::<仓库>::<DN明细行>::<单号>`（多运单末段为 `multi`）或 `<SO行>::<阶段>::<批次>`（跨订单行/跨仓库不重复） |
 | `qty`, `qty_status`, `uom` | 片段数量与证据 |
 | `available_date`, `latest_expected_at`, `date_kind`, `date_confidence` | 可售日（当前无入库/上架证据，恒为 null）与 ETA |
 | `scenario` | `conditional` / `unknown` / `allocation_unknown` |
@@ -66,7 +67,7 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 ### `links`（来源与分配证据）
 
 `so / so_line_id / source_doctype / source_name / source_line_id / relation / target_doctype / target_name / qty / uom / proof / allocation`。
-覆盖 SO→Item、SO 行→PP、SO 行→WO、WO→菲号、SO 行→DN、DN→Shipment（多运单时 `allocation=unknown` 且 qty=null）。
+覆盖 SO→Item、SO 行→PP、SO 行→WO、WO→菲号、SO 行→DN、DN→Shipment（多运单时 `allocation=unknown` 且 qty=null；来源单位缺失或与订单单位不一致时 qty=null）。
 
 ### `manifest`
 
@@ -107,7 +108,7 @@ SO Chain Overview 的链条弹窗新增「数量阶段 / 节点 / 分批可售�
 
 ## 5. 验收（测试站）
 
-- 契约单测：18 项（8 类案例 + 草稿 + estimated + 单位继承 + return_against + 取消实物 + 片段 ID + 行级权限 + 历史 as_of 拒绝 + 空结果完整性），另有 3 项批次合并语义测试；本地全绿。
+- 契约单测：27 项（8 类案例 + 草稿 + estimated + 单位校验/继承 + return_against + 退货缺口 + 工单覆盖 + 取消实物 + 片段仓库/ID + 行级权限 + 全部受限 + 历史 as_of 拒绝 + 空结果完整性），另有 3 项批次合并语义测试；本地全绿。
 - 单 SO `SO-26-00026`：3 行 / 8 阶段余额 / 16 里程碑 / 6 可售片段 / 17 关联；查询约 0.8s。
   三行阶段余额守恒 10 / 5 / 8（草稿不计数量；KS 无工序卡时用 produced_qty 标 estimated）。
 - 全范围（含取消订单）：292 行 / 308 阶段余额 / 656 里程碑 / 287 片段 / 404 关联；查询 0.30s，总计 0.85s。
