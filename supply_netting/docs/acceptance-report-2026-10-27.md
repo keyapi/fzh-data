@@ -47,8 +47,21 @@ status: verified
 
 | 范围 | 数量 | 结果 |
 |---|---|---|
-| `supply_netting/tests`（引擎 8 场景 + 8 契约/边界 + 5 真实案例） | 26 | 全通过 |
+| `supply_netting/tests`（净额 8 场景 + 8 契约边界 + 契约 §7 的 9 例 + 5 真实案例） | 35 | 全通过 |
 | `supply_chain_visibility/tests`（引入的上游组件） | 23 | 全通过 |
+
+## 4.1 供应决策契约 §7 的 8 个合成验收案例
+
+| # | 契约案例 | 用例 | 结果 |
+|---|---|---|---|
+| 1 | 阶段例 100 = 10+30+20+25+5+10；累计完工/出库不再相加 | `test_1_stage_balances_are_mutually_exclusive_and_cumulative_is_not_supply` | 通过：合计 100，供给 80（未排产不算），终态 10 单独 |
+| 2 | 一 DN 100、两运单；无分配证明不得各算 100 | `test_2_one_dn_two_shipments_needs_proven_allocation` | 通过：未证 → `allocation_unproven` 单条 100；有证 60/40 才分别配日 |
+| 3 | PO 100 部分收 10，不得算 140 或重复补入 | `test_3_partial_receipt_does_not_create_140_or_double_count_stock` | 通过：60+30+10=100，已收标 `included_in_opening` |
+| 4 | 同物料自发货/FBA；2 套不并入件 | `test_4_fba_reservation_excluded_and_units_do_not_mix` | 通过：FBA 8 排除，件 20 / 套 2 分账 |
+| 5 | 到港 11/5、可售 11/8，11/6 缺口不被提前消除 | `test_5_sellable_after_arrival_does_not_clear_earlier_gap` | 通过：保护期缺口仍 1 |
+| 6 | 分批 20/30/50，原 SO 不重复计入 | `test_6_split_tranches_only_fill_their_own_period` | 通过：拆分合计 100，11/20 的 50 不进保护期 |
+| 7 | 单据取消但实物已生产 | `test_7_cancelled_order_keeps_physical_quantity_and_reason` | 通过：取消与实物各自留痕，未重新分配前不算供给 |
+| 8 | Excel 与 Parquet 按稳定键一致；重跑不重复 | `test_8_parquet_and_excel_agree_and_rerun_is_stable` | 通过：tranche 键/数量/日期/排除原因一致，重跑结果相同 |
 
 ## 5. 真实数据对账（as_of 2026-10-21T00:00+08:00，快照 2026-10-20）
 
@@ -93,6 +106,17 @@ status: verified
 该键在通途在途有 291 件，但没有逐行 ETA：保守情景判 `eligibility_unproven`，
 预期情景判 `date_unproven`，两边都不计入到货，只出现在 `conditional_receipts`。
 这正是「有量、无日期」的正确表达——不能因为 291 > 1 就宣布不缺货。
+
+## 6.1 供应事实结构（契约 A/B/C）在真实数据上的落点
+
+| 结构 | 真实数据 | 说明 |
+|---|---|---|
+| `stage_balances` | 172 条，全部 `shipped_in_transit` | 来自通途库存快照 `intransit`；校验错误 0，按订单对账全部 `balanced=true` |
+| `milestones` | 0 条 | 结构就位；通途在途没有逐行原计划/预计/实际日期 |
+| `availability_schedule` | 172 条 tranche，全部 `conditional` | 无 ETA，`date_confidence=unknown`；计入 172、排除 0 |
+| 其他阶段 | 无本地源 | 未排产/在产/完工待发/到仓待上架需 EN 工单/DN 或 Jack 的 supply facts |
+
+**这不是「供应功能已验收」**：只证明结构、校验与数量账可运行；阶段的真实覆盖仍 partial。
 
 ## 7. 剩余阻塞与待决
 

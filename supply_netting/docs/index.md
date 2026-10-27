@@ -14,6 +14,7 @@ updated: 2026-10-27
 | 你需要… | 读这个 |
 |---|---|
 | 引擎口径、两种情景、未知怎么保留 | [reference/netting-engine.md](reference/netting-engine.md) |
+| 阶段余额 / 里程碑 / 可售 tranche 结构 | [reference/supply-facts-contract.md](reference/supply-facts-contract.md) |
 | 输出字段、文件路径、manifest 结构 | [reference/output-schema.md](reference/output-schema.md) |
 | 本次真实数据对账、案例、剩余阻塞 | [acceptance-report-2026-10-27.md](acceptance-report-2026-10-27.md) |
 | 引入的上游组件及来源 commit | [../../supply_chain_visibility/docs/reference/upstream-port.md](../../supply_chain_visibility/docs/reference/upstream-port.md) |

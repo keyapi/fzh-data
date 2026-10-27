@@ -18,6 +18,7 @@
 | `supply.py` | 通途库存快照 / 在途 / 开放 PO → `SupplyRow`；无法归属的输入留证据行 |
 | `engine.py` | `build_buckets` / `net_target` / `net_all`；两种情景；调用上游 gate 与分桶 |
 | `legacy_ledger.py` | `bucket_gaps` / `assert_bucket_identities` / `allocate_so`（原样引入） |
+| `facts.py` | A 阶段余额 / B 里程碑 / C 可售 tranche 的结构、校验与守恒 |
 | `artifacts.py` | Parquet + manifest + Excel 工作簿 |
 | `__main__.py` | CLI |
 
@@ -46,6 +47,10 @@
 7. **逐桶恒等式**：`期初 + 到货 − 满足 = 期末`、`需求 − 满足 = 未满足`，每行断言。
 8. **供应数量账**：`input_known = counted + excluded_known`，每 SKU×仓×单位断言。
 9. **每个输入有去向**：需求逐行 disposition，供应逐行 disposition，阻断账只登记不参与。
+10. **阶段互斥**：`stage_balances` 同订单×物料×仓×单位的阶段不得重复；累计完工/累计出库
+    不得再加成新供应；订单差额单列，不塞进任何阶段。
+11. **tranche 不是第二份供应**：可售计划由阶段余额派生，已含期初的不得补入；拆分必须
+    精确等于原余额（`split_balance` 会拒绝凑数）。
 
 ## 4. 两种情景
 
@@ -60,7 +65,7 @@
 ## 5. 跑与验
 
 ```bash
-uv run pytest supply_netting/tests -q           # 26
+uv run pytest supply_netting/tests -q           # 35
 uv run pytest supply_chain_visibility/tests -q  # 23（上游组件）
 uv run python -m supply_netting --help
 ```

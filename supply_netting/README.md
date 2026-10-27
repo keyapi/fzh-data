@@ -56,13 +56,16 @@ uv run python -m supply_netting \
 | `supply_facts.parquet` | **同一底层事实**：每条供应输入一行及其去向（计入/条件/排除+原因） |
 | `replenishment_review.parquet` | 每个 SKU×仓×单位 的保护期缺口、视界累计未满足、条件供应量、状态 |
 | `third_party_demand.parquet` | 3PL 需求，`replenishment_owner=unknown` |
+| `stage_balances.parquet` | 订单执行阶段余额（互斥阶段；累计完工/出库不再相加） |
+| `availability_schedule.parquet` | 分批「可售数量 × 日期」tranche 及其排除原因 |
+| `supply_milestones.parquet` | 原计划 / 当前预计 / 实际 三列里程碑（结构就位，真实来源多为空） |
 | `replenishment_review.xlsx` | 人工审核工作簿（补货审核 / 逐桶明细 / 供应事实去向 / Manifest） |
 | `supply_netting_manifest.json` | 输入哈希、口径、计数、守恒检查、partial 原因 |
 
 ## 验证
 
 ```bash
-uv run pytest supply_netting/tests -q          # 26 个用例（含 8 条必测场景 + 契约 + 真实案例）
+uv run pytest supply_netting/tests -q          # 35 个用例（8 条净额场景 + 契约 §7 8 例 + 真实案例）
 uv run pytest supply_chain_visibility/tests -q # 23 个（引入的上游组件）
 ```
 

@@ -15,6 +15,8 @@ import pandas as pd
 from self_fulfilled_demand.canonical import WAREHOUSE_ALIASES
 
 from . import artifacts
+from .facts import (milestones_frame, stages_frame, summarize_stage_balances,
+                    tranches_frame, validate_stage_balances)
 from .demand import (SERIES_DEFAULT, SERIES_THIRD_PARTY, load_backlog, load_demand_netting,
                      series_rows, unclassified_quantity)
 from .engine import build_buckets, net_all
@@ -78,7 +80,11 @@ def main(argv=None) -> int:
                      buckets=buckets, backlog=backlog, so_mode="earliest",
                      supply_sources_complete=False)
 
-    tables = artifacts.build_tables(result, supply["evidence"])
+    stage_rows = stages_frame(supply["stage_balances"])
+    schedule_rows = tranches_frame(supply["schedule"])
+    milestone_rows = milestones_frame(supply["stage_balances"])
+    tables = artifacts.build_tables(result, supply["evidence"], stage_rows=stage_rows,
+                                    schedule_rows=schedule_rows, milestone_rows=milestone_rows)
     tables["third_party_demand"] = artifacts._third_party_frame(third_party_rows)
     out_dir = Path(args.out)
     paths = artifacts.write_parquet(tables, out_dir)
@@ -112,12 +118,38 @@ def main(argv=None) -> int:
         "未履约 SO 余额未接入（backlog 为空）时，未来需求桶可能为 0",
     ]
 
+    stage_errors = validate_stage_balances(supply["stage_balances"])
+    stage_summary = [dict(order_key=row["order_key"], sku=row["sku"], uom=row["uom"],
+                          total=row["total"], delta=row["delta"], balanced=row["balanced"],
+                          by_stage=row["by_stage"])
+                     for row in summarize_stage_balances(supply["stage_balances"])]
+    facts_v1 = dict(
+        stage_balances=dict(
+            rows=len(stage_rows),
+            stages=sorted({r["stage"] for r in stage_rows}),
+            validation_errors=stage_errors,
+            order_balance=stage_summary,
+            coverage_gap="仅通途在途可作为真实阶段余额；未排产/在产/完工待发/到仓待上架无本地源",
+        ),
+        availability_schedule=dict(
+            rows=len(schedule_rows),
+            counted=sum(1 for r in schedule_rows if not r["exclusion_reason"]),
+            conditional=sum(1 for r in schedule_rows if r["scenario"] == "conditional"),
+            exclusions={reason: sum(1 for r in schedule_rows if r["exclusion_reason"] == reason)
+                        for reason in sorted({r["exclusion_reason"] for r in schedule_rows if r["exclusion_reason"]})},
+            date_adapter="sellable_at 优先；缺失则用 actual_at/expected_at；都没有保持 unknown",
+        ),
+        milestones=dict(rows=len(milestone_rows),
+                        note="里程碑字段在结构里，真实来源尚无逐行计划/预计/实际日期"),
+    )
+
     manifest = artifacts.base_manifest(
         as_of=as_of, buckets=buckets, demand_meta=demand_meta,
         blocked_meta=_blocked_meta(Path(args.demand_blocked) if args.demand_blocked else None),
         stock_meta=supply["stock_meta"], po_meta=supply["po_meta"], backlog_meta=backlog_meta,
         extra=dict(
             checks=checks,
+            facts_v1=facts_v1,
             disposition_counts=artifacts.disposition_counts(facts),
             status_counts=net_rows["status"].value_counts().to_dict() if not net_rows.empty else {},
             partial=True, partial_reasons=partial_reasons,

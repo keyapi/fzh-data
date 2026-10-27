@@ -108,11 +108,15 @@ def _third_party_frame(rows: list[dict]) -> pd.DataFrame:
                           "replenishment_owner", "note"], as_index=False)["quantity"].sum()
 
 
-def build_tables(net_result, evidence) -> dict[str, pd.DataFrame]:
+def build_tables(net_result, evidence, stage_rows=None, schedule_rows=None,
+                 milestone_rows=None) -> dict[str, pd.DataFrame]:
     return {
         "supply_netting": _rows_frame(net_result),
         "supply_facts": _facts_frame(net_result, evidence),
         "replenishment_review": _summary_frame(net_result),
+        "stage_balances": pd.DataFrame(stage_rows or []),
+        "availability_schedule": pd.DataFrame(schedule_rows or []),
+        "supply_milestones": pd.DataFrame(milestone_rows or []),
     }
 
 
@@ -138,11 +142,13 @@ def write_workbook(tables: dict[str, pd.DataFrame], manifest: dict, out_dir: Pat
     review = tables["replenishment_review"].copy()
     detail = tables["supply_netting"].copy()
     facts = tables["supply_facts"].copy()
-    manifest_rows = pd.DataFrame([{"key": key, "value": _stringify(value)}
+    manifest_rows = pd.DataFrame([{"key": key, "value": _manifest_cell(key, value)}
                                  for key, value in manifest.items()])
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         _sheet(writer, review, "补货审核")
         _sheet(writer, detail, "逐桶明细")
+        _sheet(writer, tables.get("stage_balances", pd.DataFrame()), "阶段余额")
+        _sheet(writer, tables.get("availability_schedule", pd.DataFrame()), "可售计划")
         _sheet(writer, facts, "供应事实去向")
         _sheet(writer, manifest_rows, "Manifest")
     return str(path)
@@ -157,6 +163,13 @@ def _sheet(writer, frame: pd.DataFrame, name: str) -> None:
         width = max(10, min(46, max([len(str(column))] + [len(str(v)) for v in frame[column].head(200)]) + 2))
         sheet.column_dimensions[sheet.cell(row=1, column=index).column_letter].width = width
     sheet.freeze_panes = "A2"
+
+
+def _manifest_cell(key, value):
+    """工作簿里只放摘要；长结构指向 manifest.json，避免 Excel 单元格截断。"""
+    text = _stringify(value) if not isinstance(value, str) else value
+    text = str(text)
+    return text if len(text) <= 2000 else f"（结构较大，完整内容见 supply_netting_manifest.json：{key}）"
 
 
 def _stringify(value):
