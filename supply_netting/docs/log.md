@@ -147,3 +147,22 @@ updated: 2026-10-27
 - 90/150 天缺口保守情景不变（春节 +60 天把在产最晚 ETA 推到 3-29 之后），乐观情景
   90 天不变、150 天可将相关键缺口抵减；与 v2 逐键差异 28 键、+900。
 - offset_allowed=false，仍为条件附件；不改 r6/h180/r2；测试 290 通过。
+
+## 2026-10-28 — SO 条件供给 v3 按 UOM-CANONICAL 修正
+
+- 已读 `UOM-CANONICAL.md`：个/套分列；TJ# 按套（stock_uom=套、is_stock_item=0）；
+  PK# 皮壳 1:1 按个，不是套；未知单位不合计。
+- v3 初稿沿用 W1 的「个/件」；修正后 `canonical_uom` 一律取 EN `Item.stock_uom`，
+  无证据的 367 行 / 16,081 件标 `uom_unproven`、`included=false`，只进待核。
+- 结果：included 841 条 tranche / 候选 33,942（全部「个」；在产 1,034 有日期、
+  在途 32,908 无 ETA 只列不抵）；TJ# 在供给阶段为 0 行（规则仍生效，测试覆盖）。
+- 测试 295 通过（v3 新增 14 条，含单位口径 5 条）。
+
+## 2026-10-28 — v3 补：知识清单确认与 SKU 角色
+
+- 已读 `2026-10-28-frepple-conversation-digest.md`：SKU 角色（皮壳/成品/半成品）、
+  断货删失、服务 β/τ。v3 tranche 新增 `product_role`（皮壳 357 / 成品 65 / 半成品 14 /
+  unknown 772）；本层不设服务档、不使用需求历史训练，删失与 β/τ 不作用于本层。
+- 下一项 ASSET-REUSE-AUDIT 已确认资产位置：`experiments/business_phase/inventory_policy.py`
+  （e3727683）、`sc08_conformal.py`（9624b248）、`experiments/sc13/leadtime_config.py`。
+- 测试 296 通过。

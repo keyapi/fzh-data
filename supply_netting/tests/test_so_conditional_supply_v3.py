@@ -10,7 +10,7 @@ from pathlib import Path
 import pandas as pd
 
 from supply_netting.scripts.so_conditional_supply_v3 import (build_by_key, build_diff,
-                                                             build_tranches)
+                                                             build_tranches, resolve_uom)
 
 AS_OF = "2026-10-27"
 
@@ -72,6 +72,51 @@ class V3FilterTests(unittest.TestCase):
     def test_offset_allowed_is_false(self):
         tranches, _ = run([line(qty=10.0)], [bal("in_production", 10.0, record="WO-1")])
         self.assertTrue((tranches["offset_allowed"] == False).all())  # noqa: E712
+
+
+class UomCanonicalTests(unittest.TestCase):
+    def test_uom_comes_from_en_stock_uom(self):
+        self.assertEqual(resolve_uom("KS1", "KS1", "件", {"KS1": "个"})[0], "个")
+        uom, source, proven, _ = resolve_uom("KS1", "KS1", "个", {})
+        self.assertIsNone(uom)
+        self.assertEqual(source, "unproven")
+        self.assertFalse(proven)
+
+    def test_tj_bundle_is_forced_to_set(self):
+        uom, source, proven, note = resolve_uom(
+            "TJ#KS1x1_KS2x1-001", "TJ#KS1x1_KS2x1-001", "个", {})
+        self.assertEqual(uom, "套")
+        self.assertEqual(source, "tj_bundle_rule")
+        self.assertTrue(proven)
+
+    def test_pk_cover_uses_ks_uom_one_to_one(self):
+        # PK# -> KS x1：按 KS 的「个」，不是套
+        self.assertEqual(resolve_uom("PK#KS1", "KS1", "个", {"KS1": "个"})[0], "个")
+
+    def test_unproven_uom_is_excluded_from_totals(self):
+        tranches, excluded = build_tranches(
+            [{"so": "SO-1", "payload": payload(
+                [line(qty=100.0)],
+                [bal("in_production", 40.0, record="WO-1", item="KS1"),
+                 bal("in_production", 30.0, record="WO-2", item="ND#KS1")])}],
+            {"KS1": "个"})
+        included = tranches[tranches["included"]]
+        self.assertEqual(float(included["candidate_qty"].sum()), 40.0)
+        unproven = tranches[~tranches["included"]]
+        self.assertEqual(float(unproven["candidate_qty"].sum()), 30.0)
+        self.assertTrue(unproven["uom"].isna().all())
+        self.assertEqual(excluded.get("uom_unproven"), 30.0)
+
+    def test_ge_and_tao_are_never_summed(self):
+        tranches, _ = build_tranches(
+            [{"so": "SO-1", "payload": payload(
+                [line(qty=10.0), line(item="TJ#KS2x1-001", qty=2.0, so_line="L2", uom="套")],
+                [bal("in_production", 10.0, record="WO-1", item="KS1"),
+                 bal("in_production", 2.0, record="WO-2", item="TJ#KS2x1-001",
+                     so_line="L2", uom="套")])}],
+            {"KS1": "个", "TJ#KS2x1-001": "套"})
+        by_uom = tranches[tranches["included"]].groupby("uom")["candidate_qty"].sum().to_dict()
+        self.assertEqual(by_uom, {"个": 10.0, "套": 2.0})
 
 
 class GapScenarioTests(unittest.TestCase):
