@@ -28,6 +28,8 @@ def _rows_frame(net_result) -> pd.DataFrame:
                 opening=row["opening"], receipts=row["receipts"], demand=row["demand"],
                 fulfilled=row["fulfilled"], closing=row["closing"], unserved=row["unserved"],
                 gap=row["gap"], conditional_receipts=row["conditional_receipts"],
+                period_demand=row.get("period_demand"),
+                carried_unserved=row.get("carried_unserved"),
                 has_unresolved=row["has_unresolved"], supply_evidence=row["supply_evidence"],
                 status=row["status"], unknown_reason=row.get("unknown_reason"),
             ))

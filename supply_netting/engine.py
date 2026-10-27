@@ -278,14 +278,19 @@ def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
         ledger = bucket_gaps(claims)
         conditional_qty = sum((f["qty"] or Decimal(0) for f in scenario["facts"] if f["conditional"]),
                               Decimal(0))
-        for row in ledger:
+        for index, row in enumerate(ledger):
             assert_bucket_identities(row)
+            carried = _to_decimal(row["demand"]) - _to_decimal(demand_b[index])
             out_rows.append(dict(
                 scenario=name, bucket_id=row["name"],
                 opening=_to_decimal(row["opening"]), receipts=_to_decimal(row["receipts"]),
+                # demand/gap 为「含跨桶结转」口径：等于本桶需求 + 上桶未满足。
+                # 逐桶求和会重复计数，请用 period_demand / carried_unserved。
                 demand=_to_decimal(row["demand"]), fulfilled=_to_decimal(row["fulfilled"]),
                 closing=_to_decimal(row["closing"]), unserved=_to_decimal(row["unserved"]),
                 gap=_to_decimal(row["gap"]),
+                period_demand=_to_decimal(demand_b[index]),
+                carried_unserved=carried,
                 conditional_receipts=conditional_qty,
                 has_unresolved=bool(scenario["has_unresolved"]),
                 supply_evidence=has_future_evidence, status=(

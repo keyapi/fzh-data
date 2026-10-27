@@ -102,6 +102,20 @@ def resolve_warehouse(name, cfg: dict) -> dict:
             "warehouse_parent_candidate": None,
             "warehouse_merge_status": "declared",
         }
+    roles = cfg.get("roles", {})
+    if raw in roles:
+        item = roles[raw]
+        parent = item.get("parent") or raw
+        return {
+            "canonical_warehouse": parent,
+            "warehouse_status": "role_mapped",
+            "warehouse_evidence": item.get("evidence", ""),
+            "warehouse_parent_candidate": None,
+            "warehouse_merge_status": "role_mapped",
+            "warehouse_role": item.get("role", "unknown"),
+            "conversion_assumed": bool(item.get("conversion_assumed", False)),
+            "counts_as_available": bool(item.get("counts_as_available", True)),
+        }
     if FBA_PATTERN.search(raw):
         return {
             "canonical_warehouse": raw,
@@ -135,6 +149,33 @@ def resolve_warehouse(name, cfg: dict) -> dict:
         "warehouse_parent_candidate": None,
         "warehouse_merge_status": "unknown",
     }
+
+
+def warehouse_profile(canonical: str, cfg: dict) -> dict:
+    """规范仓名 → 主仓级角色画像（``canonical_roles``）。"""
+    default = (cfg.get("canonical_roles") or {}).get(canonical, {})
+    return {
+        "warehouse_role": default.get("role", "unknown"),
+        "conversion_assumed": bool(default.get("conversion_assumed", False)),
+        "counts_as_available": bool(default.get("counts_as_available", True)),
+        "cost_source": default.get("cost_source"),
+    }
+
+
+def resolve_warehouse_role(name, cfg: dict) -> dict:
+    """仓名 → (规范仓, 角色, 是否计可用供给)。
+
+    子仓已由 ``resolve_warehouse`` 给出角色（cover/semi/finished/return）时以子仓角色为准，
+    否则退回主仓默认角色。
+    """
+    basic = resolve_warehouse(name, cfg)
+    profile = warehouse_profile(basic["canonical_warehouse"], cfg)
+    if basic.get("warehouse_role"):
+        profile["warehouse_role"] = basic["warehouse_role"]
+        profile["conversion_assumed"] = bool(basic.get("conversion_assumed", False))
+        profile["counts_as_available"] = bool(basic.get("counts_as_available", True))
+    basic.update(profile)
+    return basic
 
 
 def load_uom_cache(path: str | Path) -> pd.DataFrame:
@@ -311,13 +352,16 @@ def canonicalize(
         for u, st in zip(df["stock_uom"], df["uom_status"])
     ]
 
-    wh_rows = [resolve_warehouse(w, warehouse_cfg) for w in df["warehouse_name"]]
+    wh_rows = [resolve_warehouse_role(w, warehouse_cfg) for w in df["warehouse_name"]]
     for key in (
         "canonical_warehouse",
         "warehouse_status",
         "warehouse_evidence",
         "warehouse_parent_candidate",
         "warehouse_merge_status",
+        "warehouse_role",
+        "conversion_assumed",
+        "counts_as_available",
     ):
         df[key] = [r[key] for r in wh_rows]
 
@@ -763,7 +807,8 @@ def build_canonical(
         "ambiguity_counts": ambiguities["ambiguity_type"].value_counts().to_dict() if len(ambiguities) else {},
         "notes": [
             "UOM 为 EN Item.stock_uom 证据；非件类单位阻断净额，缺失保持 null。",
-            "仓库只按有证据的旧名→新名合并；5 类子仓未证身份，保留原行但阻断净额。",
+            "仓库旧名→新名按文档合并；子仓按 EN Tongtu Shipping Warehouse 归到主仓并带角色"
+            "（cover/semi/finished/return），不再按子仓身份阻断；退货仓角色只影响供给可用性，不影响需求归集。",
             "demand_canonical 是明细聚合；净额请用四列唯一的 demand_netting。",
             "整次构建固定同一 EN 快照，manifest 记录 commit_id 与 orders/lines 哈希。",
             "SKU 一对多不任取；未映射保留 unmapped:<sku>。",

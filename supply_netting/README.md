@@ -27,6 +27,10 @@
 | 供应 | Jack `SupplyRow` + `apply_overlap_gates`；`bucket_receipts` 分桶 |
 | FBA | 已分配/外部 FBA 供应一律 `fba_allocated` 排除，不重复分配 |
 | 同批 | 跨阶段同批（PO/在途）只计一次 |
+| 子仓 | 子仓按 EN `Tongtu Shipping Warehouse` 归主仓 + 角色（cover/semi/finished/return），不再整块阻断 |
+| 退货仓 | `role=return` 不计可用供给，单列 `return_warehouse_excluded` 证据 |
+| 占位 SKU | `placeholder_skus` 清单/正则/`available` 阈值命中即排除，单列 `placeholder_excluded` |
+| 通途 PO | `purchaseOrderQuery` 落地的 JSONL，按通途 SKU（`goods_sku`）匹配；开放量 `quantity − in_quantity`；无 ETA → 条件态 |
 | 未知 | 缺 ETA / 缺快照 / 缺单位 / 缺身份 → 条件态或 unknown，绝不写 0 |
 
 ## 跑一次
@@ -45,8 +49,10 @@ uv run python -m supply_netting \
 ```
 
 `--as-of` 是库存基准时点（带时区），必须不早于所选库存快照；`--snapshot-date` 默认取最新。
+**推荐 `--as-of` 取快照采集瞬间**（如 `2026-10-23T10:47:42+08:00`）：取当日 00:00 会让
+00:00–采集时刻的销量既已从库存扣减、又按未来需求入桶（10.8h 错位，2026-10-27 复审 F1）。
 `--backlog` 可选：未履约 SO 余额（csv/parquet，四列键 + quantity）；不传时未来桶需求为 0，
-不得据此推断「没有需求」。
+不得据此推断「没有需求」。`--po-tongtool` 可选：通途采购单 JSONL（`purchaseOrderQuery` 落地）。
 
 ## 产物
 
@@ -61,6 +67,12 @@ uv run python -m supply_netting \
 | `supply_milestones.parquet` | 原计划 / 当前预计 / 实际 三列里程碑（结构就位，真实来源多为空） |
 | `replenishment_review.xlsx` | 人工审核工作簿（补货审核 / 逐桶明细 / 供应事实去向 / Manifest） |
 | `supply_netting_manifest.json` | 输入哈希、口径、计数、守恒检查、partial 原因 |
+
+### ⚠️ `demand` / `gap` 是含跨桶结转的口径
+
+`demand` = 本桶需求 + 上桶未满足（`carried_unserved`），`gap` = 累积未满足。
+**逐桶 `sum(gap)` 或 `sum(demand)` 会重复计数**（2026-10-27 复审 F2：3 桶相加得 92，实际视界末 41）。
+要逐桶统计请用 `period_demand`；要看视界末累计未满足请用最后一个桶的 `unserved`。
 
 ## 验证
 

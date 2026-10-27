@@ -1,6 +1,6 @@
 {
-  "version": "v1_2026-10-27",
-  "policy": "只合并有文档/主数据证据的旧名→新名；子仓、备用仓、未映射仓保持独立并写原因，不按名称相似合并。not_merged 子仓在身份证据补齐前保留原行但阻断净额。",
+  "version": "v2_2026-10-27_subwarehouse_roles",
+  "policy": "只合并有文档/主数据证据的旧名→新名；子仓按 EN Tongtu Shipping Warehouse 的分公司/仓库编码归到主仓并带角色（cover/semi/finished/return），不再是独立物理库存池；退货仓不计可用供给；未知仓保持独立并写原因。",
   "aliases": {
     "CENTRADE": {
       "canonical": "美东-CENTRADE",
@@ -18,45 +18,125 @@
       "evidence": "CONCEPTS.md：通途自发货主仓加分公司前缀 FZHPoland-covers→波兰-FZHPoland-covers"
     }
   },
+  "roles": {
+    "FZH-DANEEY-皮壳仓库": {
+      "parent": "美中-FZH-DANEEY",
+      "role": "cover",
+      "conversion_assumed": true,
+      "cost_source": "HEAD-USTX-PK / 2CJG-SX",
+      "evidence": "EN Tongtu Shipping Warehouse：warehouse_classification=USTX美中分公司，warehouse_code=USTX；子仓是同一分公司不同角色/成本来源，非独立物理库存池"
+    },
+    "FZH-DANEEY-半成品仓": {
+      "parent": "美中-FZH-DANEEY",
+      "role": "semi",
+      "conversion_assumed": true,
+      "cost_source": "HEAD-USTX / 2CJG-SX",
+      "evidence": "EN Tongtu Shipping Warehouse：USTX美中分公司 / USTX"
+    },
+    "FZH-DANEEY-成品仓": {
+      "parent": "美中-FZH-DANEEY",
+      "role": "finished",
+      "conversion_assumed": false,
+      "cost_source": "HEAD-USTX / 2CJG-SX",
+      "evidence": "EN Tongtu Shipping Warehouse：USTX美中分公司 / USTX"
+    },
+    "FZH-DANEEY-退货产品仓": {
+      "parent": "美中-FZH-DANEEY",
+      "role": "return",
+      "conversion_assumed": false,
+      "counts_as_available": false,
+      "cost_source": "HEAD-USTX / 2CJG-SX",
+      "evidence": "EN Tongtu Shipping Warehouse：USTX美中分公司 / USTX；退货仓按业务口径不计可用供给"
+    },
+    "美中-FZH-DANEEY-皮壳仓库": {
+      "parent": "美中-FZH-DANEEY",
+      "role": "cover",
+      "conversion_assumed": true,
+      "cost_source": "HEAD-USTX-PK / 2CJG-SX",
+      "evidence": "EN/通途新名皮壳子仓；与旧名同一角色"
+    },
+    "美中-FZH-DANEEY-半成品仓": {
+      "parent": "美中-FZH-DANEEY",
+      "role": "semi",
+      "conversion_assumed": true,
+      "cost_source": "HEAD-USTX / 2CJG-SX",
+      "evidence": "EN/通途新名半成品子仓"
+    },
+    "美中-FZH-DANEEY-成品仓": {
+      "parent": "美中-FZH-DANEEY",
+      "role": "finished",
+      "conversion_assumed": false,
+      "cost_source": "HEAD-USTX / 2CJG-SX",
+      "evidence": "EN/通途新名成点子仓"
+    },
+    "美中-FZH-DANEEY-退货产品仓": {
+      "parent": "美中-FZH-DANEEY",
+      "role": "return",
+      "conversion_assumed": false,
+      "counts_as_available": false,
+      "cost_source": "HEAD-USTX / 2CJG-SX",
+      "evidence": "EN/通途新名退货仓；不计可用供给"
+    },
+    "FZHPoland-covers": {
+      "parent": "波兰-FZHPoland-covers",
+      "role": "cover",
+      "conversion_assumed": true,
+      "cost_source": "HEAD-PL / 2CJG-PL",
+      "evidence": "EN Tongtu Shipping Warehouse：PL波兰分公司 / PL"
+    },
+    "FZHPoland-finished": {
+      "parent": "波兰-FZHPoland-covers",
+      "role": "finished",
+      "conversion_assumed": false,
+      "cost_source": "HEAD-EUHWC / 2CJG-PL",
+      "evidence": "EN Tongtu Shipping Warehouse：PL波兰分公司 / PL；财务表波兰成品仓成本来源 HEAD-EUHWC"
+    },
+    "波兰-FZHPoland-退货产品仓": {
+      "parent": "波兰-FZHPoland-covers",
+      "role": "return",
+      "conversion_assumed": false,
+      "counts_as_available": false,
+      "cost_source": "HEAD-PL / 2CJG-PL",
+      "evidence": "通途退货产品仓；不计可用供给"
+    },
+    "美东-CENTRADE-退货产品仓": {
+      "parent": "美东-CENTRADE",
+      "role": "return",
+      "conversion_assumed": false,
+      "counts_as_available": false,
+      "cost_source": "HEAD-US / 2CJG-US",
+      "evidence": "通途退货产品仓；不计可用供给"
+    }
+  },
+  "canonical_roles": {
+    "美东-CENTRADE": {"role": "finished", "cost_source": "HEAD-US / 2CJG-US"},
+    "美中-FZH-DANEEY": {"role": "finished", "cost_source": "HEAD-USTX / 2CJG-SX"},
+    "波兰-FZHPoland-covers": {"role": "cover", "conversion_assumed": true, "cost_source": "HEAD-PL / 2CJG-PL"}
+  },
+  "placeholder_skus": {
+    "note": "占位/物料行：不是成品实物，不进可用供给；按 available 异常大 + 显式清单识别，命中单列证据",
+    "explicit": [
+      "Buttonkit-pl",
+      "Cotton-US",
+      "Cotton-EU",
+      "FBA-duo",
+      "CEN-PPCotton-5lb",
+      "TEST-1"
+    ],
+    "patterns": ["^Cotton-", "^TEST-", "^FBA-duo$", "^Buttonkit-"],
+    "available_threshold": 100000
+  },
   "declared": {
     "美东-CENTRADE": "warehouse_map v3：美东分公司仓（operator=3pl，库存所有权我方）",
     "美中-FZH-DANEEY": "warehouse_map v3：美中分公司仓",
-    "波兰-FZHPoland-covers": "warehouse_map v3：波兰分公司仓（EN 映射 assumed）",
-    "FZH-DANEEY-皮壳仓库": "通途主数据中的子仓；保留独立规范名",
-    "FZH-DANEEY-成品仓": "通途主数据中的子仓；保留独立规范名",
-    "FZH-DANEEY-半成品仓": "通途主数据中的子仓；保留独立规范名",
-    "FZH-DANEEY-退货产品仓": "通途主数据中的子仓；保留独立规范名",
-    "美中-FZH-DANEEY-退货产品仓": "EN/通途新名退货仓；保留独立规范名",
-    "美中-FZH-DANEEY-皮壳仓库": "EN/通途新名皮壳子仓；保留独立规范名",
-    "FZHPoland-finished": "财务成本表：波兰成品仓（HEAD-EUHWC），与 covers 成本来源不同，不合并"
+    "波兰-FZHPoland-covers": "warehouse_map v3：波兰分公司仓（EN 映射 assumed）"
   },
   "third_party": {
     "WayfairCG-Cranbury仓": "warehouse_map v3：3PL 仓（assumed）；不与自有仓合并",
     "枫筝海外仓-多伦多-代发仓": "名称含「代发仓」",
     "枫筝海外仓-温哥华-代发仓": "名称含「代发仓」"
   },
-  "not_merged": {
-    "FZH-DANEEY-皮壳仓库": {
-      "parent_candidate": "美中-FZH-DANEEY-皮壳仓库",
-      "reason": "未找到子仓加前缀重命名的独立证据；不按名称相似合并"
-    },
-    "FZH-DANEEY-成品仓": {
-      "parent_candidate": "美中-FZH-DANEEY",
-      "reason": "子仓与主仓库存口径不同，未证可合并"
-    },
-    "FZH-DANEEY-半成品仓": {
-      "parent_candidate": "美中-FZH-DANEEY",
-      "reason": "子仓与主仓库存口径不同，未证可合并"
-    },
-    "FZH-DANEEY-退货产品仓": {
-      "parent_candidate": "美中-FZH-DANEEY-退货产品仓",
-      "reason": "旧名/新名疑似对应，但无独立重命名证据"
-    },
-    "FZHPoland-finished": {
-      "parent_candidate": "波兰-FZHPoland-covers",
-      "reason": "成品仓与皮壳仓成本来源不同（HEAD-EUHWC vs HEAD-PL），不合并"
-    }
-  },
+  "not_merged": {},
   "unknown_warehouses": [
     "休斯顿1号仓",
     "休斯顿1号备用仓库",

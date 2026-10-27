@@ -75,14 +75,16 @@ def wh_cfg() -> dict:
 
 
 @pytest.mark.parametrize("warehouse", SUBWAREHOUSES)
-def test_all_unproven_subwarehouses_are_blocked(wh_cfg, warehouse):
+def test_subwarehouses_map_to_parent_with_role_not_blocked(wh_cfg, warehouse):
     demand = demand_df([{"warehouse_name": warehouse}])
     out = canonicalize(demand, sku_map([]), uom_cache([]), wh_cfg)
     row = out.iloc[0]
-    assert row["warehouse_merge_status"] == "not_merged_no_evidence"
-    assert bool(row["netting_allowed"]) is False
-    assert "subwarehouse_identity_unproven" in row["netting_block_reason"]
-    assert row["netting_block_primary"] == "subwarehouse_identity_unproven"
+    # 2026-10-27 口径：子仓归主仓 + 角色，不再按 subwarehouse_identity_unproven 阻断
+    assert row["warehouse_merge_status"] == "role_mapped"
+    assert row["canonical_warehouse"] in {"美中-FZH-DANEEY", "波兰-FZHPoland-covers"}
+    assert row["warehouse_role"] in {"cover", "semi", "finished", "return"}
+    assert "subwarehouse_identity_unproven" not in row["netting_block_reason"]
+    assert row["netting_block_primary"] != "subwarehouse_identity_unproven"
 
 
 @pytest.mark.parametrize("warehouse", [None, "", "   ", "星链海外仓", "休斯顿1号仓", "北美之路-LA01"])

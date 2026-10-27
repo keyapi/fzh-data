@@ -52,6 +52,8 @@ def main(argv=None) -> int:
     parser.add_argument("--uom-cache", required=True, help="item_uom_cache.parquet")
     parser.add_argument("--warehouse-aliases", default=str(WAREHOUSE_ALIASES))
     parser.add_argument("--po", default=None, help="po_open.tsv（可选，无 ETA）")
+    parser.add_argument("--po-tongtool", default=None,
+                        help="通途采购单 JSONL（purchaseOrderQuery 落地；按通途 SKU，无 ETA）")
     parser.add_argument("--backlog", default=None, help="未履约 SO 余额 csv/parquet（可选）")
     parser.add_argument("--demand-blocked", default=None, help="demand_blocked.parquet（仅登记，不参与）")
     parser.add_argument("--as-of", required=True, help="库存基准时点，ISO 且带时区")
@@ -74,7 +76,8 @@ def main(argv=None) -> int:
                          uom_cache_path=args.uom_cache,
                          warehouse_alias_path=args.warehouse_aliases,
                          snapshot_date=args.snapshot_date,
-                         include_intransit=not args.no_intransit)
+                         include_intransit=not args.no_intransit,
+                         po_tongtool_path=args.po_tongtool)
 
     result = net_all(demand_rows=default_rows, supply_rows=supply["rows"], as_of=as_of,
                      buckets=buckets, backlog=backlog, so_mode="earliest",
@@ -113,10 +116,18 @@ def main(argv=None) -> int:
         demand_unclassified_quantity=unclassified_quantity(demand_df),
     )
     partial_reasons = [
-        "供应来源未覆盖全部渠道（仅通途库存快照/在途与开放 PO），业务覆盖 unverified",
-        "通途在途与开放 PO 无逐行 ETA，保持 date_unproven 条件态",
+        "供应来源未覆盖全部渠道（通途库存快照/在途 + 开放 PO 或通途采购单），业务覆盖 unverified",
+        "通途在途与采购单无逐行 ETA，保持 date_unproven 条件态",
         "未履约 SO 余额未接入（backlog 为空）时，未来需求桶可能为 0",
+        "退货仓按业务口径不计可用供给（单列证据），相关键无期初基准时转 unknown，不写 0",
+        "占位/物料 SKU 已排除出可用供给（单列证据），其数量不进任何总量口径",
     ]
+    net_rows_note = {
+        "demand_gap_semantics": "demand 与 gap 为含跨桶结转口径（= 本桶需求 + 上桶未满足）；"
+                                "逐桶求和会重复计数，请用 period_demand / carried_unserved，"
+                                "视界末累计未满足看最后一个桶的 unserved",
+        "columns_added_2026_10_27B": ["period_demand", "carried_unserved"],
+    }
 
     stage_errors = validate_stage_balances(supply["stage_balances"])
     stage_summary = [dict(order_key=row["order_key"], sku=row["sku"], uom=row["uom"],
@@ -150,6 +161,8 @@ def main(argv=None) -> int:
         extra=dict(
             checks=checks,
             facts_v1=facts_v1,
+            po_tongtool=supply["po_tongtool_meta"],
+            net_rows_note=net_rows_note,
             disposition_counts=artifacts.disposition_counts(facts),
             status_counts=net_rows["status"].value_counts().to_dict() if not net_rows.empty else {},
             partial=True, partial_reasons=partial_reasons,

@@ -21,6 +21,7 @@ from self_fulfilled_demand.canonical import (
     load_uom_cache,
     load_warehouse_config,
     resolve_warehouse,
+    resolve_warehouse_role,
     snapshot_identity,
     supply_targets,
 )
@@ -104,20 +105,35 @@ def test_cover_and_finished_are_not_merged(wh_cfg):
     assert out["canonical_sku"].nunique() == 2
 
 
-def test_warehouse_alias_merges_but_subwarehouse_does_not(wh_cfg):
+def test_warehouse_alias_merges_and_subwarehouse_maps_to_parent_role(wh_cfg):
     assert resolve_warehouse("CENTRADE", wh_cfg)["canonical_warehouse"] == "美东-CENTRADE"
-    sub = resolve_warehouse("FZH-DANEEY-皮壳仓库", wh_cfg)
-    assert sub["canonical_warehouse"] == "FZH-DANEEY-皮壳仓库"
-    assert sub["warehouse_parent_candidate"] == "美中-FZH-DANEEY-皮壳仓库"
-    assert sub["warehouse_merge_status"] == "not_merged_no_evidence"
+    sub = resolve_warehouse_role("FZH-DANEEY-皮壳仓库", wh_cfg)
+    # 2026-10-27 口径：子仓是同一分公司的不同角色/成本来源，归到主仓并带角色，不再阻断
+    assert sub["canonical_warehouse"] == "美中-FZH-DANEEY"
+    assert sub["warehouse_role"] == "cover"
+    assert sub["conversion_assumed"] is True
+    assert sub["warehouse_merge_status"] == "role_mapped"
     assert resolve_warehouse("星链海外仓", wh_cfg)["warehouse_status"] == "unknown"
 
     demand = demand_df([])
     demand.loc[demand.index[0], "warehouse_name"] = "FZH-DANEEY-皮壳仓库"
     out = canonicalize(demand, sku_map([("TT-1", ("KS-OK",))]), uom_cache([("KS-OK", "个")]), wh_cfg)
     row = out.iloc[0]
-    assert bool(row["netting_allowed"]) is False
-    assert "subwarehouse_identity_unproven" in row["netting_block_reason"]
+    assert row["canonical_warehouse"] == "美中-FZH-DANEEY"
+    assert row["warehouse_role"] == "cover"
+    assert bool(row["netting_allowed"]) is True
+    assert "subwarehouse_identity_unproven" not in row["netting_block_reason"]
+
+
+def test_return_subwarehouse_keeps_demand_but_is_not_available_supply(wh_cfg):
+    demand = demand_df([])
+    demand.loc[demand.index[0], "warehouse_name"] = "FZH-DANEEY-退货产品仓"
+    out = canonicalize(demand, sku_map([("TT-1", ("KS-OK",))]), uom_cache([("KS-OK", "个")]), wh_cfg)
+    row = out.iloc[0]
+    assert row["canonical_warehouse"] == "美中-FZH-DANEEY"
+    assert row["warehouse_role"] == "return"
+    assert row["counts_as_available"] is False or row["counts_as_available"] == 0
+    assert bool(row["netting_allowed"]) is True
 
 
 def test_uom_unknown_and_not_piece_block(wh_cfg):
