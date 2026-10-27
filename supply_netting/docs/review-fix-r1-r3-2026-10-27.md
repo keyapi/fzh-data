@@ -78,7 +78,7 @@ manifest `checks` 增加 `opening_rows_unproven`。
 
 | 指标 | 复审值 | 本次重跑 |
 |---|---:|---:|
-| 代码 commit | f730b162 | **d4fc0862**（`git_dirty=false`） |
+| 代码 commit | f730b162 | **2d312277**（R1–R3 + 明细下界列，`git_dirty=false`） |
 | 净额键 / 行 | 545 / 5,450 | 545 / 5,450 |
 | 期初合计 | 17,689 | 17,689 |
 | 保护期需求 / 缺口 | 311.447713 / 34.867936 | 相同 |
@@ -87,6 +87,7 @@ manifest `checks` 增加 `opening_rows_unproven`。
 | 已证到货 | 0 | 0 |
 | 供应事实行 / outside | 9,827 / 2,609 | 9,827 / 2,609 |
 | 预测 | forecast-20261027-r2 | 相同，且窗口/manifest 哈希**已校验** |
+| 逐桶 `opening_lower_bound` | 无此列 | 新增；2 个无基准键为 null |
 
 新增 manifest 字段：`checks.opening_rows_unproven=0`、`checks.batch_split_conflicts=0`
 （真实数据没有这两类输入）、`replenishment_review.opening_lower_bound`（543 个键等于期初，
