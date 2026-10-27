@@ -235,6 +235,9 @@ def decision_pack(netting: pd.DataFrame, scenarios: pd.DataFrame,
     if len(facts):
         supply = facts[facts["qty"].notna()].copy()
         supply["source_layer"] = supply["source_layer"].fillna("")
+        # 同一供应在两个情景里各有一条事实行，只取 expected，避免翻倍
+        if "scenario" in supply.columns:
+            supply = supply[supply["scenario"] == "expected"]
         intransit = (supply[supply["source_layer"] == "in_transit"].groupby(key)["qty"].sum()
                      .rename("intransit_qty"))
         po = (supply[supply["source_layer"] == "tongtool_po"].groupby(key)["qty"].sum()
