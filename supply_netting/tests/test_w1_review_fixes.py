@@ -96,9 +96,13 @@ def test_coverage_beats_stage_order():
 
 
 def test_cancel_or_defer_suggestion_when_stock_far_exceeds_demand():
-    row = apply_actions(pack_row(protect_gap=0.0, opening=100.0, period_demand=5.0)
+    # 绝对量启发式：(opening+proven) - 2*demand >= 500 才提示
+    hit = apply_actions(pack_row(protect_gap=0.0, opening=600.0, period_demand=5.0)
                         .assign(proven_receipts=0.0), stages([])).iloc[0]
-    assert "推迟" in row["cancel_or_defer_suggestion"]
+    assert "推迟" in hit["cancel_or_defer_suggestion"]
+    quiet = apply_actions(pack_row(protect_gap=0.0, opening=100.0, period_demand=5.0)
+                          .assign(proven_receipts=0.0), stages([])).iloc[0]
+    assert quiet["cancel_or_defer_suggestion"] == ""
 
 
 # ── G2 ──────────────────────────────────────────────────────────────────

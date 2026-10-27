@@ -442,6 +442,10 @@ def main(argv=None) -> int:
                 "action_confidence": "measured（已知量且非首工序）/ estimated（首工序或推断）/ unknown（unknown 阶段或无 W1 行）",
                 "residual_gap": "max(0, protect_gap - action_qty)，>0 表示还需补单",
             },
+            "defer_suggestion_rule": ("(期初+已证到货) - 2×本期需求 >= 500 且本期需求 >= 1；"
+                                      "绝对量启发式，不是 90 天覆盖口径；需求未含未履约 SO"),
+            "defer_suggestion_rows": int(
+                (pack["cancel_or_defer_suggestion"].fillna("") != "").sum()),
             "timely_coverage_unproven_rows": int(
                 (pack["timely_coverage_flag"] == "timely_coverage_unproven").sum()),
             "fba_excluded_rows": int(len(fba_rows)),

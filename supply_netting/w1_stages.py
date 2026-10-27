@@ -26,6 +26,10 @@ from .so_backlog import finished_item
 IN_HOUSE = "in_house"
 FBA_SCOPES = frozenset({"external_fba"})
 FIRST_OP_BASIS = "job_card_first_op"
+# 推迟/减量提示的绝对量启发式（不是 90 天覆盖口径）：
+# (期初 + 已证到货) - 2×本期需求 >= 500 且本期需求 >= 1
+DEFER_ABS_THRESHOLD = 500.0
+DEFER_DEMAND_MIN = 1.0
 
 STAGE_FIELDS = {
     "produced_pending_dn": "so_stage_produced_pending_dn",
@@ -336,11 +340,11 @@ def apply_actions(pack: pd.DataFrame, stages: pd.DataFrame) -> pd.DataFrame:
             opening = _num(row.get("opening"))
             proven = _num(row.get("proven_receipts"))
             demand = _num(row.get("period_demand"))
-            # 只在有实际需求、且(期初+已证到货)达到 2 倍需求且至少 10 件时才提示，
-            # 避免慢销/微小分母刷出几百条噪声
-            if demand >= 1 and (opening + proven) >= max(2 * demand, 10):
-                suggestion = ("考虑推迟/减量（期初+已证到货远超本期需求；"
-                              "需求口径未含未履约 SO，需人工确认）")
+            # 绝对量启发式：扣除 2 倍本期需求后仍有 ≥500 件富余才提示；
+            # 本期需求只有 14 天口径，分母太小，所以不用倍数判断
+            if demand >= DEFER_DEMAND_MIN and                     (opening + proven) - 2 * demand >= DEFER_ABS_THRESHOLD:
+                suggestion = ("考虑推迟/减量（扣除 2 倍本期需求后仍富余 ≥500 件；"
+                              "绝对量启发式，非 90 天覆盖口径；需求未含未履约 SO）")
 
         actions.append(action)
         action_qty.append(round(covered, 6))
