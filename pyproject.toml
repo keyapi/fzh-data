@@ -35,10 +35,11 @@ dependencies = [
     "nltk>=3.10.3",
     "redis>=5.0",
     "rq>=2.0",
+    "pyarrow>=25.0.1",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size", "EN_API", "sellfox_shipping", "intent_router"]
+packages = ["multi_attr_saihu", "category", "item_cost_sx", "item_weight_size", "EN_API", "sellfox_shipping", "intent_router", "self_fulfilled_demand"]
 
 [build-system]
 requires = ["hatchling"]

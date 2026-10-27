@@ -1,0 +1,7 @@
+order_id,sku_tongtool,platform_sku,qty,sale_date,despatch_date,channel,account,warehouse,package_id,tracking,currency,amount_raw_cny,line_id
+EN-003_1,TT-SKU-C,SKU-C,1,2026-09-25,2026-09-26,亚马逊,AMZFZH,美中-FZH-DANEEY,P31,T31,USD,700.0,gs:1
+EN-003_2,TT-SKU-D,SKU-D,1,2026-09-25,2026-09-26,亚马逊,AMZFZH,美中-FZH-DANEEY,P32,T32,USD,700.0,gs:2
+EN-012,TT-SKU-M,SKU-M,3,2026-09-26,2026-09-27,亚马逊,AMZFZH,美东-CENTRADE,P12,T12,USD,2100.0,gs:3
+EN-013,TT-SKU-N,SKU-N,1,2026-09-27,2026-09-27,亚马逊,AMZFZH,美国FBA仓,,,USD,700.0,gs:4
+EN-014,TT-SKU-O,SKU-O,2,2026-09-28,2026-09-29,亚马逊,AMZFZH,星链海外仓,P14,T14,USD,1400.0,gs:5
+EN-001,TT-SKU-A,SKU-A,1,2026-09-29,2026-09-30,亚马逊,AMZFZH,美中-FZH-DANEEY,P1,T1,USD,1400.0,gs:6

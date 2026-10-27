@@ -1,0 +1,4 @@
+order_id,sku_tongtool,platform_sku,qty,sale_date,despatch_date,channel,account,warehouse,package_id,tracking,currency,amount_raw_cny,line_id
+EN-021,TT-SKU-Q,SKU-Q,1,2026-09-22,2026-09-23,亚马逊,AMZFZH,美中-FZH-DANEEY,P21,T21,USD,700.0,gse:1
+EN-022,TT-SKU-R,SKU-R,1,2026-09-23,2026-09-24,亚马逊,AMZFZH,美中-FZH-DANEEY,P22,T22,USD,700.0,gse:2
+EN-024,TT-SKU-T,SKU-T,4,,,亚马逊,AMZFZH,美东-CENTRADE,,,USD,2800.0,gse:3

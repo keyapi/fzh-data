@@ -1,0 +1,27 @@
+---
+okf: v0.1
+type: Log
+title: 自发货需求增量接入 — 变更日志
+description: 2026-10-27 接入、审查返修与真实采集记录
+tags: [log, demand, en-demand-v1]
+updated: 2026-10-27
+---
+
+# 变更日志
+
+## 2026-10-27
+
+- 新建 `self_fulfilled_demand/`：EN `Tongtool Order` 只读增量 + 本地 Parquet + 旧 GS 消费接口。
+- 实测 EN schema：154,632 单（自发货 120,808 / FBA 33,824），子表 `order_items` / `packages`
+  可从父单列表接口扁平读取；`goods_detail_id` 大面积为空，行身份改用 raw `orderDetailsId` + idx 回退。
+- 完成真实采集（窗口 A 6,800 + 窗口 B 20,703 = 27,503 单；28,823 行；24,323 包裹）。
+- 审查返修 D01–D08：
+  - 履约类型与需求有效性分离；代发/unknown 进 `deferred` 而不是 quarantine。
+  - GS 按发货口径 + EN 补洞/覆盖；新增 `superseded_cross_cutover` 防止跨切点同量双计。
+  - 分页预算耗尽抛 `EnBudgetExhausted`，标 partial、不推水位；同时间戳用 `limit_start` 推进。
+  - 快照目录 + `CURRENT` + `commit.json`；损坏指针报错；`pinned()` 固定快照读取。
+  - `sale_date` 缺失单列 `date_unknown`；GS 缺列直接报错。
+  - 新增 `demand_by_day_sku_warehouse` + UOM 证据字段（未知保留 null）。
+- 初次采集由修复前进程启动；用 `finalize_store` 收编快照并按独立计数（6,800 / 27,503）
+  与 9 月末 1,816 行交集（数量差 0）离线验证，manifest 标 `validation_status=passed`。
+- 离线测试 22 个通过。

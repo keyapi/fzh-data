@@ -1,0 +1,181 @@
+{
+ "orders": [
+  {
+   "head": {
+    "name": "EN-001",
+    "order_id_code": "EN-001",
+    "platform_order_id": "EN-001",
+    "order_type": "自发货",
+    "order_status": "已发货",
+    "invalid": 0,
+    "suspended": 0,
+    "sale_time": "2026-10-05 10:00:00",
+    "paid_time": "2026-10-05 10:00:00",
+    "despatch_complete_time": "2026-10-07 09:00:00",
+    "updated_time": "2026-10-07 09:00:00",
+    "last_sync_time": "2026-10-07 09:00:00",
+    "modified": "2026-10-07 09:00:00",
+    "creation": "2026-10-07 09:00:00",
+    "warehouse_name": "美中-FZH-DANEEY",
+    "package_id": "P1",
+    "tracking_number": "T1",
+    "merchant_carrier_shortname": "US-FedEx",
+    "channel": "亚马逊",
+    "account": "AMZFZH",
+    "sale_account": "AMZFZH",
+    "platform_code": "amazon",
+    "channel_account_en": "AMZFZH",
+    "order_amount": 100.0,
+    "order_amount_currency": "USD",
+    "raw_data": "{\"isInvalid\": 0, \"isRefunded\": 0, \"refundedTime\": null, \"orderDetails\": [{\"orderDetailsId\": \"D-SKU-A-1\", \"webstore_item_id\": \"W-EN-001-1\", \"webstore_sku\": \"SKU-A\", \"goodsMatchedSku\": \"TT-SKU-A\", \"quantity\": 1, \"isDeliverGoods\": null}]}"
+   },
+   "items": [
+    {
+     "name": "EN-001",
+     "idx": 1,
+     "platform_sku": "SKU-A",
+     "tongtool_sku": "TT-SKU-A",
+     "erp_item_code": "KS-SKU-A",
+     "quantity": 1,
+     "is_deliver_good": 1,
+     "goods_detail_id": null,
+     "web_store_item_id": "W-EN-001-1",
+     "shipping_method": "成品",
+     "match_status": "已匹配",
+     "asin": null,
+     "transaction_price": 10.0,
+     "calc_price_rmb": 70.0,
+     "item_cost": 30.0
+    }
+   ],
+   "packages": [
+    {
+     "name": "EN-001",
+     "package": "P1",
+     "tracking_number": "T1",
+     "allocated_fee": 0.0,
+     "currency": "USD",
+     "allocated_carrier_fee": 0.0,
+     "carrier_currency": null
+    }
+   ]
+  },
+  {
+   "head": {
+    "name": "EN-002",
+    "order_id_code": "EN-002",
+    "platform_order_id": "EN-002",
+    "order_type": "自发货",
+    "order_status": "等待配货",
+    "invalid": 0,
+    "suspended": 0,
+    "sale_time": "2026-10-05 10:00:00",
+    "paid_time": "2026-10-05 10:00:00",
+    "despatch_complete_time": null,
+    "updated_time": "2026-10-08 08:00:00",
+    "last_sync_time": "2026-10-08 08:00:00",
+    "modified": "2026-10-08 08:00:00",
+    "creation": "2026-10-08 08:00:00",
+    "warehouse_name": "美中-FZH-DANEEY",
+    "package_id": null,
+    "tracking_number": null,
+    "merchant_carrier_shortname": null,
+    "channel": "亚马逊",
+    "account": "AMZFZH",
+    "sale_account": "AMZFZH",
+    "platform_code": "amazon",
+    "channel_account_en": "AMZFZH",
+    "order_amount": 100.0,
+    "order_amount_currency": "USD",
+    "raw_data": "{\"isInvalid\": 0, \"isRefunded\": 0, \"refundedTime\": null, \"orderDetails\": [{\"orderDetailsId\": \"D-SKU-B-1\", \"webstore_item_id\": \"W-EN-002-1\", \"webstore_sku\": \"SKU-B\", \"goodsMatchedSku\": \"TT-SKU-B\", \"quantity\": 1, \"isDeliverGoods\": null}, {\"orderDetailsId\": \"D-SKU-B-2\", \"webstore_item_id\": \"W-EN-002-2\", \"webstore_sku\": \"SKU-B\", \"goodsMatchedSku\": \"TT-SKU-B\", \"quantity\": 2, \"isDeliverGoods\": null}]}"
+   },
+   "items": [
+    {
+     "name": "EN-002",
+     "idx": 1,
+     "platform_sku": "SKU-B",
+     "tongtool_sku": "TT-SKU-B",
+     "erp_item_code": "KS-SKU-B",
+     "quantity": 1,
+     "is_deliver_good": 1,
+     "goods_detail_id": null,
+     "web_store_item_id": "W-EN-002-1",
+     "shipping_method": "成品",
+     "match_status": "已匹配",
+     "asin": null,
+     "transaction_price": 10.0,
+     "calc_price_rmb": 70.0,
+     "item_cost": 30.0
+    },
+    {
+     "name": "EN-002",
+     "idx": 2,
+     "platform_sku": "SKU-B",
+     "tongtool_sku": "TT-SKU-B",
+     "erp_item_code": "KS-SKU-B",
+     "quantity": 2,
+     "is_deliver_good": 1,
+     "goods_detail_id": null,
+     "web_store_item_id": "W-EN-002-2",
+     "shipping_method": "成品",
+     "match_status": "已匹配",
+     "asin": null,
+     "transaction_price": 10.0,
+     "calc_price_rmb": 70.0,
+     "item_cost": 30.0
+    }
+   ],
+   "packages": []
+  },
+  {
+   "head": {
+    "name": "EN-011",
+    "order_id_code": "EN-011",
+    "platform_order_id": "EN-011",
+    "order_type": "自发货",
+    "order_status": "已发货",
+    "invalid": 0,
+    "suspended": 0,
+    "sale_time": "2026-10-09 10:00:00",
+    "paid_time": "2026-10-09 10:00:00",
+    "despatch_complete_time": "2026-10-06 12:00:00",
+    "updated_time": "2026-10-09 10:00:00",
+    "last_sync_time": "2026-10-09 10:00:00",
+    "modified": "2026-10-09 10:00:00",
+    "creation": "2026-10-09 10:00:00",
+    "warehouse_name": "美中-FZH-DANEEY",
+    "package_id": null,
+    "tracking_number": null,
+    "merchant_carrier_shortname": null,
+    "channel": "亚马逊",
+    "account": "AMZFZH",
+    "sale_account": "AMZFZH",
+    "platform_code": "amazon",
+    "channel_account_en": "AMZFZH",
+    "order_amount": 100.0,
+    "order_amount_currency": "USD",
+    "raw_data": "{\"isInvalid\": 0, \"isRefunded\": 0, \"refundedTime\": null, \"orderDetails\": [{\"orderDetailsId\": \"D-SKU-L-1\", \"webstore_item_id\": \"W-EN-011-1\", \"webstore_sku\": \"SKU-L\", \"goodsMatchedSku\": \"TT-SKU-L\", \"quantity\": 1, \"isDeliverGoods\": null}]}"
+   },
+   "items": [
+    {
+     "name": "EN-011",
+     "idx": 1,
+     "platform_sku": "SKU-L",
+     "tongtool_sku": "TT-SKU-L",
+     "erp_item_code": "KS-SKU-L",
+     "quantity": 1,
+     "is_deliver_good": 1,
+     "goods_detail_id": null,
+     "web_store_item_id": "W-EN-011-1",
+     "shipping_method": "成品",
+     "match_status": "已匹配",
+     "asin": null,
+     "transaction_price": 10.0,
+     "calc_price_rmb": 70.0,
+     "item_cost": 30.0
+    }
+   ],
+   "packages": []
+  }
+ ]
+}
