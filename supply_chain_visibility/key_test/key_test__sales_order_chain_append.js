@@ -523,7 +523,7 @@ function so_chain_show_detail(line, so) {
     d.show();
     frappe.call({
         method: 'key_test.supply_facts.get_supply_facts',
-        args: { filters: { sales_order: so, so_line: line.so_line } },
+        args: { filters: { sales_order: so, so_line: line.so_line, include_delivered: 1 } },
         callback: function (response) {
             const box = document.getElementById(factsId);
             if (box && response && response.message) {

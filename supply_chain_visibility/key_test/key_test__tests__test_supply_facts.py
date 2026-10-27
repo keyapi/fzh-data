@@ -22,12 +22,14 @@ class FakeFrappe(types.ModuleType):
         self.total_sos = 0
         self.dn_rows = []
         self.permitted_dns = []
+        self.last_query = None
         self.db = types.SimpleNamespace(
             sql=self.sql, count=self.count, has_column=lambda *a, **k: True,
             table_exists=lambda *a, **k: True)
 
     def sql(self, query, values=None, as_dict=False):
         if "select so.name as so" in query:
+            self.last_query = query
             allowed = set((values or {}).get("permitted") or [])
             return [row for row in self.so_rows if row.so in allowed]
         if "from `tabDelivery Note Item`" in query:
@@ -663,6 +665,29 @@ class SupplyFactsContractTest(unittest.TestCase):
         returned = sorted(r["qty"] for r in stages
                           if r["stage"] == self.facts.STAGE_RETURNED)
         self.assertEqual(returned, [10.0, 40.0])
+
+    def test_include_delivered_surfaces_delivered_lines(self):
+        self.fake.so_rows = [types.SimpleNamespace(so="SO-1", so_line="A")]
+        self.fake.permitted_sos = ["SO-1"]
+        self.fake.total_sos = 1
+        lines, _ = self.facts.load_lines({})
+        self.assertIn("soi.qty - soi.delivered_qty", self.fake.last_query)
+        self.assertEqual([row.so_line for row in lines], ["A"])
+        lines, _ = self.facts.load_lines({"include_delivered": 1})
+        self.assertNotIn("soi.qty - soi.delivered_qty", self.fake.last_query)
+        self.assertEqual([row.so_line for row in lines], ["A"])
+
+    def test_popup_request_includes_delivered_lines(self):
+        here = Path(__file__).resolve()
+        candidates = [
+            here.parents[1] / "public" / "js" / "sales_order.js",
+            here.parent / "key_test__sales_order_chain_append.js",
+        ]
+        target = next((path for path in candidates if path.exists()), None)
+        self.assertIsNotNone(target, "未找到销售订单 JS")
+        text = target.read_text(encoding="utf-8")
+        start = text.index("get_supply_facts")
+        self.assertIn("include_delivered", text[start:start + 400])
 
     def test_plan_unit_mismatch_blocks_coverage_allocation(self):
         pp = {"pp": "PP-1", "ppi": "PPI-1", "item_code": "SKU-1",

@@ -332,7 +332,7 @@ channel: docs/jack-w1-channel
 - 契约与字段：`supply_chain_visibility/docs/reference/supply-facts-contract.md`（stage_balances / milestones / availability_schedule / links / manifest）。
 - 代码：key_test `key_test/supply_facts.py`（whitelist `get_supply_facts`）；本地批量入口 `EN_API/supply_facts_export.py`（JSON+Excel+sha256+latest 原子指针）。
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口同一方法。
-- 验收：单 SO `SO-26-00026` → 3 行、三行阶段余额守恒 10/5/8，查询约 0.8s；测试站全范围（含取消订单）292 行 → 308 余额 / 656 里程碑 / 287 片段 / 404 关联，0.85s；契约单测 47 项 + 合并/版本一致性 7 项全绿。
+- 验收：单 SO `SO-26-00026` → 3 行、三行阶段余额守恒 10/5/8，查询约 0.8s；测试站全范围（含取消订单）292 行 → 308 余额 / 656 里程碑 / 287 片段 / 404 关联，0.85s；契约单测 49 项 + 合并/版本一致性 7 项全绿。
 - 审核整改（2026-10-27 第一轮）：行级权限按 `get_list` 可读集合取数；出库单位不一致不归一；退货按 `return_against` 抵扣；取消订单保留实物片段；片段 ID 加订单行前缀；manifest 相对路径、`observed_at`/`as_of` 分离、200 页上限标 `truncated`、显式 `external_sources`。
 - 审核整改（2026-10-27 第二轮）：可售片段继承阶段单位；退货不再生成「待出库」供给；受限来源（含行级）无法判断的阶段置 unknown；历史 `as_of` 服务端拒绝；批次合并 `restricted` 按 OR、`sources` 按 AND、外部来源保守保留 `not_integrated`；空结果保留 `empty_reason`/`partial=true`。
 - 审核整改（2026-10-27 第三轮）：在产按 `min(Σ工单量, 订单量)` 覆盖量分配，超出覆盖进未计划；退货缺口先记 unknown 再分配，不再制造虚假在产；milestones/links 与阶段余额统一单位校验（缺失/不一致不归一、工单单位不一致→unknown）；片段 ID 加仓库+DN 明细行身份并保留实际出库仓库；全部授权过滤时 `empty_reason=all_restricted`。`RULE_VERSION=2026-10-27.2`。
@@ -349,6 +349,7 @@ channel: docs/jack-w1-channel
 - 第七轮测试站验收（2026-10-27，key_test `3ae8b46`）：服务端 100 项 unittest OK；单 SO `SO-26-00026` → 3 行 / 9 余额 / 16 里程碑 / 6 片段 / 17 关联（守恒 10/5/8，0.79s）；全范围 292 行 → 312 余额 / 656 里程碑 / 259 片段 / 404 关联（0.60s，`exhausted`）；片段 ID 无重复、非取消行（排除超产）全部守恒；2 行超产现存与累计字段一致（14/14、10/10；这两行未出库，故现存=累计），xlsx 已含 `cumulative_excess_qty` 列；manifest 与 `latest.json` 报告 `supply-facts/v1` / `2026-10-27.6` / `key_test.supply_facts@2026-10-27.6`。现网无退货样本，明细容量/引用冲突/缺明细拆分由单测覆盖。
 - 审核整改（2026-10-27 第八轮）：退货容量改为**单一按原始明细记账的账本**——显式 `dn_detail` 与缺引用兜底共用同一 `matched_by_item`，调换退货顺序结果不变；单行兜底改按**原始明细行数**判断（聚合组保留 `item_qty` 逐明细数量），同仓同单位多明细聚合后缺引用一律不抵扣并标归属未知。新增顺序不变性、聚合组缺引用与 `load_dns` 贯穿测试。`RULE_VERSION`/`IMPLEMENTATION_VERSION` 升到 `2026-10-27.7`。
 - 第八轮测试站验收（2026-10-27，key_test `ab5a766`）：服务端 103 项 unittest OK；单 SO `SO-26-00026` → 3 行 / 9 余额 / 16 里程碑 / 6 片段 / 17 关联（守恒 10/5/8，0.78s）；全范围 292 行 → 312 余额 / 656 里程碑 / 259 片段 / 404 关联（0.59s，`exhausted`）；片段 ID 无重复、非取消行（排除超产）全部守恒；输出与上轮一致（现网无退货样本）；manifest 与 `latest.json` 报告 `supply-facts/v1` / `2026-10-27.7` / `key_test.supply_facts@2026-10-27.7`。退货顺序不变性、同仓聚合缺引用与逐明细容量由新增单测覆盖。
+- 审核整改（2026-10-27 第九轮）：SO 链条弹窗按具体订单行请求时补 `include_delivered=1`，已发完订单行仍可下钻历史事实，与机器导出范围一致；新增服务端 `include_delivered` 过滤与弹窗 JS 参数两项回归测试。仅 JS/测试变更，服务端数量规则与版本不变。
 - 9 SKU：生产只读解析出 99 张 SO；测试站无该样本（0 张），生产未部署新模块（本任务不授权生产部署），**待授权后验收**。
 - 边界：到仓/上架无 EN 证据 → `delivered_sellable` 不产出、`eligible=false`；多运单不摊量；无独立承诺字段；时区未证；PO/入库/预留/新鲜度未并入 EN 事实。
 - 生产未部署；#314 仍 open，由 #318 接管。PR 评论只发本段短指针。
