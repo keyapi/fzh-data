@@ -132,10 +132,15 @@ uv run python notion_stockout.py --xlsx "<SPS库存检查操作表-*.xlsx>" --ou
 | `run_pb_orders.py` | 出件 CLI 薄适配器：把结构化报告打印回原来的控制台格式，退出码不变 |
 | `run_stock_check.py` | 预检 CLI 薄适配器 |
 | `web/config.py` | 全部配置走环境变量（`PB_ORDERS_*`），本机 fallback 读 `pb_orders/.env` |
-| `web/app.py` | 路由：`/`、`/jobs/new`、`/checks/new`、`/jobs/{id}/fulfill`、`/settings`、`/settings/no-stock`、`/jobs/{id}`、`/jobs/{id}/status`、`/jobs/{id}/retry`、`/artifacts/{id}/download`、`/healthz` |
-| `web/repository.py` | SQLite：`jobs`（含 `job_type`）/ `artifacts` 两张表 + `app_settings` + 状态机 + 中断恢复；老库启动时自动补 `job_type` 列 |
+| `web/jobs_service.py` | **建任务的唯一入口**：网页表单与 JSON API 共用（校验上传 → 落盘 → 建 job → 输入登记 → 入队）；`prepare_reorder` 在这里预留 `-N` |
+| `web/app.py` | HTML 路由 + 注册 `/api/v1`；OIDC 闸门对 `/api/` 放行（由 Bearer 鉴权）；`/api/openapi.json`、`/api/docs` |
+| `web/api.py` | JSON API v1：checks / jobs / fulfill / status / artifacts / download / retry / settings |
+| `web/api_auth.py` | Bearer 鉴权：`sk-` API Key（sha256）+ OIDC `/userinfo`（60s 缓存）+ scope + 速率限制 |
+| `web/api_keys.py` | CLI：`python -m web.api_keys create/list/revoke` |
+| `web/api_errors.py` | 统一错误结构 `{"error": {code, message, hint, request_id}}` |
+| `web/repository.py` | SQLite：`jobs` / `artifacts` / `app_settings` / `api_keys` / `idempotency_keys` / `order_number_usage` + 状态机 + 中断恢复；老库启动时自动补列 |
 | `web/storage.py` | 分块上传、SHA-256、内容寻址发布、路径越界防护、`link_or_copy`（checked CSV 复用成出件输入） |
-| `web/tasks.py` | worker 入口；**按 `job_type` 分发**（`_RUNNERS`：`fulfillment` / `stock_check`）；异常翻译成用户可读的失败报告 |
+| `web/tasks.py` | worker 入口；**按 `job_type` 分发**（`_RUNNERS`：`fulfillment` / `stock_check`）；把 `reorder_list` 传给 `JobOptions.reorder`、成功后登记 `order_numbers` |
 | `web/auth.py` | 钉钉 OIDC 登录：闸门中间件、Redis state、可选白名单、URL 前缀 |
 | `web/healthcheck.py` | `python -m web.healthcheck web\|worker` |
 
@@ -182,14 +187,61 @@ server 块，里面本来就同时挂着 `/oidc/`、`/sellfox/`、`/nas/mcp`）�
 - 只接受 `.pdf` / `.csv`；体积在中间件层按 `Content-Length` 提前拒绝，落盘时再按块计数兜底；
 - 失败报告只给用户可读文字 + 错误码，堆栈只进容器日志，页面不出现服务器路径。
 
-### 4.5 本机跑测试
+### 4.5 JSON API（`/api/v1`，人 + Agent 共用）
+
+网页与 API 共用 `web/jobs_service.py`、同一个 job 模型、同一份产物与审计；
+不存在「只有页面能做」的步骤。API 只是把同一服务层暴露成 JSON。
+
+| 方法 | 路径 | Scope | 说明 |
+|---|---|---|---|
+| POST | `/api/v1/checks` | check | multipart `raw_csv`、`no_stock` → 202 + JobView |
+| POST | `/api/v1/jobs` | fulfill | multipart `order_csv`、`packslip`、`no_stock`、`no_stock_note`、`reorder`、`reorder_map`、`validate_only`、`allow_unmatched` |
+| POST | `/api/v1/jobs/{check_job_id}/fulfill` | fulfill | 只传 `packslip`（+ 可选 `reorder`/`reorder_map`）；源任务须 succeeded 且有 checked_order |
+| GET | `/api/v1/jobs/{id}` | read | 状态 / 进度 / report / error / artifacts |
+| GET | `/api/v1/jobs/{id}/artifacts` | read | 产物清单 |
+| GET | `/api/v1/artifacts/{id}/download` | read | 下载（内容寻址 + 越界复查） |
+| POST | `/api/v1/jobs/{id}/retry` | 同源任务 | 复制输入与选项，新建 job |
+| GET/PUT | `/api/v1/settings/no-stock` | read / check | 读写断货清单 |
+| GET | `/api/v1/healthz` | 公开 | 存活 |
+
+鉴权（`Authorization: Bearer`）：
+
+1. `sk-...`：sha256 查 `api_keys`（active），按 key 的 scope。/userinfo 不参与。
+2. 其他 token：调 OIDC 桥 `GET {PB_ORDERS_OIDC_ISSUER}/userinfo`（5s 超时，按 token hash
+   缓存 60s），套 `PB_ORDERS_ALLOWED_USERS`；scope 取 `PB_ORDERS_OIDC_API_SCOPES`
+   （默认 `check,fulfill,read`）。
+3. 速率限制按 principal：`PB_ORDERS_API_KEY_RPS`（默认 5/秒），超限 `429 rate_limited`。
+
+建 Key / 吊销（容器内）：
+
+```bash
+docker compose exec web python -m web.api_keys create --name agent --scopes check,fulfill,read
+docker compose exec web python -m web.api_keys list
+docker compose exec web python -m web.api_keys revoke key-xxxxxxxx
+```
+
+约定：
+
+- 创建返回 `202` + `Location: …/api/v1/jobs/{id}` + JobView；错误统一
+  `{"error": {"code", "message", "hint", "request_id"}}`；401 带 `WWW-Authenticate: Bearer`。
+- `Idempotency-Key` 命中且输入指纹一致 → 重放（200 + `Idempotent-Replayed: true`）；
+  同一 key 不同输入 → `409 idempotency_conflict`。
+- 不带 key 时按 `jobs.input_sha256` 在 `PB_ORDERS_DEDUPE_MINUTES`（默认 1440）内去重
+  （跳过 failed），返回已有 job + `deduplicated: true`。
+- `reorder`（`PO` 自动 / `PO=-N` 显式，逗号分隔）与 `reorder_map`（JSON 对象）由
+  `jobs_service.prepare_reorder` 预留号段；冲突 `409 reorder_conflict`。
+- **`/api/` 不认 cookie 会话**，因此不走 CSRF；OIDC 闸门对 `/api/` 直接放行，交给 Bearer。
+- OpenAPI：`/api/docs`（Swagger UI）、`/api/openapi.json`；配了 `PB_ORDERS_URL_PREFIX`
+  时 `servers` 自动带前缀（Swagger 的 Try it out 不会打到域名根）。
+
+### 4.6 本机跑测试
 
 ```bash
 cd pb_orders
 uv run pytest tests/ -q
 ```
 
-155 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
+217 个用例通过、2 个跳过，**不需要 Redis**：`tests/conftest.py` 用 reportlab 现画一个结构同构的
 3 页 Packslip PDF + 5 行订单 CSV + 3 行名称缓存，跑真实流程；Web 用例把
 `web.app.enqueue_job` 换成同步执行，从而覆盖「Web 建任务 + worker 处理 + 页面 + 下载」整链。
 另有 Redis/RQ 生命周期用例需本地 Docker，设 `PB_ORDERS_RQ_DOCKER=1` 才跑（默认跳过）。

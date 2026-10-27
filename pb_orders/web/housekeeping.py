@@ -79,6 +79,10 @@ def start_queue_watch(
 
 def purge_expired(settings, repo: Repository) -> int:
     """删除完成时间早于保留期的任务，以及不再被引用的产物文件。"""
+    try:
+        repo.purge_expired_idempotency()
+    except Exception:  # noqa: BLE001 - 幂等键清理失败不该挡住保留期清理
+        log.exception("清理过期幂等键失败")
     days = settings.retention_days
     if days < 0:
         return 0

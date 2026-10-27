@@ -429,7 +429,34 @@ location /pb/ {
 
 登录后页头会显示钉钉显示名。
 
-### 11.6 未完成事项
+### 11.6 JSON API（`/api/v1`，2026-10）
+
+网页表单与 API 调同一个 `web/jobs_service.py`，因此「页面能做、API 不能做」的断层不存在。
+API 不改变部署形态：同一容器、同一 SQLite、同一 RQ 队列，只是多挂了一组 `/api/v1` 路由。
+
+- **鉴权两条路**：机器用 API Key（`sk-`，库表 `api_keys` 只存 sha256 + 前缀，带 scope，
+  可吊销、按 principal 限速）；人/Agent 用 OIDC access token（`/userinfo` 5s 超时 +
+  60s 缓存）。两者都套 `PB_ORDERS_ALLOWED_USERS`。
+- **不做 `client_credentials`**：公司 OIDC 桥没实现，机器对机器用 Key。
+- **幂等**：`Idempotency-Key` + 输入 SHA-256 指纹；另有短窗口输入去重
+  （`PB_ORDERS_DEDUPE_MINUTES`，默认 1440，跳过 failed）。
+- **补发号段**：`order_number_usage` 表（`full_number` 主键）在 `BEGIN IMMEDIATE`
+  里预留 `-N`；worker 成功后把实际写进 xlsx 的 `order_numbers` 回填。
+  失败保留预留（号跳过，不重复）。
+- **安全边界不变**：`/api/` 不走 cookie/CSRF；401 返回 JSON + `WWW-Authenticate`
+  而不是 303 去登录页；下载仍走 `resolve_artifact_path` 越界复查。
+- **文档**：`/pb/api/docs`（Swagger UI）与 `/pb/api/openapi.json`；配了
+  `PB_ORDERS_URL_PREFIX` 时 `servers` 自动带前缀。
+- **运维命令**：
+
+```bash
+docker compose exec web python -m web.api_keys create --name agent --scopes check,fulfill,read
+docker compose exec web python -m web.api_keys list
+docker compose exec web python -m web.api_keys revoke key-xxxxxxxx
+curl -s https://api.vilavi.cn/pb/api/v1/healthz
+```
+
+### 11.7 未完成事项
 
 - **保留策略在启动时执行**（`PB_ORDERS_RETENTION_DAYS`，默认 90 天），**不是定时任务**：
   长期不重启的服务/worker 不会触发清理。要真正常态化清理得加调度。

@@ -11,11 +11,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import secrets
 import sqlite3
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 log = logging.getLogger("pb_orders.web")
@@ -67,6 +69,42 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at TEXT NOT NULL,
     updated_by TEXT NOT NULL DEFAULT ''
 );
+
+-- API Key：只存 sha256 与前缀，明文只在创建时显示一次。
+CREATE TABLE IF NOT EXISTS api_keys (
+    id           TEXT PRIMARY KEY,
+    name         TEXT NOT NULL,
+    key_prefix   TEXT NOT NULL,
+    key_hash     TEXT NOT NULL UNIQUE,
+    scopes       TEXT NOT NULL DEFAULT '',
+    is_active    INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL,
+    last_used_at TEXT,
+    created_by   TEXT NOT NULL DEFAULT ''
+);
+
+-- 幂等键：同一 principal + operation + key 只对应一个任务/响应。
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    principal      TEXT NOT NULL,
+    operation      TEXT NOT NULL,
+    key            TEXT NOT NULL,
+    request_sha256 TEXT NOT NULL,
+    job_id         TEXT,
+    response_json  TEXT,
+    created_at     TEXT NOT NULL,
+    expires_at     TEXT NOT NULL,
+    PRIMARY KEY (principal, operation, key)
+);
+
+-- 通途订单号占用登记：补发时按 po_base 找下一个 -N，避免重复导入。
+CREATE TABLE IF NOT EXISTS order_number_usage (
+    full_number TEXT PRIMARY KEY,
+    po_base     TEXT NOT NULL,
+    job_id      TEXT,
+    source      TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_order_number_usage_base ON order_number_usage(po_base);
 """
 
 # 断货 SKU 列表存这里（页面可改）；从没设置过时回落到 .env 的初始值
@@ -103,6 +141,10 @@ def new_id(prefix: str = "job") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:12]}"
 
 
+class OrderNumberConflict(RuntimeError):
+    """补发订单号已被占用（并发或历史登记冲突）。"""
+
+
 class Repository:
     def __init__(self, db_path):
         self.db_path = Path(db_path)
@@ -120,18 +162,23 @@ class Repository:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
             columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)")}
-            if "job_type" not in columns:
+            for column, ddl in (
+                ("job_type", "TEXT NOT NULL DEFAULT 'fulfillment'"),
+                ("input_sha256", "TEXT"),
+                ("reorder_json", "TEXT"),
+                ("api_key_id", "TEXT"),
+            ):
+                if column in columns:
+                    continue
                 try:
-                    conn.execute(
-                        "ALTER TABLE jobs ADD COLUMN job_type TEXT NOT NULL DEFAULT 'fulfillment'"
-                    )
+                    conn.execute(f"ALTER TABLE jobs ADD COLUMN {column} {ddl}")
                 except sqlite3.OperationalError as exc:
                     # Web 与 worker 会同时启动、同时看到旧库缺这一列，其中一个必然
                     # 撞上 duplicate column name。SQLite 没有 ADD COLUMN IF NOT EXISTS，
                     # 而那一刻「列已经在了」正是我们想要的结果，所以这里放行。
                     if "duplicate column name" not in str(exc).lower():
                         raise
-                    log.info("job_type 列已由另一个进程迁移完成，跳过")
+                    log.info("%s 列已由另一个进程迁移完成，跳过", column)
 
     # ---------- jobs ----------
 
@@ -148,18 +195,23 @@ class Repository:
         pipeline_version: str,
         source_job_id: str | None = None,
         job_type: str = "fulfillment",
+        input_sha256: str | None = None,
+        reorder: list[str] | None = None,
+        api_key_id: str | None = None,
     ) -> str:
         with self.connect() as conn:
             conn.execute(
                 """INSERT INTO jobs (id, job_type, status, created_by, created_at, no_stock, no_stock_note,
                        validate_only, allow_unmatched, input_packslip, input_order,
-                       progress_step, progress_message, pipeline_version, source_job_id)
+                       progress_step, progress_message, pipeline_version, source_job_id,
+                       input_sha256, reorder_json, api_key_id)
                    VALUES (?, ?, 'uploaded', ?, ?, ?, ?, ?, ?, ?, ?, 'uploaded', '已接收上传文件',
-                       ?, ?)""",
+                       ?, ?, ?, ?, ?)""",
                 (
                     job_id, job_type, created_by, now_iso(), no_stock, no_stock_note,
                     int(validate_only), int(allow_unmatched), input_packslip, input_order,
-                    pipeline_version, source_job_id,
+                    pipeline_version, source_job_id, input_sha256,
+                    json.dumps(reorder or [], ensure_ascii=False), api_key_id,
                 ),
             )
         return job_id
@@ -329,6 +381,167 @@ class Repository:
             row = conn.execute("SELECT * FROM artifacts WHERE id = ?", (artifact_id,)).fetchone()
         return dict(row) if row else None
 
+    # ---------- API keys ----------
+
+    def create_api_key(self, name: str, scopes: str, created_by: str = "") -> dict:
+        """创建 API Key。返回明文只有这一次；库里只存 sha256 与前缀。"""
+        key_id = new_id("key")
+        plaintext = "sk-" + secrets.token_urlsafe(32)
+        key_hash = hashlib.sha256(plaintext.encode("utf-8")).hexdigest()
+        prefix = plaintext[:12]
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO api_keys (id, name, key_prefix, key_hash, scopes, is_active,
+                       created_at, created_by)
+                   VALUES (?, ?, ?, ?, ?, 1, ?, ?)""",
+                (key_id, name, prefix, key_hash, scopes, now_iso(), created_by),
+            )
+        return {"id": key_id, "name": name, "key": plaintext, "key_prefix": prefix, "scopes": scopes}
+
+    def lookup_api_key(self, key_hash: str) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM api_keys WHERE key_hash = ? AND is_active = 1", (key_hash,)
+            ).fetchone()
+        return dict(row) if row else None
+
+    def touch_api_key(self, key_id: str) -> None:
+        with self.connect() as conn:
+            conn.execute("UPDATE api_keys SET last_used_at = ? WHERE id = ?", (now_iso(), key_id))
+
+    def list_api_keys(self) -> list[dict]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT id, name, key_prefix, scopes, is_active, created_at, last_used_at, created_by "
+                "FROM api_keys ORDER BY created_at DESC"
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def revoke_api_key(self, key_id: str) -> bool:
+        with self.connect() as conn:
+            cur = conn.execute("UPDATE api_keys SET is_active = 0 WHERE id = ?", (key_id,))
+        return cur.rowcount == 1
+
+    # ---------- idempotency ----------
+
+    def lookup_idempotency(self, principal: str, operation: str, key: str) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """SELECT * FROM idempotency_keys
+                   WHERE principal = ? AND operation = ? AND key = ? AND expires_at > ?""",
+                (principal, operation, key, now_iso()),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def store_idempotency(
+        self, principal: str, operation: str, key: str, request_sha256: str,
+        job_id: str, response_json: str, ttl_minutes: int,
+    ) -> None:
+        expires = (datetime.now().astimezone() + timedelta(minutes=ttl_minutes)).isoformat(timespec="seconds")
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO idempotency_keys
+                       (principal, operation, key, request_sha256, job_id, response_json, created_at, expires_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(principal, operation, key) DO UPDATE SET
+                       request_sha256 = excluded.request_sha256,
+                       job_id = excluded.job_id,
+                       response_json = excluded.response_json,
+                       created_at = excluded.created_at,
+                       expires_at = excluded.expires_at""",
+                (principal, operation, key, request_sha256, job_id, response_json, now_iso(), expires),
+            )
+
+    def purge_expired_idempotency(self) -> int:
+        with self.connect() as conn:
+            cur = conn.execute("DELETE FROM idempotency_keys WHERE expires_at <= ?", (now_iso(),))
+        return cur.rowcount
+
+    def find_recent_job(self, input_sha256: str, minutes: int) -> str | None:
+        cutoff = (datetime.now().astimezone() - timedelta(minutes=minutes)).isoformat(timespec="seconds")
+        with self.connect() as conn:
+            row = conn.execute(
+                """SELECT id FROM jobs
+                   WHERE input_sha256 = ? AND created_at >= ? AND status != 'failed'
+                   ORDER BY created_at DESC, rowid DESC LIMIT 1""",
+                (input_sha256, cutoff),
+            ).fetchone()
+        return row[0] if row else None
+
+    # ---------- Tongtool order number registry ----------
+
+    def record_order_numbers(self, job_id: str, mapping: dict[str, str], source: str = "worker") -> None:
+        """记录已写入 xlsx 的订单号（含裸号与 -N）。重复写入忽略。"""
+        if not mapping:
+            return
+        numbers = [f"{po}{suffix}" if suffix else po for po, suffix in mapping.items()]
+        self.record_full_numbers(numbers, job_id, source)
+
+    def record_full_numbers(self, numbers: list[str], job_id: str, source: str = "worker") -> None:
+        if not numbers:
+            return
+        with self.connect() as conn:
+            for full in numbers:
+                full = str(full).strip()
+                if not full:
+                    continue
+                base = full.split("-", 1)[0]
+                conn.execute(
+                    """INSERT OR IGNORE INTO order_number_usage
+                           (full_number, po_base, job_id, source, created_at)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (full, base, job_id, source, now_iso()),
+                )
+
+    def reserve_order_numbers(
+        self, po_bases: list[str], job_id: str, explicit: dict[str, str] | None = None,
+    ) -> dict[str, str]:
+        """为补发 PO 预留 -N 后缀，返回 {PO: "-N"}。
+
+        explicit 里的后缀直接采信；其余按该 PO 已登记的最大 -N + 1。
+        用 BEGIN IMMEDIATE 把「读最大号 + 插入」放在同一把写锁里。
+        """
+        explicit = {str(k): str(v) for k, v in (explicit or {}).items()}
+        result: dict[str, str] = {}
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                for po in po_bases:
+                    if po in explicit:
+                        suffix = explicit[po].strip()
+                        if suffix and not suffix.startswith("-"):
+                            suffix = "-" + suffix
+                    else:
+                        rows = conn.execute(
+                            "SELECT full_number FROM order_number_usage WHERE po_base = ?", (po,)
+                        ).fetchall()
+                        max_n = 0
+                        for (full,) in rows:
+                            if full == po:
+                                max_n = max(max_n, 1)
+                            elif full.startswith(po + "-"):
+                                try:
+                                    max_n = max(max_n, int(full[len(po) + 1:]))
+                                except ValueError:
+                                    pass
+                        suffix = f"-{max(max_n + 1, 2)}"
+                    full = f"{po}{suffix}"
+                    try:
+                        conn.execute(
+                            """INSERT INTO order_number_usage
+                                   (full_number, po_base, job_id, source, created_at)
+                               VALUES (?, ?, ?, 'reserved', ?)""",
+                            (full, po, job_id, now_iso()),
+                        )
+                    except sqlite3.IntegrityError as exc:
+                        raise OrderNumberConflict(f"{po}{suffix} 已被占用") from exc
+                    result[po] = suffix
+                conn.commit()
+            except BaseException:
+                conn.rollback()
+                raise
+        return result
+
     # ---------- helpers ----------
 
     @staticmethod
@@ -339,4 +552,5 @@ class Repository:
         job["validate_only"] = bool(job["validate_only"])
         job["allow_unmatched"] = bool(job["allow_unmatched"])
         job["no_stock_list"] = [s for s in (job["no_stock"] or "").split(",") if s.strip()]
+        job["reorder_list"] = json.loads(job["reorder_json"]) if job.get("reorder_json") else []
         return job

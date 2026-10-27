@@ -30,6 +30,7 @@ if str(_PB_DIR) not in sys.path:
     sys.path.insert(0, str(_PB_DIR))
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile  # noqa: E402
+from fastapi.openapi.docs import get_swagger_ui_html  # noqa: E402
 from fastapi.responses import (  # noqa: E402
     FileResponse,
     HTMLResponse,
@@ -39,12 +40,15 @@ from fastapi.responses import (  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from fastapi.templating import Jinja2Templates  # noqa: E402
 
+from web import api as api_mod  # noqa: E402
+from web import api_errors  # noqa: E402
 from web import auth as auth_mod  # noqa: E402
 from web import csrf as csrf_mod  # noqa: E402
 from web import housekeeping  # noqa: E402
+from web import jobs_service  # noqa: E402
 from web import storage  # noqa: E402
 from web.config import get_settings  # noqa: E402
-from web.repository import ARTIFACT_LABELS, NO_STOCK_KEY, Repository, new_id  # noqa: E402
+from web.repository import ARTIFACT_LABELS, NO_STOCK_KEY, Repository  # noqa: E402
 
 WEB_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(WEB_DIR / "templates"))
@@ -143,16 +147,6 @@ def create_app() -> FastAPI:
     def url(path: str) -> str:
         return f"{prefix}{path}"
 
-    def receive_upload(upload: UploadFile, label: str, suffix: str, dest: Path) -> str:
-        """校验扩展名 + 分块落盘到固定物理名，返回用户原始文件名（仅供展示）。
-
-        抛 `ValueError`（扩展名不对，页面按 400 处理）或
-        `storage.UploadTooLarge`（超限，页面按 413 处理）。
-        """
-        display = storage.validate_upload_name(upload.filename, label, suffix)
-        storage.save_upload_stream(upload.file, dest, settings.max_upload_bytes)
-        return display
-
     def enqueue_or_fail(job_id: str) -> None:
         """投队列；Redis 不可用时把任务落成失败，页面才看得到原因。"""
         try:
@@ -162,33 +156,6 @@ def create_app() -> FastAPI:
                 job_id,
                 {"code": "queue_unavailable", "message": exc.detail, "hint": "确认 Redis 后重新提交。"},
             )
-
-    # 上传槽位 -> (产物类型, 展示用类型名, MIME)。类型名与 database 的 ARTIFACT_LABELS 一致。
-    _INPUT_SLOTS = (
-        (storage.PACKSLIP_NAME, "input_packslip", "Packslip PDF", "application/pdf"),
-        (storage.ORDER_NAME, "input_order", "SPS 订单 CSV", "text/csv"),
-    )
-
-    def register_inputs(job_id: str, displays: dict[str, str]) -> None:
-        """把上传的输入也登记成可下载产物 —— 使用者要能核对「我到底传了什么」。
-
-        用 `publish_input_copy`（硬链接/复制），**不移动** inputs/ 里的原文件：
-        那份还要给 worker 用、还要供「用相同输入重新处理」。
-        登记失败不能连累建任务（没登记上也还能出件，只是少一个下载口），所以吞掉异常并记日志。
-        """
-        for slot, kind, label, mime in _INPUT_SLOTS:
-            path = settings.inputs_dir / job_id / slot
-            if not path.is_file():
-                continue
-            try:
-                rel_path, size, digest = storage.publish_input_copy(path, settings.artifacts_dir)
-                repo.add_artifact(
-                    job_id=job_id, kind=kind, original_name=slot,
-                    download_name=displays.get(slot) or slot, rel_path=rel_path,
-                    content_hash=digest, size_bytes=size, mime_type=mime,
-                )
-            except Exception:  # noqa: BLE001 - 登记失败不该挡住任务
-                log.exception("登记输入产物失败 job=%s slot=%s", job_id, slot)
 
     def current_no_stock() -> str:
         """当前生效的断货 SKU 列表（逗号分隔）。
@@ -204,9 +171,41 @@ def create_app() -> FastAPI:
     app = FastAPI(title="PB 订单处理", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=str(WEB_DIR / "static")), name="static")
 
+    if prefix:
+        # 应用看到的路径没有前缀（反代剥掉了），但对外文档必须指到 /pb/api/v1，
+        # 否则 Swagger 里点 “Try it out” 会打到域名根上的别的服务。
+        _app_openapi = app.openapi
+
+        def _openapi_with_prefix():
+            schema = _app_openapi()
+            schema.setdefault("servers", []).insert(0, {"url": prefix})
+            return schema
+
+        app.openapi = _openapi_with_prefix
+
+    @app.exception_handler(api_errors.ApiError)
+    async def _api_error_handler(request: Request, exc: api_errors.ApiError):
+        return JSONResponse(
+            api_errors.error_body(exc.code, exc.message, exc.hint, exc.details),
+            status_code=exc.status_code,
+            headers={"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None,
+        )
+
     ctx = auth_mod.AuthContext(settings=settings)
     states = auth_mod.StateStore(settings.redis_url)
     app.include_router(auth_mod.build_router(ctx, states, templates))
+    app.include_router(api_mod.build_api_router(settings, repo, enqueue_or_fail, url))
+
+    @app.get("/api/openapi.json", include_in_schema=False)
+    async def api_openapi():
+        return JSONResponse(app.openapi())
+
+    @app.get("/api/docs", include_in_schema=False)
+    async def api_docs():
+        return get_swagger_ui_html(
+            openapi_url=url("/api/openapi.json"),
+            title="PB 订单处理 API",
+        )
 
     if settings.auth_enabled:
         allow = "、".join(settings.allowed_users) if settings.allowed_users else "（未设白名单，按桥的判定 = 本公司钉钉员工）"
@@ -233,7 +232,16 @@ def create_app() -> FastAPI:
     async def limit_body(request: Request, call_next):
         if request.method == "POST":
             raw = request.headers.get("content-length")
-            if raw and raw.isdigit() and int(raw) > settings.max_upload_bytes * 2:
+            limit = settings.max_upload_bytes * 2 + 1024 * 1024
+            if raw and raw.isdigit() and int(raw) > limit:
+                if request.url.path.startswith("/api/"):
+                    return JSONResponse(
+                        api_errors.error_body(
+                            "payload_too_large",
+                            f"上传体积超过上限（单文件 {settings.max_upload_mb} MB）",
+                        ),
+                        status_code=413,
+                    )
                 return render(
                     request,
                     "error.html",
@@ -254,6 +262,9 @@ def create_app() -> FastAPI:
             return await call_next(request)
 
         path = request.url.path
+        # JSON API 自己用 Bearer 鉴权；不套 cookie 会话，也不跳登录页。
+        if path.startswith("/api/"):
+            return await call_next(request)
         if path in auth_mod.PUBLIC_PATHS or path.startswith("/static/"):
             return await call_next(request)
 
@@ -355,37 +366,15 @@ def create_app() -> FastAPI:
     ):
         if not csrf_mod.accepted(request, csrf):
             return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
-        job_id = new_id("job")
-        job_dir = settings.inputs_dir / job_id
-        try:
-            order_display = receive_upload(
-                raw_csv, "原始订单 CSV", storage.ORDER_SUFFIX, job_dir / storage.ORDER_NAME
-            )
-        except ValueError as exc:
-            return render(request, "error.html", {"message": str(exc)}, status_code=400)
-        except storage.UploadTooLarge as exc:
-            storage.remove_job_dirs(settings.inputs_dir, settings.work_dir, job_id)
-            return render(request, "error.html", {"message": str(exc)}, status_code=413)
-
         user = getattr(request.state, "user", None) or {}
         default_actor = user.get("display_name") if settings.auth_enabled else ""
-        repo.create_job(
-            job_id=job_id,
-            job_type="stock_check",
-            created_by=(actor.strip() or default_actor or "web-user"),
-            # 提交即冻结：这份快照写进任务，之后改设置不影响已出的结果。
-            # 用 parse_sku_list 而不是 split(",")：页面写着「逗号或换行分隔」，
-            # 只按逗号切会把多行输入当成一个 SKU，缺货行就静默漏掉了。
-            no_stock=",".join(parse_sku_list(no_stock)),
-            no_stock_note=None,
-            validate_only=False,
-            allow_unmatched=False,
-            input_packslip="",
-            input_order=order_display,
-            pipeline_version=settings.pipeline_version,
-        )
-        register_inputs(job_id, {storage.ORDER_NAME: order_display})
-        enqueue_or_fail(job_id)
+        try:
+            job_id = jobs_service.create_stock_check_job(
+                settings, repo, raw_csv, (actor.strip() or default_actor or "web-user"),
+                no_stock, enqueue_or_fail,
+            )
+        except jobs_service.JobServiceError as exc:
+            return render(request, "error.html", {"message": exc.message}, status_code=exc.status_code)
         return RedirectResponse(url(f"/jobs/{job_id}"), status_code=303)
 
     @app.get("/settings", response_class=HTMLResponse)
@@ -424,53 +413,24 @@ def create_app() -> FastAPI:
         actor: str = Form(""),
         no_stock: str = Form(""),
         no_stock_note: str = Form(""),
+        reorder: str = Form(""),
         validate_only: str = Form(""),
         allow_unmatched: str = Form(""),
         csrf: str = Form(""),
     ):
         if not csrf_mod.accepted(request, csrf):
             return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
-        job_id = new_id("job")
-        job_dir = settings.inputs_dir / job_id
-        try:
-            # 返回值是用户原始文件名，只落库供页面展示；
-            # 磁盘上一律用 storage 的固定名，避免用用户文件名做路径。
-            packslip_display = storage.validate_upload_name(
-                packslip.filename, "Packslip PDF", storage.PACKSLIP_SUFFIX
-            )
-            order_display = storage.validate_upload_name(
-                order_csv.filename, "订单 CSV", storage.ORDER_SUFFIX
-            )
-        except ValueError as exc:
-            return render(request, "error.html", {"message": str(exc)}, status_code=400)
-
-        try:
-            receive_upload(packslip, "Packslip PDF", storage.PACKSLIP_SUFFIX, job_dir / storage.PACKSLIP_NAME)
-            receive_upload(order_csv, "订单 CSV", storage.ORDER_SUFFIX, job_dir / storage.ORDER_NAME)
-        except storage.UploadTooLarge as exc:
-            storage.remove_job_dirs(settings.inputs_dir, settings.work_dir, job_id)
-            return render(request, "error.html", {"message": str(exc)}, status_code=413)
-
         user = getattr(request.state, "user", None) or {}
         default_actor = user.get("display_name") if settings.auth_enabled else ""
-        repo.create_job(
-            job_id=job_id,
-            job_type="fulfillment",
-            created_by=(actor.strip() or default_actor or "web-user"),
-            # 同 /checks/new：页面写的是「逗号或换行分隔」，多行输入要能分开
-            no_stock=",".join(parse_sku_list(no_stock)),
-            no_stock_note=no_stock_note.strip() or None,
-            validate_only=bool(validate_only),
-            allow_unmatched=bool(allow_unmatched),
-            input_packslip=packslip_display,
-            input_order=order_display,
-            pipeline_version=settings.pipeline_version,
-        )
-        register_inputs(
-            job_id,
-            {storage.PACKSLIP_NAME: packslip_display, storage.ORDER_NAME: order_display},
-        )
-        enqueue_or_fail(job_id)
+        try:
+            job_id, _ = jobs_service.create_fulfillment_job(
+                settings, repo, order_csv, packslip,
+                (actor.strip() or default_actor or "web-user"),
+                no_stock, no_stock_note, bool(validate_only), bool(allow_unmatched),
+                reorder, {}, enqueue_or_fail,
+            )
+        except jobs_service.JobServiceError as exc:
+            return render(request, "error.html", {"message": exc.message}, status_code=exc.status_code)
         return RedirectResponse(url(f"/jobs/{job_id}"), status_code=303)
 
     # ---------- 从库存预检继续出件（不再传 checked CSV）----------
@@ -509,64 +469,20 @@ def create_app() -> FastAPI:
         job_id: str,
         packslip: UploadFile,
         actor: str = Form(""),
+        reorder: str = Form(""),
         csrf: str = Form(""),
     ):
         if not csrf_mod.accepted(request, csrf):
             return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
-        source = repo.get_job(job_id)
-        if source is None or source["job_type"] != "stock_check":
-            return render(request, "error.html", {"message": "这不是一个库存预检任务"}, status_code=404)
-
-        checked = checked_artifact(job_id) if source["status"] == "succeeded" else None
-        if checked is None:
-            return render(
-                request,
-                "error.html",
-                {"message": "来源任务的 checked CSV 不可用（任务未成功或已被清理），请先重新跑一次库存预检。"},
-                status_code=409,
-            )
-        try:
-            checked_path = storage.resolve_artifact_path(settings.artifacts_dir, checked["rel_path"])
-        except storage.StoredPathError as exc:
-            return render(request, "error.html", {"message": str(exc)}, status_code=409)
-
-        new_job_id = new_id("job")
-        new_dir = settings.inputs_dir / new_job_id
-        try:
-            packslip_display = receive_upload(
-                packslip, "Packslip PDF", storage.PACKSLIP_SUFFIX, new_dir / storage.PACKSLIP_NAME
-            )
-        except ValueError as exc:
-            return render(request, "error.html", {"message": str(exc)}, status_code=400)
-        except storage.UploadTooLarge as exc:
-            storage.remove_job_dirs(settings.inputs_dir, settings.work_dir, new_job_id)
-            return render(request, "error.html", {"message": str(exc)}, status_code=413)
-
-        # 把上一次生成的 checked CSV 直接落成这次出件的 order.csv：
-        # 出件范围与预检结果严格一致，人也少传一遍文件。
-        storage.link_or_copy(checked_path, new_dir / storage.ORDER_NAME)
-
         user = getattr(request.state, "user", None) or {}
         default_actor = user.get("display_name") if settings.auth_enabled else ""
-        repo.create_job(
-            job_id=new_job_id,
-            job_type="fulfillment",
-            created_by=(actor.strip() or default_actor or "web-user"),
-            # checked CSV 已经剔过缺货明细，这里不再做无货拆分（留空）
-            no_stock="",
-            no_stock_note=None,
-            validate_only=False,
-            allow_unmatched=False,
-            input_packslip=packslip_display,
-            input_order=checked["download_name"],
-            pipeline_version=settings.pipeline_version,
-            source_job_id=job_id,
-        )
-        register_inputs(
-            new_job_id,
-            {storage.PACKSLIP_NAME: packslip_display, storage.ORDER_NAME: checked["download_name"]},
-        )
-        enqueue_or_fail(new_job_id)
+        try:
+            new_job_id, _ = jobs_service.create_fulfillment_from_check(
+                settings, repo, job_id, packslip,
+                (actor.strip() or default_actor or "web-user"), reorder, {}, enqueue_or_fail,
+            )
+        except jobs_service.JobServiceError as exc:
+            return render(request, "error.html", {"message": exc.message}, status_code=exc.status_code)
         return RedirectResponse(url(f"/jobs/{new_job_id}"), status_code=303)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
@@ -595,38 +511,10 @@ def create_app() -> FastAPI:
     async def retry_job(request: Request, job_id: str, csrf: str = Form("")):
         if not csrf_mod.accepted(request, csrf):
             return render(request, "error.html", {"message": "页面已过期，请刷新后重试"}, status_code=403)
-        old = repo.get_job(job_id)
-        if old is None:
-            raise HTTPException(status_code=404, detail="任务不存在")
-        src_dir = settings.inputs_dir / job_id
-        if not src_dir.is_dir():
-            return render(
-                request,
-                "error.html",
-                {"message": "原任务的输入文件已被清理，请重新上传。"},
-                status_code=409,
-            )
-
-        new_job_id = new_id("job")
-        storage.clone_inputs(src_dir, settings.inputs_dir / new_job_id)
-        repo.create_job(
-            job_id=new_job_id,
-            job_type=old["job_type"] or "fulfillment",
-            created_by=old["created_by"],
-            no_stock=old["no_stock"],
-            no_stock_note=old["no_stock_note"],
-            validate_only=old["validate_only"],
-            allow_unmatched=old["allow_unmatched"],
-            input_packslip=old["input_packslip"],
-            input_order=old["input_order"],
-            pipeline_version=settings.pipeline_version,
-            source_job_id=job_id,
-        )
-        register_inputs(
-            new_job_id,
-            {storage.PACKSLIP_NAME: old["input_packslip"], storage.ORDER_NAME: old["input_order"]},
-        )
-        enqueue_or_fail(new_job_id)
+        try:
+            new_job_id = jobs_service.retry_job(settings, repo, job_id, enqueue_or_fail)
+        except jobs_service.JobServiceError as exc:
+            return render(request, "error.html", {"message": exc.message}, status_code=exc.status_code)
         return RedirectResponse(url(f"/jobs/{new_job_id}"), status_code=303)
 
     @app.get("/artifacts/{artifact_id}/download")

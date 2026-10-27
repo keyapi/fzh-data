@@ -148,3 +148,16 @@ def client(pb_env, monkeypatch):
         c.repo = Repository(get_settings().db_path)
         c.settings = get_settings()
         yield c
+
+
+@pytest.fixture
+def api_key(client):
+    """带全部 scope 的 API Key（明文只在返回里出现一次）。"""
+    return client.repo.create_api_key("test-agent", "check,fulfill,read", "pytest")
+
+
+@pytest.fixture
+def api_client(client, api_key):
+    """所有 /api/v1 请求自动带 `Authorization: Bearer sk-...`。"""
+    client.headers.update({"Authorization": f"Bearer {api_key['key']}"})
+    return client

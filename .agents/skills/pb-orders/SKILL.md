@@ -72,6 +72,38 @@ uv run python run_pb_orders.py --dir "<批次目录>"                           
 
 到货后按 Notion 记录重发，变化同样回写 Notion。
 
+### C. 用 API 而不是点页面（Agent 首选）
+
+网页与 JSON API 共用 `web/jobs_service.py`，同一 job 模型 / 产物 / 审计。
+Agent 做「检查 → 出件」优先走 `/api/v1`，不要用浏览器自动化。
+
+```bash
+BASE=https://api.vilavi.cn/pb
+H="Authorization: Bearer $PB_ORDERS_API_KEY"
+
+# 1) 库存预检（上传 SPS New 订单 csv）
+curl -sS -X POST "$BASE/api/v1/checks" -H "$H" \
+  -F "raw_csv=@新订单.csv" -F "no_stock=SKU-1,SKU-2"
+
+# 2) 轮询状态 / 取产物
+curl -sS "$BASE/api/v1/jobs/<job_id>" -H "$H"
+curl -sS -OJ "$BASE/api/v1/artifacts/<artifact_id>/download" -H "$H"
+
+# 3) 继续出件（只传 Packslip PDF；补发时带 reorder）
+curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
+  -F "packslip=@Packslip 美中 xN.pdf" -F "reorder=137924672,137940567"
+
+# 或一次到位：POST /api/v1/jobs（order_csv + packslip）
+```
+
+- scope：`check` / `fulfill` / `read`；建 Key 见 `AGENT_HANDOFF.md` §4.5。
+- 同输入重复 POST 会被去重（响应带 `deduplicated: true`）；要重跑用
+  `POST /api/v1/jobs/{id}/retry`。
+- 网络错误可安全重试：带 `Idempotency-Key`，同 key 同输入会重放原响应。
+- 补发 `-N` 由服务端登记分配（`order_number_usage`），**不要手改 CSV**；
+  冲突返回 `409 reorder_conflict`（换后缀或先查已用号）。
+- OpenAPI：`https://api.vilavi.cn/pb/api/docs`。
+
 ## 铁律
 
 - **`Vendor Style` 大小写不敏感**（`CEN961NLinen-SageGreen-138` ≡ 大写形态）；对齐时统一 `upper()`。

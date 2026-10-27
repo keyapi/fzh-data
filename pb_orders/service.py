@@ -226,6 +226,7 @@ def run_job(
         ) from exc
     no_stock_skus = [s for s in options.no_stock if str(s).strip()]
     importable, no_stock = pb_tongtu_excel.split_no_stock(df_order, no_stock_skus)
+    order_numbers = sorted({str(x) for x in df_order[pb_tongtu_excel.COL_PO].dropna().unique()})
 
     # ---------- 1:1 硬校验（对全量订单行；无货拆分是之后的事）----------
     if len(df_pdf) != len(df_order):
@@ -297,6 +298,7 @@ def run_job(
             "rows": len(df_order), "columns": int(df_order.shape[1]),
             "importable": len(importable), "no_stock_rows": len(no_stock),
         },
+        "order_numbers": order_numbers,
         # 重复建单加后缀：applied 是 {PO: "-N"}；history_files 是扫过的历史导入文件数
         "reorder": {
             "applied": dict(sorted(reorder_suffixes.items())),

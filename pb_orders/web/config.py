@@ -41,6 +41,14 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    try:
+        return float(raw) if raw else default
+    except ValueError:
+        return default
+
+
 def _pipeline_version() -> str:
     env = os.environ.get("PB_ORDERS_PIPELINE_VERSION", "").strip()
     if env:
@@ -94,6 +102,15 @@ class Settings:
     session_secret: str = field(default_factory=lambda: os.environ.get("PB_ORDERS_SESSION_SECRET", ""))
     # 允许登录的钉钉用户（显示名或 sub，逗号分隔）。留空 = 任何钉钉用户都能进（会告警）。
     allowed_users: tuple[str, ...] = field(default_factory=lambda: _env_csv("PB_ORDERS_ALLOWED_USERS"))
+    # JSON API：机器用 sk- Key；OIDC 用户 token 走 /userinfo 校验。
+    api_key_rate_limit_rps: float = field(default_factory=lambda: _env_float("PB_ORDERS_API_KEY_RPS", 5.0))
+    oidc_api_scopes: tuple[str, ...] = field(
+        default_factory=lambda: _env_csv("PB_ORDERS_OIDC_API_SCOPES") or ("check", "fulfill", "read")
+    )
+    dedupe_minutes: int = field(default_factory=lambda: _env_int("PB_ORDERS_DEDUPE_MINUTES", 1440))
+    idempotency_ttl_minutes: int = field(
+        default_factory=lambda: _env_int("PB_ORDERS_IDEMPOTENCY_TTL_MINUTES", 1440)
+    )
 
     @property
     def auth_enabled(self) -> bool:

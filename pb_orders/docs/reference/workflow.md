@@ -440,5 +440,20 @@ uv run python run_pb_orders.py --dir "...\20261030" --reorder 137974027=-3
 - 结果进 `report["reorder"] = {"applied": {PO: "-N"}, "history_files": N}`，CLI 打印一行 `[重复建单]`。
 
 > 实现：`pb_tongtu_excel.parse_reorder_spec` / `scan_used_order_numbers` / `next_reorder_suffixes`，
-> 经 `service.JobOptions.reorder` / `history_dirs` 透传。**只做本地** —— 网页服务器上没有历史
-> 导入文件，网页表单/worker **不接**这条链路（要接得先解决"服务器上没有历史"的问题）。
+> 经 `service.JobOptions.reorder` / `history_dirs` 透传。
+
+### 网页 / API：服务器侧登记（2026-10 起）
+
+服务器上没有历史导入 xlsx，所以网页与 JSON API 改用**数据库登记**，不再靠扫文件：
+
+- 表 `order_number_usage(full_number PK, po_base, job_id, source, created_at)` 记录历次
+  写进通途 xlsx 的完整订单号（`Repository.record_full_numbers`）。
+- API 建任务时接受 `reorder=PO[,PO=-N]`（CLI 兼容）或 `reorder_map={"PO":"-N"}`；
+  `jobs_service.prepare_reorder` 在 `BEGIN IMMEDIATE` 事务里算「该 PO 已用最大 `-N` + 1」
+  并**预留**，重复占用返回 `409 reorder_conflict`。
+- worker 成功后把 `report["order_numbers"]` 写回登记表；失败时**保留预留**：
+  号会跳过，但不会重复（宁可缺号，不可重号）。
+- 网页「重复建单」输入走同一函数（`jobs_service`），页面与 API 行为一致。
+- 一次性对齐：可用 `Repository.record_full_numbers` 把既有 `PB_*导入*.xlsx` 的
+  `PO Number` 回填进表；未回填的 PO 第一次自动分配可能给出已用过的 `-2`。
+- 判重口径：登记的是**完整订单号**（含 `-N`），`po_base` 只是索引；裸号也算占用一次。

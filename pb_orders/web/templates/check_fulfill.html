@@ -35,6 +35,15 @@
     </label>
 
     <label>
+      重复建单号（可选）
+      <input type="text" name="reorder" placeholder="137924672,137940567=-2">
+      <small>
+        通途已建过单的 PO 要补发时填这里：只写 PO 自动分配 <code>-N</code>；写
+        <code>PO=-2</code> 用指定后缀。留空 = 不加后缀。
+      </small>
+    </label>
+
+    <label>
       操作者
       <input type="text" name="actor" value="{{ user.display_name if auth_enabled and user else 'web-user' }}">
     </label>

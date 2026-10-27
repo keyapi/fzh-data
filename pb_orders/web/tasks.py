@@ -10,6 +10,7 @@ worker 只接收 job id，其它信息（输入路径、选项）都从数据库
 
 from __future__ import annotations
 
+import logging
 import shutil
 import sys
 import traceback
@@ -25,6 +26,8 @@ from web import housekeeping  # noqa: E402
 from web import storage  # noqa: E402
 from web.config import get_settings  # noqa: E402
 from web.repository import Repository  # noqa: E402
+
+log = logging.getLogger("pb_orders.web")
 
 _CACHE_HINT = (
     "出件只读本地 SKU 名称缓存。请管理员先把 us_sku_name_cache.csv "
@@ -75,6 +78,9 @@ def _run_fulfillment(repo, job, settings, job_id, in_dir, work_dir):
         # 磁盘名固定是 order.csv，拿它命名产物会变成 `..._order_on_...`；
         # 用页面上的原始文件名词干，产物才对得上批次。
         csv_stem=Path(job["input_order"] or "").stem,
+        # 重复建单后缀：API 传 `PO=-N`，自动分配在 jobs_service 里已预留号段，
+        # 显式后缀直接落进 xlsx。失败时预留保留，号不重用。
+        reorder=job.get("reorder_list") or [],
     )
     result = service.run_job(
         # 磁盘名固定（见 storage 约定）。jobs.input_packslip/input_order
@@ -85,6 +91,11 @@ def _run_fulfillment(repo, job, settings, job_id, in_dir, work_dir):
         output_dir=work_dir,
         progress=lambda step, msg: repo.set_progress(job_id, step, msg),
     )
+    # 成功产出后登记「通途里已经用过的完整订单号」，供下一次自动分配后缀。
+    try:
+        repo.record_full_numbers(result.report.get("order_numbers") or [], job_id)
+    except Exception:  # noqa: BLE001 - 登记号段失败不应推翻已成功的出件
+        log.exception("登记通途订单号失败 job=%s", job_id)
     return result.report, result.artifacts
 
 
