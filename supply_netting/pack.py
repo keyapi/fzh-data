@@ -285,6 +285,9 @@ def main(argv=None) -> int:
     parser.add_argument("--blocked", default=None, help="demand_blocked.parquet（需求侧未映射清单）")
     parser.add_argument("--so-rows", default=None,
                         help="EN 开放 SO 行级 JSONL（status != Closed；工厂交付管线，不并入海外仓可用）")
+    parser.add_argument("--w1-cache", default=None,
+                        help="W1 supply_facts 逐 SO 缓存 JSONL（key_test.supply_facts）")
+    parser.add_argument("--w1-manifest", default=None, help="W1 拉取 manifest.json")
     parser.add_argument("--so-closed-rows", default=None,
                         help="EN status=Closed 且未交付的 SO 行级 JSONL（单列留档，不作为开放供给）")
     parser.add_argument("--out", required=True)
@@ -370,6 +373,34 @@ def main(argv=None) -> int:
     for column in ("so_pipeline_qty", "so_overdue_qty"):
         if column not in pack.columns:
             pack[column] = None
+    # W1 阶段事实 → 动作列（不改 recommendation）
+    w1_meta = None
+    if args.w1_cache:
+        from .w1_stages import apply_actions, load_w1_stages
+        stages = load_w1_stages(args.w1_cache)
+        so_branch = {str(r.so): r.branch_warehouse for r in so_frame.itertuples(index=False)}             if len(so_frame) else {}
+        if so_branch:
+            stages = stages.assign(
+                canonical_sku=[__import__("supply_netting.so_backlog", fromlist=["finished_item"])
+                               .finished_item(code)[0] for code in stages["item_code"]]
+            )
+            stages["canonical_warehouse"] = stages["so"].map(lambda so: so_branch.get(str(so)))
+        pack = apply_actions(pack, stages)
+        action_counts = pack["action"].value_counts().to_dict()
+        w1_meta = {
+            "cache": str(args.w1_cache),
+            "stage_rows_evaluated": int(len(stages)),
+            "sources_mapped_sos": int(len(so_branch)),
+            "actions": action_counts,
+            "action_confidence": pack["action_confidence"].value_counts().to_dict(),
+            "rule": "gap>0 时按 完工待发运>在产>未排产>条件量 优先级给出动作；否则不需补",
+        }
+        if args.w1_manifest:
+            fetch = json.loads(Path(args.w1_manifest).read_text(encoding="utf-8"))
+            w1_meta.update({k: fetch.get(k) for k in
+                            ("fetched_at", "requested", "succeeded", "failed", "failures",
+                             "rule_versions", "as_of_values", "partial_values", "stage_rows")})
+
     pack["layer_1_overseas"] = "现货 + 在途（当前可用 / 条件）"
     pack["layer_2_po"] = "通途 PO 开放量（无 ETA，条件态）"
     pack["layer_3_so_pipeline"] = "工厂 SO 管线（工厂交付日 + 假设提前期；不计入海外可用）"
@@ -421,6 +452,7 @@ def main(argv=None) -> int:
         decision_pack_recommendations=pack["recommendation"].value_counts().to_dict(),
         so_backlog=so_summary,
         closed_so_undelivered=closed_summary,
+        w1_stage_facts=w1_meta,
         layers=layers.to_dict("records"),
         run_manifest=dict(run_id=manifest.get("run_id"), as_of=manifest.get("as_of"),
                           partial=manifest.get("partial")),
