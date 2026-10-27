@@ -336,6 +336,7 @@ channel: docs/jack-w1-channel
 - 审核整改（2026-10-27 第一轮）：行级权限按 `get_list` 可读集合取数；出库单位不一致不归一；退货按 `return_against` 抵扣；取消订单保留实物片段；片段 ID 加订单行前缀；manifest 相对路径、`observed_at`/`as_of` 分离、200 页上限标 `truncated`、显式 `external_sources`。
 - 审核整改（2026-10-27 第二轮）：可售片段继承阶段单位；退货不再生成「待出库」供给；受限来源（含行级）无法判断的阶段置 unknown；历史 `as_of` 服务端拒绝；批次合并 `restricted` 按 OR、`sources` 按 AND、外部来源保守保留 `not_integrated`；空结果保留 `empty_reason`/`partial=true`。
 - 审核整改（2026-10-27 第三轮）：在产按 `min(Σ工单量, 订单量)` 覆盖量分配，超出覆盖进未计划；退货缺口先记 unknown 再分配，不再制造虚假在产；milestones/links 与阶段余额统一单位校验（缺失/不一致不归一、工单单位不一致→unknown）；片段 ID 加仓库+DN 明细行身份并保留实际出库仓库；全部授权过滤时 `empty_reason=all_restricted`。`RULE_VERSION=2026-10-27.2`。
+- 第三轮测试站验收（2026-10-27，key_test `8d8f5d7`，用户已重启 bench）：服务端 83 项 supply unittest OK；单 SO `SO-26-00026` → 3 行 / 9 余额 / 16 里程碑 / 7 片段 / 17 关联（守恒 10/5/8，查询 0.92s）；全范围 292 行 → 310 余额 / 656 里程碑 / 289 片段 / 404 关联（0.56s，`exhausted`）；片段 ID 全局无重复，非取消行全部守恒，`rule_version=2026-10-27.2`。
 - 9 SKU：生产只读解析出 99 张 SO；测试站无该样本（0 张），生产未部署新模块（本任务不授权生产部署），**待授权后验收**。
 - 边界：到仓/上架无 EN 证据 → `delivered_sellable` 不产出、`eligible=false`；多运单不摊量；无独立承诺字段；时区未证；PO/入库/预留/新鲜度未并入 EN 事实。
 - 生产未部署；#314 仍 open，由 #318 接管。PR 评论只发本段短指针。
