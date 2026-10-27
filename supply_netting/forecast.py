@@ -60,6 +60,9 @@ class ForecastInput:
     lead_days: int
     window_start: str | None = None
     window_end: str | None = None
+    # #2：只有「传入了预期哈希且实际匹配」才算 pinned；没 pin 就不许声称已验证。
+    manifest_pinned: bool = False
+    pinned_sha256: str | None = None
     rows: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
@@ -75,6 +78,18 @@ def _declared_output(manifest: dict, filename: str) -> dict:
     if len(matches) > 1:
         raise ForecastContractError(f"预测 manifest 重复声明输出 {filename}（{len(matches)} 条）")
     return matches[0]
+
+
+def _declared_rows(declared: dict, filename: str) -> int:
+    """上游必须显式声明正整数行数；缺失/null/bool/小数/字符串一律契约错误。"""
+    raw = declared.get("rows")
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ForecastContractError(
+            f"预测 manifest 未声明有效整数行数：{filename} rows={raw!r}")
+    if raw <= 0:
+        raise ForecastContractError(
+            f"预测 manifest 行数必须是正整数：{filename} rows={raw}")
+    return raw
 
 
 def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
@@ -121,10 +136,11 @@ def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
     missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
     if missing:
         raise ForecastContractError(f"预测窗口表缺列：{missing}")
+    declared_rows = _declared_rows(declared, windows_path.name)
     total_rows = int(len(frame))
-    if declared.get("rows") is not None and int(declared["rows"]) != total_rows:
+    if declared_rows != total_rows:
         raise ForecastContractError(
-            f"预测窗口文件行数不符：实测 {total_rows}，上游声明 {declared['rows']}")
+            f"预测窗口文件行数不符：实测 {total_rows}，上游声明 {declared_rows}")
     frame = frame[frame["lead_days"] == lead_days].copy()
     if frame.empty:
         raise ForecastContractError(f"预测窗口表没有 lead_days={lead_days} 的行")
@@ -137,6 +153,9 @@ def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
         decision_date=run_meta.get("decision_date"),
         data_cutoff=run_meta.get("data_cutoff"),
         lead_days=lead_days,
+        manifest_pinned=bool(expected_manifest_sha256),
+        pinned_sha256=(expected_manifest_sha256.strip().lower()
+                       if expected_manifest_sha256 else None),
         window_start=str(frame["window_start"].min()),
         window_end=str(frame["window_end"].max()),
         rows=frame,
@@ -260,7 +279,11 @@ def forecast_demand_rows(forecast: ForecastInput, sku_map: pd.DataFrame, *,
         windows_path=str(forecast.windows_path),
         windows_sha256=forecast.windows_sha256,
         windows_sha256_verified=True,
-        manifest_sha256_verified=True,
+        # #2：没传 pin 时只记录了「当前文件哈希」，不能冒充已与外部期望核验
+        manifest_sha256_verified=bool(forecast.manifest_pinned),
+        manifest_sha256_pinned=forecast.pinned_sha256,
+        manifest_sha256_verification=(
+            "pinned_match" if forecast.manifest_pinned else "unpinned"),
         decision_date=forecast.decision_date,
         data_cutoff=forecast.data_cutoff,
         lead_days=forecast.lead_days,

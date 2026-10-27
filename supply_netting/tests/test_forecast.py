@@ -40,7 +40,7 @@ def window(**changes):
 
 class ForecastFixture(unittest.TestCase):
     def build(self, rows, run_id="forecast-test", expected=None, *, declared=None,
-              declared_rows=None, manifest_sha=None, outputs=None):
+              declared_rows=None, outputs=None, pin=True, pin_sha=None, drop_rows=False, rows_null=False):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name) / "forecast"
@@ -52,9 +52,15 @@ class ForecastFixture(unittest.TestCase):
         import hashlib
         actual_sha = hashlib.sha256(windows.read_bytes()).hexdigest()
         if outputs is None:
-            outputs = [dict(file=windows.name,
-                            rows=declared_rows if declared_rows is not None else len(rows),
-                            sha256=declared if declared is not None else actual_sha)]
+            entry = dict(file=windows.name,
+                         sha256=declared if declared is not None else actual_sha)
+            if drop_rows:
+                pass
+            elif rows_null:
+                entry["rows"] = None
+            else:
+                entry["rows"] = declared_rows if declared_rows is not None else len(rows)
+            outputs = [entry]
         manifest = {
             "schema_version": "en-demand-forecast-v1", "run_id": run_id,
             "generated_at": "2026-10-27T14:54:27+08:00",
@@ -65,8 +71,20 @@ class ForecastFixture(unittest.TestCase):
         (run_dir / "forecast_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         import hashlib as _h
         manifest_sha = _h.sha256((run_dir / "forecast_manifest.json").read_bytes()).hexdigest()
+        if pin_sha is not None:
+            expected_sha = pin_sha
+        elif pin:
+            expected_sha = manifest_sha
+        else:
+            expected_sha = None
         return load_forecast(root, expected_run_id=expected,
-                             expected_manifest_sha256=manifest_sha)
+                             expected_manifest_sha256=expected_sha)
+
+    def meta(self, forecast):
+        buckets = build_buckets(AS_OF, protect_days=3, weeks=2)
+        _, _, meta = forecast_demand_rows(
+            forecast, sku_map([("TT0000001", ["KS0001"])]), buckets=buckets, as_of=AS_OF)
+        return meta
 
 
 class ForecastTests(ForecastFixture):
@@ -98,6 +116,34 @@ class ForecastTests(ForecastFixture):
     def test_declared_row_count_mismatch_is_refused(self):
         with self.assertRaises(ForecastContractError):
             self.build([window()], declared_rows=999)
+
+    def test_missing_or_null_row_count_is_refused(self):
+        with self.assertRaises(ForecastContractError):   # 缺失
+            self.build([window()], drop_rows=True)
+        with self.assertRaises(ForecastContractError):   # null（哈希本身正确）
+            self.build([window()], rows_null=True)
+
+    def test_non_integer_row_count_is_refused(self):
+        for bad in (13554.75, "13554", True, -1, 0):
+            with self.assertRaises(ForecastContractError, msg=repr(bad)):
+                self.build([window()], declared_rows=bad)
+
+    def test_pin_state_is_recorded_truthfully(self):
+        pinned = self.build([window()], pin=True)
+        self.assertTrue(pinned.manifest_pinned)
+        self.assertEqual(self.meta(pinned)["manifest_sha256_verified"], True)
+        self.assertEqual(self.meta(pinned)["manifest_sha256_verification"], "pinned_match")
+
+        unpinned = self.build([window()], pin=False)
+        self.assertFalse(unpinned.manifest_pinned)
+        meta = self.meta(unpinned)
+        self.assertEqual(meta["manifest_sha256_verified"], False)
+        self.assertEqual(meta["manifest_sha256_verification"], "unpinned")
+        self.assertIsNone(meta["manifest_sha256_pinned"])
+
+    def test_wrong_pin_is_refused(self):
+        with self.assertRaises(ForecastContractError):
+            self.build([window()], pin_sha="0" * 64)
 
     def test_window_is_spread_over_buckets_by_days(self):
         forecast = self.build([window()])
