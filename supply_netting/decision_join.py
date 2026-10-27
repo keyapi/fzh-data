@@ -28,7 +28,22 @@ import pandas as pd
 JOIN_KEY = ["canonical_sku", "canonical_warehouse", "canonical_uom"]
 ACTION_COLUMNS = ["action", "action_confidence", "action_qty", "residual_gap", "action_basis",
                   "action_source_so", "action_source_wo", "action_applicability",
-                  "missing_evidence"]
+                  "missing_evidence", "action_gap", "action_gap_basis",
+                  "protect_gap_action_layer"]
+# 动作层参与重算的列：决定动作时用宽表 gap（视界末），不再用 pack 的 protect_gap
+PACK_INPUT_COLUMNS = ["action", "action_confidence", "action_basis", "action_source_so",
+                      "action_source_wo", "so_stage_produced_pending_dn",
+                      "so_stage_in_production", "so_stage_in_transit", "so_stage_not_planned",
+                      "so_stage_unknown_missing_start", "so_stage_unknown_other",
+                      "conditional_supply_qty", "w1_confidence", "protect_gap"]
+ACTION_GAP_BASIS = "horizon_end"
+ACTION_SHIP = "催发运"
+ACTION_PRODUCE = "催生产"
+ACTION_VERIFY_ARRIVAL = "核实到仓 ETA"
+ACTION_VERIFY_ETA = "核实 ETA"
+ACTION_BUY = "补单"
+REPLENISH_ACTIONS = (ACTION_SHIP, ACTION_PRODUCE, ACTION_VERIFY_ARRIVAL, ACTION_VERIFY_ETA,
+                     ACTION_BUY)
 
 # 待核的缺证分组：按宽表原有 destination_reason 归组（原列保持不变）
 MISSING_EVIDENCE_GROUPS = {
@@ -54,6 +69,66 @@ ACTION_PENDING = DEST_PENDING
 CONFLICT_NOTE = "口径冲突：宽表建议补货，动作层按历史缺口判无缺口；动作按动作层原值保留，需人工裁定"
 
 
+def _gap_of(row) -> float | None:
+    """动作缺口口径：视界末 qty_current，缺失时退回 gap_today（与宽表一致）。"""
+    for column in ("qty_current", "gap_today"):
+        value = row.get(column)
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _missing_group(row) -> str:
+    """待核缺证分组；「仅库存」里没有库存基准的行单独成「无预测且无库存」。"""
+    reason = str(row.get("destination_reason") or "")
+    group = MISSING_EVIDENCE_GROUPS.get(reason, "unclassified_no_supply_evidence")
+    if group == "stock_only_no_demand":
+        opening = row.get("opening")
+        lower = row.get("opening_lower_bound")
+        if (opening is None or (isinstance(opening, float) and pd.isna(opening))) and \
+                (lower is None or (isinstance(lower, float) and pd.isna(lower))):
+            return "no_forecast_no_stock"
+    return group
+
+
+def _confidence_of(row) -> str:
+    hint = str(row.get("w1_confidence") or "")
+    return hint if hint in ("measured", "estimated", "unknown") else "unknown"
+
+
+def _replenish_action(row, gap: float | None) -> tuple[str, float, str, str]:
+    """按视界末 gap 选动作：全覆盖优先，同覆盖按 完工→在产→在途→条件量→补单。"""
+    gap_value = 0.0 if gap is None else max(0.0, float(gap))
+    produced = float(row.get("so_stage_produced_pending_dn") or 0)
+    in_prod = float(row.get("so_stage_in_production") or 0)
+    missing_start = float(row.get("so_stage_unknown_missing_start") or 0)
+    transit = float(row.get("so_stage_in_transit") or 0)
+    unknown_other = float(row.get("so_stage_unknown_other") or 0)
+    conditional = max(float(row.get("conditional_supply_qty") or 0),
+                      float(row.get("po_qty") or 0), float(row.get("intransit_qty") or 0))
+    candidates = [
+        (ACTION_SHIP, produced, "完工待发运"),
+        (ACTION_PRODUCE, in_prod + missing_start, "在产/工单已覆盖"),
+        (ACTION_VERIFY_ARRIVAL, transit, "在途"),
+        (ACTION_VERIFY_ETA, conditional, "在途/PO 条件量"),
+    ]
+    available = [c for c in candidates if c[1] > 0]
+    if not available:
+        return ACTION_BUY, 0.0, f"按视界末 gap {gap_value:g}：无阶段量/条件量 → 补单", _confidence_of(row)
+    full = [c for c in available if c[1] >= gap_value]
+    name, qty, label = full[0] if full else available[0]
+    covered = min(qty, gap_value)
+    basis = (f"按视界末 gap {gap_value:g} 选动作：{label} {qty:g}，覆盖 {covered:g}"
+             + ("" if covered >= gap_value else f"，剩余 {gap_value - covered:g} 仍需补单"))
+    if unknown_other:
+        basis += f"；另有阶段待核实 {unknown_other:g}（unknown，不作供给）"
+    return name, covered, basis, _confidence_of(row)
+
+
 def sha256_of(path: str | Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
@@ -69,28 +144,34 @@ def join_actions(wide: pd.DataFrame, pack: pd.DataFrame) -> tuple[pd.DataFrame, 
     if duplicates:
         raise ValueError(f"动作层 join 键重复 {duplicates} 行，拒绝带病 join")
 
-    merged = base.merge(pack[JOIN_KEY + [c for c in ACTION_COLUMNS if c in pack.columns]],
-                        on=JOIN_KEY, how="left", validate="one_to_one")
+    pack_columns = [c for c in PACK_INPUT_COLUMNS if c in pack.columns]
+    merged = base.merge(pack[JOIN_KEY + pack_columns],
+                        on=JOIN_KEY, how="left", validate="one_to_one", suffixes=("", "_pack"))
     if len(merged) != len(base):
         raise ValueError(f"join 后行数变化：{len(base)} → {len(merged)}")
 
     matched = merged["action"].notna() if "action" in merged.columns else pd.Series(False, index=merged.index)
     destination = merged["destination"].astype(str)
 
+    numeric_columns = ("action_qty", "residual_gap", "action_gap", "protect_gap_action_layer")
     for column in ACTION_COLUMNS:
         if column not in merged.columns:
-            merged[column] = ""
+            # 数值列必须是 float，否则写数字会撞 string dtype
+            merged[column] = ([float("nan")] * len(merged)) if column in numeric_columns else ""
 
     applicability, conflicts = [], 0
     for index, row in merged.iterrows():
         dest = str(row["destination"])
+        gap = _gap_of(row)
+        merged.at[index, "action_gap"] = gap
+        merged.at[index, "action_gap_basis"] = ACTION_GAP_BASIS
+        merged.at[index, "protect_gap_action_layer"] = row.get("protect_gap_pack")
         if dest == DEST_PENDING:
             applicability.append(NO_EVIDENCE)
-            merged.at[index, "missing_evidence"] = MISSING_EVIDENCE_GROUPS.get(
-                str(row.get("destination_reason") or ""), "unclassified_no_supply_evidence")
-            for column in ACTION_COLUMNS[:-1]:
-                # 数值列清成 NaN，文本列清成空串（直接写 "" 会撞 float dtype）
-                merged.at[index, column] = None if column in ("action_qty", "residual_gap") else ""
+            merged.at[index, "missing_evidence"] = _missing_group(row)
+            for column in ACTION_COLUMNS[:8]:
+                # 数值列清成 NaN，文本列清成空串
+                merged.at[index, column] = None if column in numeric_columns else ""
             continue
         applicability.append(HAS_EVIDENCE)
         merged.at[index, "missing_evidence"] = ""
@@ -104,11 +185,17 @@ def join_actions(wide: pd.DataFrame, pack: pd.DataFrame) -> tuple[pd.DataFrame, 
             merged.at[index, "action_qty"] = 0.0
             merged.at[index, "residual_gap"] = 0.0
             continue
-        # 建议补货：保留动作层原值；若动作层给“不需补”则标注冲突
-        if dest == DEST_REPLENISH and str(row.get("action")) == ACTION_NO_NEED:
-            conflicts += 1
-            basis = str(row.get("action_basis") or "")
-            merged.at[index, "action_basis"] = f"{basis}；{CONFLICT_NOTE}" if basis else CONFLICT_NOTE
+        # 建议补货：按宽表 gap（视界末）重算动作，保证落在 5 类动作之内
+        if dest == DEST_REPLENISH:
+            action, covered, basis, confidence = _replenish_action(row, gap)
+            if str(row.get("action")) == ACTION_NO_NEED:
+                conflicts += 1        # 记录“原动作层判无需补”的行数（用于证明已消除）
+                basis += "；原动作层按 7 天保护期判无缺口，本层改按视界末 gap 重算"
+            merged.at[index, "action"] = action
+            merged.at[index, "action_qty"] = covered
+            merged.at[index, "residual_gap"] = max(0.0, (gap or 0.0) - covered)
+            merged.at[index, "action_basis"] = basis
+            merged.at[index, "action_confidence"] = confidence
     merged["action_applicability"] = applicability
 
     stats = dict(
@@ -126,7 +213,16 @@ def join_actions(wide: pd.DataFrame, pack: pd.DataFrame) -> tuple[pd.DataFrame, 
         suggested_with_action=int(((destination == DEST_REPLENISH)
                                    & (merged["action"].astype(str) != "")).sum()),
         suggested_total=int((destination == DEST_REPLENISH).sum()),
-        destination_action_conflicts=int(conflicts),
+        # 终态冲突：宽表建议补货但动作不在 5 类之内（必须为 0）
+        destination_action_conflicts=int(((destination == DEST_REPLENISH)
+                                          & (~merged["action"].astype(str).isin(REPLENISH_ACTIONS))).sum()),
+        # 诊断：动作层原判“无需补”的行数（重算前），用于证明口径差已消除
+        legacy_action_layer_mismatches=int(conflicts),
+        replenish_action_values=sorted({str(a) for a, d in
+                                        zip(merged["action"], destination)
+                                        if d == DEST_REPLENISH}),
+        action_gap_basis=ACTION_GAP_BASIS,
+        action_gap_sources="qty_current（缺失时 gap_today），与宽表同口径；protect_gap 仅作附注",
         missing_evidence_counts=dict(
             {slug: 0 for slug in MISSING_EVIDENCE_GROUPS.values()},
             **{str(k): int(v) for k, v in
