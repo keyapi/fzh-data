@@ -143,14 +143,17 @@ def build(demand_path, keys_csv, *, eval_end=EVAL_END,
     stats["in_window_90"] = [tuple(r) in window_key_set for r in stats[KEY].values]
     # 资格只看「校准段有足够观测天数」，不用 10/29 的窗口结果筛选，避免选择偏差
     eligible = stats[stats["calib_days"] >= min_demand_days].copy()
-    eligible = eligible.sort_values("calib_qty", ascending=False)
-    total = float(eligible["calib_qty"].sum())
-    eligible["cum_share"] = eligible["calib_qty"].cumsum() / total if total else 0.0
-    eligible["abc"] = ["A" if s <= 0.80 else ("B" if s <= 0.95 else "C")
-                       for s in eligible["cum_share"]]
+    # ABC 分档必须在**同一 UOM 内部**做累计占比：个与套不能混在一起排（UOM-CANONICAL）
+    eligible = eligible.sort_values(["canonical_uom", "calib_qty"], ascending=[True, False])
+    unit_total = eligible.groupby("canonical_uom")["calib_qty"].transform("sum")
+    eligible["cum_share"] = (eligible.groupby("canonical_uom")["calib_qty"].cumsum()
+                             / unit_total).where(unit_total > 0, 0.0)
+    eligible["abc"] = ["A" if x <= 0.80 else ("B" if x <= 0.95 else "C")
+                       for x in eligible["cum_share"]]
 
     results = []
     calibration_short = 0
+    zero_eval_keys = 0
     for row in eligible.itertuples(index=False):
         key = (row.canonical_sku, row.canonical_warehouse, row.canonical_uom)
         values = global_series(demand, key, series_start, eval_end)
@@ -164,6 +167,7 @@ def build(demand_path, keys_csv, *, eval_end=EVAL_END,
         if len(calibration) < calibration_days:
             calibration_short += 1
         if float(values[score_start:].sum()) <= 0:
+            zero_eval_keys += 1     # 评估期零销量：无法评分，库存成本也不进合计
             continue
         seed_rate = float(np.mean(calibration)) if len(calibration) else 0.0
 
@@ -206,6 +210,12 @@ def build(demand_path, keys_csv, *, eval_end=EVAL_END,
         if len(by_key) else 0,
         calibration_days_target=calibration_days,
         calibration_short_keys=int(calibration_short),
+        zero_eval_sales_keys=int(zero_eval_keys),
+        excluded_from_inventory_cost=int(zero_eval_keys),
+        reconciliation=(f"{len(eligible)} 个合格键 − {zero_eval_keys} 个评估期零销量键 = "
+                        f"{len(by_key[['SKU', '仓库', '单位']].drop_duplicates()) if len(by_key) else 0}"
+                        " 个实际回放键；"
+                        "零销量键的库存成本未纳入任何合计"),
         min_demand_days=min_demand_days,
         eval_start=str(eval_start.date()),
         eval_end=str(eval_end.date()),
@@ -248,8 +258,11 @@ def summarise(by_key: pd.DataFrame) -> pd.DataFrame:
 
 def _write_report(path: Path, frontier: pd.DataFrame, window_frontier: pd.DataFrame,
                   coverage: dict, generated_at: str, args) -> None:
+    main_unit = frontier["单位"].iloc[0] if len(frontier) else "个"
+
     def row_of(lead, level, multiplier):
-        hit = frontier[(frontier["提前期天"] == lead) & (frontier["服务档"] == level)
+        hit = frontier[(frontier["单位"] == main_unit) & (frontier["提前期天"] == lead)
+                       & (frontier["服务档"] == level)
                        & (frontier["目标倍数"] == multiplier)]
         return hit.iloc[0] if len(hit) else None
 
@@ -290,15 +303,32 @@ def _write_report(path: Path, frontier: pd.DataFrame, window_frontier: pd.DataFr
         f"实际回放 **{coverage['replayed_keys']}**",
         "- 未通过资格的键历史太稀疏，逐日回放只会产出噪声，**不做、不硬造**。",
         "",
-        "## 敏感性网格（全部合格键，按提前期 × 服务档 × 目标倍数）",
+        "## 敏感性网格（按 UOM 分列；个与套不相加）",
         "",
-        "| 提前期 | 服务档 | 倍数 | fill_rate | 平均库存 | 库存增量(件) | 缺货量 | 缺货天数 |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|",
+        f"- 回放键数：**{coverage['replayed_keys']}**（{coverage['eligible_keys']} 个合格键 − "
+        f"{coverage.get('zero_eval_sales_keys', 0)} 个评估期零销量键）；",
+        f"- **这 {coverage.get('zero_eval_sales_keys', 0)} 个零销量键的库存成本未纳入任何合计**，"
+        "因此下表是「可评分键」的口径，不是全量库存；",
+        "- 套的量按**套当量**计（1 套 = 1 个套件单位，不折算成个）。",
+        "",
     ]
-    for _, row in frontier.iterrows():
-        lines.append(f"| {row['提前期天']} | {row['服务档']} | {row['目标倍数']} | "
-                     f"{row['fill_rate']} | {row['平均库存']:g} | "
-                     f"{row['库存增量_相对同档1.0倍']:g} | {row['缺货量']:g} | {row['缺货天数']} |")
+    for unit, group in frontier.groupby("单位", sort=True):
+        qty_label = "套当量" if unit == "套" else "件"
+        lines += [f"### 单位：{unit}", "",
+                  f"| 提前期 | 服务档 | 倍数 | fill_rate | 平均库存({qty_label}) | "
+                  f"库存增量({qty_label}) | 缺货量({qty_label}) | 缺货天数 |",
+                  "|---:|---:|---:|---:|---:|---:|---:|---:|"]
+        for _, row in group.iterrows():
+            lines.append(f"| {row['提前期天']} | {row['服务档']} | {row['目标倍数']} | "
+                         f"{row['fill_rate']} | {row['平均库存']:g} | "
+                         f"{row['库存增量_相对同档1.0倍']:g} | {row['缺货量']:g} | "
+                         f"{row['缺货天数']} |")
+        lines.append("")
+    lines += [
+        "> 只有 1 个键的单位（如 `套`）只是示意，不能据此定政策；",
+        "> 两个单位之间**任何合计都无效**（数量、库存、缺货都不跨单位相加）。",
+        "",
+    ]
     lines += ["", "## 撤回 v1 的结论", ""]
     example = []
     for lead in (60, 90, 120):
@@ -318,7 +348,7 @@ def _write_report(path: Path, frontier: pd.DataFrame, window_frontier: pd.DataFr
         "",
         "## 覆盖子表（仅 10-29 的 90 天窗口键）",
         "",
-        f"另出 `frontier_v2_sensitivity_window_keys.csv`（{len(window_frontier)} 行），"
+        f"另出 `frontier_v2_sensitivity_window_keys.csv`（{len(window_frontier)} 行，同样按单位分列），"
         "只用于和决策包对齐；主表不按窗口键筛选，避免选择偏差。",
         "",
         "## 复现",
