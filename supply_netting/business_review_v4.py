@@ -31,6 +31,10 @@ KEY = ["canonical_sku", "canonical_warehouse", "canonical_uom"]
 WINDOW_LABELS = {30: "30 天参考", 60: "60 天参考", 90: "90 天主窗口", 120: "120 天",
                  150: "150 天春节压力", 180: "180 天情景（仅情景，非采购量）"}
 ACTION_EVIDENCE_WINDOW = 180      # 阶段证据来自 h180 决策包（视界 189 天）
+DEFAULT_REVIEW_FILE = ("C:/Users/zhang/.agent-ops/fzh-data/reviews/"
+                       "business-workbook-v4-review-2026-10-28.md")
+DEFAULT_BOARD_ENTRY = ("D:/Work/赛狐/Cursor-claude/docs/research/supply-chain/2026-10-20/"
+                       "claude/control/PROJECT_BOARD.md")
 HEADER_FILL = PatternFill("solid", fgColor="DDEBF7")
 QTY_FORMAT = "0.000000"
 INT_FORMAT = "#,##0"
@@ -268,10 +272,8 @@ def build_workbook_v4(*, windows_csv, keys_csv, actions_parquet, so_audit_csv,
          "不证明能在缺口日期前到仓；同批去重仍未证"),
         ("R7 测试命令/结果", f"{test_command or 'uv run pytest supply_netting/tests -q'}"
                           f" → {test_result or '见提交记录'}"),
-        ("R7 独立复审文件", review_file or
-         "C:/Users/zhang/.agent-ops/fzh-data/reviews/business-workbook-v4-review-2026-10-28.md"),
-        ("R7 唯一看板入口", board_entry or
-         "D:/Work/赛狐/Cursor-claude/docs/research/supply-chain/2026-10-20/claude/control/PROJECT_BOARD.md"),
+        ("R7 独立复审文件", review_file or DEFAULT_REVIEW_FILE),
+        ("R7 唯一看板入口", board_entry or DEFAULT_BOARD_ENTRY),
         ("验收状态", acceptance_status),
         ("下一动作", "交复审；按窗口分别审，不合并成一张采购单")]
     version = pd.DataFrame(version_rows, columns=["项", "值"])
@@ -340,11 +342,12 @@ def build_workbook_v4(*, windows_csv, keys_csv, actions_parquet, so_audit_csv,
                               "sku-segment-policy-2026-10-28"],
             r6_boundary="核实到仓 ≠ 已证及时到仓",
             r7_tests=test_result or "见提交记录",
-            r7_review=review_file,
-            r7_board=board_entry,
+            r7_review=review_file or DEFAULT_REVIEW_FILE,
+            r7_board=board_entry or DEFAULT_BOARD_ENTRY,
         ),
         caveats=["窗口累计不可相加", "180 天仅情景", "待核不按 0", "14 天缓冲是条件政策",
                  "2.779 天需求未知", "SO 未进基线", "条件供给非可抵扣量"],
+        status="pending",
         acceptance_status=acceptance_status,
     )
     out_path.with_name(out_path.stem + ".manifest.json").write_text(

@@ -175,6 +175,10 @@ def test_version_page_has_r6_r7_evidence_entries(tmp_path):
     assert "reviews" in str(values["R7 独立复审文件"])
     assert "PROJECT_BOARD" in str(values["R7 唯一看板入口"])
     assert manifest["evidence_entries"]["r6_boundary"].startswith("核实到仓")
+    # manifest 的 R7 字段必须与工作簿同源，不得为 null
+    assert manifest["evidence_entries"]["r7_review"] == values["R7 独立复审文件"]
+    assert manifest["evidence_entries"]["r7_board"] == values["R7 唯一看板入口"]
+    assert manifest["status"] == "pending"
 
 
 def test_boundaries_separate_factory_so_from_backlog(tmp_path):
