@@ -17,6 +17,7 @@ updated: 2026-10-27
 | 旧 GS 407,898 行 + 10 月增量怎么拼 | [reference/consumer-interface.md](reference/consumer-interface.md) |
 | 规范 SKU×仓×UOM、净额资格、b08acc05 接口 | [reference/canonical-demand.md](reference/canonical-demand.md) |
 | 本次验收结果、数量对账、剩余阻塞 | [acceptance-report-2026-10-27.md](acceptance-report-2026-10-27.md) |
+| da4fa1e6 审核返修：子仓阻断/四列净额/快照身份 | [review-fix-da4fa1e6.md](review-fix-da4fa1e6.md) |
 | 变更时间线 | [log.md](log.md) |
 
 ## 产物路径（本地，不进 git）
