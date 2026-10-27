@@ -10,7 +10,8 @@ from pathlib import Path
 import pandas as pd
 
 from supply_netting.scripts.so_conditional_supply_v3 import (build_by_key, build_diff,
-                                                             build_tranches, resolve_uom)
+                                                             build_tranches, resolve_uom,
+                                                             summarize)
 
 AS_OF = "2026-10-27"
 
@@ -51,8 +52,9 @@ class V3FilterTests(unittest.TestCase):
              bal("shipped_in_transit", 10.0, record="DN-2", scope="external_fba")])
         self.assertEqual(sorted(tranches["stage"]), ["in_production", "shipped_in_transit"])
         self.assertEqual(tranches["candidate_qty"].sum(), 50.0)
-        self.assertEqual(excluded.get("first_op_basis"), 30.0)
-        self.assertEqual(excluded.get("excess:fba_external"), 10.0)
+        # 剔除量按「原因 → 来源单位标签 → 数量」记账，不再跨单位相加
+        self.assertEqual(excluded["first_op_basis"]["个"], 30.0)
+        self.assertEqual(excluded["excess:fba_external"]["个"], 10.0)
 
     def test_over_ship_excess_not_counted(self):
         tranches, _ = run([line(qty=50.0)],
@@ -105,7 +107,7 @@ class UomCanonicalTests(unittest.TestCase):
         unproven = tranches[~tranches["included"]]
         self.assertEqual(float(unproven["candidate_qty"].sum()), 30.0)
         self.assertTrue(unproven["uom"].isna().all())
-        self.assertEqual(excluded.get("uom_unproven"), 30.0)
+        self.assertEqual(excluded["uom_unproven"]["个"], 30.0)   # 只按来源标签记账
 
     def test_ge_and_tao_are_never_summed(self):
         tranches, _ = build_tranches(
@@ -183,3 +185,36 @@ class DiffTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DisclosureFixTests(unittest.TestCase):
+    """复审返修：不跨未知单位合计、FBA 超量按单位拆、报告不再自相矛盾。"""
+
+    def test_uom_unproven_is_not_totalled_across_units(self):
+        tranches, excluded = build_tranches(
+            [{"so": "SO-1", "payload": payload(
+                [line(qty=100.0)],
+                [bal("in_production", 40.0, record="WO-1", item="KS1"),
+                 bal("in_production", 30.0, record="WO-2", item="ND#KS1"),
+                 bal("in_production", 12.0, record="WO-3", item="ND#KS2")])}],
+            {"KS1": "个"})
+        labels = excluded["uom_unproven"]
+        self.assertEqual(sorted(labels), ["个"])      # 只有来源标签，没有求和
+        stats = summarize(tranches, build_by_key(tranches, None), excluded)
+        self.assertNotIn("uom_unproven_qty", stats)
+        self.assertEqual(stats["uom_unproven_rows"], 2)
+        self.assertIn("不是已证单位", stats["uom_unproven_note"])
+
+    def test_fba_excess_is_split_by_unit(self):
+        tranches, excluded = build_tranches(
+            [{"so": "SO-1", "payload": payload(
+                [line(qty=100.0)],
+                [bal("in_production", 40.0, record="WO-1", item="KS1"),
+                 bal("shipped_in_transit", 20.0, record="DN-1", scope="external_fba",
+                     uom="个"),
+                 bal("shipped_in_transit", 5.0, record="DN-2", scope="external_fba",
+                     uom="套")])}],
+            {"KS1": "个"})
+        fba = excluded.get("excess:fba_external") or {}
+        self.assertEqual(fba.get("个"), 20.0)
+        self.assertEqual(fba.get("套"), 5.0)

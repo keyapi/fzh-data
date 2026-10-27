@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from collections import Counter
 from datetime import date, datetime
@@ -61,8 +62,24 @@ def resolve_uom(item_code: str, canonical_sku: str, source_uom, uom_map: dict | 
     return (None, "unproven", False, "无 EN Item.stock_uom 证据")
 
 
+def sha256_of_path(path: str | Path) -> str:
+    """输入指纹；文件不存在或不是文件时返回 'missing'，不伪造哈希。"""
+    if path in (None, ""):
+        return "missing"
+    p = Path(path)
+    if not p.is_file():
+        return "missing"
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+
+
 def build_tranches(w1_rows: list[dict], uom_map: dict | None = None) -> tuple[pd.DataFrame, dict]:
-    records, excluded = [], Counter()
+    records, excluded = [], {}
+
+    def _exc(reason: str, qty: float, uom) -> None:
+        """剔除量按「原因 → 来源单位标签 → 数量」记账，**不产生跨单位合计**。"""
+        label = str(uom) if uom not in (None, "", "nan") else "未标注"
+        bucket = excluded.setdefault(reason, {})
+        bucket[label] = round(bucket.get(label, 0.0) + float(qty), 3)
     for row in w1_rows:
         payload = row["payload"]
         audit_date = date.fromisoformat(str(payload.get("as_of")))
@@ -84,13 +101,13 @@ def build_tranches(w1_rows: list[dict], uom_map: dict | None = None) -> tuple[pd
                       and stage in SUPPLY_STAGES)
             if not usable:
                 if basis == "job_card_first_op" and rec["attributable_qty"] > 0:
-                    excluded["first_op_basis"] += rec["attributable_qty"]
+                    _exc("first_op_basis", rec["attributable_qty"], balance.get("uom"))
                 elif scope != "in_house" and rec["attributable_qty"] > 0:
-                    excluded["fba_or_external"] += rec["attributable_qty"]
+                    _exc("fba_or_external", rec["attributable_qty"], balance.get("uom"))
                 elif rec["excess_qty"] > 0:
-                    excluded[f"excess:{rec['excess_class'] or 'unclassified'}"] += rec["excess_qty"]
+                    _exc(f"excess:{rec['excess_class'] or 'unclassified'}", rec["excess_qty"], balance.get("uom"))
                 elif qty_status != "known" and rec["attributable_qty"] > 0:
-                    excluded["qty_unproven"] += rec["attributable_qty"]
+                    _exc("qty_unproven", rec["attributable_qty"], balance.get("uom"))
                 continue
 
             dates = plan_dates(stage, audit_date, branch)
@@ -98,7 +115,7 @@ def build_tranches(w1_rows: list[dict], uom_map: dict | None = None) -> tuple[pd
             uom, uom_source, uom_proven, uom_note = resolve_uom(
                 item, sku, balance.get("uom"), uom_map)
             if not uom_proven:
-                excluded["uom_unproven"] += qty
+                _exc("uom_unproven", qty, balance.get("uom"))
                 records.append(dict(
                     so=row.get("so"), so_line_id=balance.get("so_line_id"),
                     item_code=item, canonical_sku=sku, conversion_assumed=converted,
@@ -233,8 +250,12 @@ def summarize(tranches: pd.DataFrame, by_key: pd.DataFrame, excluded: dict) -> d
         candidate_by_branch={str(k): round(float(v), 3) for k, v in
                              included.groupby("branch_warehouse")["candidate_qty"].sum().items()},
         uom_unproven_rows=int((~tranches.get("included", True).astype(bool)).sum()),
-        uom_unproven_qty=round(float(tranches.loc[
-            ~tranches.get("included", True).astype(bool), "candidate_qty"].sum()), 3),
+        uom_unproven_by_source_label={
+            str(k): round(float(v), 3) for k, v in
+            tranches.loc[~tranches.get("included", True).astype(bool)]
+            .groupby("source_uom")["candidate_qty"].sum().items()},
+        uom_unproven_note="来源标签仅用于说明「W1 原本写了什么单位」，"
+                          "**不是已证单位、不参与任何合计**；明细见 tranches 的 uom_proven=false 行",
         uom_sources=dict(Counter(included.get("uom_source", pd.Series(dtype=str)))),
         dated_candidate_total=round(float(by_key["candidate_dated_qty"].sum()), 3),
         dated_candidate_by_uom=_uom_sum(by_key, "candidate_dated_qty"),
@@ -246,7 +267,9 @@ def summarize(tranches: pd.DataFrame, by_key: pd.DataFrame, excluded: dict) -> d
                                 .fillna(0).sum()), 3),
         gap150_with=round(float(pd.to_numeric(by_key["gap150_with"], errors="coerce")
                                 .fillna(0).sum()), 3),
-        excluded={str(k): round(float(v), 3) for k, v in excluded.items()},
+        excluded={str(reason): {str(uom): round(float(qty), 3)
+                                for uom, qty in by_uom.items()}
+                  for reason, by_uom in excluded.items()},
         duplicate_qty=0.0,
         offset_allowed=False,
         status="pending_review",
@@ -284,8 +307,11 @@ def write_report(tranches: pd.DataFrame, by_key: pd.DataFrame, diff: pd.DataFram
         "不把组件 KS 的「个」再加一遍。",
         "- **PK# 皮壳 1:1**：转成对应 KS 物料按「个」计（`conversion_assumed`），不是「套」。",
         "- **未知单位不合计**：无 EN stock_uom 证据的行 `uom=None`、`included=false`，"
-        f"只进待核。本次 **{stats['uom_unproven_rows']} 行 / "
-        f"{stats['uom_unproven_qty']:.0f}** 因此被剔除（v3 初稿曾沿用 W1 的「个/件」）。",
+        f"只进待核。本次 **{stats['uom_unproven_rows']} 行**被剔除；"
+        "按来源标签列示（仅说明 W1 原本写的是什么，**不是已证单位、不合计**）："
+        + "；".join(f"{k} {v:,.0f}" for k, v in
+                    stats.get("uom_unproven_by_source_label", {}).items())
+        + "。明细见 `so_supply_tranches_v3.csv` 中 `uom_proven=false` 的行。",
         f"- 单位来源分布：{json.dumps(stats['uom_sources'], ensure_ascii=False)}",
         "",
         "## 1.2 与知识清单的关系（已读确认）",
@@ -319,8 +345,18 @@ def write_report(tranches: pd.DataFrame, by_key: pd.DataFrame, diff: pd.DataFram
         "## 3. 剔除了什么（数量）",
         "",
     ]
-    for reason, qty in sorted(stats["excluded"].items(), key=lambda item: -item[1]):
-        lines.append(f"- {reason}: {qty:.0f}")
+    def _reason_total(by_uom: dict) -> float:
+        return float(sum(by_uom.values()))
+
+    for reason, by_uom in sorted(stats["excluded"].items(),
+                                 key=lambda item: -_reason_total(item[1])):
+        if reason == "uom_unproven":
+            lines.append(f"- uom_unproven: {stats['uom_unproven_rows']} 行"
+                         "（来源标签 " + "；".join(f"{k} {v:,.0f}" for k, v in by_uom.items())
+                         + "；**不当已证单位、不合计**）")
+            continue
+        detail = "；".join(f"{uom} {qty:,.0f}" for uom, qty in sorted(by_uom.items()))
+        lines.append(f"- {reason}: {detail}（按单位分列，不跨单位相加）")
     lines += [
         f"- duplicate: 0（v2 无未标记孪生）",
         "",
@@ -340,7 +376,10 @@ def write_report(tranches: pd.DataFrame, by_key: pd.DataFrame, diff: pd.DataFram
         f"{stats['dated_candidate_total']:.0f}。",
         "- 完工待发阶段在 v3 为 0：这些行全部是 `job_card_first_op`（只证首工序），"
         "按规则剔除；在产阶段是唯一有日期的已证候选。",
-        "- 在途 48,978 无 ETA，只列不抵；与 v2 相同。",
+        f"- 在途候选 {stats['candidate_by_stage'].get('shipped_in_transit', 0):,.0f} 无 ETA，"
+        "只列不抵（v2 口径相同）。这是**经 v3 过滤后的候选量**（in_house、已证数量、"
+        "非首工序、单位已证）；W1 原始在途行含 FBA/未证单位/首工序等，不属同一集合，"
+        "不再并列引用，避免与候选量混淆。",
         "",
     ]
     if len(diff):
@@ -421,6 +460,13 @@ def main(argv=None) -> int:
                 conservation_v2=str(args.conservation_v2),
                 v2=str(args.v2), windows=str(args.windows),
                 leadtime_config=LEADTIME.provenance(),
+                fingerprints=dict(
+                    w1=sha256_of_path(args.w1),
+                    conservation_v2=sha256_of_path(
+                        Path(args.conservation_v2) / "so_conservation_fix_manifest.json"),
+                    uom_cache=sha256_of_path(args.uom_cache),
+                    windows_keys=sha256_of_path(args.windows),
+                ),
                 status="pending_review", offset_allowed=False,
                 note="条件附件；不改 r6/h180 净额与决策包，不 push")
     (out / "so_conditional_supply_v3_summary.json").write_text(
