@@ -139,8 +139,9 @@ def test_festival_block_uses_counted_rows_only(built):
         block[key] = sheet.cell(row, 2).value
     assert block["计入管线穿越"] == "2 单 / 60 件"       # FBA 的 SO-4 不计
     assert block["全部开放行穿越"] == "3 单 / 159 件"
-    assert "日期可判" in "".join(block.keys())
-    assert any("简报" in str(k) for k in block)          # 未溯源数字单独标注
+    # v5：两种日期定义并列（不再有「简报/未溯源」的否认性文案）
+    assert "日期定义 A" in "".join(block.keys()) and "日期定义 B" in "".join(block.keys())
+    assert not any("简报" in str(k) for k in block)
 
 
 def test_diff_column_is_150_minus_90(built):

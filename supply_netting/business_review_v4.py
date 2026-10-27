@@ -168,14 +168,19 @@ def _so_uom_tables(w1_path: str | Path, audit: pd.DataFrame) -> tuple[pd.DataFra
 def _boundaries(windows: pd.DataFrame, so_summary: pd.DataFrame) -> pd.DataFrame:
     actual = {int(r.window_days): r.actual_days for r in windows.itertuples(index=False)}
     rows = [
-        ("口径总则", "观测销售路径模拟 + 条件供给；不是承诺、不是采购量"),
+        ("口径总则", "观测销售路径模拟 + 条件供给；不是承诺、不是采购量；"
+                 "180 天页为 **scenario_only**，仅作产能/春节排期情景"),
         ("窗口关系", "30/60/90/120/150/180 都是从 as_of 起的累计，**窗口之间不可相加**"),
         ("实际天数", f"90 天={actual.get(90)}、150 天={actual.get(150)}、180 天={actual.get(180)}"
                  "（按真实桶边界，可能比标称多几天）"),
         ("需求盲区", "库存 as_of 2026-10-26 05:17 → 决策日 2026-10-29 之间有 **2.779 天**"
                  "没有新的库存/供给证据，这段需求未知"),
-        ("SO 管线", "工厂 SO 管线**未进入净额基线**；本表缺口不含未履约 SO 的到货承诺"),
-        ("14 天缓冲", "「加缓冲后总量」= 建议量 + 14 天参考缓冲，是**条件政策**，不是实测提前期"),
+        ("SO 管线", "**工厂 SO 供应**（公司向工厂下的生产/交付单）**未进入净额基线**；"
+                 "本表缺口不含其到货承诺"),
+        ("终端未履约 backlog", "**终端未履约订单（backlog）与本表分开**：本轮未接 backlog，"
+                            "未来需求桶可能偏低；两者不是同一类供给/需求，不能互相冲减"),
+        ("14 天缓冲", "「加缓冲后总量」= 建议量 + 14 天参考缓冲，是**条件政策**，"
+                  "不是实测提前期，也**不是 β/95% 覆盖承诺**"),
         ("动作来源", f"阶段证据来自 {ACTION_EVIDENCE_WINDOW} 天决策包（视界 189 天）；"
                  "**动作量与剩余量按各页窗口缺口重算**，不沿用 189 天结果"),
         ("待核", "3,469 个待核键动作留空、不按 0、不参与合计"),
@@ -191,7 +196,9 @@ def _boundaries(windows: pd.DataFrame, so_summary: pd.DataFrame) -> pd.DataFrame
 
 def build_workbook_v4(*, windows_csv, keys_csv, actions_parquet, so_audit_csv,
                       w1_jsonl, out_path, r6_manifest=None, baseline_actions=None,
-                      acceptance_status="v4 待复审") -> dict:
+                      so_rows_csv=None, review_file=None, board_entry=None,
+                      test_command=None, test_result=None,
+                      acceptance_status="v5 待复审") -> dict:
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -207,9 +214,9 @@ def build_workbook_v4(*, windows_csv, keys_csv, actions_parquet, so_audit_csv,
     scenario180 = _window_keys_with_actions(keys, 180, stage)
     pressure150 = _window_diff_with_actions(keys, 90, 150, stage)
 
-    so_rows = None
+    so_rows = pd.read_csv(so_rows_csv, encoding="utf-8-sig") if so_rows_csv else None
     so_summary, so_detail = _so_uom_tables(w1_jsonl, audit)
-    festival = _festival_block(audit, None)
+    festival = _festival_block(audit, so_rows)
     boundaries = _boundaries(windows, so_summary)
 
     pending = actions[actions["destination"] == "待核"]
@@ -251,8 +258,22 @@ def build_workbook_v4(*, windows_csv, keys_csv, actions_parquet, so_audit_csv,
         version_rows += [("旧 91 键对照", str(baseline_actions)),
                          ("旧 91 键 sha256", _sha256(baseline_actions)
                           if Path(baseline_actions).exists() else "missing")]
-    version_rows += [("验收状态", acceptance_status),
-                     ("下一动作", "交复审；按窗口分别审，不合并成一张采购单")]
+    version_rows += [
+        ("R6 政策/模型版本入口",
+         "policy-options-2026-10-28 / policy-reconcile-2026-10-28 / "
+         "service-inventory-frontier-2026-10-28-v2 / sku-segment-policy-2026-10-28 "
+         "（均在 supply-netting 目录下；本工作簿只引用，不含其数字）"),
+        ("R6 证据边界",
+         "**「核实到仓」≠「已证及时到仓」**：阶段证据只说明货在哪一步，"
+         "不证明能在缺口日期前到仓；同批去重仍未证"),
+        ("R7 测试命令/结果", f"{test_command or 'uv run pytest supply_netting/tests -q'}"
+                          f" → {test_result or '见提交记录'}"),
+        ("R7 独立复审文件", review_file or
+         "C:/Users/zhang/.agent-ops/fzh-data/reviews/business-workbook-v4-review-2026-10-28.md"),
+        ("R7 唯一看板入口", board_entry or
+         "D:/Work/赛狐/Cursor-claude/docs/research/supply-chain/2026-10-20/claude/control/PROJECT_BOARD.md"),
+        ("验收状态", acceptance_status),
+        ("下一动作", "交复审；按窗口分别审，不合并成一张采购单")]
     version = pd.DataFrame(version_rows, columns=["项", "值"])
 
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
@@ -313,6 +334,15 @@ def build_workbook_v4(*, windows_csv, keys_csv, actions_parquet, so_audit_csv,
                     so_audit_sha256=_sha256(so_audit_csv), w1_sha256=_sha256(w1_jsonl),
                     r6_manifest_sha256=(_sha256(r6_manifest)
                                         if r6_manifest and Path(r6_manifest).exists() else None)),
+        evidence_entries=dict(
+            r6_policy_models=["policy-options-2026-10-28", "policy-reconcile-2026-10-28",
+                              "service-inventory-frontier-2026-10-28-v2",
+                              "sku-segment-policy-2026-10-28"],
+            r6_boundary="核实到仓 ≠ 已证及时到仓",
+            r7_tests=test_result or "见提交记录",
+            r7_review=review_file,
+            r7_board=board_entry,
+        ),
         caveats=["窗口累计不可相加", "180 天仅情景", "待核不按 0", "14 天缓冲是条件政策",
                  "2.779 天需求未知", "SO 未进基线", "条件供给非可抵扣量"],
         acceptance_status=acceptance_status,
@@ -365,6 +395,10 @@ def main(argv=None) -> int:
     parser.add_argument("--actions", required=True)
     parser.add_argument("--so-audit", required=True)
     parser.add_argument("--w1", required=True)
+    parser.add_argument("--so-rows", default=None, help="工厂 SO 行级（口径 A 的 ETA 来源）")
+    parser.add_argument("--review-file", default=None)
+    parser.add_argument("--board-entry", default=None)
+    parser.add_argument("--test-result", default=None)
     parser.add_argument("--r6-manifest", default=None)
     parser.add_argument("--baseline-actions", default=None)
     parser.add_argument("--out", required=True)
@@ -372,7 +406,9 @@ def main(argv=None) -> int:
     manifest = build_workbook_v4(
         windows_csv=args.windows, keys_csv=args.keys, actions_parquet=args.actions,
         so_audit_csv=args.so_audit, w1_jsonl=args.w1, out_path=args.out,
-        r6_manifest=args.r6_manifest, baseline_actions=args.baseline_actions)
+        r6_manifest=args.r6_manifest, baseline_actions=args.baseline_actions,
+        so_rows_csv=args.so_rows, review_file=args.review_file,
+        board_entry=args.board_entry, test_result=args.test_result)
     print(json.dumps({k: manifest[k] for k in ("workbook", "counts", "sheets",
                                                "workbook_sha256", "git_commit")},
                      ensure_ascii=False, indent=1))

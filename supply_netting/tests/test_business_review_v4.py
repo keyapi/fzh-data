@@ -71,10 +71,18 @@ def _write_inputs(tmp_path):
 
 def build(tmp_path):
     paths = _write_inputs(tmp_path)
-    out = tmp_path / "review-v4.xlsx"
+    so_rows = tmp_path / "so_rows.csv"
+    pd.DataFrame([
+        dict(so="SO-1", spring_festival_applicability="applicable", quantity=40.0,
+             excluded_reason=None, estimated_branch_date="2027-04-05"),
+        dict(so="SO-2", spring_festival_applicability="applicable", quantity=20.0,
+             excluded_reason=None, estimated_branch_date=None),
+    ]).to_csv(so_rows, index=False, encoding="utf-8-sig")
+    out = tmp_path / "review-v5.xlsx"
     manifest = build_workbook_v4(windows_csv=paths["windows"], keys_csv=paths["keys"],
                                  actions_parquet=paths["actions"], so_audit_csv=paths["audit"],
-                                 w1_jsonl=paths["w1"], r6_manifest=paths["r6"], out_path=out)
+                                 w1_jsonl=paths["w1"], r6_manifest=paths["r6"], out_path=out,
+                                 so_rows_csv=so_rows, test_result="5 passed（样例）")
     return openpyxl.load_workbook(out), manifest
 
 
@@ -137,3 +145,43 @@ def test_manifest_records_evidence_and_recompute_rule(tmp_path):
     assert "不使用 h180" in manifest["action_recompute"]["not_reused"]
     assert manifest["inputs"]["r6_manifest_sha256"]
     assert manifest["counts"]["main90"] == 1 and manifest["counts"]["scenario180"] == 1
+
+
+def test_j1_is_relabelled_as_buffered_total(tmp_path):
+    book, _ = build(tmp_path)
+    sheet = book["5_30-60天参考"]
+    assert sheet["J1"].value == "加14天参考缓冲后总量"
+    # 源值保留（样例：30 天 qty_higher = 50*1 + 14*? → 由 _window_summary 给出，不为空）
+    assert sheet["J2"].value is not None
+
+
+def test_festival_block_shows_two_date_definitions_without_denial(tmp_path):
+    book, _ = build(tmp_path)
+    sheet = book["3_150天春节压力"]
+    text = chr(10).join(f"{sheet.cell(r, 1).value}｜{sheet.cell(r, 2).value}"
+                     for r in range(2, 8))
+    assert "日期定义 A" in text and "日期定义 B" in text
+    assert "并列展示" in text
+    assert "复现不出" not in text and "未溯源" not in text
+
+
+def test_version_page_has_r6_r7_evidence_entries(tmp_path):
+    book, manifest = build(tmp_path)
+    sheet = book["8_版本与证据"]
+    values = {sheet.cell(r, 1).value: sheet.cell(r, 2).value for r in range(2, sheet.max_row + 1)}
+    assert "policy-options-2026-10-28" in str(values["R6 政策/模型版本入口"])
+    assert "核实到仓" in str(values["R6 证据边界"])
+    assert "pytest" in str(values["R7 测试命令/结果"])
+    assert "reviews" in str(values["R7 独立复审文件"])
+    assert "PROJECT_BOARD" in str(values["R7 唯一看板入口"])
+    assert manifest["evidence_entries"]["r6_boundary"].startswith("核实到仓")
+
+
+def test_boundaries_separate_factory_so_from_backlog(tmp_path):
+    book, _ = build(tmp_path)
+    sheet = book["1_说明与边界"]
+    labels = [sheet.cell(r, 1).value for r in range(2, sheet.max_row + 1)]
+    assert "SO 管线" in labels and "终端未履约 backlog" in labels
+    text = chr(10).join(str(sheet.cell(r, 2).value) for r in range(2, sheet.max_row + 1))
+    assert "不是 β/95% 覆盖承诺" in text
+    assert "scenario_only" in text

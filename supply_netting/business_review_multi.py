@@ -86,7 +86,7 @@ def _window_summary(windows: pd.DataFrame) -> pd.DataFrame:
             "有缺口键数": int(row.gap_keys),
             "建议键数": int(row.suggestion_keys),
             "建议量（逐键向上取整）": _num(row.qty_current),
-            "其中参考缓冲": _num(row.qty_higher),
+            "加14天参考缓冲后总量": _num(row.qty_higher),
             "用途": row.usage,
             "注意": "累计窗口，窗口之间不可相加",
         })
@@ -160,30 +160,49 @@ def _window_diff(keys: pd.DataFrame, base: int, other: int,
     return frame.sort_values("建议量差（150−90）", ascending=False) if len(frame) else frame
 
 
+def _line_level_eta(so_rows: pd.DataFrame | None) -> str:
+    """口径 A：工厂行级 estimated_branch_date 非空的 SO（v3 报告复算来源）。"""
+    if so_rows is None or not len(so_rows):
+        return ""
+    if "estimated_branch_date" not in so_rows.columns:
+        return "（输入缺 estimated_branch_date 列，无法按行级 ETA 判定）"
+    applicable = so_rows[so_rows["spring_festival_applicability"] == "applicable"]
+    counted = applicable[applicable["excluded_reason"].isna()]
+    per_so = counted.groupby("so").agg(qty=("quantity", "sum"),
+                                       eta=("estimated_branch_date", lambda x: x.notna().sum()))
+    with_eta = per_so[per_so["eta"] > 0]
+    without = per_so[per_so["eta"] == 0]
+    return (f"{len(with_eta)} 单 / {with_eta['qty'].sum():,.0f} 件有 ETA；"
+            f"{len(without)} 单 / {without['qty'].sum():,.0f} 件无 ETA")
+
+
+def _audit_eta(joined: pd.DataFrame) -> str:
+    known = joined[joined["日期置信度"] == "estimated"]
+    unknown = joined[joined["日期置信度"] != "estimated"]
+    return (f"{len(known)} 单 / {known['quantity'].sum():,.0f} 件 estimated；"
+            f"{len(unknown)} 单 / {unknown['quantity'].sum():,.0f} 件 unknown")
+
+
 def _festival_block(so_audit: pd.DataFrame, so_rows: pd.DataFrame | None) -> pd.DataFrame:
-    """春节缓冲涉及的 SO：全部穿越 / 计入管线穿越 / 日期可否判定。"""
-    rows = [("口径", "生产+发运路径与春节锚点 2027-02-06 ±30 天窗口相交即加 60 天；只作解释与催办，不改净额")]
+    """春节缓冲涉及的 SO：穿越量 + 两种日期定义并列（不再写「复现不出」）。"""
+    rows = [("口径", "生产+发运路径与春节锚点 2027-02-06 ±30 天窗口相交即加 60 天；"
+                   "只作解释与催办，不改净额")]
     if so_rows is not None and len(so_rows):
         applicable = so_rows[so_rows["spring_festival_applicability"] == "applicable"]
         counted = applicable[applicable["excluded_reason"].isna()]
         rows.append(("全部开放行穿越", f"{applicable['so'].nunique()} 单 / "
-                                  f"{applicable['quantity'].sum():.0f} 件"))
+                                  f"{applicable['quantity'].sum():,.0f} 件"))
         rows.append(("计入管线穿越", f"{counted['so'].nunique()} 单 / "
-                                f"{counted['quantity'].sum():.0f} 件"))
-        per_so = counted.groupby("so")["quantity"].sum().reset_index()
+                                f"{counted['quantity'].sum():,.0f} 件"))
+        rows.append(("日期定义 A：工厂行级 ETA 非空", _line_level_eta(so_rows)))
         if len(so_audit):
+            per_so = counted.groupby("so")["quantity"].sum().reset_index()
             joined = per_so.merge(so_audit[["SO", "日期置信度", "预计到仓"]],
                                   left_on="so", right_on="SO", how="left")
-            known = joined[joined["日期置信度"] == "estimated"]
-            unknown = joined[joined["日期置信度"] != "estimated"]
-            rows.append(("其中日期可判（estimated）",
-                         f"{len(known)} 单 / {known['quantity'].sum():.0f} 件"))
-            rows.append(("其中日期不可判（unknown）",
-                         f"{len(unknown)} 单 / {unknown['quantity'].sum():.0f} 件"))
-    rows.append(("任务简报口径（待核）",
-                 "简报写「有效 6 单 / 1,477 件、2 单 unknown」，现有产物（horizon-windows、"
-                 "pack-2026-10-29-h180/so_backlog_summary、so-open-audit）复现不出该拆分；"
-                 "本表按上述可复算口径展示，未采用未溯源的数字"))
+            rows.append(("日期定义 B：SO 审计日期置信度", _audit_eta(joined)))
+        rows.append(("两个定义的关系",
+                     "A 用工厂行级交付日推 ETA，B 用 SO 审计锚点判日期置信度；"
+                     "两者数量不同是日期定义不同，并列展示、不互相替代"))
     return pd.DataFrame(rows, columns=["项", "值"])
 
 
