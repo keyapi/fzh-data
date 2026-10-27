@@ -30,15 +30,19 @@ frappe.ui.form.on('Sales Order', {
 
 const SO_CHAIN_PROD = '#0d7a3f';   // 生产 主色
 const SO_CHAIN_DN = '#0a6ed1';     // 出库 主色
+const SO_CHAIN_HEAD = '#6f42c1';   // 头程物流 主色
 function so_chain_esc(s) { return frappe.utils.escape_html(s == null ? '' : String(s)); }
 function so_chain_num(v) { const f = Number(v || 0); return (Math.round(f * 1000) / 1000).toString(); }
 function so_chain_t(s) { return so_chain_esc(s == null ? '' : __(String(s))); }
 function so_chain_link(doctype, name, label) {
     if (!name) return so_chain_esc(label || '');
-    let slug;
-    try { slug = frappe.router.slug(doctype); }
-    catch (e) { slug = doctype.toLowerCase().replace(/ /g, '-'); }
-    return '<a href="/app/' + slug + '/' + encodeURIComponent(name) + '" target="_blank">'
+    let url;
+    try {
+        url = frappe.utils.get_form_link(doctype, name);
+    } catch (e) {
+        url = '/app/' + doctype.toLowerCase().replace(/ /g, '-') + '/' + encodeURIComponent(name);
+    }
+    return '<a href="' + so_chain_esc(url) + '" target="_blank" rel="noopener noreferrer">'
          + so_chain_esc(label || name) + '</a>';
 }
 const SO_CHAIN_DEF_COLS = [
@@ -416,6 +420,82 @@ function so_chain_dn_html(line) {
     return h + '</tbody></table>';
 }
 
+// ── 数量阶段 / 里程碑 / 分批可售（与批量导出同一份 supply facts）────────────
+const SO_CHAIN_STAGE_LABEL = {
+    not_planned: '未排产', in_production: '在产', produced_pending_dn: '完工待出库',
+    shipped_in_transit: '运输中', arrived_not_sellable: '到货未可售',
+    delivered_sellable: '已可售交付', cancelled: '已取消', returned: '退货',
+    draft_dn: '草稿出库', unknown: '未知'
+};
+const SO_CHAIN_NODE_LABEL = {
+    order_placed: '下单', promised_delivery: '订单交期', production_start: '开工',
+    production_end: '完工', dispatch: '出库', departure: '离港',
+    arrival: '到港', delivery: '签收'
+};
+
+function so_chain_facts_html(facts) {
+    const manifest = facts.manifest || {};
+    let h = '';
+    if (manifest.partial) {
+        h += '<div class="text-danger" style="font-size:11px;margin-bottom:6px">部分来源无权限：'
+           + so_chain_esc((manifest.notes || []).join('；')) + '</div>';
+    }
+    const stages = facts.stage_balances || [];
+    h += '<div style="font-weight:600;font-size:12px;margin:4px 0">数量阶段（互斥）</div>';
+    if (stages.length) {
+        h += '<table class="table table-bordered" style="margin:0 0 10px;font-size:12px">'
+           + '<thead><tr><th>阶段</th><th>数量</th><th>单位</th><th>明细</th><th>依据/排除</th></tr></thead><tbody>';
+        stages.forEach(function (r) {
+            h += '<tr><td>' + so_chain_t(SO_CHAIN_STAGE_LABEL[r.stage] || r.stage) + '</td>'
+               + '<td style="text-align:right">' + (r.qty == null ? '未知' : so_chain_num(r.qty)) + '</td>'
+               + '<td>' + so_chain_esc(r.uom || '-') + '</td>'
+               + '<td>' + so_chain_esc(r.stage_detail || '') + '</td>'
+               + '<td class="text-muted">' + so_chain_esc(r.exclusion_reason || '') + '</td></tr>';
+        });
+        h += '</tbody></table>';
+    } else {
+        h += '<div class="text-muted" style="font-size:12px">无阶段余额</div>';
+    }
+
+    const miles = facts.milestones || [];
+    h += '<div style="font-weight:600;font-size:12px;margin:4px 0">节点（原计划 / 最新预计 / 实际）</div>';
+    if (miles.length) {
+        h += '<table class="table table-bordered" style="margin:0 0 10px;font-size:12px">'
+           + '<thead><tr><th>节点</th><th>原计划</th><th>承诺</th><th>最新预计</th><th>实际</th><th>来源</th></tr></thead><tbody>';
+        miles.forEach(function (m) {
+            h += '<tr><td>' + so_chain_t(SO_CHAIN_NODE_LABEL[m.node] || m.node) + '</td>'
+               + '<td>' + so_chain_esc(m.baseline_planned_at || '-') + '</td>'
+               + '<td>' + so_chain_esc(m.committed_due_at || '-') + '</td>'
+               + '<td>' + so_chain_esc(m.latest_expected_at || '-') + '</td>'
+               + '<td>' + so_chain_esc(m.actual_at || '-') + '</td>'
+               + '<td class="text-muted">' + so_chain_esc(m.source_record || '') + '</td></tr>';
+        });
+        h += '</tbody></table>';
+    } else {
+        h += '<div class="text-muted" style="font-size:12px">无节点证据</div>';
+    }
+
+    const tranches = facts.availability_schedule || [];
+    h += '<div style="font-weight:600;font-size:12px;margin:4px 0">分批可售计划</div>';
+    if (tranches.length) {
+        h += '<table class="table table-bordered" style="margin:0;font-size:12px">'
+           + '<thead><tr><th>片段</th><th>数量</th><th>可售日</th><th>最新预计</th><th>情景</th><th>排除原因</th></tr></thead><tbody>';
+        tranches.forEach(function (t) {
+            const qty = t.qty == null ? '分配未知' : so_chain_num(t.qty);
+            h += '<tr><td>' + so_chain_esc(t.batch_key || t.tranche_id) + '</td>'
+               + '<td style="text-align:right">' + qty + '</td>'
+               + '<td>' + so_chain_esc(t.available_date || '未知') + '</td>'
+               + '<td>' + so_chain_esc(t.latest_expected_at || '-') + '</td>'
+               + '<td>' + so_chain_t(t.scenario || '') + '</td>'
+               + '<td class="text-muted">' + so_chain_esc(t.exclusion_reason || '') + '</td></tr>';
+        });
+        h += '</tbody></table>';
+    } else {
+        h += '<div class="text-muted" style="font-size:12px">无可售片段</div>';
+    }
+    return h;
+}
+
 function so_chain_show_detail(line, so) {
     const head = '<div style="margin-bottom:6px"><b>' + so_chain_link('Item', line.item_code, line.item_code) + '</b>'
         + '　订单 ' + so_chain_num(line.qty) + '　已发 ' + so_chain_num(line.delivered)
@@ -429,6 +509,7 @@ function so_chain_show_detail(line, so) {
             + '<div style="border:1px solid ' + color + ';border-top:none;border-radius:0 0 4px 4px;padding:8px 10px">'
             + body + '</div></div>';
     };
+    const factsId = 'so-chain-facts-' + String(line.so_line || 'line').replace(/[^A-Za-z0-9_-]/g, '');
     const d = new frappe.ui.Dialog({
         title: __('链条明细：') + so + ' / ' + (line.item_name || line.item_code),
         size: 'extra-large',
@@ -437,6 +518,96 @@ function so_chain_show_detail(line, so) {
     d.fields_dict.html.$wrapper.html('<div style="max-height:72vh;overflow:auto">' + head
         + sec(SO_CHAIN_PROD, '生产链条', so_chain_tree_html(line))
         + sec(SO_CHAIN_DN, '出库', so_chain_dn_html(line))
+        + '<div id="' + factsId + '" style="margin-top:10px"></div>'
         + '</div>');
+    d.show();
+    frappe.call({
+        method: 'key_test.supply_facts.get_supply_facts',
+        args: { filters: { sales_order: so, so_line: line.so_line, include_delivered: 1 } },
+        callback: function (response) {
+            const box = document.getElementById(factsId);
+            if (box && response && response.message) {
+                box.innerHTML = so_chain_facts_html(response.message);
+            }
+        },
+        error: function () {
+            const box = document.getElementById(factsId);
+            if (box) box.innerHTML = '<div class="text-muted">数量事实加载失败或无权限</div>';
+        },
+    });
+}
+
+// ── 头程物流（独立弹窗）：DN → 运单号 → Shipment 状态/里程碑 + 轨迹 ──────────
+function so_chain_head_leg_html(dns) {
+    if (!dns || !dns.length) return '<div class="text-muted">无销售出库</div>';
+    let anyNumbers = false;
+    let h = '';
+    dns.forEach(function (d) {
+        const numbers = d.numbers || [];
+        if (numbers.length) anyNumbers = true;
+        h += '<div style="margin:8px 0 4px"><b>' + so_chain_link('Delivery Note', d.dn, d.dn) + '</b>'
+           + '　' + so_chain_esc(d.date || '-') + '　' + so_chain_t(d.status)
+           + (d.docstatus === 0 ? ' <span class="text-muted">(草稿)</span>' : '')
+           + (d.is_return ? ' <span class="text-danger">(退货)</span>' : '') + '</div>';
+        if (!numbers.length) {
+            h += '<div class="text-muted" style="font-size:12px;margin-left:8px">该出库单未填运单号</div>';
+            return;
+        }
+        h += '<table class="table table-bordered" style="margin:0 0 4px;font-size:12px">'
+           + '<thead><tr><th>运单号</th><th>状态</th><th>最新节点</th><th>ETA</th>'
+           + '<th>离港</th><th>到港</th><th>签收</th><th>匹配</th></tr></thead><tbody>';
+        numbers.forEach(function (n) {
+            const events = n.events || [];
+            h += '<tr>'
+               + '<td>' + (n.shipment ? so_chain_link('Shipment', n.shipment, n.number) : so_chain_esc(n.number))
+               + (n.primary ? ' <span class="text-muted">(主)</span>' : '') + '</td>'
+               + '<td>' + (n.status11 ? so_chain_t(n.status11) : '<span class="text-muted">状态未知</span>') + '</td>'
+               + '<td>' + so_chain_esc(n.last_node || '-') + '</td>'
+               + '<td>' + so_chain_esc(n.eta || '-') + '</td>'
+               + '<td>' + so_chain_esc(n.atd || '-') + '</td>'
+               + '<td>' + so_chain_esc(n.ata || '-') + '</td>'
+               + '<td>' + so_chain_esc(n.dlvr || '-') + '</td>'
+               + '<td>' + so_chain_esc(n.match_status || '-') + '</td></tr>';
+            if (events.length) {
+                h += '<tr><td colspan="8" style="border-top:none;padding:2px 8px 6px">'
+                   + '<details><summary class="text-muted" style="font-size:11px;cursor:pointer">轨迹 '
+                   + events.length + ' 个节点</summary>'
+                   + '<table class="table" style="margin:4px 0;font-size:11px"><thead><tr>'
+                   + '<th>时间</th><th>节点</th><th>地点</th><th>描述</th></tr></thead><tbody>';
+                events.forEach(function (e) {
+                    h += '<tr><td>' + so_chain_esc(e.time || e.date || '') + '</td>'
+                       + '<td>' + so_chain_esc(e.name || '') + '</td>'
+                       + '<td>' + so_chain_esc(e.location || '') + '</td>'
+                       + '<td>' + so_chain_esc(e.description || '') + '</td></tr>';
+                });
+                h += '</tbody></table></details></td></tr>';
+            }
+        });
+        h += '</tbody></table>';
+    });
+    return (anyNumbers ? '' : '<div class="text-muted" style="margin-bottom:6px">有出库单，但未填运单号</div>') + h;
+}
+
+function so_chain_show_logistics(data, so) {
+    const perms = data.permissions || {};
+    const head = '<div style="margin-bottom:6px"><b>'
+        + so_chain_link('Item', data.item_code, data.item_code) + '</b>'
+        + (data.item_name ? '　' + so_chain_esc(data.item_name) : '') + '</div>';
+    let body;
+    if (perms.delivery_note === false) {
+        body = '<div class="text-muted">无 Delivery Note 读取权限，无法显示头程物流。</div>';
+    } else if (perms.shipment === false) {
+        body = '<div class="text-muted">无 Shipment 读取权限，运单状态不可见。</div>';
+    } else {
+        body = so_chain_head_leg_html(data.dns || []);
+    }
+    const d = new frappe.ui.Dialog({
+        title: __('头程物流：') + so + ' / ' + (data.item_name || data.item_code),
+        size: 'extra-large',
+        fields: [{ fieldtype: 'HTML', fieldname: 'html' }],
+    });
+    d.fields_dict.html.$wrapper.html('<div style="max-height:72vh;overflow:auto">' + head
+        + '<div style="border:1px solid ' + SO_CHAIN_HEAD + ';border-radius:4px;padding:8px 10px">'
+        + body + '</div></div>');
     d.show();
 }

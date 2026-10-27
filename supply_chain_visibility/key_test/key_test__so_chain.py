@@ -20,6 +20,8 @@
 import frappe
 from frappe.utils import getdate, today
 
+from key_test.supply_query import dn_logistic_numbers
+
 
 def _num(v):
     try:
@@ -300,3 +302,112 @@ def get_so_chain(sales_order):
 
     return {"sales_order": doc.name, "customer": doc.customer_name or doc.customer,
             "status": doc.status, "lines": lines}
+
+
+@frappe.whitelist()
+def get_so_line_logistics(sales_order, so_line):
+    """First-leg logistics for one SO line: DN → waybill numbers → Shipment + events."""
+    doc = frappe.get_doc("Sales Order", sales_order)
+    if not frappe.has_permission("Sales Order", "read", doc):
+        frappe.throw("无权限读取该销售订单")
+    item = next((it for it in doc.items if it.name == so_line), None)
+    if not item:
+        frappe.throw("订单行不存在或不属于该销售订单")
+
+    result = {
+        "sales_order": doc.name, "so_line": item.name, "item_code": item.item_code,
+        "item_name": item.item_name,
+        "permissions": {"delivery_note": True, "shipment": True},
+        "dns": [],
+    }
+    if not frappe.has_permission("Delivery Note", "read"):
+        result["permissions"]["delivery_note"] = False
+        return result
+
+    dn_rows = frappe.db.sql(
+        """select distinct dn.name as dn, dn.posting_date as date, dn.status as status,
+                  dn.docstatus as docstatus, ifnull(dn.is_return, 0) as is_return
+           from `tabDelivery Note Item` dni
+           join `tabDelivery Note` dn on dn.name = dni.parent
+           where dni.against_sales_order = %(so)s
+             and (dni.so_detail = %(line)s
+                  or (ifnull(dni.so_detail, '') = '' and dni.item_code = %(item)s))
+             and dn.docstatus in (0, 1)
+           order by dn.posting_date, dn.name""",
+        {"so": doc.name, "line": item.name, "item": item.item_code}, as_dict=True,
+    )
+    if not dn_rows:
+        return result
+
+    dn_names = [row.dn for row in dn_rows]
+    permitted_dns = {row.name for row in frappe.get_list(
+        "Delivery Note", filters=[["name", "in", dn_names], ["docstatus", "in", (0, 1)]],
+        fields=["name"], limit_page_length=0)}
+    if permitted_dns != set(dn_names):
+        result["permissions"]["delivery_note"] = False
+        return result
+
+    numbers_by_dn = dn_logistic_numbers(dn_names)
+    all_numbers = sorted({n["number"] for values in numbers_by_dn.values() for n in values})
+    shipment_by_number, events_by_shipment = {}, {}
+    if all_numbers and not (
+            frappe.has_permission("Shipment", "read")
+            and frappe.db.has_column("Shipment", "custom_zmt_logistic_number")):
+        result["permissions"]["shipment"] = False
+    elif all_numbers:
+        candidates = frappe.db.sql(
+            """select name, custom_zmt_logistic_number as number,
+                      custom_zmt_status4 as status4, custom_zmt_status11 as status11,
+                      custom_zmt_last_node as last_node, custom_zmt_eta as eta,
+                      custom_zmt_atd as atd, custom_zmt_ata as ata, custom_zmt_dlvr as dlvr,
+                      custom_zmt_match_status as match_status, custom_zmt_source as source
+               from `tabShipment`
+               where custom_zmt_logistic_number in %(numbers)s and docstatus in (0, 1)""",
+            {"numbers": tuple(all_numbers)}, as_dict=True,
+        )
+        permitted_shipments = {row.name for row in frappe.get_list(
+            "Shipment",
+            filters=[["custom_zmt_logistic_number", "in", all_numbers],
+                     ["docstatus", "in", (0, 1)]],
+            fields=["name"], limit_page_length=0)}
+        shipment_by_number = {c.number: c for c in candidates if c.name in permitted_shipments}
+        if shipment_by_number:
+            for event in frappe.get_all(
+                    "Shipment Logistics Event",
+                    filters={"parent": ["in", sorted({c.name for c in shipment_by_number.values()})],
+                             "parenttype": "Shipment"},
+                    fields=["parent", "seq", "event_time", "event_name", "event_date",
+                            "location", "description"],
+                    order_by="parent asc, idx asc"):
+                events_by_shipment.setdefault(event.parent, []).append({
+                    "seq": event.seq,
+                    "time": str(event.event_time or "")[:16],
+                    "name": event.event_name or "",
+                    "date": str(event.event_date or "")[:10],
+                    "location": event.location or "",
+                    "description": event.description or "",
+                })
+
+    for row in dn_rows:
+        numbers = []
+        for entry in numbers_by_dn.get(row.dn, []):
+            shipment = shipment_by_number.get(entry["number"])
+            numbers.append({
+                "number": entry["number"], "primary": entry["primary"],
+                "shipment": shipment.name if shipment else "",
+                "status4": shipment.status4 if shipment else "",
+                "status11": shipment.status11 if shipment else "",
+                "last_node": str(shipment.last_node or "")[:10] if shipment else "",
+                "eta": str(shipment.eta or "")[:10] if shipment else "",
+                "atd": str(shipment.atd or "")[:10] if shipment else "",
+                "ata": str(shipment.ata or "")[:10] if shipment else "",
+                "dlvr": str(shipment.dlvr or "")[:10] if shipment else "",
+                "match_status": shipment.match_status if shipment else "",
+                "source": shipment.source if shipment else "",
+                "events": events_by_shipment.get(shipment.name, []) if shipment else [],
+            })
+        result["dns"].append({
+            "dn": row.dn, "date": str(row.date or "")[:10], "status": row.status,
+            "docstatus": row.docstatus, "is_return": row.is_return, "numbers": numbers,
+        })
+    return result

@@ -6,6 +6,23 @@ title: supply_chain_visibility 变更日志
 
 # 变更日志
 
+## 2026-10-27
+- 按用户授权将测试 key_test 快进到 c34fa53，备份旧覆盖文件并重启测试 bench；服务器 41 项 unittest 和真实报表 REST 验证通过。生产未改动，部署详情见 JACK_QA 的 P0-TEST-DEPLOY 条目。
+- 完成复审收尾：160 项本地测试与 2 项子测试通过，app 41 项离线测试通过；保留业务未知与证据入口，未部署生产。
+
+## 2026-10-26
+- 修复复审发现的资格、单位、批次重叠、逐 PO 时点、来源重放/冲突、采集覆盖和实时缓存问题；补充正式反例与边界测试。同步 app 数量/证据状态字段，保持证据入口与生产只读。
+- 原生筛选报表与库存证据入口仅部署测试站；PO 只读适配器与窗口对账核心完成，75 项本地测试、39 项测试服务器报表测试通过。交 Jack 的完整记录位于 `docs/research/supply-chain/2026-10-20/claude/control/handoffs/2026-10-26-codex-native-report-handoff.md`；完整 PO/WO/DN/入库整合仍待后续，未改生产。
+- 新增原生供应链报表计划：只读核实生产库存 DocType、七日 Parquet、BOM V2 Prepared Report 与 SO 报表单次执行基线；纠正把本机停用任务等同生产同步停用的判断，明确原生过滤查询、后台报表与业务预计算的分工。
+- **入库证据复核（2026-10-26）**：PO021704 头写 10-14，实际 38 行 10-14 + 12 行 10-19；按头日期 ±1.5 天采集漏 12/50。新增 `tongtool_api/receipt_collector.py` 重叠窗口 + 仓库外缓存 + 显式弱键；`receipt_reconciliation.py` 增加 `not_collected`、`weak_event_key`、`possible_duplicate`/`dedup_assumed`。本地 83 项测试通过；未改生产。
+- **采集入口实测（2026-10-26）**：新增 `tongtool_api/collect_receipts_cli.py`；09-01–10-26（14 天窗/2 天重叠）跑出 166 输入 → 150 唯一 + 16 重叠重复，12 PO / 113 SKU，无截断。新增 8 项测试，共 84 项本地测试通过。
+- **覆盖报告（2026-10-26）**：新增 `receipt_coverage.py` 并接 CLI `--coverage-out`；150 条唯一行全部 `unknown`（缺稳定 ID），全部无 UOM/时区；`not_collected=0`；未自动抵扣。共 86 项本地测试通过。
+- **供应整合设计（2026-10-26）**：新增 `docs/research/2026-10-26-receipt-supply-integration.md`，明确共同口径、时间桥接、PO/在途重叠、UOM/身份 gate 与验收测试；未改生产。
+- **P1/P2 实现（2026-10-26）**：新增 `supply_row.py`（统一行 schema + 校验）与 `receipt_bridge.py`（PO/库存/入库三数桥接，不自动调整）；12 项新测试，共 98 项本地测试通过。
+- **P3 实现（2026-10-26）**：新增 `overlap_gates.py`（PO/在途同批、DN trace、外部 FBA、未映射、未知 UOM、cover 转换 gate）；桥接增加 `transit_qty`/`overlap_status`；9 项新测试，共 107 项本地测试通过。
+- **P4 数据层接入（2026-10-26）**：新增 `supply_integration.py`（rows + gates + bridge + 聚合；`report_only()` 只返回聚合/flag）；5 项新测试，共 112 项本地测试通过；未改 key_test 入口。
+- **P5 基线与清单（2026-10-26）**：新增 `scripts/bench_supply_integration.py` 与发布检查清单；合成 4k/20k/40k 行构建 0.76/3.63/7.90 秒，peak 12.6/62.4/124.6 MB；未部署。
+
 ## 2026-10-13
 - **Stage 1 v35（出库按 DN 归组）**：修「N单」误报 —— 原按 `Delivery Note Item` **明细行**计数，一张 DN 拆多行会显示成「5单」。改为**按出库单归组**（`dns=[{dn,date,status,docstatus,is_return,qty,lines[]}]`），摘要「N单」= **DN 张数**；明细表加「行数」列，`>1` 行时列出 `q1 + q2 + … = 合计`。生产 SO-26-00101 实测：`DM-153-IVORY` 22 行 → **1单·已发200**；真有 2 张 DN 的 `HLR-140-GREY` → **2单**(DN-26-00071+DN-26-00089)。⚠️ 过程踩坑：归组后 `dns` 变 dict，`d.qty` 必须改 `d["qty"]`（否则 `AttributeError`→500），已在**测试机拦下**（未到生产）。
 - **Stage 1 v34（报工/入库 两列 + 列宽）**：把「已生产」**拆成「报工」「入库」**，不一致标黄。`so_chain.py` 每工单加 `last_op_done`（末道必经工序报工，**去重 `max(整批卡[无菲号],逐菲号卡)`**，护栏=取有卡的最大 sequence 必经工序）、每行输出 `reported/instock/report_note`；**成品(KS)行无工序 → 报工取子装配件(皮壳/内胆)齐套(取较慢)**（用户选定）。列宽拖拽改**总宽模型**：拖宽→**整表总宽变、下方出横向滚动条**，**不再压缩首列**（对齐 AG Grid/Excel）；表头右缘**始终可见分隔条** + 悬停主色 + `col-resize` 光标，**双击=自适应内容**。测试 SO-26-00026/00025 验证（列/黄标/拖拽 qty 54→144 且首列 209 不变/双击 115→159）；生产 `6fc2ef7` 部署，SO-25-00169(82 行) 一屏放下、0 报错。详见 [docs/reference/en-produced-qty-vs-jobcard.md](reference/en-produced-qty-vs-jobcard.md)。
@@ -41,3 +58,5 @@ title: supply_chain_visibility 变更日志
 - **新增**：`docs/reference/en-custom-apps-and-deploy.md`（自定义 app 拓扑 + 落地链路 + 实测坑）。
 - **背景**：绍兴工厂负责人拟把「下单→出库」整条链的信息呈现/查询做到 EN 上（形式未定）；
   本次完成了事实地图、呈现形式调研、Stage 1（SO 表单内嵌）+ Stage 2（原生报表），均已在**测试机**部署验证，**生产未部署**。
+- **2026-10-27 生产部署**：`key_test` 生产同步 `c34fa53`（PR #2）；`bench migrate` + `clear-cache` + `bench restart`；
+  `SO Chain Overview` / `Supply Timeline` 冒烟通过。上文“生产未部署”已过时；详见 `JACK_QA.md` 的 `P0-PROD-DEPLOY-2026-10-27`。
