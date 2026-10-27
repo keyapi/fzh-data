@@ -14,6 +14,8 @@ tags: [solutions, index]
 | 日期 | 标题 | 文件 |
 |------|------|------|
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |
+| 2026-10-27 | 供应分型与断货证据 — 先排费用/组件，再按角色分型；PJ 检查点不是每周 | [workflow-issues/supply-sku-segmentation-and-stockout-evidence.md](workflow-issues/supply-sku-segmentation-and-stockout-evidence.md) |
+| 2026-10-27 | frePPLe 评估 — 社区 MIT、企业闭源；借求解逻辑，不部署 | [tooling-decisions/frepple-evaluation-and-borrow-logic.md](tooling-decisions/frepple-evaluation-and-borrow-logic.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-10-08 | key_test 应用的两个结构性隐患：每次登录写元数据 + 打核心报表猴补丁，且生产/测试分支割裂 | [workflow-issues/key-test-login-hook-and-prod-test-divergence.md](workflow-issues/key-test-login-hook-and-prod-test-divergence.md) |
 | 2026-09-24 | 知识库防腐三件套 — 孤儿检测 / 生成式索引 / 链接图 | [best-practices/knowledge-base-anti-rot.md](best-practices/knowledge-base-anti-rot.md) |

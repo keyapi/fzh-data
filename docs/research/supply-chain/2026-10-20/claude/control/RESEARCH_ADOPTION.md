@@ -12,14 +12,18 @@ status: active
 > 口径：**"研究里写过"≠"已采用"**。本表逐项标 采用 / 待验证 / 延后 / 未采用，并给证据。
 > 未采用必须有理由；待验证必须写清验证方式；不得用"已落地"概括。
 
+> **2026-10-27 状态更新**：`statsforecast 2.1.1` 已在 `keyapi/forecast-refresh-oct27` 安装并用于
+> `self_fulfilled_demand/forecast.py`（AutoETS 默认 + MA3/naive guard）；实际 run `forecast-20261027-r2`。
+> 下表第 2–4 行的"未安装/无实现"是历史状态，已被 T2/T5/A 包/D19 更新；以"当前状态"列为准。
+
 ## 一、研究采用表
 
 | # | 研究结论 | 来源 | 代码/任务 | 验证状态 | 未采用/待验证原因 |
 |---|---|---|---|---|---|
 | 1 | 分段 + 全局 LightGBM + 分层调和 + Conformal | `01-existing-assets.md:85`（PR #304 未合并）、`04:172` | 无 | **延后** | #301 保留为"公司级方向"；当前 10–122 SKU 样本量不足以训练全局模型 |
-| 2 | 长尾用 Croston / TSB / ADIDA / IMAPA | `01:86`、`04:92`、`04:259-260` | **无实现**（`model_race.py` 候选仅 seasonal_naive / mean3 / seasonal_yoy / peer_shape + ets 跳过） | **待验证** | `statsforecast` 未安装；需按"先搜再造"先装库跑固定输入对照，不得自研前先自写 |
-| 3 | AutoETS / ETS | `00:106`、`02:207` | 候选登记但 **skip** | **待验证** | venv 无 `statsmodels`/`statsforecast`（#301 R1 已复核实测 False） |
-| 4 | ens5 组合法 + naive 守门 | `05-synthesis.md:24,80,161` | **无实现** | **待验证** | E1 结论基于稳定切片，`05:161` 明写**不能外推到美中新运营**；须分区实施 |
+| 2 | 长尾用 Croston / TSB / ADIDA / IMAPA | `01:86`、`04:92`、`04:259-260` | T2/A 包已对照；生产默认未用 | **已对照，未采用** | T2 测试集 TSB 0.6806 / Croston 0.6903 vs MA3 0.6915，无优势；A 包 routed 0.551 不敌 combo/tree；D19 不按回测切换 |
+| 3 | AutoETS / ETS | `00:106`、`02:207` | **已实现**：`self_fulfilled_demand/forecast.py`（statsforecast 2.1.1） | **已采用（规则默认）** | Codex2 裁定 A；D19 明确它只是规则默认，**不是效果改进**，不得称"更好" |
+| 4 | ens5 组合法 + naive 守门 | `05-synthesis.md:24,80,161` | A 包已对照 combo；未接主表 | **已对照，未采用** | A 包 combo 0.519，优于单模型但不敌 global_tree 0.494；无干净留出，未接主表 |
 | 5 | 断货=截断需求（Tobit / 删失校正） | `01:86`、`05:80` | 无实现；V1 只把断货月标为需求缺口 | **待验证** | 需要 3 天以上库存历史与断货期识别；当前仅 3 天库存历史 |
 | 6 | 新品用物料组相似借力 | `01:86` | 部分：V1 `peer_shape` | **部分采用** | peer_shape 用的是其余 SKU 季节形状，不是物料组层级 |
 | 7 | seasonal naive / mean3 / seasonal×YoY | V1 `model_race.py` | 已实现 + 6 起点滚动回测 | **已采用**（限定） | 覆盖率 74–77%，仅 rolling-origin，非独立留出 |
