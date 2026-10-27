@@ -9,7 +9,7 @@ import pandas as pd
 
 from supply_netting.w1_stages import (ACTION_BUY, ACTION_NO_NEED, ACTION_PRODUCE,
                                       ACTION_SHIP, ACTION_VERIFY_ARRIVAL,
-                                      ACTION_VERIFY_ETA, ACTION_VERIFY_STAGE,
+                                      ACTION_VERIFY_ETA, ACTION_VERIFY_PROGRESS,
                                       ACTION_WORK_ORDER,
                                       aggregate_stages, apply_actions, load_w1_stages,
                                       map_stage_keys)
@@ -74,7 +74,7 @@ def test_action_chain_produce_work_order_eta_buy():
 
     buy = apply_actions(pack_row(), stage_rows([])).iloc[0]
     assert buy["action"] == ACTION_BUY
-    assert buy["action_confidence"] == "assumed"
+    assert buy["action_confidence"] == "unknown"      # 无 W1 行 → unknown（G1 三档）
 
 
 def test_no_gap_is_no_need_regardless_of_stage():
@@ -132,9 +132,9 @@ def test_load_w1_stages_reads_cached_jsonl(tmp_path):
 def test_unknown_stage_is_verify_not_buy():
     stages = mapped([("SO12", "L12", "KS1", "成品仓 - FZH", "个", "unknown", 40, "WO-12")])
     row = apply_actions(pack_row(), stages).iloc[0]
-    assert row["action"] == ACTION_VERIFY_STAGE
-    assert "阶段未归类 40" in row["action_basis"]
-    assert row["action_confidence"] == "measured"
+    assert row["action"] == ACTION_VERIFY_PROGRESS
+    assert "阶段待核实 40" in row["action_basis"]
+    assert row["action_confidence"] == "unknown"      # unknown 阶段依据不得标 measured
 
 
 def test_unknown_without_start_evidence_is_produce_action():

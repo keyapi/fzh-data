@@ -264,10 +264,40 @@ def decision_pack(netting: pd.DataFrame, scenarios: pd.DataFrame,
         return "不需补（当前窗口）"
 
     out["recommendation"] = out.apply(recommend, axis=1)
+    # G2：recommendation 只看净额口径（海外现货 + 已证到货），不代表运营动作
+    out["recommendation_scope"] = "netting_only_pre_supply"
+    out["recommendation_note"] = "netting 口径；未含工厂/在途，实际动作见 action（action 优先）"
     out["demand_basis"] = "demand_netting 前瞻行；未接入未履约 SO backlog"
     out["supply_basis"] = "期初库存 + 已证到货；在途/通途 PO 无 ETA 仅作条件量"
     out["note"] = "条件决策包，不是采购单；partial=true"
     return out.sort_values(["protect_gap", "period_demand"], ascending=False)
+
+
+def build_layers(pack: pd.DataFrame, *, po_total: float = 0.0,
+                 so_total: float = 0.0) -> pd.DataFrame:
+    """三层供给拆成 1a/1b/2/3：只有 1a 计可用，其余都是条件量（G2）。"""
+    opening = pd.to_numeric(pack.get("opening"), errors="coerce").fillna(0.0)
+    intransit = pd.to_numeric(pack.get("intransit_qty"), errors="coerce").fillna(0.0)
+    po = pd.to_numeric(pack.get("po_qty"), errors="coerce").fillna(0.0)
+    so = pd.to_numeric(pack.get("so_pipeline_qty"), errors="coerce").fillna(0.0)
+    return pd.DataFrame([
+        dict(layer="1a_海外仓现货", basis="库存快照期初；就是净额口径里的 opening",
+             total_quantity=float(opening.sum()), matched_to_demand_keys=float(opening.sum()),
+             conditional_total=0.0, counted_as_available=True,
+             note="唯一计入可用的层"),
+        dict(layer="1b_海外仓在途", basis="通途在途，无 ETA → 条件态",
+             total_quantity=float(intransit.sum()), matched_to_demand_keys=float(intransit.sum()),
+             conditional_total=float(intransit.sum()), counted_as_available=False,
+             note="不进可用供给，只用于决定动作"),
+        dict(layer="2_通途PO", basis="开放状态 0/1/2；4=作废已排除；willArriveDate 全空",
+             total_quantity=po_total, matched_to_demand_keys=float(po.sum()),
+             conditional_total=po_total, counted_as_available=False,
+             note="条件量，需核实 ETA"),
+        dict(layer="3_工厂SO管线", basis="工厂交付日 + 90 天业务口径(+春节)；皮壳/半成品 1:1 假设",
+             total_quantity=so_total, matched_to_demand_keys=float(so.sum()),
+             conditional_total=so_total, counted_as_available=False,
+             note="上游管线，不计入海外可用"),
+    ])
 
 
 def _history_frame(demand_netting: pd.DataFrame) -> pd.DataFrame:
@@ -387,13 +417,37 @@ def main(argv=None) -> int:
             stages["canonical_warehouse"] = stages["so"].map(lambda so: so_branch.get(str(so)))
         pack = apply_actions(pack, stages)
         action_counts = pack["action"].value_counts().to_dict()
+        fba_rows = stages[stages["scope"].fillna("").isin(["external_fba"])]             if "scope" in stages.columns else stages.iloc[0:0]
         w1_meta = {
             "cache": str(args.w1_cache),
             "stage_rows_evaluated": int(len(stages)),
             "sources_mapped_sos": int(len(so_branch)),
             "actions": action_counts,
             "action_confidence": pack["action_confidence"].value_counts().to_dict(),
-            "rule": "gap>0 时按 完工待发运>在产>未排产>条件量 优先级给出动作；否则不需补",
+            "rule": ("gap>0 时先选能覆盖缺口的阶段（全覆盖优先，同覆盖按 "
+                     "produced → in_production → in_transit → not_planned → PO）；"
+                     "覆盖不足给 action_qty 与 residual_gap 并标「+ 补单剩余」"),
+            "codex_review": {
+                "ref": "Codex 独立复核 2026-10-27 18:32（2 blocker + 2 major）",
+                "items": ["G1 scope/role/qty_basis 过滤与三档 confidence",
+                          "G2 层拆分 1a/1b 与 recommendation/action 语义",
+                          "G3 action_qty/residual_gap 部分催+剩余补",
+                          "G4 逾期单不再加 90 天、春节按生产窗口判定"],
+            },
+            "column_semantics": {
+                "priority": "action > recommendation",
+                "recommendation": "netting 口径（海外现货 + 已证到货），未含工厂/在途",
+                "recommendation_scope": "netting_only_pre_supply",
+                "action": "运营动作，可含条件供给；action_qty 是可能覆盖量，不代表及时",
+                "action_confidence": "measured（已知量且非首工序）/ estimated（首工序或推断）/ unknown（unknown 阶段或无 W1 行）",
+                "residual_gap": "max(0, protect_gap - action_qty)，>0 表示还需补单",
+            },
+            "timely_coverage_unproven_rows": int(
+                (pack["timely_coverage_flag"] == "timely_coverage_unproven").sum()),
+            "fba_excluded_rows": int(len(fba_rows)),
+            "fba_excluded_qty": round(float(pd.to_numeric(fba_rows.get("qty"),
+                                                         errors="coerce").fillna(0).sum()), 3)
+            if len(fba_rows) else 0.0,
         }
         if args.w1_manifest:
             fetch = json.loads(Path(args.w1_manifest).read_text(encoding="utf-8"))
@@ -407,23 +461,7 @@ def main(argv=None) -> int:
 
     po_total = float((manifest.get("po_tongtool") or {}).get("quantity") or 0.0)
     so_total = float((so_summary or {}).get("quantity") or 0.0)
-    layers = pd.DataFrame([
-        dict(layer="1_海外仓现货+在途", basis="期初库存（快照）；在途无 ETA 为条件量",
-             total_quantity=float(pd.to_numeric(pack["opening"], errors="coerce").fillna(0).sum()),
-             matched_to_demand_keys=float(pd.to_numeric(pack["opening"], errors="coerce").fillna(0).sum()),
-             conditional_total=float(pd.to_numeric(pack["intransit_qty"], errors="coerce").fillna(0).sum()),
-             counted_as_available=True),
-        dict(layer="2_通途PO", basis="开放状态 0/1/2；4=作废已排除；willArriveDate 全空",
-             total_quantity=po_total,
-             matched_to_demand_keys=float(pd.to_numeric(pack["po_qty"], errors="coerce").fillna(0).sum()),
-             conditional_total=po_total,
-             counted_as_available=False),
-        dict(layer="3_工厂SO管线", basis="工厂交付日 + 假设头程/上架；estimated；皮壳/半成品 1:1 假设",
-             total_quantity=so_total,
-             matched_to_demand_keys=float(pd.to_numeric(pack["so_pipeline_qty"], errors="coerce").fillna(0).sum()),
-             conditional_total=so_total,
-             counted_as_available=False),
-    ])
+    layers = build_layers(pack, po_total=po_total, so_total=so_total)
 
     inventory_top.to_csv(out_dir / "unmapped_top20_inventory.csv", index=False, encoding="utf-8-sig")
     demand_top.to_csv(out_dir / "unmapped_top20_demand.csv", index=False, encoding="utf-8-sig")

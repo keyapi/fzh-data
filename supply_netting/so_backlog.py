@@ -45,11 +45,35 @@ SPRING_FESTIVAL_BUFFER_DAYS = 60
 SPRING_FESTIVAL_MONTHS = (1, 2)
 
 
-def spring_festival_buffer(delivery: date | None) -> int:
-    """交付日落在 1–2 月（跨春节）时加 2 个月缓冲；其余为 0。"""
+STAGE_ETA_ASSUMPTION_DAYS = 14   # 完工待发运 -> 到仓的假设值（发运/运输/入库），未实测
+
+
+def _festival_applicable(delivery: date | None) -> bool:
+    """生产/订舱路径 [交付日-90, 交付日] 是否穿越 1-2 月停工与恢复窗口。"""
     if delivery is None:
-        return 0
-    return SPRING_FESTIVAL_BUFFER_DAYS if delivery.month in SPRING_FESTIVAL_MONTHS else 0
+        return False
+    start = delivery - timedelta(days=BASELINE_ORDER_TO_BRANCH_DAYS)
+    for year in (start.year, delivery.year):
+        for month in SPRING_FESTIVAL_MONTHS:
+            window_start = date(year, month, 1)
+            window_end = date(year, month + 1, 1) if month < 12 else date(year, 12, 31)
+            if start <= window_end and delivery >= window_start:
+                return True
+    return False
+
+
+def spring_festival_status(delivery: date | None) -> tuple[str, int]:
+    """返回 (applicability, buffer_days)；无交付日时 applicability=unknown。"""
+    if delivery is None:
+        return "unknown", 0
+    if _festival_applicable(delivery):
+        return "applicable", SPRING_FESTIVAL_BUFFER_DAYS
+    return "not_applicable", 0
+
+
+def spring_festival_buffer(delivery: date | None) -> int:
+    """兼容旧接口：applicable 时返回 60，否则 0。"""
+    return spring_festival_status(delivery)[1]
 
 
 def customer_branch(customer: str) -> tuple[str | None, str]:
@@ -88,9 +112,12 @@ def build_so_backlog(rows: pd.DataFrame, *, as_of: date,
     if not len(rows):
         return pd.DataFrame(columns=["so", "customer", "branch_warehouse", "factory_warehouse",
                                      "item_code", "finished_item", "tongtool_sku", "stage", "quantity",
-                                     "scheduled_delivery", "estimated_branch_date",
+                                     "scheduled_delivery", "plan_based_branch_date",
+                                     "estimated_branch_date",
                                      "date_confidence", "date_basis", "order_to_branch_days",
-                                     "spring_festival_buffer_days", "conversion_assumed",
+                                     "spring_festival_buffer_days",
+                                     "spring_festival_applicability",
+                                     "stage_eta_assumption_days", "conversion_assumed",
                                      "overdue", "role", "excluded_reason"])
     frame = rows.copy()
     frame["open_qty"] = pd.to_numeric(frame["open_qty"], errors="coerce").fillna(0.0)
@@ -109,9 +136,16 @@ def build_so_backlog(rows: pd.DataFrame, *, as_of: date,
         finished, assumed = finished_item(getattr(record, "item_code", ""))
         delivery = getattr(record, "delivery_date", None)
         scheduled = pd.to_datetime(delivery).date() if delivery else None
-        festival = spring_festival_buffer(scheduled)
-        estimated = (scheduled + timedelta(days=order_to_branch_days + festival)
-                     if scheduled else None)
+        applicability, festival = spring_festival_status(scheduled)
+        plan_based = (scheduled + timedelta(days=order_to_branch_days + festival)
+                      if scheduled else None)
+        # G4：已逾期的交付日不再往上加 90 天当“预计到仓”；无阶段证据时留 null + unknown
+        if plan_based is None:
+            estimated, basis = None, "unknown"
+        elif scheduled < as_of:
+            estimated, basis = None, "unknown"
+        else:
+            estimated, basis = plan_based, "plan_based"
         overdue = bool(scheduled and scheduled < as_of)
         excluded = ""
         if not countable:
@@ -131,11 +165,14 @@ def build_so_backlog(rows: pd.DataFrame, *, as_of: date,
                                 else "item_code_fallback"),
             stage=stage, quantity=float(record.open_qty),
             scheduled_delivery=scheduled.isoformat() if scheduled else None,
+            plan_based_branch_date=plan_based.isoformat() if plan_based else None,
             estimated_branch_date=estimated.isoformat() if estimated else None,
-            date_confidence="estimated" if scheduled else "unknown",
-            date_basis=date_basis if scheduled else "unknown",
+            date_confidence="estimated" if estimated else "unknown",
+            date_basis=basis,
             order_to_branch_days=order_to_branch_days,
             spring_festival_buffer_days=festival,
+            spring_festival_applicability=applicability,
+            stage_eta_assumption_days=STAGE_ETA_ASSUMPTION_DAYS,
             conversion_assumed=bool(assumed), overdue=overdue,
             role=role, excluded_reason=excluded,
         ))
@@ -169,6 +206,10 @@ def summarize_backlog(frame: pd.DataFrame) -> dict:
         "order_to_branch_days": BASELINE_ORDER_TO_BRANCH_DAYS,
         "order_to_branch_range_days": list(BASELINE_RANGE_DAYS),
         "spring_festival_buffer_days": SPRING_FESTIVAL_BUFFER_DAYS,
+        "spring_festival_applicability": {k: round(float(v), 3) for k, v in
+                                          counted.groupby("spring_festival_applicability")
+                                          ["quantity"].sum().items()},
+        "stage_eta_assumption_days": STAGE_ETA_ASSUMPTION_DAYS,
         "spring_festival_applied_lines": int((counted["spring_festival_buffer_days"] > 0).sum()),
         "spring_festival_applied_quantity": round(
             float(counted.loc[counted["spring_festival_buffer_days"] > 0, "quantity"].sum()), 3),

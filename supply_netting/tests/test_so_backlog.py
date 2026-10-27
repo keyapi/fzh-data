@@ -56,11 +56,13 @@ def test_dates_are_estimated_and_overdue_flagged():
     ]), as_of=date(2026, 10, 27))
     row = frame.iloc[0]
     assert row["scheduled_delivery"] == "2026-10-20"
-    assert row["estimated_branch_date"] == "2027-01-18"      # 交付日 + 90 天业务口径
+    # G4：已逾期交付日不再加 90 天当“预计到仓”，只保留 plan_based 供对照
+    assert row["plan_based_branch_date"] == "2027-01-18"
+    assert row["estimated_branch_date"] is None
+    assert row["date_confidence"] == "unknown"
+    assert row["date_basis"] == "unknown"
     assert row["order_to_branch_days"] == 90
     assert row["spring_festival_buffer_days"] == 0
-    assert row["date_confidence"] == "estimated"
-    assert row["date_basis"] == "assumed_business_90d"
     assert bool(row["overdue"]) is True
     assert summarize_backlog(frame)["overdue_quantity"] == 4.0
 
