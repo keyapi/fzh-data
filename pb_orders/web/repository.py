@@ -381,6 +381,18 @@ class Repository:
             row = conn.execute("SELECT * FROM artifacts WHERE id = ?", (artifact_id,)).fetchone()
         return dict(row) if row else None
 
+    def artifacts_by_kind(self, kinds: tuple[str, ...] | list[str]) -> list[dict]:
+        """按产物类型取全部行（回填订单号等一次性维护用）。"""
+        kinds = tuple(kinds)
+        if not kinds:
+            return []
+        marks = ", ".join("?" for _ in kinds)
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM artifacts WHERE kind IN ({marks}) ORDER BY created_at", kinds
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     # ---------- API keys ----------
 
     def create_api_key(self, name: str, scopes: str, created_by: str = "") -> dict:

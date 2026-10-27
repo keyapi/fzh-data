@@ -137,6 +137,7 @@ uv run python notion_stockout.py --xlsx "<SPS库存检查操作表-*.xlsx>" --ou
 | `web/api.py` | JSON API v1：checks / jobs / fulfill / status / artifacts / download / retry / settings |
 | `web/api_auth.py` | Bearer 鉴权：`sk-` API Key（sha256）+ OIDC `/userinfo`（60s 缓存）+ scope + 速率限制 |
 | `web/api_keys.py` | CLI：`python -m web.api_keys create/list/revoke` |
+| `web/backfill_order_numbers.py` | 一次性回填：扫已有通途 xlsx 产物，把订单号写进 `order_number_usage`（`--apply` 才写库） |
 | `web/api_errors.py` | 统一错误结构 `{"error": {code, message, hint, request_id}}` |
 | `web/repository.py` | SQLite：`jobs` / `artifacts` / `app_settings` / `api_keys` / `idempotency_keys` / `order_number_usage` + 状态机 + 中断恢复；老库启动时自动补列 |
 | `web/storage.py` | 分块上传、SHA-256、内容寻址发布、路径越界防护、`link_or_copy`（checked CSV 复用成出件输入） |

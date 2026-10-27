@@ -118,3 +118,34 @@ def test_api_rejects_bad_reorder_map_json(api_client):
     )
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "invalid_input"
+
+
+def test_backfill_reads_existing_tongtool_artifacts(client, pb_env):
+    """新库上线时从历史 xlsx 回填，下一次自动分配才会跳过已用过的 -2。"""
+    from web import backfill_order_numbers as backfill
+
+    client.repo.create_job(
+        job_id="job-old", created_by="tester", no_stock="", no_stock_note=None,
+        validate_only=False, allow_unmatched=False, input_packslip="",
+        input_order="old.csv", pipeline_version="test-version",
+    )
+    xlsx = pb_env.tmp / "PB_0_导入_原始_old.xlsx"
+    pd.DataFrame({
+        "PO Number": ["137943090", "137943090-2"],
+        "PO Number-Line": ["137943090-1", "137943090-2-1"],
+    }).to_excel(xlsx, index=False)
+    rel, size, digest = storage.publish_artifact(xlsx, client.settings.artifacts_dir, xlsx.name)
+    client.repo.add_artifact(
+        job_id="job-old", kind="tongtool", original_name=xlsx.name,
+        download_name=xlsx.name, rel_path=rel, content_hash=digest, size_bytes=size,
+        mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+    found, warnings = backfill.collect_numbers(client.settings, client.repo)
+    assert warnings == []
+    assert found == {"137943090": "job-old", "137943090-2": "job-old"}
+
+    client.repo.record_full_numbers(list(found), "job-old", source="backfill")
+    assert client.repo.reserve_order_numbers(["137943090"], "job-new") == {
+        "137943090": "-3"
+    }
