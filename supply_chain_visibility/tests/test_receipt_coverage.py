@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date
 import unittest
 
@@ -36,6 +37,31 @@ def make_result() -> CollectionResult:
 
 
 class ReceiptCoverageTests(unittest.TestCase):
+    def test_truncated_window_preserves_observed_rows_and_unknown_reasons(self):
+        window = make_result().windows[0]
+        for timestamp, disposition, reason in (
+            ("2026-10-03T10:00:00+08:00", "unknown", "missing_stable_id"),
+            ("2026-10-03 10:00:00", "unknown", "missing_stable_id"),
+            ("2026-10-08T10:00:00+08:00", "not_collected", "outside_collection_window"),
+        ):
+            with self.subTest(timestamp=timestamp):
+                row = replace(make_result().rows[0], row={
+                    "purchaseOrderCode": "PO1", "sku": "S1", "warehouseName": "WH-A",
+                    "warehousingDate": timestamp, "warehousingNum": 2,
+                })
+                result = CollectionResult(
+                    rows=(row,), windows=(window,), input_count=1, unique_count=1,
+                    overlap_duplicate_count=0, possible_duplicate_count=0,
+                    truncated_windows=(window,), cache_hits=0,
+                )
+                report = build_coverage_report(result)
+                self.assertEqual(report["reconciliation"]["dispositions"], {disposition: 1})
+                self.assertEqual(report["reconciliation"]["unknown_reasons"], {reason: 1})
+                self.assertFalse(report["coverage"]["query_range_complete"])
+                self.assertEqual(report["collection"]["unique_count"], 1)
+                self.assertEqual(report["collection"]["truncated_windows"],
+                                 [{"start": "2026-10-01", "end": "2026-10-07"}])
+
     def test_overlap_rows_are_not_mapped_again(self):
         events = events_from_collection(make_result())
         self.assertEqual(len(events), 2)

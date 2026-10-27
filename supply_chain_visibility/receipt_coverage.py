@@ -74,10 +74,12 @@ def build_coverage_report(
     if collection_windows is None:
         # Request bounds use the documented API query timezone. Source event
         # strings without an offset remain naive and are never localized here.
+        # A truncated request still returned observed rows inside its bounds.
+        # Keep those rows classifiable; report incomplete coverage separately.
         collection_windows = [SnapshotWindow(
             datetime.combine(window.start, time.min, tzinfo=BUSINESS_TIMEZONE),
             datetime.combine(window.end, time(23, 59, 59), tzinfo=BUSINESS_TIMEZONE),
-        ) for window in result.windows if window not in result.truncated_windows]
+        ) for window in result.windows]
     reconciliation = reconcile_receipts(
         events,
         warehouse_windows or {},
