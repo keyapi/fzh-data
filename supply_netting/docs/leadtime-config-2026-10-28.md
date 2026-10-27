@@ -104,12 +104,24 @@ arrival_to_stock`，同一 `(route, warehouse, mode)` 只允许一条。我们�
 - `so_conditional_supply` manifest：新增 `leadtime_config` 同结构；`rules` 的
   `ship_days / production_days / sea_days / spring_buffer_days` 也改为从配置派生
   （`shared_days()` 在各路线不一致时直接报错，不擅自压成单值）。
-- `scripts/so_conditional_supply_v3.py` manifest：同样新增 `leadtime_config`
-  （v3 的日期由 `plan_dates()` 提供，与 v2 共用同一份配置）。
+- `scripts/so_conditional_supply_v3.py` manifest：新增**最小留痕块**（`provenance()`，
+  只有 5 个字段）`leadtime_config = {version, sha256, source, sample_size, path}`。
+  `source` 各块一致给单值、不一致给去重列表；`sample_size` 取各块最小值（只要有一块
+  未实测就不声称有实测样本）。
 - 每行 ETA 的 `eta_basis` 文本带配置版本号，例如
   `审计日+生产60天+发运7天+海运40天（assumed；交期配置 2026-10-28.1）`。
 - 对账方式：产物 manifest 的 `leadtime_config.version` + `sha256` 就是这批数字用的口径；
   哈希对不上说明配置被改过（哪怕版本号没动）。
+
+### 已落地的产物留痕
+
+| 产物 manifest | `leadtime_config` 形态 | 版本 | 配置哈希（前 12 位） |
+|---|---|---|---|
+| `so-conditional-supply-2026-10-28-v3/so_conditional_supply_v3_manifest.json` | 5 字段最小块 | `2026-10-28.1` | `2ce7b25fa860` |
+
+该块是**补写进既有 manifest** 的：不重跑数据，`report.md` / 两张 CSV / `summary.json`
+的 sha256 与写入前完全一致；只有 manifest 文件本身变了。manifest 的 `generated_at`
+仍是原始出包时间（`2026-10-28T03:25:36+08:00`），不要把它当成一次重算。
 
 ## 6. 怎么改口径
 
@@ -126,8 +138,8 @@ arrival_to_stock`，同一 `(route, warehouse, mode)` 只允许一条。我们�
 
 - `sc13` 模块本身仍在 `docs/research/` 下（研究目录，不是包），未 import；本模块按合约
   语义自实现，未复制其代码。
-- v3 的 manifest 已补 `leadtime_config`，但**既有 v3 产物目录不重跑**：其 manifest 里的
-  版本/哈希要等下一次正常出包才出现（本次只改代码，未重算日期与候选量）。
+- v3 的 `2026-10-28-v3` 产物目录**未重跑**：`leadtime_config` 块是补写进那份 manifest
+  的，日期与候选量一律未动；下一次正常出包会由代码自动写入同样形态的块。
 - A1/A2/A3（base-stock 回放、sc08 共形校准、正态 CV）与 A5（缓冲公式两份）按审计建议
   留待后续任务，本次不动。
 - 90 与「在产 60+7+35=102」两条路径口径本身不一致，本次**只做来源版本化**，不调和数字。

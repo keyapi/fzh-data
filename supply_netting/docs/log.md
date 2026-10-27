@@ -202,3 +202,15 @@ updated: 2026-10-27
   才会带新字段。
 - 测试 +3（v3 manifest 端到端：合成 W1 跑 `main(--out tmp)` 后校验版本/哈希/来源，
   并与 `plan_dates` 逐值比对日期）。
+
+## 2026-10-28 — LEADTIME-CONFIG-WIRE 补 2：v3 产物 manifest 实写留痕块
+
+- v3 改用**最小留痕块** `provenance()`：`leadtime_config = {version, sha256, source,
+  sample_size, path}`（source 各块不一致时给去重列表；sample_size 取最小值）。
+- 已把该块**补写进既有产物** `so-conditional-supply-2026-10-28-v3/
+  so_conditional_supply_v3_manifest.json`：`2026-10-28.1` /
+  `2ce7b25fa860…73ae` / `assumed` / `0` / `supply_netting/config/leadtime_config.json`。
+  写入前后对 `report.md`、两张 CSV、`summary.json` 做 sha256 比对，全部 UNCHANGED；
+  只有 manifest 本身变了，`generated_at` 保持原始出包时间。
+- 测试 +2（`provenance()` 5 字段与取值；混合 source → 列表且 sample_size 取最小值），
+  v3 端到端断言改为校验这 5 个字段与哈希。

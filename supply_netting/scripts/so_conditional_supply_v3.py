@@ -420,7 +420,7 @@ def main(argv=None) -> int:
                 uom_canonical="D:/Work/赛狐/Cursor-claude/docs/research/supply-chain/2026-10-20/claude/control/reference/UOM-CANONICAL.md",
                 conservation_v2=str(args.conservation_v2),
                 v2=str(args.v2), windows=str(args.windows),
-                leadtime_config=LEADTIME.to_manifest(),
+                leadtime_config=LEADTIME.provenance(),
                 status="pending_review", offset_allowed=False,
                 note="条件附件；不改 r6/h180 净额与决策包，不 push")
     (out / "so_conditional_supply_v3_summary.json").write_text(

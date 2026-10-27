@@ -187,19 +187,40 @@ class LeadTimeConfig:
         return values.pop()
 
     # ---- 留痕 ------------------------------------------------------------
+    @property
+    def config_label(self) -> str:
+        """仓库相对路径（worktree 换目录后仍可读）；不在仓库内才记绝对路径。"""
+        try:
+            return self.path.resolve().relative_to(
+                Path(__file__).resolve().parent.parent).as_posix()
+        except ValueError:
+            return str(self.path)
+
+    def provenance(self) -> dict:
+        """最小留痕块：version / sha256 / source / sample_size / path。
+
+        ``sha256`` 按加载时读到的同一份字节计算。``source`` 各块一致时给单值、不一致给
+        去重列表；``sample_size`` 取各块**最小值** —— 只要有一块未实测（0），整块就不
+        声称有实测样本。
+        """
+        sources = sorted({self.so_pipeline.source, self.spring_festival.source,
+                          *(r.source for r in self.routes)})
+        return dict(
+            version=self.version,
+            sha256=self.config_sha256,
+            source=sources[0] if len(sources) == 1 else sources,
+            sample_size=min(self.so_pipeline.sample_size, self.spring_festival.sample_size,
+                            *(r.sample_size for r in self.routes)),
+            path=self.config_label,
+        )
+
     def to_manifest(self) -> dict:
         """写进 manifest 的完整留痕：版本 + 文件哈希 + 来源 + 每条路线的分段。
 
         ``sha256`` 按加载时读到的同一份字节计算：即使加载后文件被改，留痕仍指被解析的那份。
-        ``config`` 尽量记仓库相对路径（worktree 换目录后仍可读），不在仓库内才记绝对路径。
         """
-        try:
-            config_label = self.path.resolve().relative_to(
-                Path(__file__).resolve().parent.parent).as_posix()
-        except ValueError:
-            config_label = str(self.path)
         return dict(
-            config=config_label,
+            config=self.config_label,
             version=self.version,
             sha256=self.config_sha256,
             effective_from=self.effective_from.isoformat(),

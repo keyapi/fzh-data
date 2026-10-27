@@ -299,6 +299,30 @@ class HashTests(unittest.TestCase):
             self.assertNotEqual(before, after)
 
 
+class ProvenanceTests(unittest.TestCase):
+    """最小留痕块：version / sha256 / source / sample_size / path（写进产物 manifest）。"""
+
+    def test_default_block_has_exactly_five_fields(self):
+        cfg = load_default_config()
+        block = cfg.provenance()
+        self.assertEqual(set(block), {"version", "sha256", "source", "sample_size", "path"})
+        self.assertEqual(block["version"], cfg.version)
+        self.assertEqual(block["sha256"],
+                         hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes()).hexdigest())
+        self.assertEqual(block["source"], "assumed")
+        self.assertEqual(block["sample_size"], 0)
+        self.assertEqual(block["path"], "supply_netting/config/leadtime_config.json")
+
+    def test_mixed_sources_listed_and_min_samples_used(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = _raw()
+            doc["routes"][0]["source"] = "measured"
+            doc["routes"][0]["sample_size"] = 5
+            block = load_config(_write(tmp, doc)).provenance()
+            self.assertEqual(block["source"], ["assumed", "measured"])
+            self.assertEqual(block["sample_size"], 0)   # 取最小值：仍有一块未实测
+
+
 class V3ManifestTests(unittest.TestCase):
     """v3 的日期来自同一份配置，manifest 必须带上版本 + 哈希 + 来源 + 样本量。"""
 
@@ -335,11 +359,16 @@ class V3ManifestTests(unittest.TestCase):
             manifest = json.loads((out / "so_conditional_supply_v3_manifest.json")
                                   .read_text(encoding="utf-8"))
             block = manifest["leadtime_config"]
+            self.assertEqual(set(block),
+                             {"version", "sha256", "source", "sample_size", "path"})
             self.assertEqual(block["version"], cfg.version)
             self.assertEqual(block["sha256"], cfg.config_sha256)
-            self.assertEqual(block["sources"], ["assumed"])
-            self.assertEqual(block["so_pipeline"]["sample_size"], 0)
-            self.assertEqual(block["spring_festival"]["source"], "assumed")
+            self.assertEqual(block["sha256"],
+                             hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes())
+                             .hexdigest())
+            self.assertEqual(block["source"], "assumed")
+            self.assertEqual(block["sample_size"], 0)
+            self.assertEqual(block["path"], "supply_netting/config/leadtime_config.json")
             self.assertEqual(manifest["offset_allowed"], False)
 
             # 日期数值不变：与 plan_dates 逐值一致
