@@ -70,3 +70,15 @@ updated: 2026-10-27
   使用范围、输入输出哈希与 7 条限制；代码 `20b2892a`（git_dirty=false）。
 - 供应侧口径对齐 r5：每行保留 protect_gap，manifest 记 34.867936 / 71 键。
 - 测试 170 通过（supply_netting 147 + 上游 23）；最终代码 `85b5302b`（git_dirty=false）。
+
+## 2026-10-29 — 决策包终审返修 r2（F1–F7）
+
+- F1：不可算/待核的数量字段全部 null（含 Parquet/JSON/xlsx），新增
+  demand_evidence_status / gap_evidence_status 与 measured_zero。
+- F2：严格 JSON（NaN→null、allow_nan=False、parse_constant 回读）。
+- F3：ABC 与汇总按 UOM，多 UOM 不出无单位标量（真实数据单 UOM「个」，495/777/282 不变）。
+- F4：独立输入键集合对账 + 255 行预测源行排除明细（CSV/sheet/manifest）。
+- F5：r5 产物、预测窗口/manifest、历史需求、sku_map 哈希全部记录并校验。
+- F6：qty_low_counterfactual + 语义列；F7：first_gap_bucket_start/end + gap_today_note。
+- 新包 `decision-pack-2026-10-29-r2`（原包不覆盖）；代码 `9f3285e3`（git_dirty=false）；
+  测试 192 通过（新增 14 条）。

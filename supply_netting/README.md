@@ -87,7 +87,8 @@ uv run python -m supply_netting.decision_pack   --run "D:/Work/fzh-order-store/e
 每个 SKU×仓×UOM 键都有且只有一个去向（建议补货 / 无需补货 / 不可算 / 待核），
 覆盖对账不符即报错；数量只在 UOM 组内合计；给 current-policy 与
 higher-service 两档情景；产出 xlsx + Parquet + JSON + manifest。
-见 [docs/decision-pack-2026-10-29.md](docs/decision-pack-2026-10-29.md)。
+见 [docs/decision-pack-2026-10-29.md](docs/decision-pack-2026-10-29.md)；
+终审返修版（null 语义/严格 JSON/按 UOM）见 [r2 报告](docs/decision-pack-2026-10-29-r2.md)。
 
 ## 验证
 
