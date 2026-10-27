@@ -59,3 +59,4 @@ tags: [adobe, illustrator, ags, license-validation, openclash, office-network, h
 ## 相关
 - [us_openai_api_proxy/docs/operations.md](../../../us_openai_api_proxy/docs/operations.md) — 办公室 OpenClash 运维手册
 - [us_openai_api_proxy/docs/log.md](../../../us_openai_api_proxy/docs/log.md) — 变更日志（v0.14）
+- [openclash-per-target-direct-rule.md](openclash-per-target-direct-rule.md) — 同一自定义规则文件的另一类用法：目标级 DIRECT（WiFi 下 RDP/远程访问不通）

@@ -42,3 +42,4 @@ triggers:
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/integration-issues/grokbot-ssh-via-shanghai-jump-symmetric-nat.md` —— grok-bot（美东）SSH 接入 — 对称 NAT 下的跳板选路与 Tailscale SSH 验证绕过
+- `docs/solutions/best-practices/openclash-per-target-direct-rule.md` —— 办公室 WiFi 下单个境外主机/RDP 不通：目标级 DIRECT 规则（直连光猫正常时先查 OpenClash）
