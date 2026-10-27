@@ -130,7 +130,7 @@ def build_stage_balances(line, ctx):
         return rows
 
     allocated = defaultdict(float)
-    allocated_by_wh = defaultdict(float)
+    allocated_by_item = defaultdict(float)
     unallocated = []
     dn_names = {d.get("dn") for d in nonreturns}
     for ret in returns:
@@ -138,7 +138,9 @@ def build_stage_balances(line, ctx):
         amount = -_num(ret.get("qty"))
         if against and against in dn_names:
             allocated[against] += amount
-            allocated_by_wh[(against, ret.get("warehouse"))] += amount
+            item = ret.get("dn_detail")
+            if item:
+                allocated_by_item[item] += amount
         else:
             unallocated.append(ret)
     returned_total = sum(-_num(r.get("qty")) for r in returns)
@@ -158,13 +160,32 @@ def build_stage_balances(line, ctx):
         grouped_dns[dn.get("dn")].append(dn)
     for dn_name, dn_rows in grouped_dns.items():
         gross_total = sum(_num(r.get("qty")) for r in dn_rows)
-        net_total = max(0.0, gross_total - min(allocated.get(dn_name, 0.0), gross_total))
+        ret_total = min(allocated.get(dn_name, 0.0), gross_total)
+        net_total = max(0.0, gross_total - ret_total)
         shipped_physical += gross_total
         shipped_net += net_total
+        row_allocs = []
         for dn in dn_rows:
+            names = dn.get("dn_items") or [dn.get("dn_item")]
+            alloc = sum(allocated_by_item.get(n, 0.0) for n in names if n)
+            row_allocs.append(min(alloc, _num(dn.get("qty"))))
+        leftover = ret_total - sum(row_allocs)
+        if leftover > 1e-9 and len(dn_rows) == 1:
+            room = max(0.0, _num(dn_rows[0].get("qty")) - row_allocs[0])
+            absorbed = min(leftover, room)
+            row_allocs[0] += absorbed
+            leftover -= absorbed
+        if leftover > 1e-9:
+            if net_total > 1e-9:
+                rows.append(_balance(
+                    line, STAGE_UNKNOWN, net_total, uom,
+                    detail="退货无原出库明细归属，分仓数量未知",
+                    reason="退货无法归属到原出库明细，仅保留 DN 净额，不摊到具体仓库",
+                    batch_key=dn_name, source=dn_name,
+                    demand_status=demand_status))
+            continue
+        for dn, row_alloc in zip(dn_rows, row_allocs):
             gross_qty = _num(dn.get("qty"))
-            row_alloc = min(allocated_by_wh.get((dn_name, dn.get("warehouse")), 0.0),
-                            gross_qty)
             net_qty = max(0.0, gross_qty - row_alloc)
             if net_qty <= 1e-9:
                 continue
@@ -175,14 +196,18 @@ def build_stage_balances(line, ctx):
             stage, detail, reason = STAGE_IN_TRANSIT, "在途", ""
             if not dn_numbers:
                 detail, reason = "运单未登记", ""
-            elif known and all(s in RECEIVED_STATUSES for s in known) and len(known) == len(statuses):
+            elif (len(known) == len(statuses)
+                  and all(s in RECEIVED_STATUSES for s in known)):
                 stage, detail, reason = STAGE_ARRIVED, "已签收/POD（不等于可售）", "缺入库/上架证据"
-            elif known and all(s in ARRIVED_STATUSES for s in known):
+            elif (len(known) == len(statuses)
+                  and all(s in ARRIVED_STATUSES for s in known)):
                 stage, detail, reason = STAGE_ARRIVED, "到港/清关/派送（未证可售）", "缺入库/上架证据"
+            elif len(known) < len(statuses):
+                detail = ("运单状态未知（未匹配 Shipment）" if not known
+                          else "部分运单状态未知，不判定到港")
+                reason = "缺运单状态证据"
             elif len(dn_numbers) > 1:
                 detail, reason = "多运单，到货分配未知", "多运单未提供数量分配证据"
-            elif not known:
-                detail, reason = "运单状态未知（未匹配 Shipment）", "缺运单状态证据"
             if not ctx.get("shipment_permission"):
                 detail, reason = "状态未知（无 Shipment 读取权限）", "缺 Shipment 权限"
             rows.append(_balance(line, stage, net_qty, uom, detail=detail,
@@ -191,6 +216,9 @@ def build_stage_balances(line, ctx):
                                  demand_status=demand_status))
 
     own_wos = [w for w in (ctx.get("wos") or []) if w.get("item_code") == line.get("item_code")]
+    own_pps = [p for p in (ctx.get("pps") or []) if p.get("item_code") == line.get("item_code")]
+    pp_coverage = min(sum(_num(p.get("planned_qty")) for p in own_pps), _num(qty))
+    pp_ok = ctx.get("production_plan_permission", True)
     wo_units_ok = all((w.get("stock_uom") or "") == uom for w in own_wos)
     produced_estimated = any(w.get("produced_basis") == "wo_produced_qty" for w in own_wos)
     produced_total = (sum(_num(w.get("produced")) for w in own_wos)
@@ -224,9 +252,6 @@ def build_stage_balances(line, ctx):
                 rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom,
                                      reason="工单单位与订单单位不一致，完工/在产数量未归一",
                                      demand_status=demand_status))
-            elif wo_coverage <= 1e-9:
-                rows.append(_balance(line, STAGE_NOT_PLANNED, remaining, uom,
-                                     detail="无工单/生产计划", demand_status=demand_status))
             else:
                 production_gap = max(0.0, wo_coverage - produced_capped)
                 in_production = min(remaining, production_gap)
@@ -236,11 +261,29 @@ def build_stage_balances(line, ctx):
                         detail="在产/部分完工",
                         source=",".join(w.get("wo") for w in own_wos),
                         demand_status=demand_status))
-                uncovered = remaining - in_production
-                if uncovered > 1e-9:
-                    rows.append(_balance(
-                        line, STAGE_NOT_PLANNED, uncovered, uom,
-                        detail="无工单/生产计划覆盖", demand_status=demand_status))
+                leftover = remaining - in_production
+                if leftover > 1e-9:
+                    plan_only = min(leftover, max(0.0, pp_coverage - wo_coverage))
+                    if plan_only > 1e-9:
+                        rows.append(_balance(
+                            line, STAGE_UNKNOWN, plan_only, uom,
+                            detail="已提交生产计划，未建工单",
+                            reason="生产计划覆盖但阶段枚举无法表达，不判为未计划",
+                            demand_status=demand_status))
+                        leftover -= plan_only
+                    if leftover > 1e-9:
+                        if not pp_ok:
+                            rows.append(_balance(
+                                line, STAGE_UNKNOWN, leftover, uom,
+                                reason="无生产计划读取权限（含行级受限），阶段未知",
+                                demand_status=demand_status))
+                        else:
+                            detail = ("无工单/生产计划"
+                                      if wo_coverage <= 1e-9 and pp_coverage <= 1e-9
+                                      else "无工单/生产计划覆盖")
+                            rows.append(_balance(line, STAGE_NOT_PLANNED, leftover, uom,
+                                                 detail=detail,
+                                                 demand_status=demand_status))
 
     if cancelled:
         rows.append(_balance(line, STAGE_CANCELLED, qty, uom,
@@ -575,8 +618,8 @@ def load_pps(lines):
         return {}, False
     rows = frappe.db.sql(
         """select ppi.sales_order_item as so_line, ppi.name as ppi, ppi.parent as pp,
-                  pp.posting_date as pp_date, ppi.planned_qty, ppi.pending_qty,
-                  ppi.stock_uom
+                  pp.posting_date as pp_date, ppi.item_code, ppi.planned_qty,
+                  ppi.pending_qty, ppi.stock_uom
            from `tabProduction Plan Item` ppi
            join `tabProduction Plan` pp on pp.name = ppi.parent
            where pp.docstatus = 1 and ppi.sales_order_item in %(lines)s""",
@@ -689,8 +732,8 @@ def load_dns(lines):
         """select dn.name as dn, dn.posting_date as date, dn.status as status,
                   dn.docstatus as docstatus, ifnull(dn.is_return, 0) as is_return,
                   dn.return_against as return_against,
-                  dni.so_detail as so_line, dni.name as dn_item, dni.qty, dni.uom,
-                  dni.warehouse
+                  dni.so_detail as so_line, dni.name as dn_item, dni.dn_detail,
+                  dni.qty, dni.uom, dni.warehouse
            from `tabDelivery Note Item` dni
            join `tabDelivery Note` dn on dn.name = dni.parent
            where dni.so_detail in %(lines)s and dn.docstatus in (0, 1)
@@ -861,6 +904,7 @@ def get_supply_facts(filters=None):
             "dn_permission": dn_ok,
             "shipment_permission": ship_ok,
             "work_order_permission": wo_ok,
+            "production_plan_permission": permissions["production_plan"] and not pp_restricted,
             "observed_at": observed_at,
         }))
 
