@@ -146,6 +146,7 @@ uv run pytest self_fulfilled_demand/tests -q
 ## 7. 冻结状态
 
 - 分支：`keyapi/self-fulfilled-demand-oct29`
+- 实现提交：`3cfc585c`（feat(supply-chain): EN 终端订单只读增量与旧 GS 统一消费接口）
 - 改动：`self_fulfilled_demand/`（代码/测试/文档）、`AGENTS.md` 模块索引、`index.md` 自动更新、
   `pyproject.toml`/`uv.lock`（新增 `pyarrow`）
 - 未 push、未开 PR；等待外部复核。
