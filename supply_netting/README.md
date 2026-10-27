@@ -81,7 +81,7 @@ uv run python -m supply_netting \
 ## 验证
 
 ```bash
-uv run pytest supply_netting/tests -q          # 124 个用例（净额/契约/输入层/决策包/预测/F1–F4 回归/真实案例）
+uv run pytest supply_netting/tests -q          # 136 个用例（净额/契约/输入层/决策包/预测/F1–R3 回归/真实案例）
 uv run pytest supply_chain_visibility/tests -q # 23 个（引入的上游组件）
 ```
 

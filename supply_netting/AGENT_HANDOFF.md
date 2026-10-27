@@ -60,6 +60,12 @@
     阶段校验在写产物之前，失败不落盘。
 15. **预测与需求两套资格**：`netting_eligible` ≠ `netting_allowed`；实际订单优先于预测；
     预测只覆盖通过资格的键，未覆盖部分不填 0。
+16. **拆分母额度**：`split_of` + `split_total` 必须传到计数侧；同一父的 6/4 子额度各自计数，
+    只有同一额度跨阶段重放才去重；拆分合计≠父余额直接报错。
+17. **期初未知就是未知**：混合已知+未证期初 → `opening=null` 并给 `opening_lower_bound`，
+    不能用精确小计隐含未知为零。
+18. **预测哈希**：消费前按上游 manifest 的 `outputs` 校验窗口 sha256 与行数；
+    缺失/重复/错配一律 `ForecastContractError`。
 
 ## 4. 两种情景
 
@@ -74,7 +80,7 @@
 ## 5. 跑与验
 
 ```bash
-uv run pytest supply_netting/tests -q           # 124
+uv run pytest supply_netting/tests -q           # 136
 uv run pytest supply_chain_visibility/tests -q  # 23（上游组件）
 uv run python -m supply_netting --help
 ```

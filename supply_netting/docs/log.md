@@ -41,3 +41,13 @@ updated: 2026-10-27
 - r5：545 键、保护期缺口 71 键共 34.87、视界末未满足 449.97、条件供应 11,305；
   全部恒等式通过，`git_dirty=false`。
 - 测试 147 通过（F1–F4 回归 21 个、预测 9 个）。
+
+## 2026-10-27 — 第二轮复审 R1–R3
+
+- R1：拆分谱系（split_of / split_total / document_key split-quota）传到计数侧；
+  合法 6+4 子额度各自计数（净额 10、gap 0），只有同一额度跨阶段重放才去重；
+  拆分与整批观察并存时两侧保留并上报 batch_split_conflicts。
+- R2：混合已知+未证期初 → opening=null + opening_lower_bound，gap 保持 null。
+- R3：预测入口按上游 manifest 校验窗口 sha256 与行数，新增 --forecast-manifest-sha256。
+- r5 复算：代码 d4fc0862（git_dirty=false），数字与上一轮完全一致；预测哈希已验证。
+- 测试 159 通过（supply_netting 136 + 上游 23）。

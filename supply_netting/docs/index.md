@@ -19,6 +19,7 @@ updated: 2026-10-27
 | 刷新预测怎么接入、资格怎么分 | [reference/forecast-input.md](reference/forecast-input.md) |
 | 本次真实数据对账、案例、剩余阻塞 | [acceptance-report-2026-10-27.md](acceptance-report-2026-10-27.md) |
 | 独立复审 F1–F4 返修与 r5 结果 | [review-fix-r5-2026-10-27.md](review-fix-r5-2026-10-27.md) |
+| 第二轮复审 R1–R3 返修与 r5 复算 | [review-fix-r1-r3-2026-10-27.md](review-fix-r1-r3-2026-10-27.md) |
 | 引入的上游组件及来源 commit | [../../supply_chain_visibility/docs/reference/upstream-port.md](../../supply_chain_visibility/docs/reference/upstream-port.md) |
 | 变更时间线 | [log.md](log.md) |
 
