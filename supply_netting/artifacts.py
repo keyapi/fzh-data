@@ -82,6 +82,9 @@ def _summary_frame(net_result) -> pd.DataFrame:
         records.append(dict(
             canonical_sku=sku, canonical_warehouse=warehouse, canonical_uom=uom,
             opening=target["opening"],
+            # R2：期初未知时给已知下界，避免把「未知」读成 0
+            opening_lower_bound=_num(target.get("opening_lower_bound")),
+            opening_unproven_rows=target.get("opening_unproven", 0),
             protect_demand=_num(protect.get("demand")),
             protect_gap=_num(protect.get("gap")),
             horizon_unserved=_num(last.get("unserved")),

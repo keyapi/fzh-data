@@ -83,7 +83,7 @@ def _timing(stock_meta: dict, as_of: datetime) -> dict:
                 note="snapshot_at 无时区，按 as_of 时区解读；正值表示 as_of 晚于快照")
 
 
-def main(argv=None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="供给净额：需求净额 × 库存/供应事实 → 分桶净额")
     parser.add_argument("--demand", required=True, help="冻结的 demand_netting.parquet")
     parser.add_argument("--stock", required=True, help="通途库存快照 en_stock.parquet")
@@ -106,10 +106,16 @@ def main(argv=None) -> int:
     parser.add_argument("--forecast-run-id", default=None,
                         help="要求的预测 run_id；与 CURRENT 不一致直接报错，不静默换版本")
     parser.add_argument("--forecast-lead-days", type=int, default=60)
+    parser.add_argument("--forecast-manifest-sha256", default=None,
+                        help="固定上游 forecast_manifest.json 的哈希；不符直接报错")
     parser.add_argument("--no-forecast", action="store_true",
                         help="不消费预测（只回放历史需求；manifest 会明确标注）")
     parser.add_argument("--out", required=True)
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
 
     as_of = _parse_as_of(args.as_of)
     buckets = build_buckets(as_of, protect_days=args.protect_days, weeks=args.weeks)
@@ -126,7 +132,8 @@ def main(argv=None) -> int:
     if not args.no_forecast:
         forecast = load_forecast(args.forecast_root,
                                  expected_run_id=args.forecast_run_id,
-                                 lead_days=args.forecast_lead_days)
+                                 lead_days=args.forecast_lead_days,
+                                 expected_manifest_sha256=args.forecast_manifest_sha256)
         covered = overlap_keys(default_rows, forecast.window_start, as_of.tzinfo)
         forecast_rows, forecast_evidence, forecast_meta = forecast_demand_rows(
             forecast, load_sku_map(args.sku_map), buckets=buckets, as_of=as_of,
@@ -209,6 +216,8 @@ def main(argv=None) -> int:
         supply_facts_rows=int(len(facts)),
         netting_rows=int(len(net_rows)),
         opening_rows_excluded=sum(t.get("opening_excluded", 0) for t in result["targets"]),
+        opening_rows_unproven=sum(t.get("opening_unproven", 0) for t in result["targets"]),
+        batch_split_conflicts=sum(t.get("batch_split_conflicts", 0) for t in result["targets"]),
         duplicate_supply_rows=int((facts["disposition_reason"] == "duplicate_supply_row").sum())
         if "disposition_reason" in facts.columns else 0,
         same_batch_excluded_rows=int(

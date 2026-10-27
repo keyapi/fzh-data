@@ -264,25 +264,36 @@ def _opening_eligible(row: SupplyRow) -> bool:
 
 
 def opening_basis(rows: Sequence[SupplyRow]) -> dict:
-    """把库存行拆成「计入期初」与「明确/未证排除」。
+    """把库存行拆成「计入 / 明确排除 / 可能属于基准但未证」。
 
-    返回 ``opening``（Decimal 或 None）、``reason`` 与两侧的行，供事实表逐条留痕。
+    R2：只要还有「可能属于基准但数量/身份未证」的行，精确期初就是未知——
+    不能返回已知小计并让读者把它当成完整期初。此时给出 ``lower_bound``（已知下界），
+    ``opening=None``。
     """
     included = [row for row in rows if _opening_eligible(row)]
     excluded = [row for row in rows if not _opening_eligible(row)]
+    unproven = [row for row in excluded
+                if row.qty is None or row.exclusion_reason not in _OPENING_DEFINITIVE_EXCLUSIONS]
+    definitive = [row for row in excluded if row not in unproven]
+    known = (sum((row.qty for row in included), Decimal(0))
+             if included and all(row.qty is not None for row in included) else Decimal(0))
+
+    if unproven:
+        return dict(opening=None, reason="opening_partially_unproven",
+                    lower_bound=known if included else Decimal(0),
+                    included=included, excluded=excluded, unproven=unproven)
     if included:
         if any(row.qty is None for row in included):
-            return dict(opening=None, reason="opening_qty_unproven",
-                        included=included, excluded=excluded)
-        return dict(opening=sum((row.qty for row in included), Decimal(0)),
-                    reason="snapshot", included=included, excluded=excluded)
-    if excluded:
-        definitive = all(row.qty is not None and row.exclusion_reason in _OPENING_DEFINITIVE_EXCLUSIONS
-                         for row in excluded)
-        return dict(opening=Decimal(0) if definitive else None,
-                    reason="all_opening_excluded" if definitive else "opening_unproven",
-                    included=[], excluded=excluded)
-    return dict(opening=None, reason="no_snapshot_basis", included=[], excluded=[])
+            return dict(opening=None, reason="opening_qty_unproven", lower_bound=None,
+                        included=included, excluded=excluded, unproven=[])
+        total = sum((row.qty for row in included), Decimal(0))
+        return dict(opening=total, reason="snapshot", lower_bound=total,
+                    included=included, excluded=excluded, unproven=[])
+    if definitive:
+        return dict(opening=Decimal(0), reason="all_opening_excluded", lower_bound=Decimal(0),
+                    included=[], excluded=excluded, unproven=[])
+    return dict(opening=None, reason="no_snapshot_basis", lower_bound=None,
+                included=[], excluded=[], unproven=[])
 
 
 def _dedupe_exact(rows: Sequence[SupplyRow]) -> tuple[list[SupplyRow], list[SupplyRow]]:
@@ -299,18 +310,32 @@ def _dedupe_exact(rows: Sequence[SupplyRow]) -> tuple[list[SupplyRow], list[Supp
     return kept, dropped
 
 
-def apply_batch_quota(rows: Sequence[SupplyRow]) -> tuple[list[SupplyRow], list[tuple[SupplyRow, str]]]:
-    """同批跨阶段只计一次。
+def _quota_key(row: SupplyRow) -> str:
+    """额度身份：合法拆分子额度各有自己的身份；其余用批次键本身。
 
-    只对「已证批次」生效：同一 ``(sku, 仓, 单位, batch_key)`` 出现在多个阶段时，
-    保留最靠后可售的阶段（到仓 > 在途 > 完工待发 > 在产），其余全部留证；
-    同阶段同批重复也只留一条。数量不一致记为 ``batch_quantity_conflict``，
-    但绝不把两侧数量相加。
+    R1：拆分谱系来自 ``facts.split_balance``，经 Tranche 写进 ``document_key``。
+    同一父余额的 6+4 是两个额度，必须各自计数；只有同一额度的跨阶段观察才去重。
+    """
+    document = row.document_key or ""
+    prefix = "split-quota:"
+    if document.startswith(prefix):
+        return document[len(prefix):]
+    return row.batch_key or ""
+
+
+def apply_batch_quota(rows: Sequence[SupplyRow]) -> tuple[list[SupplyRow], list[tuple[SupplyRow, str]], list[tuple]]:
+    """同批跨阶段只计一次（按额度身份）。
+
+    只对「已证批次」生效：同一 ``(sku, 仓, 单位, batch_key, 额度)`` 出现在多个阶段时，
+    保留最靠后可售的阶段，其余留证；同阶段同额度重复也只留一条。
+    合法拆分的不同子额度是不同额度，全部保留数量与日期。
+    数量不一致记为 ``batch_quantity_conflict``，绝不把两侧相加。
     """
     groups: dict[tuple, list[SupplyRow]] = {}
     for row in rows:
         if row.batch_proven and row.batch_key:
-            groups.setdefault((row.sku, row.warehouse, row.uom, row.batch_key), []).append(row)
+            groups.setdefault((row.sku, row.warehouse, row.uom, row.batch_key,
+                               _quota_key(row)), []).append(row)
     excluded: dict[int, tuple[SupplyRow, str]] = {}
     for group in groups.values():
         if len(group) < 2:
@@ -322,8 +347,15 @@ def apply_batch_quota(rows: Sequence[SupplyRow]) -> tuple[list[SupplyRow], list[
             if row is best:
                 continue
             excluded[id(row)] = (row, reason)
+
+    # 同一批次同时出现「合法拆分」与「整批观察」：谱系无法证明是否同一实物，
+    # 按额度各自保留，但必须把冲突显式报出来，便于人工核实。
+    kinds: dict[tuple, set] = {}
+    for key in groups:
+        kinds.setdefault(key[:4], set()).add("split" if key[4] != key[3] else "whole")
+    split_conflicts = [batch for batch, seen in kinds.items() if len(seen) > 1]
     kept = [row for row in rows if id(row) not in excluded]
-    return kept, list(excluded.values())
+    return kept, list(excluded.values()), split_conflicts
 
 
 def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
@@ -348,9 +380,10 @@ def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
     opening_rows = [r for r in deduped if r.source_layer == "inventory_snapshot"]
     basis = opening_basis(opening_rows)
     opening, opening_reason = basis["opening"], basis["reason"]
+    opening_lower_bound = basis.get("lower_bound")
 
     future_rows = [r for r in deduped if r.source_layer != "inventory_snapshot"]
-    future_rows, quota_excluded = apply_batch_quota(future_rows)
+    future_rows, quota_excluded, split_conflicts = apply_batch_quota(future_rows)
     extra_pres = [(row, "duplicate_supply_row") for row in duplicated] + quota_excluded
     has_future_evidence = bool(future_rows) or bool(extra_pres)
     scenarios = {name: _run_scenario(name, future_rows, target=key, as_of=as_of,
@@ -366,7 +399,8 @@ def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
     for name in SCENARIOS:
         scenario = scenarios[name]
         if opening is None:
-            out_rows.extend(_unknown_rows(key, buckets, name, opening_reason))
+            out_rows.extend(_unknown_rows(key, buckets, name, opening_reason,
+                                          opening_lower_bound))
             continue
         claims = [dict(name=b.bucket_id,
                        opening=float(opening) if index == 0 else None,
@@ -393,6 +427,7 @@ def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
                 historical_demand=_to_decimal(
                     demand["by_source"][buckets[index].bucket_id].get("demand_netting", Decimal(0))),
                 conditional_receipts=conditional_qty,
+                opening_lower_bound=opening_lower_bound,
                 has_unresolved=bool(scenario["has_unresolved"]),
                 supply_evidence=has_future_evidence, status=(
                     "conditional" if (scenario["has_unresolved"] or conditional_qty > 0
@@ -404,6 +439,9 @@ def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
                      + [_fact(r, reason=f"opening_excluded:{r.exclusion_reason or 'unproven'}")
                         for r in basis["excluded"]])
     return dict(key=key, opening=opening, opening_reason=opening_reason,
+                opening_lower_bound=opening_lower_bound,
+                opening_unproven=len(basis.get("unproven", [])),
+                batch_split_conflicts=len(split_conflicts),
                 opening_facts=opening_facts,
                 opening_included=len(basis["included"]),
                 opening_excluded=len(basis["excluded"]),
@@ -413,10 +451,12 @@ def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
                 scenarios=scenarios, rows=out_rows)
 
 
-def _unknown_rows(key, buckets: Sequence[Bucket], scenario: str, reason: str) -> list[dict]:
+def _unknown_rows(key, buckets: Sequence[Bucket], scenario: str, reason: str,
+                  lower_bound=None) -> list[dict]:
     return [dict(scenario=scenario, bucket_id=b.bucket_id, opening=None, receipts=None,
                  demand=None, fulfilled=None, closing=None, unserved=None, gap=None,
-                 conditional_receipts=None, has_unresolved=True, supply_evidence=False,
+                 conditional_receipts=None, opening_lower_bound=lower_bound,
+                 has_unresolved=True, supply_evidence=False,
                  status="unknown", unknown_reason=reason)
             for b in buckets]
 

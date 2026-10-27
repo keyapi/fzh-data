@@ -63,8 +63,23 @@ class ForecastInput:
     rows: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
+def _declared_output(manifest: dict, filename: str) -> dict:
+    """按准确文件名取上游 manifest 的输出声明；缺失或重复都报错。"""
+    outputs = manifest.get("outputs")
+    if not isinstance(outputs, list) or not outputs:
+        raise ForecastContractError("预测 manifest 缺少 outputs 列表，无法校验输出哈希")
+    matches = [item for item in outputs
+               if isinstance(item, dict) and str(item.get("file")) == filename]
+    if not matches:
+        raise ForecastContractError(f"预测 manifest 未声明输出 {filename}")
+    if len(matches) > 1:
+        raise ForecastContractError(f"预测 manifest 重复声明输出 {filename}（{len(matches)} 条）")
+    return matches[0]
+
+
 def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
-                  lead_days: int = 60) -> ForecastInput:
+                  lead_days: int = 60,
+                  expected_manifest_sha256: str | None = None) -> ForecastInput:
     root = Path(root)
     current = root / "CURRENT"
     if not current.exists():
@@ -82,16 +97,34 @@ def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
         if not path.exists():
             raise ForecastContractError(f"预测产物缺失：{path}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_sha256 = _sha256(manifest_path)
+    if expected_manifest_sha256 and manifest_sha256.lower() != expected_manifest_sha256.strip().lower():
+        raise ForecastContractError(
+            f"预测 manifest 哈希不符：实测 {manifest_sha256}，要求 {expected_manifest_sha256}")
     if manifest.get("schema_version") != SCHEMA_VERSION:
         raise ForecastContractError(f"预测 schema 不符：{manifest.get('schema_version')}")
     if manifest.get("run_id") != run_id:
         raise ForecastContractError(
             f"预测 manifest.run_id={manifest.get('run_id')} 与 CURRENT={run_id} 不一致")
 
+    # R3：消费前必须对照上游 manifest 声明校验窗口文件哈希（缺失/重复/错配都拒绝）。
+    declared = _declared_output(manifest, windows_path.name)
+    windows_sha256 = _sha256(windows_path)
+    declared_sha256 = str(declared.get("sha256") or "").strip().lower()
+    if not declared_sha256:
+        raise ForecastContractError(f"预测 manifest 未给 {windows_path.name} 的 sha256")
+    if declared_sha256 != windows_sha256.lower():
+        raise ForecastContractError(
+            f"预测窗口文件哈希不符：实测 {windows_sha256}，上游声明 {declared_sha256}")
+
     frame = pd.read_parquet(windows_path)
     missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
     if missing:
         raise ForecastContractError(f"预测窗口表缺列：{missing}")
+    total_rows = int(len(frame))
+    if declared.get("rows") is not None and int(declared["rows"]) != total_rows:
+        raise ForecastContractError(
+            f"预测窗口文件行数不符：实测 {total_rows}，上游声明 {declared['rows']}")
     frame = frame[frame["lead_days"] == lead_days].copy()
     if frame.empty:
         raise ForecastContractError(f"预测窗口表没有 lead_days={lead_days} 的行")
@@ -99,8 +132,8 @@ def load_forecast(root: str | Path, *, expected_run_id: str | None = None,
     run_meta = manifest.get("run", {})
     return ForecastInput(
         root=root, run_id=run_id, run_dir=run_dir, manifest=manifest,
-        manifest_sha256=_sha256(manifest_path), windows_path=windows_path,
-        windows_sha256=_sha256(windows_path),
+        manifest_sha256=manifest_sha256, windows_path=windows_path,
+        windows_sha256=windows_sha256,
         decision_date=run_meta.get("decision_date"),
         data_cutoff=run_meta.get("data_cutoff"),
         lead_days=lead_days,
@@ -226,6 +259,8 @@ def forecast_demand_rows(forecast: ForecastInput, sku_map: pd.DataFrame, *,
         manifest_sha256=forecast.manifest_sha256,
         windows_path=str(forecast.windows_path),
         windows_sha256=forecast.windows_sha256,
+        windows_sha256_verified=True,
+        manifest_sha256_verified=True,
         decision_date=forecast.decision_date,
         data_cutoff=forecast.data_cutoff,
         lead_days=forecast.lead_days,

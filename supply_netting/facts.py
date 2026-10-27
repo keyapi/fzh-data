@@ -72,6 +72,8 @@ class StageBalance:
     batch_proven: bool = False
     # 合法拆分：split_of 指向原余额；没有它就不允许同阶段重复出现
     split_of: str | None = None
+    # 拆分总量（父余额数量），用于校验子额度合计，不参与供给计算
+    split_total: Decimal | None = None
 
 
 class DuplicateBalanceError(ValueError):
@@ -98,6 +100,8 @@ class Tranche:
     source_complete: bool = False
     batch_key: str | None = None
     batch_proven: bool = False
+    # R1：拆分谱系必须传到计数侧，否则合法子额度会被跨阶段去重误删
+    split_of: str | None = None
 
 
 def _aware(value) -> bool:
@@ -135,10 +139,20 @@ def validate_stage_balances(balances, order_totals: dict | None = None) -> list[
         if len(rows) < 2:
             continue
         parents = {row.split_of for row in rows}
+        totals = {row.split_total for row in rows}
         # 只有「同一父余额的显式拆分」才合法；其余重复一律失败关闭。
         if len(parents) != 1 or None in parents:
             labels = ", ".join(row.balance_id for row in rows)
             errors.append(f"同订单/物料/仓/单位阶段重复且不是同一父余额拆分：{labels}")
+            continue
+        # R1：合法拆分的子额度合计必须等于父余额数量（split_total）。
+        if len(totals) != 1 or None in totals:
+            errors.append(f"拆分 {rows[0].split_of} 的父余额（split_total）声明不一致")
+            continue
+        children_total = sum((row.qty or Decimal(0)) for row in rows)
+        if children_total != next(iter(totals)):
+            errors.append(f"拆分 {rows[0].split_of} 子额度合计 {children_total} "
+                          f"≠ 父余额 {next(iter(totals))}")
     for row in balances:
         if order_totals is None or row.order_qty is None:
             continue
@@ -190,7 +204,8 @@ def split_balance(balance: StageBalance, splits) -> list[StageBalance]:
         out.append(replace(balance, balance_id=f"{balance.balance_id}#{label}{index}",
                            qty=Decimal(str(qty)), sellable_at=available_at,
                            date_confidence="confirmed" if _aware(available_at) else "unknown",
-                           split_of=balance.split_of or balance.balance_id))
+                           split_of=balance.split_of or balance.balance_id,
+                           split_total=balance.qty))
     return out
 
 
@@ -225,6 +240,7 @@ def build_availability_schedule(balances) -> list[Tranche]:
             source_complete=row.source_complete,
             batch_key=row.batch_key,
             batch_proven=row.batch_proven,
+            split_of=row.split_of,
         )
         tranches.append(tranche)
         if row.qty is not None:
@@ -296,6 +312,8 @@ def tranches_to_supply_rows(tranches):
             b_min_eligible=False, b_max_eligible=True,
             source_key=tranche.tranche_id, source_complete=tranche.source_complete,
             batch_key=tranche.batch_key, batch_proven=tranche.batch_proven,
+            # R1：拆分谱系写进 document_key，供计数侧区分「合法子额度」与「同额度重放」
+            document_key=(f"split-quota:{tranche.balance_id}" if tranche.split_of else None),
         ))
     return rows, evidence
 

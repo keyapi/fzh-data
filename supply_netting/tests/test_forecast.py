@@ -39,22 +39,34 @@ def window(**changes):
 
 
 class ForecastFixture(unittest.TestCase):
-    def build(self, rows, run_id="forecast-test", expected=None):
+    def build(self, rows, run_id="forecast-test", expected=None, *, declared=None,
+              declared_rows=None, manifest_sha=None, outputs=None):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name) / "forecast"
         run_dir = root / run_id
         run_dir.mkdir(parents=True)
         (root / "CURRENT").write_text(run_id, encoding="utf-8")
-        (run_dir / "forecast_manifest.json").write_text(json.dumps({
+        windows = run_dir / "forecast_sku_warehouse_windows.parquet"
+        pd.DataFrame(rows).to_parquet(windows, index=False)
+        import hashlib
+        actual_sha = hashlib.sha256(windows.read_bytes()).hexdigest()
+        if outputs is None:
+            outputs = [dict(file=windows.name,
+                            rows=declared_rows if declared_rows is not None else len(rows),
+                            sha256=declared if declared is not None else actual_sha)]
+        manifest = {
             "schema_version": "en-demand-forecast-v1", "run_id": run_id,
             "generated_at": "2026-10-27T14:54:27+08:00",
             "run": {"decision_date": "2026-10-29", "data_cutoff": "2026-10-26"},
             "code": {"git_head": "deadbeef"},
-        }), encoding="utf-8")
-        pd.DataFrame(rows).to_parquet(run_dir / "forecast_sku_warehouse_windows.parquet",
-                                      index=False)
-        return load_forecast(root, expected_run_id=expected)
+            "outputs": outputs,
+        }
+        (run_dir / "forecast_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        import hashlib as _h
+        manifest_sha = _h.sha256((run_dir / "forecast_manifest.json").read_bytes()).hexdigest()
+        return load_forecast(root, expected_run_id=expected,
+                             expected_manifest_sha256=manifest_sha)
 
 
 class ForecastTests(ForecastFixture):
@@ -69,6 +81,23 @@ class ForecastTests(ForecastFixture):
     def test_wrong_version_is_refused(self):
         with self.assertRaises(ForecastContractError):
             self.build([window()], expected="forecast-20261027-r2")
+
+    def test_windows_hash_mismatch_is_refused(self):
+        # R3：上游声明的窗口哈希与实测不符 → 拒绝消费
+        with self.assertRaises(ForecastContractError):
+            self.build([window()], declared="0" * 64)
+
+    def test_missing_or_duplicate_output_declaration_is_refused(self):
+        with self.assertRaises(ForecastContractError):
+            self.build([window()], outputs=[])
+        with self.assertRaises(ForecastContractError):
+            self.build([window()], outputs=[
+                dict(file="forecast_sku_warehouse_windows.parquet", rows=1, sha256="a" * 64),
+                dict(file="forecast_sku_warehouse_windows.parquet", rows=1, sha256="b" * 64)])
+
+    def test_declared_row_count_mismatch_is_refused(self):
+        with self.assertRaises(ForecastContractError):
+            self.build([window()], declared_rows=999)
 
     def test_window_is_spread_over_buckets_by_days(self):
         forecast = self.build([window()])
