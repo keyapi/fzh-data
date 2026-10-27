@@ -119,6 +119,67 @@ class TrancheTests(unittest.TestCase):
         self.assertTrue(frame["layer_overlap_unproven"].all())
 
 
+class V2ScopeTests(unittest.TestCase):
+    def test_fba_customer_with_in_house_scope_is_not_authoritative(self):
+        rows = [payload("SO-8", [line("SO-8", "L1", "美国FBA仓", "KS8")],
+                        [balance("SO-8", "L1", "KS8", "produced_pending_dn", 60.0,
+                                 scope="in_house")])]
+        frame = build_tranches(rows, {"SO-8": True})
+        row = frame.iloc[0]
+        self.assertIsNone(row["branch_warehouse"])
+        self.assertFalse(bool(row["authoritative_offset"]))
+
+    def test_first_op_basis_is_estimated_not_authoritative(self):
+        rows = [payload("SO-1", [line("SO-1", "L1", "美东公司（CENTADE）", "KS1")],
+                        [balance("SO-1", "L1", "KS1", "produced_pending_dn", 40.0),
+                         dict(balance("SO-1", "L1", "KS1", "in_production", 25.0),
+                              qty_basis="job_card_first_op")])]
+        frame = build_tranches(rows, {"SO-1": True})
+        by_stage = frame.set_index("stage")
+        self.assertEqual(by_stage.loc["produced_pending_dn", "qty_evidence"], "measured")
+        self.assertTrue(bool(by_stage.loc["produced_pending_dn", "authoritative_offset"]))
+        self.assertEqual(by_stage.loc["in_production", "qty_evidence"], "estimated_first_op")
+        self.assertFalse(bool(by_stage.loc["in_production", "authoritative_offset"]))
+
+        by_key = build_by_key(frame, None)
+        row = by_key.iloc[0]
+        self.assertEqual(row["conditional_dated_qty"], 40.0)
+        self.assertEqual(row["conditional_dated_qty_estimated"], 25.0)
+        self.assertEqual(row["conditional_dated_qty_all"], 65.0)
+
+    def test_uom_totals_are_kept_separate(self):
+        rows = [payload("SO-1", [line("SO-1", "L1", "美东公司（CENTADE）", "KS1")],
+                        [dict(balance("SO-1", "L1", "KS1", "produced_pending_dn", 10.0),
+                              uom="个")]),
+                payload("SO-2", [line("SO-2", "L1", "美东公司（CENTADE）", "KS2", uom="件")],
+                        [dict(balance("SO-2", "L1", "KS2", "produced_pending_dn", 3.0),
+                              uom="件")])]
+        frame = build_tranches(rows, {"SO-1": True, "SO-2": True})
+        by_key = build_by_key(frame, None)
+        split = by_key.groupby("uom")["conditional_dated_qty"].sum().to_dict()
+        self.assertEqual(split, {"个": 10.0, "件": 3.0})
+        # 没有任何一行把两个 UOM 合并
+        self.assertEqual(len(by_key), 2)
+
+    def test_gap_comparison_matches_uom(self):
+        rows = [payload("SO-1", [line("SO-1", "L1", "美东公司（CENTADE）", "KS1", uom="件")],
+                        [dict(balance("SO-1", "L1", "KS1", "produced_pending_dn", 30.0),
+                              uom="件")])]
+        frame = build_tranches(rows, {"SO-1": True})
+        windows = pd.DataFrame([dict(window_days=90, canonical_sku="KS1",
+                                     canonical_warehouse="美东-CENTRADE",
+                                     canonical_uom="个", cum_unserved=100.0,
+                                     bucket_end="2027-01-25T05:17:34+08:00")])
+        by_key = build_by_key(frame, windows)
+        self.assertEqual(len(by_key), 1)
+        row = by_key.iloc[0]
+        self.assertEqual(row["uom"], "件")
+        # 个的缺口不能被子键的套/件供给抵减
+        self.assertTrue(pd.isna(row["gap90_base"]))
+        self.assertTrue(pd.isna(row["gap90_with"]))
+        self.assertEqual(row["conditional_dated_qty"], 30.0)
+
+
 class KeyAggregationTests(unittest.TestCase):
     def _inputs(self, conserved=True):
         rows = [payload("SO-1", [line("SO-1", "L1", "美东公司（CENTADE）", "KS1")],

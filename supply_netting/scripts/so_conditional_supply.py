@@ -130,9 +130,19 @@ def build_tranches(w1_rows: list[dict], conservation: dict[str, bool]) -> pd.Dat
             dates = plan_dates(stage, audit_date, branch)
             excluded = balance.get("exclusion_reason") or ""
             blocking_exclusion = bool(excluded) and excluded not in ("缺出库单",)
+            basis = str(balance.get("qty_basis") or "")
+            if not qty_known:
+                qty_evidence = "unknown"
+            elif basis == "job_card_first_op":
+                qty_evidence = "estimated_first_op"      # 只证明首工序，不等于可发运
+            else:
+                qty_evidence = "measured"
+            # v2：权威量必须 in_house + 守恒 + 有分公司目标 + 已证数量 + 非首工序推断
             authoritative = bool(
                 conserved is True and qty_known and scope == "in_house"
+                and branch is not None and role == "finished"
                 and stage in ("produced_pending_dn", "in_production")
+                and qty_evidence == "measured"
                 and not blocking_exclusion
             )
             records.append(dict(
@@ -148,6 +158,7 @@ def build_tranches(w1_rows: list[dict], conservation: dict[str, bool]) -> pd.Dat
                 included_in_stock=balance.get("included_in_stock"),
                 scope=scope,
                 so_conserved=conserved,
+                qty_evidence=qty_evidence,
                 authoritative_offset=authoritative,
                 **dates,
                 dedup_status=("po_in_transit_unproven"
@@ -193,12 +204,18 @@ def build_by_key(tranches: pd.DataFrame, windows_keys: pd.DataFrame | None,
     earliest_any = dated.groupby(key)["eta_earliest_date"].min().rename("earliest_eta_any")
     dated_qty = (dated[dated["authoritative_offset"]].groupby(key)["qty"].sum()
                  .rename("conditional_dated_qty"))
+    estimated_qty = (dated[dated["so_conserved"].fillna(False).astype(bool)
+                           & dated["authoritative_offset"].eq(False)
+                           & dated["qty_evidence"].eq("estimated_first_op")]
+                     .groupby(key)["qty"].sum().rename("conditional_dated_qty_estimated"))
     dated_qty_all = dated.groupby(key)["qty"].sum().rename("conditional_dated_qty_all")
     transit_qty = (usable[usable["stage"] == "shipped_in_transit"]
                    .groupby(key)["qty"].sum().rename("in_transit_qty_no_eta"))
-    frame = (grouped.join([earliest, earliest_any, dated_qty, dated_qty_all, transit_qty],
-                          how="outer")
-             .fillna({c: 0.0 for c in ("conditional_dated_qty", "conditional_dated_qty_all",
+    frame = (grouped.join([earliest, earliest_any, dated_qty, estimated_qty,
+                           dated_qty_all, transit_qty], how="outer")
+             .fillna({c: 0.0 for c in ("conditional_dated_qty",
+                                       "conditional_dated_qty_estimated",
+                                       "conditional_dated_qty_all",
                                        "in_transit_qty_no_eta")})
              .reset_index())
     frame["earliest_eta"] = frame["earliest_eta"].dt.strftime("%Y-%m-%d")
@@ -235,22 +252,47 @@ def build_by_key(tranches: pd.DataFrame, windows_keys: pd.DataFrame | None,
     return frame
 
 
+def _uom_table(frame: pd.DataFrame, value: str, group: str | None = None) -> list[str]:
+    """按 UOM 汇总；绝不产生跨 UOM 的总计行。"""
+    if frame.empty or value not in frame.columns:
+        return ["（无数据）"]
+    numeric = frame.assign(qty=pd.to_numeric(frame[value], errors="coerce").fillna(0.0))
+    uom_col = "uom" if "uom" in numeric.columns else "canonical_uom"
+    grouped = numeric.groupby([uom_col] + ([group] if group else []), as_index=False)["qty"].sum()
+    lines = ["| " + " | ".join(grouped.columns) + " |",
+             "|" + "|".join("---" for _ in grouped.columns) + "|"]
+    for row in grouped.itertuples(index=False):
+        lines.append("| " + " | ".join(str(v) for v in row) + " |")
+    return lines
+
+
 def write_report(tranches: pd.DataFrame, by_key: pd.DataFrame, meta: dict, out: Path) -> None:
     total = len(tranches)
     known = int((tranches["qty_status"] == "known").sum())
     auth = int(tranches["authoritative_offset"].sum())
     non_conserved = sorted({row.so for row in tranches.itertuples(index=False)
                             if row.so_conserved is False})
+    fba = tranches[tranches["branch_warehouse"].isna()]
+    first_op = int((tranches["qty_evidence"] == "estimated_first_op").sum())
     stage_qty = (tranches[tranches["qty_status"] == "known"]
-                 .groupby("stage")["qty"].sum().round(3).to_dict())
+                 .groupby(["uom", "stage"], as_index=False)["qty"].sum().round(3))
     lines = [
-        "# SO 工厂条件供给层（W1 阶段余额 → 有条件、带日期）",
+        "# SO 工厂条件供给层 v2（W1 阶段余额 → 有条件、带日期）",
         "",
         f"- 生成时间：{meta['generated_at']}；W1 as_of：{meta['as_of']}；规则版本：{meta['rule_version']}",
         f"- 输入：`{meta['w1']}`（{meta['so_count']} 张 SO / {total} 条阶段余额）",
         f"- 守恒证据：`{meta['audit_csv']}`（{len(non_conserved)} 单不守恒）",
         "",
-        "## 日期规则（全部 assumed，无一条 confirmed）",
+        "## v2 修正（相对 v1）",
+        "",
+        "1. **权威条件量必须 `scope=in_house` 且 SO 守恒且目标分公司非空**；"
+        f"FBA 客户行 {len(fba)} 条全部排除（v1 曾把 794 件 FBA 算进“权威”）。",
+        f"2. `qty_basis=job_card_first_op` 的行 {first_op} 条标 `estimated_first_op`："
+        "只证明首工序，**不称可发运、不进权威抵扣**。",
+        "3. 所有汇总按 **UOM 分列**；本报告不出现跨 UOM 合计。",
+        "4. 90/150 天缺口对比也按 UOM 匹配，不混合计量单位。",
+        "",
+        "## 日期规则（全部 assumed / unknown，无一条 confirmed）",
         "",
         f"- 完工待发运：审计日 + 发运 {SHIP_DAYS} 天 + 海运（美东/美中 35、波兰 40，assumed）",
         f"- 在产：审计日 + 生产 {PRODUCTION_DAYS} 天 + 发运 {SHIP_DAYS} + 海运",
@@ -259,46 +301,38 @@ def write_report(tranches: pd.DataFrame, by_key: pd.DataFrame, meta: dict, out: 
         "",
         "## 守恒标记",
         "",
-        f"- 不守恒 SO：**{len(non_conserved)} 张**（审计口径：阶段合计（剔超产）≠ SO 总量）。",
-        "- 这些单的 `authoritative_offset=false`，只作证据与敏感性（`conditional_dated_qty_all`），"
-        "**不得作为权威抵扣**。",
+        f"- 不守恒 SO：**{len(non_conserved)} 张**；这些单 `authoritative_offset=false`，"
+        "只进敏感性（`conditional_dated_qty_all`），**不得作为权威抵扣**。",
         f"- 可作权威条件量的行：{auth} / {known} 条已知量行。",
         "",
-        "## 去重状态",
+        "## 分 UOM 条件量（不跨 UOM 相加）",
         "",
-        "- 与通途 PO/在途的去重**未证**：所有行 `dedup_status=po_in_transit_unproven`；"
-        "有 `batch_key` 的另标 `batch_key_present`，但不升级为已证同批。",
-        "- 同一 SO 行出现多层可供给阶段时标 `layer_overlap_unproven`，不擅自合并。",
-        "- `included_in_stock` 全部为 unknown，未证明是否已含库存。",
+        "权威（in_house + 守恒 + 已证数量）：",
         "",
-        "## 阶段量（已知数量，全部 SO）",
+        *_uom_table(by_key, "conditional_dated_qty"),
         "",
+        "首工序推断（estimated，不抵扣）：",
+        "",
+        *_uom_table(by_key, "conditional_dated_qty_estimated"),
+        "",
+        "敏感性上限（含不守恒 SO，仅参考）：",
+        "",
+        *_uom_table(by_key, "conditional_dated_qty_all"),
+        "",
+        "在途无 ETA（不计任何时点覆盖）：",
+        "",
+        *_uom_table(by_key, "in_transit_qty_no_eta"),
+        "",
+        "## 阶段量（已知数量，按 UOM）",
+        "",
+        "| uom | stage | qty |",
+        "|---|---|---|",
     ]
-    for stage, qty in sorted(stage_qty.items(), key=lambda item: -item[1]):
-        lines.append(f"- {stage}: {qty}")
-    auth_qty = float(tranches.loc[tranches["authoritative_offset"], "qty"].sum())
-    known_rows = tranches[tranches["qty_status"] == "known"]
-    dated_all = float(known_rows.loc[known_rows["stage"].isin(
-        ("produced_pending_dn", "in_production")), "qty"].sum())
-    cond_qty = float(pd.to_numeric(by_key.get("conditional_dated_qty"), errors="coerce")
-                     .fillna(0).sum()) if len(by_key) else 0.0
-    cond_all = float(pd.to_numeric(by_key.get("conditional_dated_qty_all"), errors="coerce")
-                     .fillna(0).sum()) if len(by_key) else 0.0
-    transit_qty = float(pd.to_numeric(by_key.get("in_transit_qty_no_eta"), errors="coerce")
-                        .fillna(0).sum()) if len(by_key) else 0.0
-    missing_dn = int((tranches["exclusion_reason"] == "缺出库单").sum())
+    for row in stage_qty.sort_values(["uom", "qty"], ascending=[True, False])             .itertuples(index=False):
+        lines.append(f"| {row.uom} | {row.stage} | {round(float(row.qty), 3)} |")
     lines += [
         "",
-        "## 条件量口径",
-        "",
-        f"- 可权威条件量（守恒 SO、已证数量、in_house、有日期）：**{auth_qty:.0f}**；"
-        f"对应 key 汇总 **{cond_qty:.0f}**。",
-        f"- 敏感性上限（含不守恒 SO）：**{cond_all:.0f}**，仅作参考，不得抵扣。",
-        f"- 在途（无 ETA，不计入任何时点覆盖）：**{transit_qty:.0f}**。",
-        f"- `缺出库单` 行 {missing_dn} 条：仍按完工待发运给 assumed 日期，但置信度不提升，"
-        "发货段未获凭证。",
-        "",
-        "## 90 / 150 天缺口对比（含 / 不含工厂条件供给）",
+        "## 90 / 150 天缺口对比（按 UOM 匹配，含 / 不含工厂条件供给）",
         "",
     ]
     if len(by_key):
@@ -306,24 +340,39 @@ def write_report(tranches: pd.DataFrame, by_key: pd.DataFrame, meta: dict, out: 
             base_col, with_col = f"gap{days}_base", f"gap{days}_with"
             if base_col not in by_key.columns:
                 continue
-            base = pd.to_numeric(by_key[base_col], errors="coerce")
-            with_supply = pd.to_numeric(by_key[with_col], errors="coerce")
-            comparable = base.notna()
-            lines.append(
-                f"- {days} 天：基线 {base[comparable].sum():.0f}，"
-                f"含条件供给 {with_supply[comparable].sum():.0f}"
-                f"（减少 {base[comparable].sum() - with_supply[comparable].sum():.0f}）；"
-                f"发生变化的键 {(with_supply[comparable] < base[comparable]).sum()} / "
-                f"{int(comparable.sum())}。")
-        lines.append("- 只覆盖有净额键的 SKU×仓；未匹配净额的键 gap 为 null，不写 0。")
+            frame = by_key.assign(
+                _base=pd.to_numeric(by_key[base_col], errors="coerce"),
+                _with=pd.to_numeric(by_key[with_col], errors="coerce"))
+            frame = frame[frame["_base"].notna()]
+            if frame.empty:
+                continue
+            lines.append(f"**{days} 天**")
+            lines.append("")
+            lines.append("| uom | 基线缺口 | 含条件供给 | 减少 | 变化键/可比键 |")
+            lines.append("|---|---:|---:|---:|---|")
+            for uom, group in frame.groupby("uom", sort=True):
+                reduced = int((group["_with"] < group["_base"]).sum())
+                lines.append(f"| {uom} | {group['_base'].sum():.0f} | "
+                             f"{group['_with'].sum():.0f} | "
+                             f"{group['_base'].sum() - group['_with'].sum():.0f} | "
+                             f"{reduced} / {len(group)} |")
+            lines.append("")
+        lines.append("只覆盖有净额键的 SKU×仓×UOM；未匹配的键 gap 为 null，不写 0。")
     lines += [
+        "",
+        "## 去重状态",
+        "",
+        "- 与通途 PO/在途去重**未证**：所有行 `dedup_status=po_in_transit_unproven`；"
+        "有 `batch_key` 只标存在，不升级为已证同批。",
+        "- 同一 SO 行多层阶段标 `layer_overlap_unproven`，不擅自合并；"
+        "`included_in_stock` 全部 unknown。",
         "",
         "## 输出",
         "",
-        "- `so_supply_tranches.csv`：SO 行 × 阶段明细",
+        "- `so_supply_tranches.csv`：SO 行 × 阶段明细（含 `qty_evidence`）",
         "- `so_conditional_by_key.csv`：SKU×分公司仓×UOM 汇总 + 90/150 天缺口含/不含对比",
         "",
-        "**只作条件情景**：不改 r6/h180 净额数字，不写 confirmed，不能直接当采购抵扣。",
+        "**只作条件附件**：不改 r6/h180 净额数字，不写 confirmed，不能直接当采购抵扣。",
         "",
     ]
     (out / "report.md").write_text("\n".join(lines), encoding="utf-8")
@@ -339,7 +388,7 @@ def main(argv=None) -> int:
                         default="D:/Work/fzh-order-store/en-demand-v1/supply-netting/"
                                 "horizon-windows-2026-10-29/horizon_windows_keys.csv")
     parser.add_argument("--out", default="D:/Work/fzh-order-store/en-demand-v1/supply-netting/"
-                                         "so-conditional-supply-2026-10-27")
+                                         "so-conditional-supply-2026-10-27-v2")
     args = parser.parse_args(argv)
 
     w1 = load_w1(args.w1)
