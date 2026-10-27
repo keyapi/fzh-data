@@ -28,6 +28,7 @@ def _rows_frame(net_result) -> pd.DataFrame:
                 opening=row["opening"], receipts=row["receipts"], demand=row["demand"],
                 fulfilled=row["fulfilled"], closing=row["closing"], unserved=row["unserved"],
                 gap=row["gap"], conditional_receipts=row["conditional_receipts"],
+                opening_lower_bound=row.get("opening_lower_bound"),
                 period_demand=row.get("period_demand"),
                 carried_unserved=row.get("carried_unserved"),
                 forecast_demand=row.get("forecast_demand"),
