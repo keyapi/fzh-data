@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-27（供应分型 / frePPLe / 先搜分支）
+
+- **更新**: `workflow-issues/search-first-before-implementing.md`（`last_updated: 2026-10-27`）—— 补 Case 4：**main 上 grep 不到 ≠ 项目没有**。预测（statsforecast 2.1.1）、供应净额、库存政策、交期配置分别在本地的 `keyapi/forecast-refresh-oct27`、`keyapi/supply-integrate-oct27` 分支和 PR #300；先查 `git branch -a` / `git log --all` / `gh pr list --state all` / `git ls-tree`，再决定“复用 / 接线 / 重造”。
+- **新增**: `tooling-decisions/frepple-evaluation-and-borrow-logic.md` —— frePPLe 社区版 8.0+ MIT、7.x AGPL、企业/云闭源；库存规划/承诺交期/Gantt 仅商业版；ERPNext 连接器 GPL-3.0 且 2022-02 后未更新（LICENSE 与 hooks 的 MIT 声明不一致，以 GPL-3.0 为准）。结论：**借 solver 逻辑（lead-time offset / allocation / pegging / CTP），不部署系统**；预测/库存/交期/净额复用本仓库已有资产。
+- **新增**: `workflow-issues/supply-sku-segmentation-and-stockout-evidence.md` —— 分型前先排包装费/无 `sku_item` 映射的非商品（`497268621` 是“礼盒包装费 ETSY”），再按成品/半成品/皮壳分型；`monthly_series` 只覆盖三个主仓，会漏渠道把畅销皮壳误判成长尾；PJ 检查点 22 个日期、6 个间隔 >7 天（最大 38 天），不能证明“断货超过一周”；零库存当日仍有销量的仅 1.3%；Jeck 表是成本系数表不是促销表；`item_attr.moq` 非零仅 21/15,230，是字段未维护，不是工厂 MOQ。
+
 ## 2026-10-27（OpenClash 单目标直连）
 - **新增**: `best-practices/openclash-per-target-direct-rule.md` — 办公室 WiFi 下单个境外主机/RDP 不通、直连光猫正常时的最小修复：先看 OpenClash 日志的 `match ... using ...` 行，确认目标落到默认 `Match`/代理节点；在自定义规则文件加 `IP-CIDR /32 → DIRECT`（域名用 `DOMAIN-SUFFIX`），备份后重启 OpenClash。验收必须做目标协议的端到端验证（RDP X.224 协商），不能只看端口 OPEN；同时回归普通代理出口。含多级 NAT 无法按设备隔离、远端白名单、目标 IP 变更等边界。本次实际目标 IP 只保留在受控路由器配置，不写入公开仓库。
 
