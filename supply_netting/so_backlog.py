@@ -18,6 +18,8 @@ from datetime import date, datetime, timedelta
 
 import pandas as pd
 
+from .leadtime import load_default_config
+
 COVER_PREFIX = "PK#"
 DELETED_PREFIXES = ("删除",)
 
@@ -36,20 +38,24 @@ WAREHOUSE_STAGE = {
     "仓库": ("unknown", "unattributed", False),
 }
 
-# 绍兴生产周期业务口径（用户 2026-10-27 确认）：下单 → 国外分公司能发货约 3 个月；
-# 近期 PB 实测有提前约 2 周的情况，所以取 90 天 baseline、范围 75–90 天。
-BASELINE_ORDER_TO_BRANCH_DAYS = 90
-BASELINE_RANGE_DAYS = (75, 90)
-# 春节：工厂放假约 1 个月 + 恢复产能约 1 个月 → 路径穿越停工窗口加 60 天缓冲。
-SPRING_FESTIVAL_ANCHOR = date(2027, 2, 6)      # 2027 年春节
-SPRING_FESTIVAL_SHUTDOWN_DAYS = 30
-SPRING_FESTIVAL_RECOVERY_DAYS = 30
-SPRING_FESTIVAL_BUFFER_DAYS = SPRING_FESTIVAL_SHUTDOWN_DAYS + SPRING_FESTIVAL_RECOVERY_DAYS
-# 停工 1 月 + 恢复 1 月：锚点前后各 30 天为受影响窗口
-SPRING_FESTIVAL_WINDOW_DAYS = 30
+# 交期口径全部来自版本化配置 ``supply_netting/config/leadtime_config.json``
+# （加载即校验：缺文件、缺字段、measured 却 sample_size=0 都在导入时失败，无内置默认值）。
+LEADTIME = load_default_config()
 
+# 业务口径（配置文件 so_pipeline，source=assumed、sample_size=0）：
+# 下单 → 国外分公司能发货约 3 个月；PB 实测有提前约 2 周，故 90 天 baseline、范围 75–90。
+BASELINE_ORDER_TO_BRANCH_DAYS = LEADTIME.so_pipeline.order_to_branch_days
+BASELINE_RANGE_DAYS = tuple(LEADTIME.so_pipeline.order_to_branch_range_days)
+# 春节：工厂放假 1 个月 + 恢复产能 1 个月 → 路径穿越停工窗口加 shutdown+recovery 缓冲。
+SPRING_FESTIVAL_ANCHOR = LEADTIME.spring_festival.anchor
+SPRING_FESTIVAL_SHUTDOWN_DAYS = LEADTIME.spring_festival.shutdown_days
+SPRING_FESTIVAL_RECOVERY_DAYS = LEADTIME.spring_festival.recovery_days
+SPRING_FESTIVAL_BUFFER_DAYS = LEADTIME.spring_festival.buffer_days
+# 锚点前后各 window 天为受影响窗口
+SPRING_FESTIVAL_WINDOW_DAYS = LEADTIME.spring_festival.window_days
 
-STAGE_ETA_ASSUMPTION_DAYS = 14   # 完工待发运 -> 到仓的假设值（发运/运输/入库），未实测
+# 完工待发运 -> 到仓的假设值（发运/运输/入库），未实测
+STAGE_ETA_ASSUMPTION_DAYS = LEADTIME.so_pipeline.stage_eta_assumption_days
 
 
 def festival_window(anchor: date = SPRING_FESTIVAL_ANCHOR) -> tuple[date, date]:
@@ -245,8 +251,11 @@ def summarize_backlog(frame: pd.DataFrame) -> dict:
         "spring_festival_applied_lines": int((counted["spring_festival_buffer_days"] > 0).sum()),
         "spring_festival_applied_quantity": round(
             float(counted.loc[counted["spring_festival_buffer_days"] > 0, "quantity"].sum()), 3),
-        "date_confidence": "estimated（工厂交付日 + 90 天业务口径 + 春节缓冲）；未实测",
-        "date_basis": "assumed_business_90d（业务口径，不是统计结论）",
+        "date_confidence": (f"estimated（工厂交付日 + {BASELINE_ORDER_TO_BRANCH_DAYS:g} 天业务口径"
+                            f" + 春节缓冲）；未实测"),
+        "date_basis": (f"assumed_business_{BASELINE_ORDER_TO_BRANCH_DAYS:g}d"
+                       "（业务口径，不是统计结论）"),
+        "leadtime_config": LEADTIME.to_manifest(),
         "note": "上游管线，不计入海外仓可用；不得与预测需求相加",
     }
 
@@ -286,8 +295,11 @@ def _festival_stats(frame: pd.DataFrame, counted: pd.DataFrame) -> dict:
         shutdown_days=SPRING_FESTIVAL_SHUTDOWN_DAYS,
         recovery_days=SPRING_FESTIVAL_RECOVERY_DAYS,
         buffer_days=SPRING_FESTIVAL_BUFFER_DAYS,
-        rule="生产+发运路径 [交付日-90, 交付日+90] 与锚点±30 天窗口相交即加 60 天；"
-             "另给只看生产段 [交付日-90, 交付日] 的对照",
+        rule=f"生产+发运路径 [交付日-{BASELINE_ORDER_TO_BRANCH_DAYS:g}, "
+             f"交付日+{BASELINE_ORDER_TO_BRANCH_DAYS:g}] 与锚点"
+             f"±{SPRING_FESTIVAL_WINDOW_DAYS:g} 天窗口相交即加 "
+             f"{SPRING_FESTIVAL_BUFFER_DAYS:g} 天；"
+             f"另给只看生产段 [交付日-{BASELINE_ORDER_TO_BRANCH_DAYS:g}, 交付日] 的对照",
         all_open_rows=_counts(frame, delivery),
         crossing_all_open=_counts(crossing_all, None),
         crossing_counted=_counts(crossing_counted, None),

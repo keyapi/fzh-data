@@ -1,0 +1,62 @@
+{
+  "version": "2026-10-28.1",
+  "effective_from": "2026-10-27",
+  "so_pipeline": {
+    "order_to_branch_days": 90,
+    "order_to_branch_range_days": [75, 90],
+    "stage_eta_assumption_days": 14,
+    "source": "assumed",
+    "sample_size": 0,
+    "notes": "用户 2026-10-27 业务口径：下单 → 国外分公司能发货约 3 个月；PB 实测有提前约 2 周，故取 90 天 baseline、范围 75–90。非实测（sample_size=0），不得当 confirmed。"
+  },
+  "spring_festival": {
+    "anchor": "2027-02-06",
+    "shutdown_days": 30,
+    "recovery_days": 30,
+    "window_days": 30,
+    "source": "assumed",
+    "sample_size": 0,
+    "notes": "2027 年春节：工厂放假约 1 个月 + 恢复产能约 1 个月 → 路径穿越停工窗口加 shutdown+recovery=60 天缓冲；锚点前后各 window_days 天为受影响窗口。"
+  },
+  "routes": [
+    {
+      "route_id": "CN->US-EAST",
+      "warehouse": "美东-CENTRADE",
+      "mode": "slow_boat",
+      "segments": {
+        "production": 60,
+        "shipping": 7,
+        "ocean": 35
+      },
+      "source": "assumed",
+      "sample_size": 0,
+      "notes": "美东分公司：在产 +60、完工待发运 +7 发运、海运 35；全部自然日，未实测。"
+    },
+    {
+      "route_id": "CN->US-WEST",
+      "warehouse": "美中-FZH-DANEEY",
+      "mode": "slow_boat",
+      "segments": {
+        "production": 60,
+        "shipping": 7,
+        "ocean": 35
+      },
+      "source": "assumed",
+      "sample_size": 0,
+      "notes": "美中分公司：在产 +60、完工待发运 +7 发运、海运 35；全部自然日，未实测。"
+    },
+    {
+      "route_id": "CN->PL",
+      "warehouse": "波兰-FZHPoland-covers",
+      "mode": "slow_boat",
+      "segments": {
+        "production": 60,
+        "shipping": 7,
+        "ocean": 40
+      },
+      "source": "assumed",
+      "sample_size": 0,
+      "notes": "波兰分公司：在产 +60、完工待发运 +7 发运、海运 40（比美线多 5 天）；全部自然日，未实测。"
+    }
+  ]
+}

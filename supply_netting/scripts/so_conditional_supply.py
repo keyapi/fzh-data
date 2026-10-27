@@ -7,11 +7,12 @@
 - ``so_conditional_by_key.csv``：SKU×分公司仓×UOM 汇总 + 90/150 天缺口「含/不含」工厂条件供给
 - ``report.md``：假设、守恒标记、去重未证
 
-日期规则（审计日 = W1 ``as_of``，2026-10-27）：
-- 完工待发运 ``produced_pending_dn`` = 审计日 + 发运 7 天 + 海运假设（美东 35 / 波兰 40，assumed）
-- 在产 ``in_production`` = 审计日 + 生产 60 天 + 发运 7 + 海运
+日期规则（审计日 = W1 ``as_of``，2026-10-27；天数为 `config/leadtime_config.json`
+里的 assumed 分段，缺文件/缺字段即失败）：
+- 完工待发运 ``produced_pending_dn`` = 审计日 + 发运 + 海运（美东 35 / 美中 35 / 波兰 40）
+- 在产 ``in_production`` = 审计日 + 生产 + 发运 + 海运
 - 在途 ``shipped_in_transit`` = 剩余海运 unknown → 不给日期
-- 路径穿越 2027-02-06 窗口（锚点 ±30 天）→ 最晚 ETA 加 60 天（最早 ETA 不加）
+- 路径穿越 2027-02-06 窗口（锚点 ±30 天）→ 最晚 ETA 加春节缓冲（默认 60 天），最早 ETA 不加
 
 守恒：``so_open_audit_2026-10-27.csv`` 的「守恒」列；不守恒的单不进「权威条件量」，
 只作证据/敏感性，绝不作为抵扣。
@@ -26,13 +27,14 @@ from pathlib import Path
 
 import pandas as pd
 
+from supply_netting.leadtime import load_default_config
 from supply_netting.so_backlog import (CUSTOMER_BRANCH, SPRING_FESTIVAL_ANCHOR,
                                        finished_item, festival_window)
 
-SHIP_DAYS = 7
-PRODUCTION_DAYS = 60
-SEA_DAYS = {"美东-CENTRADE": 35, "美中-FZH-DANEEY": 35, "波兰-FZHPoland-covers": 40}
-SPRING_BUFFER_DAYS = 60
+# 发运 / 生产 / 海运 / 春节缓冲全部读版本化配置
+# （``supply_netting/config/leadtime_config.json``，按分公司仓取分段；缺文件/缺字段即失败）。
+LEADTIME = load_default_config()
+SPRING_BUFFER_DAYS = LEADTIME.spring_festival.buffer_days
 PRODUCTIVE_STAGES = ("produced_pending_dn", "in_production", "shipped_in_transit")
 LAYER_ORDER = {"shipped_in_transit": 0, "produced_pending_dn": 1, "in_production": 2}
 
@@ -55,8 +57,9 @@ def _branch(customer: str) -> tuple[str | None, str]:
     return None, "unknown"
 
 
-def _sea_days(branch: str | None) -> int | None:
-    return SEA_DAYS.get(branch or "")
+def _route(branch: str | None):
+    """分公司仓 → 交期配置里的路线分段；未知仓直接报错（不猜天数）。"""
+    return LEADTIME.route_for(branch) if branch else None
 
 
 def _crosses_festival(start: date, end: date, anchor: date = SPRING_FESTIVAL_ANCHOR) -> bool:
@@ -66,27 +69,30 @@ def _crosses_festival(start: date, end: date, anchor: date = SPRING_FESTIVAL_ANC
 
 def plan_dates(stage: str, audit_date: date, branch: str | None) -> dict:
     """返回 earliest/latest ETA、依据与置信度（全部 assumed / unknown，绝不 confirmed）。"""
-    sea = _sea_days(branch)
-    if stage == "produced_pending_dn" and sea is not None:
-        base = audit_date + timedelta(days=SHIP_DAYS + sea)
-        basis = f"审计日+发运{SHIP_DAYS}天+海运{sea}天（assumed）"
-        confidence = "assumed"
-    elif stage == "in_production" and sea is not None:
-        base = audit_date + timedelta(days=PRODUCTION_DAYS + SHIP_DAYS + sea)
-        basis = (f"审计日+生产{PRODUCTION_DAYS}天+发运{SHIP_DAYS}天+海运{sea}天（assumed）")
-        confidence = "assumed"
-    elif stage == "shipped_in_transit":
+    if stage == "shipped_in_transit":
         return dict(eta_earliest=None, eta_latest=None, eta_basis="在途剩余海运未证（unknown）",
                     confidence="unknown", spring_buffer_days=None, spring_crossing=None)
-    else:
+    route = _route(branch)
+    if route is None or stage not in ("produced_pending_dn", "in_production"):
         return dict(eta_earliest=None, eta_latest=None, eta_basis="非可供给阶段，不给日期",
                     confidence="unknown", spring_buffer_days=None, spring_crossing=None)
+    ship, sea = route.shipping_days, route.ocean_days
+    source = f"交期配置 {LEADTIME.version}"
+    if stage == "produced_pending_dn":
+        base = audit_date + timedelta(days=ship + sea)
+        basis = f"审计日+发运{ship:g}天+海运{sea:g}天（assumed；{source}）"
+    else:
+        production = route.production_days
+        base = audit_date + timedelta(days=production + ship + sea)
+        basis = (f"审计日+生产{production:g}天+发运{ship:g}天+海运{sea:g}天"
+                 f"（assumed；{source}）")
     spring = _crosses_festival(audit_date, base)
     latest = base + timedelta(days=SPRING_BUFFER_DAYS) if spring else base
     if spring:
-        basis = f"{basis}；路径穿越 2027-02-06 窗口，最晚 +{SPRING_BUFFER_DAYS} 天"
+        basis = (f"{basis}；路径穿越 {SPRING_FESTIVAL_ANCHOR.isoformat()} 窗口，"
+                 f"最晚 +{SPRING_BUFFER_DAYS:g} 天")
     return dict(eta_earliest=base.isoformat(), eta_latest=latest.isoformat(), eta_basis=basis,
-                confidence=confidence, spring_buffer_days=SPRING_BUFFER_DAYS if spring else 0,
+                confidence="assumed", spring_buffer_days=SPRING_BUFFER_DAYS if spring else 0,
                 spring_crossing=bool(spring))
 
 
@@ -276,6 +282,10 @@ def write_report(tranches: pd.DataFrame, by_key: pd.DataFrame, meta: dict, out: 
     first_op = int((tranches["qty_evidence"] == "estimated_first_op").sum())
     stage_qty = (tranches[tranches["qty_status"] == "known"]
                  .groupby(["uom", "stage"], as_index=False)["qty"].sum().round(3))
+    ship_days = LEADTIME.shared_days("shipping")
+    production_days = LEADTIME.shared_days("production")
+    sea_text = "、".join(f"{route.warehouse} {route.ocean_days:g}"
+                        for route in LEADTIME.routes)
     lines = [
         "# SO 工厂条件供给层 v2（W1 阶段余额 → 有条件、带日期）",
         "",
@@ -294,10 +304,15 @@ def write_report(tranches: pd.DataFrame, by_key: pd.DataFrame, meta: dict, out: 
         "",
         "## 日期规则（全部 assumed / unknown，无一条 confirmed）",
         "",
-        f"- 完工待发运：审计日 + 发运 {SHIP_DAYS} 天 + 海运（美东/美中 35、波兰 40，assumed）",
-        f"- 在产：审计日 + 生产 {PRODUCTION_DAYS} 天 + 发运 {SHIP_DAYS} + 海运",
+        f"- 完工待发运：审计日 + 发运 {ship_days:g} 天 + 海运（{sea_text}；assumed）",
+        f"- 在产：审计日 + 生产 {production_days:g} 天 + 发运 {ship_days:g} + 海运",
         "- 在途：剩余海运 unknown → 不给日期（不计入任何时点覆盖）",
-        f"- 春节：路径穿越 {SPRING_FESTIVAL_ANCHOR.isoformat()} 窗口（锚点 ±30 天）→ 最晚 ETA +{SPRING_BUFFER_DAYS} 天，最早 ETA 不加",
+        f"- 春节：路径穿越 {SPRING_FESTIVAL_ANCHOR.isoformat()} 窗口（锚点 "
+        f"±{LEADTIME.spring_festival.window_days:g} 天）→ 最晚 ETA +{SPRING_BUFFER_DAYS:g} 天，"
+        "最早 ETA 不加",
+        f"- 交期口径：`{LEADTIME.path.name}` 版本 {LEADTIME.version}"
+        f"（effective_from {LEADTIME.effective_from.isoformat()}，"
+        f"source={LEADTIME.so_pipeline.source}、sample_size={LEADTIME.so_pipeline.sample_size}）",
         "",
         "## 守恒标记",
         "",
@@ -410,10 +425,13 @@ def main(argv=None) -> int:
         w1=str(args.w1), so_count=len(w1), audit_csv=str(args.audit_csv),
         windows_keys=str(args.windows_keys) if windows is not None else None,
         rows=len(tranches), keys=len(by_key),
-        rules=dict(ship_days=SHIP_DAYS, production_days=PRODUCTION_DAYS, sea_days=SEA_DAYS,
+        rules=dict(ship_days=LEADTIME.shared_days("shipping"),
+                   production_days=LEADTIME.shared_days("production"),
+                   sea_days={r.warehouse: r.ocean_days for r in LEADTIME.routes},
                    spring_buffer_days=SPRING_BUFFER_DAYS,
                    spring_anchor=SPRING_FESTIVAL_ANCHOR.isoformat(),
                    confidence="assumed/unknown only; never confirmed"),
+        leadtime_config=LEADTIME.to_manifest(),
         note="条件情景，不改净额/决策包数字",
     )
     (out / "so_conditional_supply_manifest.json").write_text(

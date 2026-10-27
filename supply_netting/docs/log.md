@@ -176,3 +176,17 @@ updated: 2026-10-27
   与 sc08 的比率经验分位不同、且 sc08 已证名义 95% 实际 0.54–0.70（A3）；
   交期分段硬编码、sc13 合约零接线（A4，最高优先）；本仓库内部缓冲公式有两份（A5）。
 - 未改任何代码；报告与 CSV 在 asset-reuse-audit-2026-10-28/。
+
+## 2026-10-28 — LEADTIME-CONFIG-WIRE（A4 接线）
+
+- 新增 `config/leadtime_config.json`（版本 `2026-10-28.1`）+ `leadtime.py`：90/75–90、
+  发运 7、生产 60、海运 35·40、春节锚点/30+30/窗口 30、完工到仓 14 全部改为读配置，
+  每条假设自报 `source=assumed`、`sample_size=0`、`notes`。
+- `so_backlog.py` 与 `scripts/so_conditional_supply.py` 的模块常量改为配置派生；
+  导入即加载，缺文件/缺字段/measured 无样本一律失败，无内置默认值、无环境变量回退。
+- 留痕：`summarize_backlog()` 与条件供给 manifest 新增 `leadtime_config`
+  （版本/生效日/来源/每条路线分段）；逐行 `eta_basis` 带配置版本号。
+- **数字零变化**：301 测试通过（新增 `tests/test_leadtime.py` 22 条）；不改 r6/h180
+  净额、决策包与已验收产物，不 push。
+- 分段词表与 sc13 不同（production/shipping/ocean），原因见
+  [leadtime-config-2026-10-28.md](leadtime-config-2026-10-28.md) §3。
