@@ -54,10 +54,30 @@ def _merge(target, batch):
     for key, value in (manifest.get("counts") or {}).items():
         target["counts"][key] = target["counts"].get(key, 0) + int(value or 0)
     for key, value in (manifest.get("coverage") or {}).items():
-        if key in ("sources", "restricted", "external_sources", "source_timestamps"):
-            target[key].update(value or {})
+        if key == "sources":
+            for name, ok in (value or {}).items():
+                target["sources"][name] = bool(target["sources"].get(name, True)) and bool(ok)
+        elif key == "restricted":
+            for name, flag in (value or {}).items():
+                target["restricted"][name] = bool(target["restricted"].get(name)) or bool(flag)
+        elif key == "external_sources":
+            for name, state in (value or {}).items():
+                old = target["external_sources"].get(name)
+                if old == "not_integrated":
+                    continue
+                if state != "integrated":
+                    target["external_sources"][name] = state or "not_integrated"
+                else:
+                    target["external_sources"][name] = "integrated"
+        elif key == "source_timestamps":
+            for name, stamp in (value or {}).items():
+                old = target["source_timestamps"].get(name)
+                if old is None or (stamp and stamp < old):
+                    target["source_timestamps"][name] = stamp
         elif isinstance(value, int):
             target["coverage"][key] = target["coverage"].get(key, 0) + value
+        elif key == "empty_reason" and value:
+            target["coverage"]["empty_reason"] = value
     for note in manifest.get("notes") or []:
         if note not in target["notes"]:
             target["notes"].append(note)
@@ -244,7 +264,9 @@ def main(argv=None):
             "generated_at": generated_at,
             "scope": {"codes": args.codes, "so": args.so, "all": args.all,
                       "include_delivered": bool(args.include_delivered)},
-            "coverage": result["coverage"],
+            "coverage": dict(result["coverage"],
+                             restricted=result["restricted"],
+                             external_sources=result["external_sources"]),
             "sources": result["sources"],
             "source_timestamps": result["source_timestamps"],
             "restricted": result["restricted"],

@@ -139,14 +139,17 @@ def build_stage_balances(line, ctx):
 
     numbers = ctx.get("numbers_by_dn") or {}
     shipment_by_number = ctx.get("shipment_by_number") or {}
-    shipped_gross = 0.0
+    shipped_physical = 0.0
+    shipped_net = 0.0
     for dn in submitted:
         if int(dn.get("is_return") or 0):
             continue
-        net_qty = max(0.0, _num(dn.get("qty")) - allocated.get(dn.get("dn"), 0.0))
+        gross_qty = _num(dn.get("qty"))
+        net_qty = max(0.0, gross_qty - allocated.get(dn.get("dn"), 0.0))
+        shipped_physical += gross_qty
+        shipped_net += net_qty
         if net_qty <= 1e-9:
             continue
-        shipped_gross += net_qty
         dn_numbers = [n["number"] for n in numbers.get(dn.get("dn"), [])]
         statuses = [((shipment_by_number.get(number) or {}).get("status11") or "")
                     for number in dn_numbers]
@@ -173,8 +176,8 @@ def build_stage_balances(line, ctx):
     own_wos = [w for w in (ctx.get("wos") or []) if w.get("item_code") == line.get("item_code")]
     produced_estimated = any(w.get("produced_basis") == "wo_produced_qty" for w in own_wos)
     produced_capped = min(produced_total, _num(qty))
-    open_net = _num(qty) - shipped_gross
-    produced_pending = max(0.0, min(produced_capped - shipped_gross, open_net))
+    open_net = _num(qty) - shipped_net
+    produced_pending = max(0.0, min(produced_capped - shipped_physical, open_net))
     remaining = max(0.0, open_net - produced_pending)
     if produced_pending > 1e-9:
         rows.append(_balance(line, STAGE_PRODUCED_PENDING, produced_pending, uom,
@@ -184,14 +187,19 @@ def build_stage_balances(line, ctx):
                              else "job_card_first_op",
                              demand_status=demand_status))
     if not cancelled and remaining > 1e-9:
-        if own_wos:
+        if returned_total > 1e-9 and produced_pending <= 1e-9:
+            rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom,
+                                 reason="退货实物可用性未证，需求余额不推断为待出库",
+                                 demand_status=demand_status))
+        elif not ctx.get("work_order_permission"):
+            rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom,
+                                 reason="无工单读取权限（含行级受限），阶段未知",
+                                 demand_status=demand_status))
+        elif own_wos:
             rows.append(_balance(line, STAGE_IN_PRODUCTION, remaining, uom,
                                  detail="在产/部分完工",
                                  source=",".join(w.get("wo") for w in own_wos),
                                  demand_status=demand_status))
-        elif not ctx.get("work_order_permission"):
-            rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom,
-                                 reason="无工单读取权限", demand_status=demand_status))
         else:
             rows.append(_balance(line, STAGE_NOT_PLANNED, remaining, uom,
                                  detail="无工单/生产计划", demand_status=demand_status))
@@ -205,7 +213,8 @@ def build_stage_balances(line, ctx):
         return rows
 
     known = sum(r["qty"] for r in rows
-                if r["stage"] in EXECUTED_STAGES and r["qty"] is not None)
+                if r["qty"] is not None
+                and r["stage"] not in (STAGE_RETURNED, STAGE_DRAFT, STAGE_CANCELLED))
     diff = round(_num(qty) - known, 6)
     if diff > 1e-6:
         rows.append(_balance(line, STAGE_UNKNOWN, diff, uom,
@@ -310,12 +319,13 @@ def build_availability(line, ctx, stage_rows):
             continue
         if stage_row.get("demand_status") == "cancelled":
             continue
+        unit = stage_row.get("uom") or uom
         if stage_row["stage"] in (STAGE_IN_TRANSIT, STAGE_ARRIVED):
             dn = stage_row["batch_key"]
             dn_numbers = [n["number"] for n in numbers.get(dn, [])]
             if len(dn_numbers) > 1:
                 rows.append(_tranche(
-                    line, "%s::multi" % dn, None, uom, stage=stage_row["stage"],
+                    line, "%s::multi" % dn, None, unit, stage=stage_row["stage"],
                     scenario="allocation_unknown", batch_key=dn, source=dn,
                     reason="多运单分配未知，不复制 DN 全量"))
                 continue
@@ -325,7 +335,7 @@ def build_availability(line, ctx, stage_rows):
                       else "ETA 未经入库/上架验证")
             rows.append(_tranche(
                 line, "%s::%s" % (dn, dn_numbers[0] if dn_numbers else "NO_NUMBER"),
-                stage_row["qty"], uom, stage=stage_row["stage"], eta=eta,
+                stage_row["qty"], unit, stage=stage_row["stage"], eta=eta,
                 scenario="conditional" if eta else "unknown", batch_key=dn, source=dn,
                 reason=reason, qty_status=stage_row.get("qty_status"),
                 qty_basis=stage_row.get("qty_basis", "")))
@@ -333,7 +343,7 @@ def build_availability(line, ctx, stage_rows):
                                     STAGE_NOT_PLANNED, STAGE_DELIVERED):
             rows.append(_tranche(
                 line, "%s::%s" % (stage_row["stage"], stage_row.get("batch_key") or ""),
-                stage_row["qty"], uom, stage=stage_row["stage"],
+                stage_row["qty"], unit, stage=stage_row["stage"],
                 scenario="unknown", reason="缺生产/完工/入库日期证据",
                 qty_status=stage_row.get("qty_status"),
                 qty_basis=stage_row.get("qty_basis", "")))
@@ -668,25 +678,44 @@ def get_supply_facts(filters=None):
     if not frappe.has_permission("Sales Order", "read"):
         frappe.throw("No permission for Sales Order", frappe.PermissionError)
     try:
-        as_of = getdate(filters.get("as_of")) if filters.get("as_of") else getdate(today())
+        current_day = getdate(today())
+        requested_day = getdate(filters.get("as_of")) if filters.get("as_of") else current_day
     except Exception:
         frappe.throw("as_of must be a date")
+    if requested_day != current_day:
+        frappe.throw("Historical as_of is not supported; only the current snapshot can be exported")
+    as_of = requested_day
     observed_at = now_datetime()
+    permissions = _permission_flags()
     lines, so_restricted = load_lines(filters)
     if filters.get("so_line"):
         lines = [l for l in lines if l.so_line == filters.so_line]
     if not lines:
+        external = {
+            "tongtool_po": "not_integrated",
+            "receipt": "not_integrated",
+            "warehouse_receipt": "not_integrated",
+        }
+        empty_reason = "all_restricted" if so_restricted else "no_matching_lines"
+        coverage = {
+            "sales_orders": 0, "so_lines": 0, "sources": permissions,
+            "restricted": {"sales_order": so_restricted},
+            "external_sources": external, "observed_at": _iso(observed_at),
+            "empty_reason": empty_reason,
+        }
+        notes = ["empty_result: " + empty_reason,
+                 "external sources not integrated: tongtool_po, receipt, warehouse_receipt"]
+        manifest = build_manifest(as_of=as_of, scope={k: v for k, v in filters.items()},
+                                  lines=[], facts=[], coverage=coverage,
+                                  counts={"input": 0, "output": 0},
+                                  partial=True, notes=notes)
+        manifest["observed_at"] = _iso(observed_at)
         return {
             "schema_version": SCHEMA_VERSION, "rule_version": RULE_VERSION,
             "as_of": str(as_of), "lines": [], "stage_balances": [], "milestones": [],
-            "availability_schedule": [], "links": [],
-            "manifest": build_manifest(as_of=as_of, scope={k: v for k, v in filters.items()},
-                                       lines=[], facts=[], coverage={},
-                                       counts={"input": 0, "output": 0},
-                                       partial=False, notes=["no matching SO lines"]),
+            "availability_schedule": [], "links": [], "manifest": manifest,
         }
 
-    permissions = _permission_flags()
     pps, pp_restricted = (load_pps(lines) if permissions["production_plan"] else ({}, False))
     wos, wo_restricted = (load_wos(lines, pps) if permissions["work_order"] else ({}, False))
     dns, dn_restricted = (load_dns(lines) if permissions["delivery_note"] else ({}, False))
@@ -714,6 +743,9 @@ def get_supply_facts(filters=None):
     partial = bool(partial_reasons)
 
     facts = []
+    dn_ok = permissions["delivery_note"] and not dn_restricted
+    wo_ok = permissions["work_order"] and not wo_restricted
+    ship_ok = permissions["shipment"] and not ship_restricted
     for line in lines:
         ctx_dns = [d for d in dns.get(line.so_line, []) if d.so_line == line.so_line]
         line_numbers = []
@@ -736,9 +768,9 @@ def get_supply_facts(filters=None):
             "dns": ctx_dns,
             "numbers_by_dn": {d.dn: numbers_by_dn.get(d.dn, []) for d in ctx_dns},
             "shipment_by_number": line_shipments,
-            "dn_permission": permissions["delivery_note"],
-            "shipment_permission": permissions["shipment"],
-            "work_order_permission": permissions["work_order"],
+            "dn_permission": dn_ok,
+            "shipment_permission": ship_ok,
+            "work_order_permission": wo_ok,
             "observed_at": observed_at,
         }))
 

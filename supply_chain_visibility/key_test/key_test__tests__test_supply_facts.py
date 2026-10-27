@@ -1,4 +1,5 @@
 """Acceptance tests for the supply facts contract (pure builders)."""
+import datetime
 import importlib.util
 import sys
 import types
@@ -6,12 +7,16 @@ from pathlib import Path
 import unittest
 
 
+class _AttrDict(dict):
+    __getattr__ = dict.__getitem__
+
+
 class FakeFrappe(types.ModuleType):
     def __init__(self):
         super().__init__("frappe")
         self.PermissionError = PermissionError
         self.whitelist = lambda *args, **kwargs: (lambda fn: fn)
-        self._dict = lambda value=None: types.SimpleNamespace(**dict(value or {}))
+        self._dict = lambda value=None: _AttrDict(value or {})
         self.so_rows = []
         self.permitted_sos = []
         self.total_sos = 0
@@ -95,7 +100,8 @@ class SupplyFactsContractTest(unittest.TestCase):
         cls.fake = fake
         sys.modules["frappe"] = fake
         sys.modules["frappe.utils"] = types.SimpleNamespace(
-            getdate=lambda x: x, today=lambda: "2026-10-27",
+            getdate=lambda x: x if isinstance(x, datetime.date) else datetime.date.fromisoformat(str(x)[:10]),
+            today=lambda: "2026-10-27",
             now_datetime=lambda: "2026-10-27 10:00:00")
         root = Path(__file__).parents[1]
         service = root / "supply_query.py"
@@ -211,8 +217,8 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertTrue(all(r["demand_status"] == "cancelled" for r in stages))
 
     def test_uom_mismatch_does_not_convert_units(self):
-        stages = self.facts.build_stage_balances(
-            _line(), _ctx(wos=[_wo()], dns=[_dn(qty=2.0, uom="箱")]))
+        ctx = _ctx(wos=[_wo()], dns=[_dn(qty=2.0, uom="箱")])
+        stages = self.facts.build_stage_balances(_line(), ctx)
         self.assertFalse([r for r in stages if r["stage"] == self.facts.STAGE_NOT_PLANNED])
         unknown = [r for r in stages if r["stage"] == self.facts.STAGE_UNKNOWN]
         self.assertTrue(unknown)
@@ -221,6 +227,11 @@ class SupplyFactsContractTest(unittest.TestCase):
         physical = [r for r in stages if r["uom"] == "箱"]
         self.assertEqual(physical[0]["qty"], 2.0)
         self.assertEqual(physical[0]["qty_status"], "known")
+        tranches = self.facts.build_availability(_line(), ctx, stages)
+        self.assertEqual(len(tranches), 1)
+        self.assertEqual(tranches[0]["uom"], "箱")
+        self.assertEqual(tranches[0]["qty"], 2.0)
+        self.assertEqual(tranches[0]["qty_status"], "known")
 
     def test_return_against_nets_the_original_dn(self):
         dns = [_dn(qty=100.0),
@@ -228,11 +239,35 @@ class SupplyFactsContractTest(unittest.TestCase):
         stages = self.facts.build_stage_balances(_line(), _ctx(dns=dns))
         in_transit = next(r for r in stages if r["stage"] == self.facts.STAGE_IN_TRANSIT)
         self.assertEqual(in_transit["qty"], 90.0)
-        not_planned = next(r for r in stages if r["stage"] == self.facts.STAGE_NOT_PLANNED)
-        self.assertEqual(not_planned["qty"], 10.0)
         returned = next(r for r in stages if r["stage"] == self.facts.STAGE_RETURNED)
         self.assertEqual(returned["qty"], 10.0)
-        self.assertAlmostEqual(self._sum_executed(stages), 100.0)
+        unknown = next(r for r in stages if r["stage"] == self.facts.STAGE_UNKNOWN)
+        self.assertEqual(unknown["qty"], 10.0)
+        self.assertIn("退货", unknown["exclusion_reason"])
+        self.assertAlmostEqual(
+            sum(r["qty"] for r in stages if r["qty"] is not None
+                and r["stage"] not in (self.facts.STAGE_RETURNED, self.facts.STAGE_DRAFT)),
+            100.0)
+
+    def test_return_does_not_regenerate_pending_supply(self):
+        dns = [_dn(qty=100.0),
+               _dn(name="DN-R", qty=-10.0, is_return=1, return_against="DN-1")]
+        stages = self.facts.build_stage_balances(
+            _line(), _ctx(wos=[_wo(produced=100.0)], dns=dns))
+        self.assertFalse([r for r in stages
+                          if r["stage"] == self.facts.STAGE_PRODUCED_PENDING])
+        tranches = self.facts.build_availability(
+            _line(), _ctx(wos=[_wo(produced=100.0)], dns=dns), stages)
+        self.assertFalse([t for t in tranches if t["qty"] == 10.0])
+
+    def test_row_sources_restricted_make_stage_unknown(self):
+        stages = self.facts.build_stage_balances(
+            _line(), _ctx(wos=[_wo()], work_order_permission=False))
+        unknown = [r for r in stages if r["stage"] == self.facts.STAGE_UNKNOWN]
+        self.assertTrue(unknown)
+        self.assertEqual(unknown[0]["qty"], 40.0)
+        self.assertIn("受限", unknown[0]["exclusion_reason"])
+        self.assertFalse([r for r in stages if r["stage"] == self.facts.STAGE_NOT_PLANNED])
 
     def test_tranche_ids_include_so_line(self):
         dn_ctx = _ctx(dns=[_dn()], numbers_by_dn={"DN-1": [{"number": "A"}]},
@@ -270,6 +305,21 @@ class SupplyFactsContractTest(unittest.TestCase):
         pending = next(r for r in stages if r["stage"] == "produced_pending_dn")
         self.assertEqual(pending["qty_status"], "estimated")
         self.assertEqual(pending["qty_basis"], "wo_produced_qty")
+
+    def test_historical_as_of_rejected_server_side(self):
+        with self.assertRaises(Exception):
+            self.facts.get_supply_facts({"as_of": "2020-01-01"})
+
+    def test_empty_result_keeps_integrity(self):
+        self.fake.so_rows = []
+        self.fake.permitted_sos = []
+        self.fake.total_sos = 0
+        result = self.facts.get_supply_facts({})
+        manifest = result["manifest"]
+        self.assertTrue(manifest["partial"])
+        self.assertEqual(manifest["coverage"]["empty_reason"], "no_matching_lines")
+        self.assertEqual(manifest["coverage"]["external_sources"]["receipt"], "not_integrated")
+        self.assertIn("empty_result", " ".join(manifest["notes"]))
 
     def test_case8_rebuild_is_stable_and_partial_is_explicit(self):
         ctx = _ctx(wos=[_wo()], dns=[_dn()])
