@@ -283,6 +283,8 @@ def main(argv=None) -> int:
     parser.add_argument("--demand", required=True, help="demand_netting.parquet（算历史波动与需求侧未映射）")
     parser.add_argument("--stock", required=True, help="库存快照 parquet（算库存侧未映射）")
     parser.add_argument("--blocked", default=None, help="demand_blocked.parquet（需求侧未映射清单）")
+    parser.add_argument("--so-rows", default=None,
+                        help="EN 开放 SO 行级 JSONL（工厂交付管线；不并入海外仓可用）")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
 
@@ -330,10 +332,52 @@ def main(argv=None) -> int:
     scenarios = service_level_scenarios(history, demand_by_key)
     pack = decision_pack(netting, scenarios, facts)
 
+    # 第三层：EN 工厂 SO 管线（不计入海外仓可用）
+    so_summary = None
+    so_frame = pd.DataFrame()
+    if args.so_rows:
+        from .so_backlog import attach_to_pack, build_so_backlog, summarize_backlog
+        raw = pd.DataFrame([json.loads(line) for line in
+                            Path(args.so_rows).read_text(encoding="utf-8").splitlines() if line.strip()])
+        as_of = pd.Timestamp(manifest["as_of"]).date()
+        so_frame = build_so_backlog(raw, as_of=as_of)
+        so_summary = summarize_backlog(so_frame)
+        so_frame.to_csv(out_dir / "so_backlog_rows.csv", index=False, encoding="utf-8-sig")
+        (out_dir / "so_backlog_summary.json").write_text(
+            json.dumps(so_summary, ensure_ascii=False, indent=1), encoding="utf-8")
+        pack = attach_to_pack(pack, so_frame)
+    for column in ("so_pipeline_qty", "so_overdue_qty"):
+        if column not in pack.columns:
+            pack[column] = None
+    pack["layer_1_overseas"] = "现货 + 在途（当前可用 / 条件）"
+    pack["layer_2_po"] = "通途 PO 开放量（无 ETA，条件态）"
+    pack["layer_3_so_pipeline"] = "工厂 SO 管线（工厂交付日 + 假设提前期；不计入海外可用）"
+
+    po_total = float((manifest.get("po_tongtool") or {}).get("quantity") or 0.0)
+    so_total = float((so_summary or {}).get("quantity") or 0.0)
+    layers = pd.DataFrame([
+        dict(layer="1_海外仓现货+在途", basis="期初库存（快照）；在途无 ETA 为条件量",
+             total_quantity=float(pd.to_numeric(pack["opening"], errors="coerce").fillna(0).sum()),
+             matched_to_demand_keys=float(pd.to_numeric(pack["opening"], errors="coerce").fillna(0).sum()),
+             conditional_total=float(pd.to_numeric(pack["intransit_qty"], errors="coerce").fillna(0).sum()),
+             counted_as_available=True),
+        dict(layer="2_通途PO", basis="开放状态 0/1/2；4=作废已排除；willArriveDate 全空",
+             total_quantity=po_total,
+             matched_to_demand_keys=float(pd.to_numeric(pack["po_qty"], errors="coerce").fillna(0).sum()),
+             conditional_total=po_total,
+             counted_as_available=False),
+        dict(layer="3_工厂SO管线", basis="工厂交付日 + 假设头程/上架；estimated；皮壳/半成品 1:1 假设",
+             total_quantity=so_total,
+             matched_to_demand_keys=float(pd.to_numeric(pack["so_pipeline_qty"], errors="coerce").fillna(0).sum()),
+             conditional_total=so_total,
+             counted_as_available=False),
+    ])
+
     inventory_top.to_csv(out_dir / "unmapped_top20_inventory.csv", index=False, encoding="utf-8-sig")
     demand_top.to_csv(out_dir / "unmapped_top20_demand.csv", index=False, encoding="utf-8-sig")
     scenarios.to_csv(out_dir / "service_level_scenarios.csv", index=False, encoding="utf-8-sig")
     pack.to_csv(out_dir / "conditional_decision_pack.csv", index=False, encoding="utf-8-sig")
+    layers.to_csv(out_dir / "decision_layers.csv", index=False, encoding="utf-8-sig")
 
     inventory_all = match_unmapped(inv_rows, sku_map)
     demand_all = match_unmapped(demand_rows, sku_map) if len(demand_rows) else pd.DataFrame()
@@ -354,9 +398,11 @@ def main(argv=None) -> int:
         decision_pack_rows=int(len(pack)),
         decision_pack_gap_keys=int((pack["protect_gap"].fillna(0) > 0).sum()),
         decision_pack_recommendations=pack["recommendation"].value_counts().to_dict(),
+        so_backlog=so_summary,
+        layers=layers.to_dict("records"),
         run_manifest=dict(run_id=manifest.get("run_id"), as_of=manifest.get("as_of"),
                           partial=manifest.get("partial")),
-        note="条件情景，不是采购单；未含提前期与未履约 SO backlog",
+        note="条件情景，不是采购单；三层：海外现货/在途 → 通途PO（条件）→ 工厂SO管线（不计入可用）；未含实测提前期",
     )
     (out_dir / "pack_manifest.json").write_text(
         json.dumps(summary, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -367,6 +413,9 @@ def main(argv=None) -> int:
         inventory_top.to_excel(writer, sheet_name="未映射-库存top20", index=False)
         (demand_top if len(demand_top) else pd.DataFrame({"说明": ["无需求侧未映射"]})).to_excel(
             writer, sheet_name="未映射-需求top20", index=False)
+        layers.to_excel(writer, sheet_name="三层供给", index=False)
+        if len(so_frame):
+            so_frame.to_excel(writer, sheet_name="工厂SO管线", index=False)
         pd.DataFrame([{"key": k, "value": json.dumps(v, ensure_ascii=False)} for k, v in summary.items()]
                      ).to_excel(writer, sheet_name="Manifest", index=False)
     print(json.dumps(summary, ensure_ascii=False, indent=1))

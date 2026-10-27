@@ -124,17 +124,20 @@ def _po_file(tmp_path: Path, records) -> Path:
 
 def test_tongtool_po_keeps_open_status_and_computes_open_qty(tmp_path):
     path = _po_file(tmp_path, [
-        dict(PONum="PO1", goods_sku="TT-PO1", quantity=100, in_quantity=40, status="4",
+        dict(PONum="PO1", goods_sku="TT-PO1", quantity=100, in_quantity=40, status="1",
              warehouseName="美东-CENTRADE", willArriveDate=None, purchaseArrivalDate=None),
         dict(PONum="PO2", goods_sku="TT-PO1", quantity=10, in_quantity=10, status="3",
              warehouseName="美东-CENTRADE", willArriveDate=None, purchaseArrivalDate=None),
         dict(PONum="PO3", goods_sku="TT-PO1", quantity=5, in_quantity=0, status="0",
              warehouseName="美中-FZH-DANEEY", willArriveDate=None, purchaseArrivalDate=None),
+        dict(PONum="PO4", goods_sku="TT-PO1", quantity=7, in_quantity=0, status="4",
+             warehouseName="美东-CENTRADE", willArriveDate=None, purchaseArrivalDate=None),
     ])
     frame, meta = load_po_tongtool(path)
-    assert set(frame["document_key"]) == {"PO1", "PO3"}      # 已收(status 3)不进开放量
+    assert set(frame["document_key"]) == {"PO1", "PO3"}      # 已收(3)/作废(4)不进开放量
     assert float(frame["qty"].sum()) == 65                    # 60 + 5
     assert meta["rows"] == 2 and meta["with_eta"] == 0
+    assert meta["cancelled_rows"] == 1 and meta["cancelled_quantity"] == 7.0
 
 
 def test_tongtool_po_without_eta_stays_conditional(tmp_path):

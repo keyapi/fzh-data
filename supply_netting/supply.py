@@ -35,7 +35,11 @@ SOURCE_INTRANSIT = "in_transit"
 SOURCE_PO = "po_open"
 SOURCE_PO_TONGTOOL = "tongtool_po"
 
-PO_OPEN_STATUSES = frozenset({"0", "4"})   # 通途采购单开放状态（0 未到货 / 4 部分到货）
+# 通途采购单状态（EN_API/tongtong_purchase/AGENT_HANDOFF.md 官方语义）：
+# 0 等待到货 / 1 部分到货等待剩余 / 2 部分到货不等待剩余 → 开放；
+# 3 全部到货 → 已收；4 作废 → 排除。
+PO_OPEN_STATUSES = frozenset({"0", "1", "2"})
+PO_CANCELLED_STATUSES = frozenset({"4"})
 
 
 def load_stock(path: str | Path, snapshot_date: str | None = None) -> tuple[pd.DataFrame, dict]:
@@ -86,11 +90,16 @@ def load_po_tongtool(path: str | Path | None) -> tuple[pd.DataFrame, dict]:
                            note="通途采购单快照不存在；本轮 PO 供给缺失，不伪造")
     records = [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
     rows = []
+    cancelled = [0.0, 0]
     for record in records:
         status = str(record.get("status"))
         quantity = float(record.get("quantity") or 0)
         received = float(record.get("in_quantity") or 0)
         open_qty = quantity - received
+        if status in PO_CANCELLED_STATUSES:
+            cancelled[0] += quantity
+            cancelled[1] += 1
+            continue
         if status not in PO_OPEN_STATUSES or open_qty <= 0:
             continue
         rows.append(dict(
@@ -104,8 +113,10 @@ def load_po_tongtool(path: str | Path | None) -> tuple[pd.DataFrame, dict]:
     df = pd.DataFrame(rows, columns=list(empty.columns))
     return df, dict(source=str(p), rows=int(len(df)), quantity=float(df["qty"].sum()) if len(df) else 0.0,
                     statuses=sorted({str(r.get("status")) for r in records}),
+                    cancelled_rows=int(cancelled[1]), cancelled_quantity=float(cancelled[0]),
                     with_eta=int(sum(1 for r in rows if r["arrive_date"])),
-                    note="无逐行 ETA 时保持 date_unproven 条件态")
+                    open_statuses=sorted(PO_OPEN_STATUSES),
+                    note="4=作废已排除；0/1/2 为开放；无逐行 ETA 时保持 date_unproven 条件态")
 
 
 def _fact(reason: str, **fields) -> dict:
