@@ -218,10 +218,12 @@ def summarise(by_key: pd.DataFrame) -> pd.DataFrame:
     if by_key.empty:
         return pd.DataFrame()
     rows = []
-    for (lead, level, multiplier), group in by_key.groupby(
-            ["lead_days", "service_level", "target_multiplier"]):
+    # UOM 口径：个/套分列，不跨单位相加（见 UOM-CANONICAL.md）
+    for (uom, lead, level, multiplier), group in by_key.groupby(
+            ["单位", "lead_days", "service_level", "target_multiplier"]):
         demand = float(group["窗口需求"].sum())
         rows.append(dict(
+            单位=uom,
             提前期天=int(lead), 服务档=level, 目标倍数=multiplier,
             键数=int(len(group)),
             总需求=round(demand, 3),
@@ -232,11 +234,12 @@ def summarise(by_key: pd.DataFrame) -> pd.DataFrame:
             缺货天数=int(group["缺货天数"].sum()),
             周期数=int(group["补货周期数"].sum()),
         ))
-    frame = pd.DataFrame(rows).sort_values(["提前期天", "服务档", "目标倍数"])
+    frame = pd.DataFrame(rows).sort_values(["单位", "提前期天", "服务档", "目标倍数"])
     baseline = (frame[frame["目标倍数"] == 1.0]
-                .set_index(["提前期天", "服务档"])["平均库存"].to_dict())
+                .set_index(["单位", "提前期天", "服务档"])["平均库存"].to_dict())
     frame["库存增量_相对同档1.0倍"] = [
-        round(row["平均库存"] - baseline.get((row["提前期天"], row["服务档"]), row["平均库存"]), 3)
+        round(row["平均库存"] - baseline.get((row["单位"], row["提前期天"], row["服务档"]),
+                                             row["平均库存"]), 3)
         for _, row in frame.iterrows()]
     frame["fill_rate"] = frame["fill_rate"].round(4)
     frame["说明"] = "增量是库存数量，不是资金/预算；观测销售路径模拟，非承诺"
@@ -272,6 +275,12 @@ def _write_report(path: Path, frontier: pd.DataFrame, window_frontier: pd.DataFr
         "3. **暖机 + 在途初始化**：模拟起点提前 (L+R)，按稳态预置在途批次，评估窗内跑满补货周期。",
         "4. **L×S 敏感性**：提前期 60/90/120 × 服务档 90/95/98 × 目标倍数 1.0/1.5/2.0。",
         "5. 名称改为「观测销售路径模拟」；v1 的「加库存收益小」结论**已撤回**。",
+        "",
+        "## UOM 口径（UOM-CANONICAL.md）",
+        "",
+        "- 已读 `UOM-CANONICAL.md`：**个/套分列；TJ# 按套（stock_uom=套, is_stock_item=0）；"
+        "PK# 皮壳 1:1 不是套；未知单位不合计**；",
+        "- 本表所有合计按 `单位` 分组输出，**不提供跨单位总合计**；",
         "",
         "## 覆盖",
         "",
@@ -363,7 +372,13 @@ def main(argv=None) -> int:
                     warmup="L+R，且在途按稳态预置",
                     no_lookahead="ABC/资格只用评估开始前可见销售",
                     no_moq=True),
-        coverage=coverage, caveats=[
+        coverage=coverage,
+        uom_policy=dict(
+            canonical="D:/Work/赛狐/Cursor-claude/docs/research/supply-chain/2026-10-20/claude/control/reference/UOM-CANONICAL.md",
+            rule="个/套分列、不跨单位相加；TJ# 按套；PK# 按皮壳 1:1；未知单位不合计",
+            units_in_output=sorted(set(by_key["单位"].dropna())) if len(by_key) else [],
+            confirmation="已读 UOM-CANONICAL；个/套分列；TJ# 按套；PK# 按皮壳 1:1；未知单位不合计。"),
+        caveats=[
             "观测销售路径模拟，不是承诺", "不改 r6 / h180 决策包",
             "额外占用是库存数量，不是资金/预算",
         ])
