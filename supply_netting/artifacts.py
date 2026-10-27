@@ -30,6 +30,8 @@ def _rows_frame(net_result) -> pd.DataFrame:
                 gap=row["gap"], conditional_receipts=row["conditional_receipts"],
                 period_demand=row.get("period_demand"),
                 carried_unserved=row.get("carried_unserved"),
+                forecast_demand=row.get("forecast_demand"),
+                historical_demand=row.get("historical_demand"),
                 has_unresolved=row["has_unresolved"], supply_evidence=row["supply_evidence"],
                 status=row["status"], unknown_reason=row.get("unknown_reason"),
             ))
@@ -53,7 +55,7 @@ def _facts_frame(net_result, evidence: list[dict]) -> pd.DataFrame:
                 records.append(record)
     for fact in evidence:
         record = dict(fact)
-        record.update(canonical_sku=None, canonical_warehouse=fact.get("warehouse"),
+        record.update(canonical_sku=fact.get("sku"), canonical_warehouse=fact.get("warehouse"),
                       canonical_uom=fact.get("uom"), scenario="any")
         records.append(record)
     frame = pd.DataFrame(records)
@@ -74,6 +76,9 @@ def _summary_frame(net_result) -> pd.DataFrame:
         last = list(expected.values())[-1]
         cond = expected.get("protect", {}).get("conditional_receipts")
         status = protect.get("status")
+        sources = target.get("demand_sources", {})
+        forecast_qty = sum((bucket.get("forecast", 0) for bucket in sources.values()), 0)
+        historical_qty = sum((bucket.get("demand_netting", 0) for bucket in sources.values()), 0)
         records.append(dict(
             canonical_sku=sku, canonical_warehouse=warehouse, canonical_uom=uom,
             opening=target["opening"],
@@ -82,6 +87,8 @@ def _summary_frame(net_result) -> pd.DataFrame:
             horizon_unserved=_num(last.get("unserved")),
             conservative_protect_gap=_num(conservative.get("protect", {}).get("gap")),
             conditional_supply_qty=_num(cond),
+            forecast_demand_qty=_num(forecast_qty),
+            historical_demand_qty=_num(historical_qty),
             status=status,
             needs_review={
                 "unknown": "无库存基准：该仓/物料在最新快照里没有行，按未知保留，不填 0",
@@ -112,14 +119,22 @@ def _third_party_frame(rows: list[dict]) -> pd.DataFrame:
 
 def build_tables(net_result, evidence, stage_rows=None, schedule_rows=None,
                  milestone_rows=None) -> dict[str, pd.DataFrame]:
+    from .facts import MILESTONE_FRAME_COLUMNS, STAGE_FRAME_COLUMNS, TRANCHE_FRAME_COLUMNS
+
     return {
         "supply_netting": _rows_frame(net_result),
         "supply_facts": _facts_frame(net_result, evidence),
         "replenishment_review": _summary_frame(net_result),
-        "stage_balances": pd.DataFrame(stage_rows or []),
-        "availability_schedule": pd.DataFrame(schedule_rows or []),
-        "supply_milestones": pd.DataFrame(milestone_rows or []),
+        # F9：空表也要带固定 schema，接口不能因为「本次没有行」就变零列。
+        "stage_balances": _frame(stage_rows, STAGE_FRAME_COLUMNS),
+        "availability_schedule": _frame(schedule_rows, TRANCHE_FRAME_COLUMNS),
+        "supply_milestones": _frame(milestone_rows, MILESTONE_FRAME_COLUMNS),
     }
+
+
+def _frame(rows, columns) -> pd.DataFrame:
+    frame = pd.DataFrame(list(rows or []))
+    return frame.reindex(columns=columns) if len(frame) else pd.DataFrame(columns=columns)
 
 
 def disposition_counts(facts: pd.DataFrame) -> dict:

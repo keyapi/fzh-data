@@ -34,6 +34,10 @@ def balance(stage, qty, *, order="SO-1", sku="S", warehouse="W", uom=UOM,
         date_confidence="confirmed",
         observed_at="2026-10-27T00:00:00+00:00",
         source="synthetic",
+        # 合成用例默认给足证明；未证场景由用例显式覆盖（F2 回归）。
+        identity_confidence="proven",
+        warehouse_confidence="confirmed",
+        source_complete=True,
     )
     values.update(changes)
     return StageBalance(**values)

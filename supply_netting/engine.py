@@ -21,6 +21,7 @@ from supply_chain_visibility.receipt_buckets import bucket_receipts
 from supply_chain_visibility.overlap_gates import apply_overlap_gates
 from supply_chain_visibility.supply_row import SupplyRow
 
+from .facts import STAGE_PRECEDENCE
 from .legacy_ledger import allocate_so, assert_bucket_identities, bucket_gaps
 
 SCENARIOS = ("conservative", "expected")
@@ -116,35 +117,48 @@ def _as_bucket_list(buckets: Sequence[Bucket]):
 
 def _assign_demand(demand_rows: Iterable[dict], buckets: Sequence[Bucket],
                    as_of: datetime) -> dict:
-    """逐条需求给一个去向：某个桶 / 基准前 / 视界后 / 日期未证（落最早桶）。"""
+    """逐条需求给一个去向：某个桶 / 基准前 / 视界后 / 日期未证（落最早桶）。
+
+    ``demand_source`` 区分「已发生订单（demand_netting）」与「刷新预测」，两者不混算。
+    """
     totals = {b.bucket_id: Decimal(0) for b in buckets}
+    by_source = {b.bucket_id: {} for b in buckets}
     dispositions: list[dict] = []
     hidden_qty = Decimal(0)
+
+    def add(bucket_id, quantity, source):
+        totals[bucket_id] += quantity
+        bucket_map = by_source[bucket_id]
+        bucket_map[source] = bucket_map.get(source, Decimal(0)) + quantity
+
     for row in demand_rows:
         qty = _dec(row.get("quantity")) or Decimal(0)
         row_id = row.get("demand_row_id")
+        source = row.get("demand_source") or "demand_netting"
         instant = day_instant(row.get("demand_date"), as_of.tzinfo)
         if instant is None:
             # 日期未知的未履约量：不丢、不写 0，落最早桶并标条件。
-            totals[buckets[0].bucket_id] += qty
-            dispositions.append(dict(demand_row_id=row_id, quantity=qty, bucket_id=buckets[0].bucket_id,
+            add(buckets[0].bucket_id, qty, source)
+            dispositions.append(dict(demand_row_id=row_id, quantity=qty,
+                                     bucket_id=buckets[0].bucket_id, demand_source=source,
                                      reason="demand_date_unproven_earliest"))
             continue
         if instant < as_of:
             hidden_qty += qty
             dispositions.append(dict(demand_row_id=row_id, quantity=qty, bucket_id=None,
-                                     reason="before_as_of"))
+                                     demand_source=source, reason="before_as_of"))
             continue
         bucket = next((b for b in buckets if b.start <= instant < b.end), None)
         if bucket is None:
             hidden_qty += qty
             dispositions.append(dict(demand_row_id=row_id, quantity=qty, bucket_id=None,
-                                     reason="after_horizon"))
+                                     demand_source=source, reason="after_horizon"))
             continue
-        totals[bucket.bucket_id] += qty
+        add(bucket.bucket_id, qty, source)
         dispositions.append(dict(demand_row_id=row_id, quantity=qty, bucket_id=bucket.bucket_id,
-                                 reason="bucketed"))
-    return dict(totals=totals, dispositions=dispositions, hidden_qty=hidden_qty)
+                                 demand_source=source, reason="bucketed"))
+    return dict(totals=totals, by_source=by_source, dispositions=dispositions,
+                hidden_qty=hidden_qty)
 
 
 def _allocation_status(row: SupplyRow, scenario: str) -> str:
@@ -190,9 +204,12 @@ def _fact(row: SupplyRow, *, reason: str, bucket_id: str | None = None) -> dict:
     )
 
 
-def _run_scenario(name: str, rows: Sequence[SupplyRow], *, as_of: datetime,
-                  buckets: Sequence[Bucket]) -> dict:
+def _run_scenario(name: str, rows: Sequence[SupplyRow], *, target: tuple,
+                  as_of: datetime, buckets: Sequence[Bucket],
+                  extra_pres: Sequence[tuple[SupplyRow, str]] = ()) -> dict:
     events, pres, owner = [], [], {}
+    for row, reason in extra_pres:
+        pres.append(_fact(row, reason=reason))
     for index, row in enumerate(rows):
         if not row.b_max_eligible and row.exclusion_reason in PRE_DISPOSED:
             pres.append(_fact(row, reason=PRE_DISPOSED[row.exclusion_reason]))
@@ -206,8 +223,8 @@ def _run_scenario(name: str, rows: Sequence[SupplyRow], *, as_of: datetime,
         event = _event(row, name, index)
         events.append(event)
         owner[event["event_id"]] = row
-    result = bucket_receipts(events, target=(rows[0].sku, rows[0].warehouse, rows[0].uom),
-                             as_of=as_of, buckets=_as_bucket_list(buckets))
+    result = bucket_receipts(events, target=target, as_of=as_of,
+                             buckets=_as_bucket_list(buckets))
     facts = list(pres)
     for disposition in result["dispositions"]:
         row = owner[disposition["event_id"]]
@@ -227,13 +244,96 @@ def _to_decimal(value) -> Decimal:
     return Decimal(str(round(float(value), 6)))
 
 
+# F1：期初可用资格。gate 已把「不能计」的原因写好，这里必须照着用，不能只看 source_layer。
+_OPENING_DEFINITIVE_EXCLUSIONS = frozenset({
+    "external_fba", "exact_replay", "source_identity_conflict", "source_grain_conflict",
+    "proven_batch_replay",
+})
+
+
+def _opening_eligible(row: SupplyRow) -> bool:
+    if row.source_layer != "inventory_snapshot":
+        return False
+    if row.scope == "external_fba":
+        return False
+    if row.exclusion_reason in _OPENING_DEFINITIVE_EXCLUSIONS:
+        return False
+    # 结构性的整行排除（身份/单位/仓/重复/批次冲突）由 gate 关掉 b_max 表示；
+    # 只收紧 b_min 的原因（如来源时点未证）不影响期初基准本身。
+    return bool(row.b_max_eligible)
+
+
+def opening_basis(rows: Sequence[SupplyRow]) -> dict:
+    """把库存行拆成「计入期初」与「明确/未证排除」。
+
+    返回 ``opening``（Decimal 或 None）、``reason`` 与两侧的行，供事实表逐条留痕。
+    """
+    included = [row for row in rows if _opening_eligible(row)]
+    excluded = [row for row in rows if not _opening_eligible(row)]
+    if included:
+        if any(row.qty is None for row in included):
+            return dict(opening=None, reason="opening_qty_unproven",
+                        included=included, excluded=excluded)
+        return dict(opening=sum((row.qty for row in included), Decimal(0)),
+                    reason="snapshot", included=included, excluded=excluded)
+    if excluded:
+        definitive = all(row.qty is not None and row.exclusion_reason in _OPENING_DEFINITIVE_EXCLUSIONS
+                         for row in excluded)
+        return dict(opening=Decimal(0) if definitive else None,
+                    reason="all_opening_excluded" if definitive else "opening_unproven",
+                    included=[], excluded=excluded)
+    return dict(opening=None, reason="no_snapshot_basis", included=[], excluded=[])
+
+
+def _dedupe_exact(rows: Sequence[SupplyRow]) -> tuple[list[SupplyRow], list[SupplyRow]]:
+    """完全相同的供应行只留一条；重复输入失败关闭，不靠改 event_id 变成两条。"""
+    seen: set[tuple] = set()
+    kept, dropped = [], []
+    for row in rows:
+        signature = (row.source_layer, row.source_key, row.stage, row.qty, row.available_date)
+        if row.source_key and signature in seen:
+            dropped.append(row)
+            continue
+        seen.add(signature)
+        kept.append(row)
+    return kept, dropped
+
+
+def apply_batch_quota(rows: Sequence[SupplyRow]) -> tuple[list[SupplyRow], list[tuple[SupplyRow, str]]]:
+    """同批跨阶段只计一次。
+
+    只对「已证批次」生效：同一 ``(sku, 仓, 单位, batch_key)`` 出现在多个阶段时，
+    保留最靠后可售的阶段（到仓 > 在途 > 完工待发 > 在产），其余全部留证；
+    同阶段同批重复也只留一条。数量不一致记为 ``batch_quantity_conflict``，
+    但绝不把两侧数量相加。
+    """
+    groups: dict[tuple, list[SupplyRow]] = {}
+    for row in rows:
+        if row.batch_proven and row.batch_key:
+            groups.setdefault((row.sku, row.warehouse, row.uom, row.batch_key), []).append(row)
+    excluded: dict[int, tuple[SupplyRow, str]] = {}
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        best = max(group, key=lambda row: (STAGE_PRECEDENCE.get(row.stage, 0), row.qty or 0))
+        conflict = any(row.qty != best.qty for row in group if row is not best)
+        reason = "batch_quantity_conflict" if conflict else "same_batch_counted_once"
+        for row in group:
+            if row is best:
+                continue
+            excluded[id(row)] = (row, reason)
+    kept = [row for row in rows if id(row) not in excluded]
+    return kept, list(excluded.values())
+
+
 def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
                buckets: Sequence[Bucket], demand_rows: Iterable[dict],
                supply_rows: Sequence[SupplyRow], backlog_qty: Decimal = Decimal("0"),
                so_mode: str = "earliest", supply_sources_complete: bool = False) -> dict:
     """对单个 ``sku × 仓 × 单位`` 做逐桶净额。仓与单位是硬边界，跨仓不抵消。"""
     key = (sku, warehouse, uom)
-    rows = apply_overlap_gates([r for r in supply_rows if (r.sku, r.warehouse, r.uom) == key])
+    gated = apply_overlap_gates([r for r in supply_rows if (r.sku, r.warehouse, r.uom) == key])
+    deduped, duplicated = _dedupe_exact(gated)
     demand = _assign_demand(demand_rows, buckets, as_of)
     demand_b = [demand["totals"][b.bucket_id] for b in buckets]
 
@@ -245,19 +345,17 @@ def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
     else:
         backlog_flag = "none"
 
-    opening_rows = [r for r in rows if r.source_layer == "inventory_snapshot"]
-    if not opening_rows:
-        opening, opening_reason = None, "no_snapshot_basis"
-    elif any(r.qty is None for r in opening_rows):
-        opening, opening_reason = None, "opening_qty_unproven"
-    else:
-        opening = sum((r.qty for r in opening_rows), Decimal(0))
-        opening_reason = "snapshot"
+    opening_rows = [r for r in deduped if r.source_layer == "inventory_snapshot"]
+    basis = opening_basis(opening_rows)
+    opening, opening_reason = basis["opening"], basis["reason"]
 
-    future_rows = [r for r in rows if r.source_layer != "inventory_snapshot"]
-    has_future_evidence = bool(future_rows)
-    scenarios = {name: _run_scenario(name, future_rows, as_of=as_of, buckets=buckets)
-                 for name in SCENARIOS} if future_rows else {
+    future_rows = [r for r in deduped if r.source_layer != "inventory_snapshot"]
+    future_rows, quota_excluded = apply_batch_quota(future_rows)
+    extra_pres = [(row, "duplicate_supply_row") for row in duplicated] + quota_excluded
+    has_future_evidence = bool(future_rows) or bool(extra_pres)
+    scenarios = {name: _run_scenario(name, future_rows, target=key, as_of=as_of,
+                                     buckets=buckets, extra_pres=extra_pres)
+                 for name in SCENARIOS} if (future_rows or extra_pres) else {
         name: dict(receipts={b.bucket_id: Decimal(0) for b in buckets}, facts=[],
                    has_unresolved=False, counts={}, ledger={}, input_rows=0,
                    counted_rows=0, excluded_rows=0)
@@ -291,6 +389,9 @@ def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
                 gap=_to_decimal(row["gap"]),
                 period_demand=_to_decimal(demand_b[index]),
                 carried_unserved=carried,
+                forecast_demand=_to_decimal(demand["by_source"][buckets[index].bucket_id].get("forecast", Decimal(0))),
+                historical_demand=_to_decimal(
+                    demand["by_source"][buckets[index].bucket_id].get("demand_netting", Decimal(0))),
                 conditional_receipts=conditional_qty,
                 has_unresolved=bool(scenario["has_unresolved"]),
                 supply_evidence=has_future_evidence, status=(
@@ -299,9 +400,15 @@ def net_target(*, sku: str, warehouse: str, uom: str, as_of: datetime,
                                       or not has_future_evidence) else "valued"),
             ))
 
+    opening_facts = ([_fact(r, reason="opening_basis") for r in basis["included"]]
+                     + [_fact(r, reason=f"opening_excluded:{r.exclusion_reason or 'unproven'}")
+                        for r in basis["excluded"]])
     return dict(key=key, opening=opening, opening_reason=opening_reason,
-                opening_facts=[_fact(r, reason="opening_basis") for r in opening_rows],
-                demand_buckets=demand_b, demand_dispositions=demand["dispositions"],
+                opening_facts=opening_facts,
+                opening_included=len(basis["included"]),
+                opening_excluded=len(basis["excluded"]),
+                demand_buckets=demand_b, demand_sources=demand["by_source"],
+                demand_dispositions=demand["dispositions"],
                 demand_hidden_qty=demand["hidden_qty"], backlog=backlog_flag,
                 scenarios=scenarios, rows=out_rows)
 

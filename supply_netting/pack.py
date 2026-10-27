@@ -213,16 +213,19 @@ def service_level_scenarios(history: pd.DataFrame, demand_by_key: pd.DataFrame) 
 
 
 def decision_pack(netting: pd.DataFrame, scenarios: pd.DataFrame,
-                  facts: pd.DataFrame) -> pd.DataFrame:
+                  facts: pd.DataFrame, demand_basis: str = "demand_netting 前瞻行") -> pd.DataFrame:
     """SKU×仓工作表：需求、供给、缺口、标记、服务档与建议。"""
     key = ["canonical_sku", "canonical_warehouse", "canonical_uom"]
     expected = netting[netting["scenario"] == "expected"]
     protect = expected[expected["bucket_id"] == "protect"]
-    horizon = expected.groupby(key, as_index=False).agg(
-        period_demand=("period_demand", "sum"),
-        conditional_receipts=("conditional_receipts", "max"),
-        end_unserved=("unserved", "last"),
-    )
+    agg = dict(period_demand=("period_demand", "sum"),
+               conditional_receipts=("conditional_receipts", "max"),
+               end_unserved=("unserved", "last"))
+    if "forecast_demand" in expected.columns:
+        agg["forecast_demand_qty"] = ("forecast_demand", "sum")
+    if "historical_demand" in expected.columns:
+        agg["historical_demand_qty"] = ("historical_demand", "sum")
+    horizon = expected.groupby(key, as_index=False).agg(**agg)
     base = protect[key + ["opening", "receipts", "gap", "status"]].rename(
         columns={"receipts": "proven_receipts", "gap": "protect_gap"})
     out = base.merge(horizon, on=key, how="left")
@@ -267,7 +270,7 @@ def decision_pack(netting: pd.DataFrame, scenarios: pd.DataFrame,
     # G2：recommendation 只看净额口径（海外现货 + 已证到货），不代表运营动作
     out["recommendation_scope"] = "netting_only_pre_supply"
     out["recommendation_note"] = "netting 口径；未含工厂/在途，实际动作见 action（action 优先）"
-    out["demand_basis"] = "demand_netting 前瞻行；未接入未履约 SO backlog"
+    out["demand_basis"] = demand_basis
     out["supply_basis"] = "期初库存 + 已证到货；在途/通途 PO 无 ETA 仅作条件量"
     out["note"] = "条件决策包，不是采购单；partial=true"
     return out.sort_values(["protect_gap", "period_demand"], ascending=False)
@@ -365,7 +368,12 @@ def main(argv=None) -> int:
                      .agg(quantity=("period_demand", "sum")))
     history = _history_frame(pd.read_parquet(args.demand))
     scenarios = service_level_scenarios(history, demand_by_key)
-    pack = decision_pack(netting, scenarios, facts)
+    forecast_info = manifest.get("forecast") or {}
+    demand_basis = ("预测 " + str(forecast_info.get("run_id")) + "（窗口 "
+                    + str(forecast_info.get("window_start")) + ".."
+                    + str(forecast_info.get("window_end")) + "）+ 历史净额；未含未履约 SO"
+                    if forecast_info.get("run_id") else "demand_netting 前瞻行；未接入未履约 SO")
+    pack = decision_pack(netting, scenarios, facts, demand_basis=demand_basis)
 
     # 第三层：EN 工厂 SO 管线（不计入海外仓可用）
     so_summary = None
@@ -497,7 +505,15 @@ def main(argv=None) -> int:
         w1_stage_facts=w1_meta,
         layers=layers.to_dict("records"),
         run_manifest=dict(run_id=manifest.get("run_id"), as_of=manifest.get("as_of"),
-                          partial=manifest.get("partial")),
+                          partial=manifest.get("partial"),
+                          forecast_run_id=forecast_info.get("run_id"),
+                          forecast_manifest_sha256=forecast_info.get("manifest_sha256"),
+                          forecast_window=[forecast_info.get("window_start"),
+                                           forecast_info.get("window_end")],
+                          forecast_demand_quantity=forecast_info.get("demand_quantity"),
+                          forecast_excluded=forecast_info.get("excluded"),
+                          stock_snapshot=((manifest.get("timing") or {}).get("snapshot_date")),
+                          stock_vs_as_of_hours=((manifest.get("timing") or {}).get("offset_hours"))),
         note="条件情景，不是采购单；三层：海外现货/在途 → 通途PO（条件）→ 工厂SO管线（不计入可用）；未含实测提前期",
     )
     (out_dir / "pack_manifest.json").write_text(

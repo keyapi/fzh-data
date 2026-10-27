@@ -11,7 +11,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, fields, replace
 from datetime import datetime
 from decimal import Decimal
 
@@ -27,7 +27,15 @@ STAGE_SOURCE_LAYER = {
     "in_production": "work_order",
     "finished_waiting_shipment": "work_order",
     "shipped_in_transit": "in_transit",
-    "arrived_waiting_receipt": "receipt_event",
+    # F4：到仓待上架若已有「已证、未含期初」的未来可售日，它是可售 tranche，
+    # 不是原始收货证据；原始收货事件仍走 receipt_event 且不计（gate 的 evidence_only）。
+    "arrived_waiting_receipt": "in_transit",
+}
+STAGE_PRECEDENCE = {           # 同一批次跨阶段时「更靠后＝更接近可售」
+    "in_production": 1,
+    "finished_waiting_shipment": 2,
+    "shipped_in_transit": 3,
+    "arrived_waiting_receipt": 4,
 }
 DATE_CONFIDENCES = ("confirmed", "estimated", "unknown")
 
@@ -55,8 +63,19 @@ class StageBalance:
     observed_at: str | None = None
     source: str = "unknown"
     source_key: str | None = None
-    warehouse_confidence: str = "confirmed"
-    identity_confidence: str = "proven"
+    # F2：证明状态必须随行传递；默认「未证」，禁止在转换时抬升。
+    warehouse_confidence: str = "unmapped"
+    identity_confidence: str = "unproven"
+    source_complete: bool = False
+    # F3：稳定批次身份（已证才可以跨阶段判重）
+    batch_key: str | None = None
+    batch_proven: bool = False
+    # 合法拆分：split_of 指向原余额；没有它就不允许同阶段重复出现
+    split_of: str | None = None
+
+
+class DuplicateBalanceError(ValueError):
+    """同一 balance_id 出现两次：结构性错误，失败关闭。"""
 
 
 @dataclass(frozen=True)
@@ -74,6 +93,11 @@ class Tranche:
     scenario: str
     included_in_opening: bool
     exclusion_reason: str = ""
+    identity_confidence: str = "unproven"
+    warehouse_confidence: str = "unmapped"
+    source_complete: bool = False
+    batch_key: str | None = None
+    batch_proven: bool = False
 
 
 def _aware(value) -> bool:
@@ -87,7 +111,8 @@ def _aware(value) -> bool:
 
 
 def validate_stage_balances(balances, order_totals: dict | None = None) -> list[str]:
-    errors, seen = [], set()
+    errors = []
+    grouped: dict[tuple, list[StageBalance]] = {}
     for row in balances:
         label = row.balance_id or "<no id>"
         if row.stage not in STAGES:
@@ -100,12 +125,20 @@ def validate_stage_balances(balances, order_totals: dict | None = None) -> list[
             errors.append(f"{label}: qty 必须是非负有限数")
         if row.qty is not None and row.qty_status == "unknown":
             errors.append(f"{label}: qty_status=unknown 时 qty 必须为 null")
-        key = (row.order_key, row.sku, row.warehouse, row.uom, row.stage)
-        if key in seen:
-            errors.append(f"{label}: 同订单/物料/仓/单位阶段重复，违反互斥")
-        seen.add(key)
+        if row.batch_proven and not (row.batch_key and str(row.batch_key).strip()):
+            errors.append(f"{label}: batch_proven 需要非空 batch_key")
         if row.sellable_at and not _aware(row.sellable_at):
             errors.append(f"{label}: sellable_at 必须带时区")
+        grouped.setdefault((row.order_key, row.sku, row.warehouse, row.uom, row.stage), []).append(row)
+
+    for rows in grouped.values():
+        if len(rows) < 2:
+            continue
+        parents = {row.split_of for row in rows}
+        # 只有「同一父余额的显式拆分」才合法；其余重复一律失败关闭。
+        if len(parents) != 1 or None in parents:
+            labels = ", ".join(row.balance_id for row in rows)
+            errors.append(f"同订单/物料/仓/单位阶段重复且不是同一父余额拆分：{labels}")
     for row in balances:
         if order_totals is None or row.order_qty is None:
             continue
@@ -156,7 +189,8 @@ def split_balance(balance: StageBalance, splits) -> list[StageBalance]:
     for index, (label, qty, available_at) in enumerate(splits, start=1):
         out.append(replace(balance, balance_id=f"{balance.balance_id}#{label}{index}",
                            qty=Decimal(str(qty)), sellable_at=available_at,
-                           date_confidence="confirmed" if _aware(available_at) else "unknown"))
+                           date_confidence="confirmed" if _aware(available_at) else "unknown",
+                           split_of=balance.split_of or balance.balance_id))
     return out
 
 
@@ -164,7 +198,12 @@ def build_availability_schedule(balances) -> list[Tranche]:
     """阶段余额 → 可售 tranche。每条余额必须全部落在「计入」或「排除」之一。"""
     tranches: list[Tranche] = []
     ledger: dict[str, dict] = {}
+    seen: set[str] = set()
     for row in balances:
+        if row.balance_id in seen:
+            raise DuplicateBalanceError(
+                f"重复的阶段余额 {row.balance_id}：重复输入必须失败关闭，不得靠改 event_id 绕过")
+        seen.add(row.balance_id)
         account = ledger.setdefault(row.balance_id, dict(input_known=Decimal(0),
                                                          scheduled=Decimal(0), excluded=Decimal(0)))
         if row.qty is not None:
@@ -181,6 +220,11 @@ def build_availability_schedule(balances) -> list[Tranche]:
             scenario="conditional" if (reason or row.date_confidence != "confirmed") else "base",
             included_in_opening=row.included_in_opening,
             exclusion_reason=reason,
+            identity_confidence=row.identity_confidence,
+            warehouse_confidence=row.warehouse_confidence,
+            source_complete=row.source_complete,
+            batch_key=row.batch_key,
+            batch_proven=row.batch_proven,
         )
         tranches.append(tranche)
         if row.qty is not None:
@@ -245,11 +289,13 @@ def tranches_to_supply_rows(tranches):
             event_date=None, available_date=tranche.available_at,
             date_confidence=tranche.date_confidence,
             timezone_status="verified" if _aware(tranche.available_at) else "unverified",
-            identity_confidence="proven",
+            # F2：原样传递，绝不在这里抬升成 proven/confirmed
+            identity_confidence=tranche.identity_confidence,
             source_as_of=tranche.available_at if _aware(tranche.available_at) else None,
-            scope="in_house", warehouse_confidence="confirmed", role="finished",
+            scope="in_house", warehouse_confidence=tranche.warehouse_confidence, role="finished",
             b_min_eligible=False, b_max_eligible=True,
-            source_key=tranche.tranche_id, source_complete=True,
+            source_key=tranche.tranche_id, source_complete=tranche.source_complete,
+            batch_key=tranche.batch_key, batch_proven=tranche.batch_proven,
         ))
     return rows, evidence
 
@@ -270,3 +316,10 @@ def milestones_frame(balances) -> list[dict]:
 def tranches_frame(tranches) -> list[dict]:
     return [dict(asdict(row), qty=None if row.qty is None else float(row.qty))
             for row in tranches]
+
+
+# F9：空表也必须带固定 schema，别让「没有记录」变成零列。
+STAGE_FRAME_COLUMNS = [field.name for field in fields(StageBalance)]
+TRANCHE_FRAME_COLUMNS = [field.name for field in fields(Tranche)]
+MILESTONE_FRAME_COLUMNS = ["balance_id", "order_key", "stage", "planned_at", "expected_at",
+                           "actual_at", "observed_at", "source"]

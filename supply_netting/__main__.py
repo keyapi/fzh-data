@@ -7,19 +7,21 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
-from self_fulfilled_demand.canonical import WAREHOUSE_ALIASES
+from self_fulfilled_demand.canonical import WAREHOUSE_ALIASES, load_sku_map
 
 from . import artifacts
 from .facts import (milestones_frame, stages_frame, summarize_stage_balances,
                     tranches_frame, validate_stage_balances)
 from .demand import (SERIES_DEFAULT, SERIES_THIRD_PARTY, load_backlog, load_demand_netting,
                      series_rows, unclassified_quantity)
-from .engine import build_buckets, net_all
+from .engine import build_buckets, day_instant, net_all
+from .forecast import forecast_demand_rows, load_forecast, overlap_keys
 from .supply import load_inputs
 
 
@@ -44,6 +46,43 @@ def _blocked_meta(path: Path | None) -> dict:
                 note="阻断量单独保留；不参与净额，也不与可净额量相减")
 
 
+def _file_meta(path) -> dict:
+    """F7：影响数值/资格的输入都要有哈希，缺项写 exists=false，不静默。"""
+    if not path:
+        return dict(path=None, exists=False, sha256="")
+    target = Path(path)
+    return dict(path=str(target), exists=target.exists(),
+                sha256=artifacts.sha256_text(target) if target.exists() else "")
+
+
+def _git_meta() -> dict:
+    try:
+        head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                              text=True, timeout=15).stdout.strip()
+        dirty = bool(subprocess.run(["git", "status", "--porcelain"], capture_output=True,
+                                    text=True, timeout=15).stdout.strip())
+        return dict(git_head=head or None, git_dirty=dirty)
+    except (OSError, subprocess.SubprocessError):
+        return dict(git_head=None, git_dirty=None)
+
+
+def _timing(stock_meta: dict, as_of: datetime) -> dict:
+    """库存快照与 as_of 的差异必须显式披露，不靠读者对比两行。"""
+    snapshot_at = stock_meta.get("snapshot_at")
+    offset_hours = None
+    offset_seconds = None
+    if snapshot_at:
+        parsed = datetime.fromisoformat(str(snapshot_at))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=as_of.tzinfo)
+        offset_seconds = round((as_of - parsed).total_seconds(), 1)
+        offset_hours = round(offset_seconds / 3600, 3) + 0.0
+    return dict(snapshot_date=stock_meta.get("snapshot_date"), snapshot_at=snapshot_at,
+                as_of=as_of.isoformat(), offset_seconds=offset_seconds,
+                offset_hours=offset_hours,
+                note="snapshot_at 无时区，按 as_of 时区解读；正值表示 as_of 晚于快照")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="供给净额：需求净额 × 库存/供应事实 → 分桶净额")
     parser.add_argument("--demand", required=True, help="冻结的 demand_netting.parquet")
@@ -61,6 +100,14 @@ def main(argv=None) -> int:
     parser.add_argument("--protect-days", type=int, default=7)
     parser.add_argument("--weeks", type=int, default=4)
     parser.add_argument("--no-intransit", action="store_true", help="不把通途在途当作供应证据")
+    parser.add_argument("--forecast-root",
+                        default="D:/Work/fzh-order-store/en-demand-v1/forecast",
+                        help="预测根目录（读 CURRENT 指向的 run）")
+    parser.add_argument("--forecast-run-id", default=None,
+                        help="要求的预测 run_id；与 CURRENT 不一致直接报错，不静默换版本")
+    parser.add_argument("--forecast-lead-days", type=int, default=60)
+    parser.add_argument("--no-forecast", action="store_true",
+                        help="不消费预测（只回放历史需求；manifest 会明确标注）")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
 
@@ -72,6 +119,28 @@ def main(argv=None) -> int:
     third_party_rows = series_rows(demand_df, SERIES_THIRD_PARTY)
     backlog, backlog_meta = load_backlog(args.backlog)
 
+    # 未来桶需求来自刷新预测；历史/资格仍来自 demand_netting。两套资格字段互不替代。
+    forecast_meta = dict(source="none", note="--no-forecast")
+    forecast_evidence: list[dict] = []
+    demand_rows = default_rows
+    if not args.no_forecast:
+        forecast = load_forecast(args.forecast_root,
+                                 expected_run_id=args.forecast_run_id,
+                                 lead_days=args.forecast_lead_days)
+        covered = overlap_keys(default_rows, forecast.window_start, as_of.tzinfo)
+        forecast_rows, forecast_evidence, forecast_meta = forecast_demand_rows(
+            forecast, load_sku_map(args.sku_map), buckets=buckets, as_of=as_of,
+            skip_keys=covered)
+        forecast_meta["keys_with_actuals_in_window"] = len(covered)
+        window_start_at = day_instant(forecast.window_start, as_of.tzinfo)
+        forecast_meta["gap_from_as_of_days"] = (
+            round((window_start_at - as_of).total_seconds() / 86400, 3)
+            if window_start_at is not None else None)
+        forecast_meta["coverage_note"] = (
+            "历史订单全部早于 as_of，只作历史证据；净额需求来自预测。"
+            "预测窗口起点与 as_of 之间（gap_from_as_of_days）无需求数据，不填 0。")
+        demand_rows = default_rows + forecast_rows
+
     supply = load_inputs(stock_path=args.stock, po_path=args.po, sku_map_path=args.sku_map,
                          uom_cache_path=args.uom_cache,
                          warehouse_alias_path=args.warehouse_aliases,
@@ -79,14 +148,40 @@ def main(argv=None) -> int:
                          include_intransit=not args.no_intransit,
                          po_tongtool_path=args.po_tongtool)
 
-    result = net_all(demand_rows=default_rows, supply_rows=supply["rows"], as_of=as_of,
+    # F3：阶段余额校验必须在写任何产物之前强制通过（重复身份 = 失败关闭）。
+    stage_errors = validate_stage_balances(supply["stage_balances"])
+    if stage_errors:
+        print("阶段余额校验失败，拒绝写产物：")
+        for message in stage_errors[:20]:
+            print(f" - {message}")
+        return 2
+
+    result = net_all(demand_rows=demand_rows, supply_rows=supply["rows"], as_of=as_of,
                      buckets=buckets, backlog=backlog, so_mode="earliest",
                      supply_sources_complete=False)
+
+    # F8：没有视界内需求键的已证供应也要逐条留痕，不能只留一个计数。
+    netted_keys = {tuple(t["key"]) for t in result["targets"]}
+    outside_scope = [dict(
+        event_id=f"outside:{row.source_layer}:{row.source_key}",
+        source_layer=row.source_layer, stage=row.stage, sku=row.sku,
+        warehouse=row.warehouse, uom=row.uom, qty=row.qty,
+        available_date=row.available_date, date_confidence=row.date_confidence,
+        scope=row.scope, identity_confidence=row.identity_confidence,
+        warehouse_confidence=row.warehouse_confidence, b_min_eligible=row.b_min_eligible,
+        b_max_eligible=row.b_max_eligible, batch_key=row.batch_key,
+        batch_proven=row.batch_proven, document_key=row.document_key,
+        source_key=row.source_key, exclusion_reason="outside_demand_scope",
+        disposition_reason="outside_demand_scope", bucket_id=None, counted=False,
+        conditional=False, scenario="any", raw_sku=None, raw_warehouse=None,
+    ) for row in supply["rows"]
+        if (row.sku, row.warehouse, row.uom) not in netted_keys]
+    evidence = supply["evidence"] + forecast_evidence + outside_scope
 
     stage_rows = stages_frame(supply["stage_balances"])
     schedule_rows = tranches_frame(supply["schedule"])
     milestone_rows = milestones_frame(supply["stage_balances"])
-    tables = artifacts.build_tables(result, supply["evidence"], stage_rows=stage_rows,
+    tables = artifacts.build_tables(result, evidence, stage_rows=stage_rows,
                                     schedule_rows=schedule_rows, milestone_rows=milestone_rows)
     tables["third_party_demand"] = artifacts._third_party_frame(third_party_rows)
     out_dir = Path(args.out)
@@ -94,21 +189,32 @@ def main(argv=None) -> int:
 
     facts = tables["supply_facts"]
     net_rows = tables["supply_netting"]
-    netted_keys = {tuple(t["key"]) for t in result["targets"]}
     demand_accounted = sum(len(t["demand_dispositions"]) for t in result["targets"])
     checks = dict(
         bucket_identities_passed=True,           # engine 对每一行调用 assert_bucket_identities
         demand_four_key_duplicates=demand_meta["four_key_duplicates"],
         netting_allowed_all_true=True,
-        demand_rows_in=len(default_rows),
+        demand_rows_in=len(demand_rows),
+        demand_rows_historical=len(default_rows),
+        demand_rows_forecast=len(demand_rows) - len(default_rows),
+        forecast_demand_quantity=float(forecast_meta.get("demand_quantity") or 0.0),
         demand_rows_accounted=demand_accounted,
-        demand_rows_skipped_no_horizon_demand=len(default_rows) - demand_accounted,
+        demand_rows_before_as_of=sum(
+            1 for t in result["targets"] for d in t["demand_dispositions"]
+            if d["reason"] == "before_as_of"),
+        demand_rows_skipped_no_horizon_demand=len(demand_rows) - demand_accounted,
         supply_rows_in=len(supply["rows"]),
-        supply_rows_outside_demand_keys=sum(
-            1 for r in supply["rows"] if (r.sku, r.warehouse, r.uom) not in netted_keys),
+        supply_rows_outside_demand_keys=len(outside_scope),
         supply_evidence_rows=len(supply["evidence"]),
         supply_facts_rows=int(len(facts)),
         netting_rows=int(len(net_rows)),
+        opening_rows_excluded=sum(t.get("opening_excluded", 0) for t in result["targets"]),
+        duplicate_supply_rows=int((facts["disposition_reason"] == "duplicate_supply_row").sum())
+        if "disposition_reason" in facts.columns else 0,
+        same_batch_excluded_rows=int(
+            facts["disposition_reason"].isin(["same_batch_counted_once"]).sum())
+        if "disposition_reason" in facts.columns else 0,
+        stage_validation_errors=stage_errors,
         ledger_conserved=all(
             account["input_known"] == account["counted"] + account["excluded_known"]
             for target in result["targets"] for scenario in target["scenarios"].values()
@@ -118,9 +224,11 @@ def main(argv=None) -> int:
     partial_reasons = [
         "供应来源未覆盖全部渠道（通途库存快照/在途 + 开放 PO 或通途采购单），业务覆盖 unverified",
         "通途在途与采购单无逐行 ETA，保持 date_unproven 条件态",
-        "未履约 SO 余额未接入（backlog 为空）时，未来需求桶可能为 0",
+        "未履约 SO 余额未接入（backlog 为空）时，未来桶只剩预测与结转，不含开放 SO",
         "退货仓按业务口径不计可用供给（单列证据），相关键无期初基准时转 unknown，不写 0",
         "占位/物料 SKU 已排除出可用供给（单列证据），其数量不进任何总量口径",
+        "预测只覆盖通过预测资格（netting_eligible）的 SKU×仓；未覆盖键仍只有历史需求，"
+        "预测资格与需求净额资格是两套字段",
     ]
     net_rows_note = {
         "demand_gap_semantics": "demand 与 gap 为含跨桶结转口径（= 本桶需求 + 上桶未满足）；"
@@ -129,7 +237,6 @@ def main(argv=None) -> int:
         "columns_added_2026_10_27B": ["period_demand", "carried_unserved"],
     }
 
-    stage_errors = validate_stage_balances(supply["stage_balances"])
     stage_summary = [dict(order_key=row["order_key"], sku=row["sku"], uom=row["uom"],
                           total=row["total"], delta=row["delta"], balanced=row["balanced"],
                           by_stage=row["by_stage"])
@@ -161,6 +268,17 @@ def main(argv=None) -> int:
         extra=dict(
             checks=checks,
             facts_v1=facts_v1,
+            forecast=forecast_meta,
+            input_files=dict(
+                stock=_file_meta(args.stock), po=_file_meta(args.po),
+                po_tongtool=_file_meta(args.po_tongtool), sku_map=_file_meta(args.sku_map),
+                uom_cache=_file_meta(args.uom_cache),
+                warehouse_aliases=_file_meta(args.warehouse_aliases),
+                demand=_file_meta(args.demand),
+                demand_blocked=_file_meta(args.demand_blocked),
+            ),
+            code=_git_meta(),
+            timing=_timing(supply["stock_meta"], as_of),
             po_tongtool=supply["po_tongtool_meta"],
             net_rows_note=net_rows_note,
             disposition_counts=artifacts.disposition_counts(facts),

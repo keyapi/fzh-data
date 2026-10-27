@@ -229,7 +229,7 @@ def build_supply_facts(stock_df: pd.DataFrame, po_df: pd.DataFrame, *,
                       warehouse_cfg, run_id, SOURCE_INTRANSIT, "shipped_in_transit", evidence)
         if mapped is None:
             continue
-        item, canonical_wh, uom, _confidence = mapped
+        item, canonical_wh, uom, confidence = mapped
         key = (item, canonical_wh, uom)
         balance_id = f"{SOURCE_INTRANSIT}:{run_id}:{record.sku}:{canonical_wh}"
         previous = intransit_seen.get(key)
@@ -248,6 +248,8 @@ def build_supply_facts(stock_df: pd.DataFrame, po_df: pd.DataFrame, *,
             allocation_status="free",   # 见 docs：来源未显示 FBA 预留，按自由供应处理并留证
             sellable_at=None, date_confidence="unknown", observed_at=snapshot_day,
             source="tongtool_stock.intransit", source_key=balance_id,
+            # _map 已完成身份/单位/仓三关；这里如实记录，不是默认值。
+            identity_confidence="proven", warehouse_confidence=confidence, source_complete=True,
         )
         intransit_seen[key] = balance
         balances.append(balance)
