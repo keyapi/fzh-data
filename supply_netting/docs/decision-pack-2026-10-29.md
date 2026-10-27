@@ -21,7 +21,7 @@ status: verified
 | 刷新预测 | `forecast-20261027-r2`（commit `6a7d56bd`，accept-with-findings） |
 | 需求历史 | `canonical-r2/demand_netting.parquet`（数据截止 **2026-10-26**） |
 | 库存快照 | `_inputs/en_stock-2026-10-26-backup.parquet`（as_of `2026-10-26T05:17:34+08:00`） |
-| 本包代码 | `20b2892a`（`git_dirty=false`） |
+| 本包代码 | `85b5302b`（`git_dirty=false`） |
 
 ## 2. 方法
 
@@ -66,7 +66,8 @@ status: verified
 | 无需补货键 | 452 |
 | 不可算键 | 2 |
 | 待核键 | 3,469 |
-| 模型化缺口合计（建议补货键） | **449.966544** |
+| r5 保护期缺口（建议补货键） | **34.867936 / 71 键** |
+| 模型化缺口合计（视界末，建议补货键） | **449.966544** |
 | 建议量（current / higher） | 495 / 777 |
 | UOM 拆分 | 个：3,997 键（91 建议）；套：17 键（0 建议） |
 
@@ -90,7 +91,7 @@ basis_supply / data_cutoff`。
 | 文件 | 内容 |
 |---|---|
 | `decision_pack_2026-10-29.xlsx` | 6 个 sheet：决策清单(4,014) / 去向对账 / 情景对照 / UOM 分组 / 数据与限制 / Manifest |
-| `decision_pack_2026-10-29.parquet` | 同上主表，29 列，机器可读 |
+| `decision_pack_2026-10-29.parquet` | 同上主表，30 列，机器可读 |
 | `decision_pack_2026-10-29.json` | 逐行 JSON |
 | `decision_pack_manifest.json` | 截止日、决策日、旧报告日期、使用范围、输入/输出哈希、覆盖对账、两档情景、7 条限制 |
 

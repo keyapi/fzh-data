@@ -68,4 +68,5 @@ updated: 2026-10-27
   UOM 个/套分组合计，不跨 UOM。
 - 产出 xlsx(6 sheet)/Parquet/JSON/manifest，manifest 记录截止日、旧报告日期、
   使用范围、输入输出哈希与 7 条限制；代码 `20b2892a`（git_dirty=false）。
-- 测试 170 通过（supply_netting 147 + 上游 23）。
+- 供应侧口径对齐 r5：每行保留 protect_gap，manifest 记 34.867936 / 71 键。
+- 测试 170 通过（supply_netting 147 + 上游 23）；最终代码 `85b5302b`（git_dirty=false）。
