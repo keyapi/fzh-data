@@ -21,6 +21,7 @@ updated: 2026-10-27
 | 独立复审 F1–F4 返修与 r5 结果 | [review-fix-r5-2026-10-27.md](review-fix-r5-2026-10-27.md) |
 | 第二轮复审 R1–R3 返修与 r5 复算 | [review-fix-r1-r3-2026-10-27.md](review-fix-r1-r3-2026-10-27.md) |
 | 第三轮复审 R3 元数据收口（行数/pin 状态） | [review-fix-r3-metadata-2026-10-27.md](review-fix-r3-metadata-2026-10-27.md) |
+| **10-29 广范围补货决策包**（去向对账 / 两档情景 / 审核清单） | [decision-pack-2026-10-29.md](decision-pack-2026-10-29.md) |
 | 引入的上游组件及来源 commit | [../../supply_chain_visibility/docs/reference/upstream-port.md](../../supply_chain_visibility/docs/reference/upstream-port.md) |
 | 变更时间线 | [log.md](log.md) |
 

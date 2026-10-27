@@ -59,3 +59,13 @@ updated: 2026-10-27
 - 验证状态：`manifest_sha256_verified` 只在传了预期哈希且匹配时为 true，
   否则标 `unpinned`；新增 `manifest_sha256_pinned` / `manifest_sha256_verification`。
 - 测试 163 通过（supply_netting 140 + 上游 23）；r5 数字不变，预测量仍是 2,378.272644。
+
+## 2026-10-29 — 广范围补货决策包
+
+- 新增 `decision_pack.py`：输入键 4,014（r5 净额键 ∪ 库存键 ∪ 预测键），
+  去向 建议补货 91 / 无需补货 452 / 不可算 2 / 待核 3,469，合计对账一致。
+- 两档情景：current 495 件，higher(+σ 参考缓冲) 777 件，额外占用 282；
+  UOM 个/套分组合计，不跨 UOM。
+- 产出 xlsx(6 sheet)/Parquet/JSON/manifest，manifest 记录截止日、旧报告日期、
+  使用范围、输入输出哈希与 7 条限制；代码 `20b2892a`（git_dirty=false）。
+- 测试 170 通过（supply_netting 147 + 上游 23）。

@@ -78,10 +78,21 @@ uv run python -m supply_netting \
 **逐桶 `sum(gap)` 或 `sum(demand)` 会重复计数**（2026-10-27 复审 F2：3 桶相加得 92，实际视界末 41）。
 要逐桶统计请用 `period_demand`；要看视界末累计未满足请用最后一个桶的 `unserved`。
 
+## 广范围补货决策包（10-29）
+
+```bash
+uv run python -m supply_netting.decision_pack   --run "D:/Work/fzh-order-store/en-demand-v1/supply-netting/run-2026-10-26-r5"   --demand "D:/Work/fzh-order-store/en-demand-v1/canonical-r2/demand_netting.parquet"   --out "D:/Work/fzh-order-store/en-demand-v1/supply-netting/decision-pack-2026-10-29"
+```
+
+每个 SKU×仓×UOM 键都有且只有一个去向（建议补货 / 无需补货 / 不可算 / 待核），
+覆盖对账不符即报错；数量只在 UOM 组内合计；给 current-policy 与
+higher-service 两档情景；产出 xlsx + Parquet + JSON + manifest。
+见 [docs/decision-pack-2026-10-29.md](docs/decision-pack-2026-10-29.md)。
+
 ## 验证
 
 ```bash
-uv run pytest supply_netting/tests -q          # 136 个用例（净额/契约/输入层/决策包/预测/F1–R3 回归/真实案例）
+uv run pytest supply_netting/tests -q          # 147 个用例（净额/契约/输入层/决策包/预测/F1–R3 回归/真实案例）
 uv run pytest supply_chain_visibility/tests -q # 23 个（引入的上游组件）
 ```
 

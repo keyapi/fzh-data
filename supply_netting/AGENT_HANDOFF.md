@@ -20,6 +20,7 @@
 | `legacy_ledger.py` | `bucket_gaps` / `assert_bucket_identities` / `allocate_so`（原样引入） |
 | `facts.py` | A 阶段余额 / B 里程碑 / C 可售 tranche 的结构、校验与守恒 |
 | `forecast.py` | 刷新预测入口：CURRENT/manifest 校验、窗口 p50 摊桶、预测资格与去向 |
+| `decision_pack.py` | 10-29 广范围决策包：每个键单一去向、UOM 组内合计、两档情景、审核清单 |
 | `artifacts.py` | Parquet + manifest + Excel 工作簿 |
 | `__main__.py` | CLI |
 
@@ -83,7 +84,7 @@
 ## 5. 跑与验
 
 ```bash
-uv run pytest supply_netting/tests -q           # 136
+uv run pytest supply_netting/tests -q           # 147
 uv run pytest supply_chain_visibility/tests -q  # 23（上游组件）
 uv run python -m supply_netting --help
 ```
