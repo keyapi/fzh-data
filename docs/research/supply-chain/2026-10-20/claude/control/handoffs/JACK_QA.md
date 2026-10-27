@@ -309,6 +309,22 @@ channel: docs/jack-w1-channel
 - 真实测试站 REST：样本 SKU 返回 17 行，evidence_qty_status 新列存在，qty_status/证据状态契约均通过，B 资格仍全部 false；不存在的仓库返回 1 条 not_reported，未伪装成库存记录；报表页面 HTTP 200。只保留这些聚合验收结果，不提交业务行级响应。
 - 本次仅部署已审报表修复，不把 fzh-data 的纯函数数据层接入运行中的完整供应链。生产未改动，#314/#2 仍 draft，不合并。
 
+### [P0-PROD-DEPLOY-2026-10-27] key_test #2 生产部署
+
+**结论：key_test #2（`c34fa53`）已合并到 main，并完成生产 pull + migrate + clear-cache + restart；冒烟通过。**
+
+- 合并：key_test PR #2 **MERGED**；origin/main = `c34fa53`；fzh-data #314 仍 open draft（docs/handoff，不影响生产）。
+- 生产 preflight：branch `main`，工作区干净；部署前 HEAD `f7ea65a`；备份分支 `backup/pre-c34fa53-20261027`。
+- 部署：`git pull --ff-only origin main`（`f7ea65a..c34fa53`）→ `bench --site erpnext.vilavi.cn migrate` → `clear-cache` → `bench restart`。
+- 环境：`duckdb 1.5.6`；`Tongtool Stock Latest` 存在；无新增必需 pip 依赖。
+- 冒烟（生产 REST）：
+  - Report 记录存在：`Supply Timeline`、`SO Chain Overview`。
+  - SO Chain Overview：`SO-26-00132` → 2 行 / 14 列；`SO-26-00110` → 199 行 / 14 列。
+  - Supply Timeline：157 行 / 33 列；message 提示仅库存证据、B 资格 false、仓库范围未知（预期）。
+- 备注：migrate 同时重放既有 report patches / Work Order·Item 自定义字段（既有 hook，不是 #2 引入）；无错误。
+- 回滚：`checkout backup/pre-c34fa53-20261027` + clear-cache + restart；未改写历史。
+- 待办：key_test #2 body 与 fzh-data #314 仍写“draft / 不合并 / 生产未部署”，已过时；Jack 需更正记录。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

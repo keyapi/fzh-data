@@ -58,3 +58,5 @@ title: supply_chain_visibility 变更日志
 - **新增**：`docs/reference/en-custom-apps-and-deploy.md`（自定义 app 拓扑 + 落地链路 + 实测坑）。
 - **背景**：绍兴工厂负责人拟把「下单→出库」整条链的信息呈现/查询做到 EN 上（形式未定）；
   本次完成了事实地图、呈现形式调研、Stage 1（SO 表单内嵌）+ Stage 2（原生报表），均已在**测试机**部署验证，**生产未部署**。
+- **2026-10-27 生产部署**：`key_test` 生产同步 `c34fa53`（PR #2）；`bench migrate` + `clear-cache` + `bench restart`；
+  `SO Chain Overview` / `Supply Timeline` 冒烟通过。上文“生产未部署”已过时；详见 `JACK_QA.md` 的 `P0-PROD-DEPLOY-2026-10-27`。

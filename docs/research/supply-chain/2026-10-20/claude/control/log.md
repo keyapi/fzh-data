@@ -57,3 +57,5 @@ date: 2026-10-23
   #311/#312 仍 draft，等用户/审核会话批准。待业务确认：PO status=4、FZH-DANEEY 子仓运营方。
 - **2026-10-26 合并就绪清单**：新增 `handoffs/2026-10-26-merge-readiness.md`（#311 → rebase #312 → #312、
   检查项、业务确认、禁止项），给审核/合并会话直接使用。
+- **2026-10-27 key_test #2 生产部署**：`key_test` 生产同步 `c34fa53`（PR #2）；`bench migrate` + `clear-cache` +
+  `bench restart`；`SO Chain Overview` / `Supply Timeline` 冒烟通过。详见 `JACK_QA.md` 的 `P0-PROD-DEPLOY-2026-10-27`。
