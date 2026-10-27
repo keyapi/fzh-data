@@ -8,7 +8,8 @@ from datetime import date
 import pandas as pd
 
 from supply_netting.so_backlog import (attach_to_pack, build_so_backlog, clean_sku,
-                                       finished_item, summarize_backlog, summarize_raw)
+                                       finished_item, spring_festival_buffer,
+                                       summarize_backlog, summarize_raw)
 
 
 def so_df(rows):
@@ -52,11 +53,14 @@ def test_fba_is_excluded_from_branch_pipeline():
 def test_dates_are_estimated_and_overdue_flagged():
     frame = build_so_backlog(so_df([
         ("SO3", "CENTRADE", "2026-10-20", "KS3", "TT3", "成品仓 - FZH", 4),
-    ]), as_of=date(2026, 10, 27), transit_days=45)
+    ]), as_of=date(2026, 10, 27))
     row = frame.iloc[0]
     assert row["scheduled_delivery"] == "2026-10-20"
-    assert row["estimated_branch_date"] == "2026-12-04"      # 交付日 + 45 天假设
+    assert row["estimated_branch_date"] == "2027-01-18"      # 交付日 + 90 天业务口径
+    assert row["order_to_branch_days"] == 90
+    assert row["spring_festival_buffer_days"] == 0
     assert row["date_confidence"] == "estimated"
+    assert row["date_basis"] == "assumed_business_90d"
     assert bool(row["overdue"]) is True
     assert summarize_backlog(frame)["overdue_quantity"] == 4.0
 
@@ -98,3 +102,29 @@ def test_raw_summary_keeps_all_open_rows_for_reconciliation():
     raw = summarize_raw(frame)
     assert raw["quantity"] == 20.0                 # 全部开放行
     assert summarize_backlog(frame)["quantity"] == 10.0   # 仅计入管线
+
+
+def test_spring_festival_adds_two_month_buffer_for_jan_feb_delivery():
+    assert spring_festival_buffer(date(2026, 2, 10)) == 60
+    assert spring_festival_buffer(date(2026, 1, 3)) == 60
+    assert spring_festival_buffer(date(2026, 9, 1)) == 0
+    assert spring_festival_buffer(None) == 0
+
+    frame = build_so_backlog(so_df([
+        ("SO8", "DANEEY", "2026-02-10", "KS8", "TT8", "成品仓 - FZH", 5),
+    ]), as_of=date(2026, 1, 5))
+    row = frame.iloc[0]
+    assert row["spring_festival_buffer_days"] == 60
+    assert row["estimated_branch_date"] == "2026-07-10"      # 2026-02-10 + 90 + 60
+    summary = summarize_backlog(frame)
+    assert summary["spring_festival_applied_quantity"] == 5.0
+
+
+def test_tongtool_sku_falls_back_to_item_code_when_customer_code_missing():
+    frame = build_so_backlog(so_df([
+        ("SO9", "DANEEY", "2026-10-30", "PK#KS9", None, "半成品仓 - FZH", 2),
+        ("SO9", "DANEEY", "2026-10-30", "KS9", "删除TT9", "半成品仓 - FZH", 3),
+    ]), as_of=date(2026, 10, 27))
+    first, second = frame.iloc[0], frame.iloc[1]
+    assert first["tongtool_sku"] == "KS9" and first["tongtool_sku_basis"] == "item_code_fallback"
+    assert second["tongtool_sku"] == "TT9" and second["tongtool_sku_basis"] == "customer_item_code"

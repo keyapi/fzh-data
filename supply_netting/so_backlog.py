@@ -36,7 +36,20 @@ WAREHOUSE_STAGE = {
     "仓库": ("unknown", "unattributed", False),
 }
 
-DEFAULT_TRANSIT_DAYS = 45   # 假设值：出厂 → 分公司可上架；未实测，标 estimated
+# 绍兴生产周期业务口径（用户 2026-10-27 确认）：下单 → 国外分公司能发货约 3 个月；
+# 近期 PB 实测有提前约 2 周的情况，所以取 90 天 baseline、范围 75–90 天。
+BASELINE_ORDER_TO_BRANCH_DAYS = 90
+BASELINE_RANGE_DAYS = (75, 90)
+# 春节：工厂放假约 1 个月 + 恢复产能约 1 个月 → 跨 1–2 月的交付加 2 个月缓冲。
+SPRING_FESTIVAL_BUFFER_DAYS = 60
+SPRING_FESTIVAL_MONTHS = (1, 2)
+
+
+def spring_festival_buffer(delivery: date | None) -> int:
+    """交付日落在 1–2 月（跨春节）时加 2 个月缓冲；其余为 0。"""
+    if delivery is None:
+        return 0
+    return SPRING_FESTIVAL_BUFFER_DAYS if delivery.month in SPRING_FESTIVAL_MONTHS else 0
 
 
 def customer_branch(customer: str) -> tuple[str | None, str]:
@@ -69,14 +82,16 @@ def finished_item(item_code: str) -> tuple[str, bool]:
 
 
 def build_so_backlog(rows: pd.DataFrame, *, as_of: date,
-                     transit_days: int = DEFAULT_TRANSIT_DAYS) -> pd.DataFrame:
+                     order_to_branch_days: int = BASELINE_ORDER_TO_BRANCH_DAYS,
+                     date_basis: str = "assumed_business_90d") -> pd.DataFrame:
     """开放 SO 行 → 管线行。返回列含阶段、分支仓、计划/预计日期与资格标记。"""
     if not len(rows):
         return pd.DataFrame(columns=["so", "customer", "branch_warehouse", "factory_warehouse",
                                      "item_code", "finished_item", "tongtool_sku", "stage", "quantity",
                                      "scheduled_delivery", "estimated_branch_date",
-                                     "date_confidence", "conversion_assumed", "overdue",
-                                     "role", "excluded_reason"])
+                                     "date_confidence", "date_basis", "order_to_branch_days",
+                                     "spring_festival_buffer_days", "conversion_assumed",
+                                     "overdue", "role", "excluded_reason"])
     frame = rows.copy()
     frame["open_qty"] = pd.to_numeric(frame["open_qty"], errors="coerce").fillna(0.0)
     frame = frame[frame["open_qty"] > 0].copy()
@@ -94,7 +109,9 @@ def build_so_backlog(rows: pd.DataFrame, *, as_of: date,
         finished, assumed = finished_item(getattr(record, "item_code", ""))
         delivery = getattr(record, "delivery_date", None)
         scheduled = pd.to_datetime(delivery).date() if delivery else None
-        estimated = scheduled + timedelta(days=transit_days) if scheduled else None
+        festival = spring_festival_buffer(scheduled)
+        estimated = (scheduled + timedelta(days=order_to_branch_days + festival)
+                     if scheduled else None)
         overdue = bool(scheduled and scheduled < as_of)
         excluded = ""
         if not countable:
@@ -107,11 +124,18 @@ def build_so_backlog(rows: pd.DataFrame, *, as_of: date,
             so=record.so, customer=customer, branch_warehouse=branch,
             factory_warehouse=warehouse,
             item_code=record.item_code, finished_item=finished,
-            tongtool_sku=clean_sku(getattr(record, "customer_item_code", None)),
+            # 客户物料号通常是通途 SKU；没有就回退成品编码，不阻塞
+            tongtool_sku=clean_sku(getattr(record, "customer_item_code", None)) or finished,
+            tongtool_sku_basis=("customer_item_code"
+                                if clean_sku(getattr(record, "customer_item_code", None))
+                                else "item_code_fallback"),
             stage=stage, quantity=float(record.open_qty),
             scheduled_delivery=scheduled.isoformat() if scheduled else None,
             estimated_branch_date=estimated.isoformat() if estimated else None,
             date_confidence="estimated" if scheduled else "unknown",
+            date_basis=date_basis if scheduled else "unknown",
+            order_to_branch_days=order_to_branch_days,
+            spring_festival_buffer_days=festival,
             conversion_assumed=bool(assumed), overdue=overdue,
             role=role, excluded_reason=excluded,
         ))
@@ -142,8 +166,14 @@ def summarize_backlog(frame: pd.DataFrame) -> dict:
             float(counted.loc[counted["conversion_assumed"], "quantity"].sum()), 3),
         "excluded": {k: round(float(v), 3) for k, v in
                      excluded.groupby("excluded_reason")["quantity"].sum().items()},
-        "transit_days_assumed": DEFAULT_TRANSIT_DAYS,
-        "date_confidence": "estimated（工厂交付日 + 假设提前期）；未实测",
+        "order_to_branch_days": BASELINE_ORDER_TO_BRANCH_DAYS,
+        "order_to_branch_range_days": list(BASELINE_RANGE_DAYS),
+        "spring_festival_buffer_days": SPRING_FESTIVAL_BUFFER_DAYS,
+        "spring_festival_applied_lines": int((counted["spring_festival_buffer_days"] > 0).sum()),
+        "spring_festival_applied_quantity": round(
+            float(counted.loc[counted["spring_festival_buffer_days"] > 0, "quantity"].sum()), 3),
+        "date_confidence": "estimated（工厂交付日 + 90 天业务口径 + 春节缓冲）；未实测",
+        "date_basis": "assumed_business_90d（业务口径，不是统计结论）",
         "note": "上游管线，不计入海外仓可用；不得与预测需求相加",
     }
 
