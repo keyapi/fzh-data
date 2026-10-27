@@ -15,8 +15,8 @@ from frappe.utils import getdate, now_datetime, today
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v1"
-RULE_VERSION = "2026-10-27.6"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.6"
+RULE_VERSION = "2026-10-27.7"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.7"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -139,14 +139,32 @@ def build_stage_balances(line, ctx):
     for dn in nonreturns:
         grouped_dns[dn.get("dn")].append(dn)
 
-    def item_capacity(dn, name):
+    def group_item_names(dn, idx):
         item_qty = dn.get("item_qty") or {}
-        if name in item_qty:
-            return _num(item_qty[name])
+        if item_qty:
+            return list(item_qty)
         names = [n for n in (dn.get("dn_items") or [dn.get("dn_item")]) if n]
-        return _num(dn.get("qty")) if name in names else None
+        return names or ["__group__%d" % idx]
 
-    matched_by_group = defaultdict(float)
+    def original_item_names(dn_rows):
+        names = []
+        for idx, dn in enumerate(dn_rows):
+            for name in group_item_names(dn, idx):
+                if name not in names:
+                    names.append(name)
+        return names
+
+    def item_capacity(dn_rows, name):
+        for dn in dn_rows:
+            item_qty = dn.get("item_qty") or {}
+            if name in item_qty:
+                return _num(item_qty[name])
+        for dn in dn_rows:
+            names = [n for n in (dn.get("dn_items") or [dn.get("dn_item")]) if n]
+            if names == [name]:
+                return _num(dn.get("qty"))
+        return None
+
     matched_by_item = defaultdict(float)
     matched_by_dn = defaultdict(float)
     matched_total = 0.0
@@ -165,33 +183,31 @@ def build_stage_balances(line, ctx):
         detail = ret.get("dn_detail")
         matched_here = 0.0
         if detail:
-            found = False
-            for idx, dn in enumerate(dn_rows):
-                capacity = item_capacity(dn, detail)
-                if capacity is None:
-                    continue
+            capacity = item_capacity(dn_rows, detail)
+            if capacity is None:
+                conflict_total += amount
+            else:
                 remaining = max(0.0, capacity - matched_by_item[(against, detail)])
                 take = min(amount, remaining)
                 matched_by_item[(against, detail)] += take
-                matched_by_group[(against, idx)] += take
                 matched_here += take
                 amount -= take
-                found = True
-                break
-            if found:
+                excess_total += amount
+        else:
+            names = original_item_names(dn_rows)
+            if len(names) == 1:
+                name = names[0]
+                capacity = item_capacity(dn_rows, name)
+                if capacity is None:
+                    capacity = sum(_num(dn.get("qty")) for dn in dn_rows)
+                remaining = max(0.0, capacity - matched_by_item[(against, name)])
+                take = min(amount, remaining)
+                matched_by_item[(against, name)] += take
+                matched_here += take
+                amount -= take
                 excess_total += amount
             else:
-                conflict_total += amount
-        elif len(dn_rows) == 1:
-            remaining = max(0.0, _num(dn_rows[0].get("qty"))
-                            - matched_by_group[(against, 0)])
-            take = min(amount, remaining)
-            matched_by_group[(against, 0)] += take
-            matched_here += take
-            amount -= take
-            excess_total += amount
-        else:
-            unattributed_total += amount
+                unattributed_total += amount
         matched_total += matched_here
         matched_by_dn[against] += matched_here
     unallocated_total = sum(-_num(r.get("qty")) for r in unallocated)
@@ -234,8 +250,10 @@ def build_stage_balances(line, ctx):
         shipped_net += net_total
         for idx, dn in enumerate(dn_rows):
             gross_qty = _num(dn.get("qty"))
-            net_qty = max(0.0, gross_qty - min(matched_by_group[(dn_name, idx)],
-                                               gross_qty))
+            names = group_item_names(dn, idx)
+            row_alloc = min(sum(matched_by_item[(dn_name, name)] for name in names),
+                            gross_qty)
+            net_qty = max(0.0, gross_qty - row_alloc)
             if net_qty <= 1e-9:
                 continue
             dn_numbers = [n["number"] for n in numbers.get(dn_name, [])]

@@ -92,6 +92,13 @@ def _dn(name="DN-1", qty=25.0, docstatus=1, is_return=0, **overrides):
     return dn
 
 
+def _dn_row(**overrides):
+    row = {"date": "2026-10-16", "status": "", "docstatus": 1, "is_return": 0,
+           "return_against": None, "so_line": "SOI-1", "dn_detail": None, "uom": "个"}
+    row.update(overrides)
+    return _AttrDict(row)
+
+
 def _ship(number="ZMT1", status="已离港", eta="2026-11-01", atd="2026-10-17",
           ata=None, dlvr=None):
     return {"shipment": "SHIP-1", "number": number, "status11": status, "status4": "在途",
@@ -568,19 +575,13 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(by_stage[self.facts.STAGE_NOT_PLANNED], 70.0)
 
     def test_load_dns_preserves_return_item_identity_and_warehouses(self):
-        def dn_row(**overrides):
-            row = {"date": "2026-10-16", "status": "", "docstatus": 1, "is_return": 0,
-                   "return_against": None, "so_line": "SOI-1", "dn_detail": None,
-                   "uom": "个"}
-            row.update(overrides)
-            return _AttrDict(row)
         self.fake.dn_rows = [
-            dn_row(dn="DN-1", dn_item="row-a", qty=40.0, warehouse="WH-A"),
-            dn_row(dn="DN-1", dn_item="row-b", qty=60.0, warehouse="WH-B"),
-            dn_row(dn="DN-R", dn_item="row-r1", dn_detail="row-a", qty=-10.0,
-                   warehouse="WH-C", is_return=1, return_against="DN-1"),
-            dn_row(dn="DN-R", dn_item="row-r2", dn_detail="row-b", qty=-10.0,
-                   warehouse="WH-C", is_return=1, return_against="DN-1"),
+            _dn_row(dn="DN-1", dn_item="row-a", qty=40.0, warehouse="WH-A"),
+            _dn_row(dn="DN-1", dn_item="row-b", qty=60.0, warehouse="WH-B"),
+            _dn_row(dn="DN-R", dn_item="row-r1", dn_detail="row-a", qty=-10.0,
+                    warehouse="WH-C", is_return=1, return_against="DN-1"),
+            _dn_row(dn="DN-R", dn_item="row-r2", dn_detail="row-b", qty=-10.0,
+                    warehouse="WH-C", is_return=1, return_against="DN-1"),
         ]
         self.fake.permitted_dns = ["DN-1", "DN-R"]
         dns, restricted = self.facts.load_dns([_AttrDict(_line())])
@@ -596,6 +597,72 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual({t["warehouse"]: t["qty"] for t in tranches},
                          {"WH-A": 30.0, "WH-B": 50.0})
         self.assertEqual(len({t["tranche_id"] for t in tranches}), 2)
+
+    def test_load_dns_aggregates_rows_but_keeps_detail_identity(self):
+        self.fake.dn_rows = [
+            _dn_row(dn="DN-1", dn_item="row-a", qty=40.0, warehouse="WH-A"),
+            _dn_row(dn="DN-1", dn_item="row-b", qty=60.0, warehouse="WH-A"),
+            _dn_row(dn="DN-R", dn_item="row-r", qty=-10.0, warehouse="WH-B",
+                    is_return=1, return_against="DN-1"),
+        ]
+        self.fake.permitted_dns = ["DN-1", "DN-R"]
+        dns, _ = self.facts.load_dns([_AttrDict(_line())])
+        rows = dns["SOI-1"]
+        outbound = [r for r in rows if not r["is_return"]]
+        self.assertEqual(len(outbound), 1)
+        self.assertEqual(sorted(outbound[0]["item_qty"]), ["row-a", "row-b"])
+        self.assertAlmostEqual(sum(outbound[0]["item_qty"].values()), 100.0)
+        stages = self.facts.build_stage_balances(_line(), _ctx(dns=rows))
+        transit = [r["qty"] for r in stages
+                   if r["stage"] == self.facts.STAGE_IN_TRANSIT]
+        self.assertEqual(transit, [100.0])
+        returned = [r for r in stages if r["stage"] == self.facts.STAGE_RETURNED]
+        self.assertEqual(returned[0]["qty"], 10.0)
+        self.assertIn("归属", returned[0]["exclusion_reason"])
+
+    def test_return_order_does_not_change_capacity_allocation(self):
+        base = [_dn(qty=100.0, warehouse="WH-A", dn_item="row-a")]
+        no_detail = _dn(name="DN-R1", qty=-60.0, is_return=1,
+                        return_against="DN-1", warehouse="WH-B")
+        explicit = _dn(name="DN-R2", qty=-60.0, is_return=1,
+                       return_against="DN-1", dn_detail="row-a", warehouse="WH-B")
+        explicit2 = _dn(name="DN-R3", qty=-60.0, is_return=1,
+                        return_against="DN-1", dn_detail="row-a", warehouse="WH-B")
+        for ordered in ([no_detail, explicit], [explicit, no_detail],
+                        [explicit, explicit2], [explicit2, explicit]):
+            stages = self.facts.build_stage_balances(_line(), _ctx(dns=base + ordered))
+            returned = sorted(r["qty"] for r in stages
+                              if r["stage"] == self.facts.STAGE_RETURNED)
+            self.assertEqual(returned, [20.0, 100.0])
+            self.assertFalse([r for r in stages
+                              if r["stage"] == self.facts.STAGE_IN_TRANSIT])
+            self.assertAlmostEqual(
+                sum(r["qty"] for r in stages if r["qty"] is not None
+                    and r["stage"] not in (self.facts.STAGE_RETURNED,
+                                           self.facts.STAGE_DRAFT)), 100.0)
+
+    def test_missing_detail_on_aggregated_multi_detail_group_is_unattributed(self):
+        group = _dn(qty=100.0, warehouse="WH-A",
+                    dn_items=["row-a", "row-b"],
+                    item_qty={"row-a": 40.0, "row-b": 60.0})
+        ret = _dn(name="DN-R", qty=-10.0, is_return=1,
+                  return_against="DN-1", warehouse="WH-B")
+        stages = self.facts.build_stage_balances(_line(), _ctx(dns=[group, ret]))
+        transit = [r for r in stages if r["stage"] == self.facts.STAGE_IN_TRANSIT]
+        self.assertEqual([r["qty"] for r in transit], [100.0])
+        returned = [r for r in stages if r["stage"] == self.facts.STAGE_RETURNED]
+        self.assertEqual(returned[0]["qty"], 10.0)
+        self.assertIn("归属", returned[0]["exclusion_reason"])
+        self.assertFalse([r for r in stages
+                          if r["stage"] == self.facts.STAGE_UNKNOWN and r["qty"] is not None])
+        explicit = _dn(name="DN-R2", qty=-50.0, is_return=1,
+                       return_against="DN-1", dn_detail="row-a", warehouse="WH-B")
+        stages = self.facts.build_stage_balances(_line(), _ctx(dns=[group, explicit]))
+        transit = [r["qty"] for r in stages if r["stage"] == self.facts.STAGE_IN_TRANSIT]
+        self.assertEqual(transit, [60.0])
+        returned = sorted(r["qty"] for r in stages
+                          if r["stage"] == self.facts.STAGE_RETURNED)
+        self.assertEqual(returned, [10.0, 40.0])
 
     def test_plan_unit_mismatch_blocks_coverage_allocation(self):
         pp = {"pp": "PP-1", "ppi": "PPI-1", "item_code": "SKU-1",
