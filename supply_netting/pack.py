@@ -284,7 +284,9 @@ def main(argv=None) -> int:
     parser.add_argument("--stock", required=True, help="库存快照 parquet（算库存侧未映射）")
     parser.add_argument("--blocked", default=None, help="demand_blocked.parquet（需求侧未映射清单）")
     parser.add_argument("--so-rows", default=None,
-                        help="EN 开放 SO 行级 JSONL（工厂交付管线；不并入海外仓可用）")
+                        help="EN 开放 SO 行级 JSONL（status != Closed；工厂交付管线，不并入海外仓可用）")
+    parser.add_argument("--so-closed-rows", default=None,
+                        help="EN status=Closed 且未交付的 SO 行级 JSONL（单列留档，不作为开放供给）")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
 
@@ -336,16 +338,35 @@ def main(argv=None) -> int:
     so_summary = None
     so_frame = pd.DataFrame()
     if args.so_rows:
-        from .so_backlog import attach_to_pack, build_so_backlog, summarize_backlog
+        from .so_backlog import (attach_to_pack, build_so_backlog, summarize_backlog,
+                                 summarize_raw)
         raw = pd.DataFrame([json.loads(line) for line in
                             Path(args.so_rows).read_text(encoding="utf-8").splitlines() if line.strip()])
         as_of = pd.Timestamp(manifest["as_of"]).date()
         so_frame = build_so_backlog(raw, as_of=as_of)
         so_summary = summarize_backlog(so_frame)
+        so_summary["raw"] = summarize_raw(so_frame)   # 与业务报数对账用：未分类前全量开放行
         so_frame.to_csv(out_dir / "so_backlog_rows.csv", index=False, encoding="utf-8-sig")
         (out_dir / "so_backlog_summary.json").write_text(
             json.dumps(so_summary, ensure_ascii=False, indent=1), encoding="utf-8")
         pack = attach_to_pack(pack, so_frame)
+
+    # Closed 旧单单列：不作为开放供给，只留档
+    closed_summary = None
+    if args.so_closed_rows:
+        from .so_backlog import (build_so_backlog as _build, summarize_backlog as _summarize,
+                                 summarize_raw as _raw)
+        closed_raw = pd.DataFrame([json.loads(line) for line in
+                                   Path(args.so_closed_rows).read_text(encoding="utf-8").splitlines()
+                                   if line.strip()])
+        closed_frame = _build(closed_raw, as_of=pd.Timestamp(manifest["as_of"]).date())
+        closed_frame.to_csv(out_dir / "closed_so_undelivered_rows.csv", index=False, encoding="utf-8-sig")
+        closed_summary = {"raw": _raw(closed_frame),
+                          "classified": _summarize(closed_frame),
+                          "note": ("status=Closed 且 per_delivered<100 的旧单（手工关闭/短交）；"
+                                   "不作为开放供给，不并入任何一层")}
+        (out_dir / "closed_so_undelivered_summary.json").write_text(
+            json.dumps(closed_summary, ensure_ascii=False, indent=1), encoding="utf-8")
     for column in ("so_pipeline_qty", "so_overdue_qty"):
         if column not in pack.columns:
             pack[column] = None
@@ -399,6 +420,7 @@ def main(argv=None) -> int:
         decision_pack_gap_keys=int((pack["protect_gap"].fillna(0) > 0).sum()),
         decision_pack_recommendations=pack["recommendation"].value_counts().to_dict(),
         so_backlog=so_summary,
+        closed_so_undelivered=closed_summary,
         layers=layers.to_dict("records"),
         run_manifest=dict(run_id=manifest.get("run_id"), as_of=manifest.get("as_of"),
                           partial=manifest.get("partial")),
@@ -416,6 +438,10 @@ def main(argv=None) -> int:
         layers.to_excel(writer, sheet_name="三层供给", index=False)
         if len(so_frame):
             so_frame.to_excel(writer, sheet_name="工厂SO管线", index=False)
+        if closed_summary is not None:
+            pd.DataFrame([{"key": k, "value": json.dumps(v, ensure_ascii=False)}
+                          for k, v in closed_summary.items()]).to_excel(
+                writer, sheet_name="Closed旧单留档", index=False)
         pd.DataFrame([{"key": k, "value": json.dumps(v, ensure_ascii=False)} for k, v in summary.items()]
                      ).to_excel(writer, sheet_name="Manifest", index=False)
     print(json.dumps(summary, ensure_ascii=False, indent=1))

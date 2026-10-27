@@ -29,6 +29,7 @@ CUSTOMER_BRANCH = {
 }
 
 WAREHOUSE_STAGE = {
+    "北京委外成品仓": ("outsourced_finished", "finished_waiting_shipment", True),
     "半成品仓": ("semi", "in_production", True),
     "成品仓": ("finished", "finished_waiting_shipment", True),
     "包材仓": ("packaging", "packaging_material", False),
@@ -36,6 +37,16 @@ WAREHOUSE_STAGE = {
 }
 
 DEFAULT_TRANSIT_DAYS = 45   # 假设值：出厂 → 分公司可上架；未实测，标 estimated
+
+
+def customer_branch(customer: str) -> tuple[str | None, str]:
+    """客户 → (分公司仓, 角色)。任何 *FBA* 客户都属外部范围，不进分公司管线。"""
+    name = str(customer or "").strip()
+    if name in CUSTOMER_BRANCH:
+        return CUSTOMER_BRANCH[name]
+    if "FBA" in name.upper():
+        return None, "fba_external"
+    return None, "unknown"
 
 
 def clean_sku(value) -> str | None:
@@ -73,7 +84,7 @@ def build_so_backlog(rows: pd.DataFrame, *, as_of: date,
     out = []
     for record in frame.itertuples(index=False):
         customer = str(getattr(record, "customer", "") or "")
-        branch, customer_role = CUSTOMER_BRANCH.get(customer, (None, "unknown"))
+        branch, customer_role = customer_branch(customer)
         warehouse = str(getattr(record, "warehouse", "") or "")
         role, stage, countable = "unknown", "unattributed", False
         for key, (role_value, stage_value, ok) in WAREHOUSE_STAGE.items():
@@ -153,3 +164,24 @@ def attach_to_pack(pack: pd.DataFrame, backlog: pd.DataFrame) -> pd.DataFrame:
     ).reset_index().rename(columns={"finished_item": "canonical_sku",
                                     "branch_warehouse": "canonical_warehouse"})
     return pack.merge(grouped, on=["canonical_sku", "canonical_warehouse"], how="left")
+
+
+def summarize_raw(frame: pd.DataFrame) -> dict:
+    """未做管线分类前的原始口径（全部开放行），用于和业务报数对账。"""
+    if not len(frame):
+        return {"orders": 0, "lines": 0, "quantity": 0.0, "overdue_quantity": 0.0}
+    open_rows = frame[pd.to_numeric(frame["quantity"], errors="coerce").fillna(0) > 0].copy()
+    delivery = pd.to_datetime(open_rows["scheduled_delivery"], errors="coerce")
+    return {
+        "orders": int(open_rows["so"].nunique()),
+        "lines": int(len(open_rows)),
+        "quantity": round(float(open_rows["quantity"].sum()), 3),
+        "overdue_quantity": round(float(open_rows.loc[open_rows["overdue"].astype(bool),
+                                                     "quantity"].sum()), 3),
+        "by_customer": {str(k): round(float(v), 3) for k, v in
+                        open_rows.groupby("customer")["quantity"].sum().items()},
+        "by_factory_warehouse": {str(k): round(float(v), 3) for k, v in
+                                 open_rows.groupby("factory_warehouse")["quantity"].sum().items()},
+        "by_delivery_month": {str(k): round(float(v), 3) for k, v in
+                              open_rows.groupby(delivery.dt.strftime("%Y-%m")).quantity.sum().items()},
+    }

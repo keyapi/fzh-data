@@ -8,7 +8,7 @@ from datetime import date
 import pandas as pd
 
 from supply_netting.so_backlog import (attach_to_pack, build_so_backlog, clean_sku,
-                                       finished_item, summarize_backlog)
+                                       finished_item, summarize_backlog, summarize_raw)
 
 
 def so_df(rows):
@@ -70,3 +70,31 @@ def test_attach_to_pack_adds_columns_without_touching_available():
     out = attach_to_pack(pack, backlog)
     assert out.iloc[0]["so_pipeline_qty"] == 9.0
     assert out.iloc[0]["opening"] == 2.0            # 可用量不被改写
+
+
+def test_any_fba_customer_is_external_scope():
+    frame = build_so_backlog(so_df([
+        ("SO5", "德国FBA仓", "2026-10-30", "KS5", "TT5", "成品仓 - FZH", 3),
+    ]), as_of=date(2026, 10, 27))
+    assert frame.iloc[0]["excluded_reason"] == "fba_external_scope"
+
+
+def test_outsourced_finished_warehouse_is_counted_as_finished():
+    frame = build_so_backlog(so_df([
+        ("SO6", "DANEEY", "2026-10-30", "KS6", "TT6", "北京委外成品仓 - FZH", 6),
+    ]), as_of=date(2026, 10, 27))
+    row = frame.iloc[0]
+    assert row["role"] == "outsourced_finished"
+    assert row["stage"] == "finished_waiting_shipment"
+    assert summarize_backlog(frame)["quantity"] == 6.0
+
+
+def test_raw_summary_keeps_all_open_rows_for_reconciliation():
+    frame = build_so_backlog(so_df([
+        ("SO7", "DANEEY", "2026-10-30", "KS7", "TT7", "成品仓 - FZH", 10),
+        ("SO7", "DANEEY", "2026-10-30", "HM5", None, "包材仓 - FZH", 4),
+        ("SO7", "美国FBA仓", "2026-10-30", "KS7", "TT7", "成品仓 - FZH", 6),
+    ]), as_of=date(2026, 10, 27))
+    raw = summarize_raw(frame)
+    assert raw["quantity"] == 20.0                 # 全部开放行
+    assert summarize_backlog(frame)["quantity"] == 10.0   # 仅计入管线
