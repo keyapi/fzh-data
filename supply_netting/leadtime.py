@@ -39,6 +39,7 @@ sc13 的 profile 是 ``route × warehouse × mode`` 三段
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -157,6 +158,7 @@ class LeadTimeConfig:
     spring_festival: SpringFestival
     routes: tuple[Route, ...]
     path: Path
+    config_sha256: str
     warnings: tuple[str, ...] = field(default_factory=tuple)
 
     # ---- 查询 ------------------------------------------------------------
@@ -186,8 +188,9 @@ class LeadTimeConfig:
 
     # ---- 留痕 ------------------------------------------------------------
     def to_manifest(self) -> dict:
-        """写进 manifest 的完整留痕：版本 + 来源 + 每条路线的分段。
+        """写进 manifest 的完整留痕：版本 + 文件哈希 + 来源 + 每条路线的分段。
 
+        ``sha256`` 按加载时读到的同一份字节计算：即使加载后文件被改，留痕仍指被解析的那份。
         ``config`` 尽量记仓库相对路径（worktree 换目录后仍可读），不在仓库内才记绝对路径。
         """
         try:
@@ -198,6 +201,7 @@ class LeadTimeConfig:
         return dict(
             config=config_label,
             version=self.version,
+            sha256=self.config_sha256,
             effective_from=self.effective_from.isoformat(),
             sources=sorted({self.so_pipeline.source, self.spring_festival.source,
                             *(r.source for r in self.routes)}),
@@ -297,10 +301,15 @@ def load_config(path: str | Path | None = None, *, expected_version: str | None 
     p = Path(path) if path is not None else DEFAULT_CONFIG_PATH
     if not p.is_file():
         raise ConfigNotFound(f"交期配置文件不存在：{p}（不回退到内置默认天数）")
+    raw = p.read_bytes()
     try:
-        doc = json.loads(p.read_text(encoding="utf-8"))
+        doc = json.loads(raw.decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        raise ConfigParseError(f"{p} 不是 UTF-8 文本：{exc}") from exc
     except json.JSONDecodeError as exc:
         raise ConfigParseError(f"{p} 不是合法 JSON：{exc}") from exc
+    # 哈希按被解析的同一份字节算，加载后文件再被改也不会让留痕说谎
+    config_sha256 = hashlib.sha256(raw).hexdigest()
     if not isinstance(doc, dict):
         raise ConfigParseError(f"{p} 顶层必须是 JSON 对象，收到 {type(doc).__name__}")
 
@@ -404,7 +413,8 @@ def load_config(path: str | Path | None = None, *, expected_version: str | None 
 
     return LeadTimeConfig(version=version, effective_from=effective_from,
                           so_pipeline=pipeline, spring_festival=festival,
-                          routes=tuple(routes), path=p, warnings=tuple(warnings))
+                          routes=tuple(routes), path=p, config_sha256=config_sha256,
+                          warnings=tuple(warnings))
 
 
 def load_default_config(**kwargs) -> LeadTimeConfig:

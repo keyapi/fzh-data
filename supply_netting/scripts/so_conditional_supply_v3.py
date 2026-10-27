@@ -29,6 +29,7 @@ import pandas as pd
 from self_fulfilled_demand.canonical import load_sku_map
 
 from supply_netting.decision_pack import COUNTERFACTUAL_NOTE
+from supply_netting.leadtime import load_default_config
 from supply_netting.so_backlog import finished_item
 from supply_netting.scripts.so_conditional_supply import _branch, load_w1, plan_dates
 from supply_netting.scripts.so_conservation_fix import reconcile
@@ -36,6 +37,9 @@ from supply_netting.scripts.so_conservation_fix import reconcile
 SUPPLY_STAGES = ("produced_pending_dn", "in_production", "shipped_in_transit")
 DATED_STAGES = ("produced_pending_dn", "in_production")
 KEY = ["canonical_sku", "branch_warehouse", "uom"]
+
+# 日期分段（发运/生产/海运/春节）来自版本化配置；manifest 记录版本 + 哈希 + 来源。
+LEADTIME = load_default_config()
 
 
 def resolve_uom(item_code: str, canonical_sku: str, source_uom, uom_map: dict | None) -> tuple:
@@ -416,6 +420,7 @@ def main(argv=None) -> int:
                 uom_canonical="D:/Work/赛狐/Cursor-claude/docs/research/supply-chain/2026-10-20/claude/control/reference/UOM-CANONICAL.md",
                 conservation_v2=str(args.conservation_v2),
                 v2=str(args.v2), windows=str(args.windows),
+                leadtime_config=LEADTIME.to_manifest(),
                 status="pending_review", offset_allowed=False,
                 note="条件附件；不改 r6/h180 净额与决策包，不 push")
     (out / "so_conditional_supply_v3_summary.json").write_text(

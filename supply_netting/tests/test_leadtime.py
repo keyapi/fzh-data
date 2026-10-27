@@ -4,12 +4,15 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib
 import json
 import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+
+import pandas as pd
 
 import supply_netting.leadtime as leadtime
 import supply_netting.so_backlog as so_backlog
@@ -68,6 +71,9 @@ class FrozenValuesTests(unittest.TestCase):
         self.assertTrue(manifest["version"].startswith("2026-10-28"))
         self.assertEqual(manifest["effective_from"], "2026-10-27")
         self.assertEqual(manifest["config"], "supply_netting/config/leadtime_config.json")
+        self.assertEqual(manifest["sha256"],
+                         hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes()).hexdigest())
+        self.assertEqual(len(manifest["sha256"]), 64)
         self.assertEqual(manifest["sources"], ["assumed"])
         self.assertEqual(manifest["so_pipeline"]["source"], "assumed")
         self.assertEqual(manifest["so_pipeline"]["sample_size"], 0)
@@ -273,6 +279,76 @@ class ConsumerWiringTests(unittest.TestCase):
                 leadtime.DEFAULT_CONFIG_PATH = original
                 importlib.reload(so_backlog)
         self.assertEqual(so_backlog.BASELINE_ORDER_TO_BRANCH_DAYS, 90)
+
+
+class HashTests(unittest.TestCase):
+    """哈希按被解析的同一份字节算；改了文件哈希就变。"""
+
+    def test_hash_comes_from_parsed_bytes(self):
+        cfg = load_default_config()
+        self.assertEqual(cfg.to_manifest()["sha256"], cfg.config_sha256)
+        self.assertEqual(cfg.config_sha256,
+                         hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes()).hexdigest())
+
+    def test_editing_file_changes_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = _raw()
+            before = load_config(_write(tmp, doc)).config_sha256
+            doc["routes"][2]["segments"]["ocean"] = 41
+            after = load_config(_write(tmp, doc)).config_sha256
+            self.assertNotEqual(before, after)
+
+
+class V3ManifestTests(unittest.TestCase):
+    """v3 的日期来自同一份配置，manifest 必须带上版本 + 哈希 + 来源 + 样本量。"""
+
+    def _w1(self, path: Path) -> None:
+        payload = {
+            "so": "SO-1", "as_of": AUDIT.isoformat(), "links": [],
+            "lines": [dict(so="SO-1", so_line="L1", item_code="KS1", customer="美东公司（CENTADE）",
+                           qty=100.0, delivered_qty=0.0, uom="个", warehouse="成品仓 - FZH",
+                           scope="in_house", role="finished")],
+            "stage_balances": [dict(so="SO-1", so_line_id="L1", item_code="KS1",
+                                    warehouse="成品仓 - FZH", uom="个", stage="in_production",
+                                    stage_detail="", qty=10.0, qty_status="known",
+                                    qty_basis="", cumulative_excess_qty=None, batch_key="WO-1",
+                                    source_record="WO-1", exclusion_reason="",
+                                    included_in_stock="unknown", demand_status="active",
+                                    scope="in_house", role="finished")],
+        }
+        path.write_text(json.dumps({"so": "SO-1", "payload": payload}, ensure_ascii=False) + "\n",
+                        encoding="utf-8")
+
+    def test_v3_manifest_records_leadtime_version_hash_source(self):
+        from supply_netting.scripts import so_conditional_supply_v3 as v3
+        from supply_netting.scripts.so_conditional_supply import plan_dates
+
+        cfg = load_default_config()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            w1, cache, out = tmp / "w1.jsonl", tmp / "uom.parquet", tmp / "out"
+            self._w1(w1)
+            pd.DataFrame([dict(item_code="KS1", stock_uom="个")]).to_parquet(cache, index=False)
+            v3.main(["--w1", str(w1), "--out", str(out), "--uom-cache", str(cache),
+                     "--role-csv", "", "--windows", "", "--v2", "", "--conservation-v2", ""])
+
+            manifest = json.loads((out / "so_conditional_supply_v3_manifest.json")
+                                  .read_text(encoding="utf-8"))
+            block = manifest["leadtime_config"]
+            self.assertEqual(block["version"], cfg.version)
+            self.assertEqual(block["sha256"], cfg.config_sha256)
+            self.assertEqual(block["sources"], ["assumed"])
+            self.assertEqual(block["so_pipeline"]["sample_size"], 0)
+            self.assertEqual(block["spring_festival"]["source"], "assumed")
+            self.assertEqual(manifest["offset_allowed"], False)
+
+            # 日期数值不变：与 plan_dates 逐值一致
+            tranches = pd.read_csv(out / "so_supply_tranches_v3.csv", encoding="utf-8-sig")
+            dated = tranches[tranches["eta_earliest"].notna()].iloc[0]
+            expected = plan_dates("in_production", AUDIT, "美东-CENTRADE")
+            self.assertEqual(dated["eta_earliest"], expected["eta_earliest"])
+            self.assertEqual(dated["eta_latest"], expected["eta_latest"])
+            self.assertEqual(dated["candidate_qty"], 10.0)
 
 
 if __name__ == "__main__":

@@ -190,3 +190,15 @@ updated: 2026-10-27
   净额、决策包与已验收产物，不 push。
 - 分段词表与 sc13 不同（production/shipping/ocean），原因见
   [leadtime-config-2026-10-28.md](leadtime-config-2026-10-28.md) §3。
+
+## 2026-10-28 — LEADTIME-CONFIG-WIRE 补：v3 manifest + 配置哈希
+
+- `LeadTimeConfig` 新增 `config_sha256`（按加载时读到的同一份字节）→ `to_manifest()`
+  的 `sha256`；v2 / so_backlog / v3 三处 manifest 自动带上。
+- `scripts/so_conditional_supply_v3.py` manifest 新增 `leadtime_config`
+  （version / sha256 / sources / sample_size / 分段）：此前 v3 的日期已自动走配置，
+  但 manifest 查不到用的是哪一版。
+- 日期与候选量零变化：只加留痕字段，未重跑既有 v3 产物目录；既有产物下次正常出包时
+  才会带新字段。
+- 测试 +3（v3 manifest 端到端：合成 W1 跑 `main(--out tmp)` 后校验版本/哈希/来源，
+  并与 `plan_dates` 逐值比对日期）。
