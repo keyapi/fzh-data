@@ -1,0 +1,140 @@
+# -*- coding: utf-8 -*-
+"""SO 条件供给 v3：逐行封顶、首工序/FBA 剔除、按 UOM、缺口含/不含、v2 差异。"""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+import pandas as pd
+
+from supply_netting.scripts.so_conditional_supply_v3 import (build_by_key, build_diff,
+                                                             build_tranches)
+
+AS_OF = "2026-10-27"
+
+
+def line(item="KS1", qty=100.0, so_line="L1", customer="美东公司（CENTADE）", uom="个"):
+    return dict(so="SO-1", so_line=so_line, item_code=item, customer=customer, qty=qty,
+                delivered_qty=0.0, uom=uom, warehouse="成品仓 - FZH", scope="in_house",
+                role="finished")
+
+
+def bal(stage, qty, *, item="KS1", so_line="L1", record="", exclusion="", basis="",
+        scope="in_house", status="known", uom="个"):
+    return dict(so="SO-1", so_line_id=so_line, item_code=item, warehouse="成品仓 - FZH",
+                uom=uom, stage=stage, stage_detail="", qty=qty, qty_status=status,
+                qty_basis=basis, cumulative_excess_qty=None, batch_key=record,
+                source_record=record, exclusion_reason=exclusion,
+                included_in_stock="unknown", demand_status="active", scope=scope,
+                role="finished")
+
+
+def payload(lines, balances):
+    return {"so": "SO-1", "as_of": AS_OF, "lines": lines,
+            "stage_balances": balances, "links": []}
+
+
+def run(lines, balances):
+    tranches, excluded = build_tranches([{"so": "SO-1", "payload": payload(lines, balances)}])
+    return tranches, excluded
+
+
+class V3FilterTests(unittest.TestCase):
+    def test_first_op_and_fba_are_excluded(self):
+        tranches, excluded = run(
+            [line(qty=100.0)],
+            [bal("in_production", 40.0, record="WO-1"),
+             bal("produced_pending_dn", 30.0, basis="job_card_first_op"),
+             bal("shipped_in_transit", 10.0, record="DN-1"),
+             bal("shipped_in_transit", 10.0, record="DN-2", scope="external_fba")])
+        self.assertEqual(sorted(tranches["stage"]), ["in_production", "shipped_in_transit"])
+        self.assertEqual(tranches["candidate_qty"].sum(), 50.0)
+        self.assertEqual(excluded.get("first_op_basis"), 30.0)
+        self.assertEqual(excluded.get("excess:fba_external"), 10.0)
+
+    def test_over_ship_excess_not_counted(self):
+        tranches, _ = run([line(qty=50.0)],
+                          [bal("shipped_in_transit", 80.0, record="DN-1")])
+        row = tranches.iloc[0]
+        self.assertEqual(row["candidate_qty"], 50.0)    # 封顶到订单行
+        self.assertEqual(row["excess_class"], "over_ship")
+
+    def test_uom_kept_separate(self):
+        tranches, _ = run(
+            [line(qty=10.0), line(item="KS2", qty=3.0, so_line="L2", uom="件")],
+            [bal("in_production", 10.0, record="WO-1"),
+             bal("in_production", 3.0, item="KS2", so_line="L2", record="WO-2", uom="件")])
+        by_uom = tranches.groupby("uom")["candidate_qty"].sum().to_dict()
+        self.assertEqual(by_uom, {"个": 10.0, "件": 3.0})
+
+    def test_offset_allowed_is_false(self):
+        tranches, _ = run([line(qty=10.0)], [bal("in_production", 10.0, record="WO-1")])
+        self.assertTrue((tranches["offset_allowed"] == False).all())  # noqa: E712
+
+
+class GapScenarioTests(unittest.TestCase):
+    def _windows(self, bucket_end):
+        return pd.DataFrame([dict(window_days=150, canonical_sku="KS1",
+                                  canonical_warehouse="美东-CENTRADE",
+                                  canonical_uom="个", cum_unserved=100.0,
+                                  bucket_end=bucket_end)])
+
+    def test_spring_buffer_decides_whether_candidate_arrives_in_time(self):
+        tranches, _ = run([line(qty=100.0)],
+                          [bal("in_production", 40.0, record="WO-1")])
+        by_key = build_by_key(tranches, self._windows("2027-03-29T05:17:34+08:00"))
+        row = by_key.iloc[0]
+        self.assertEqual(row["gap150_base"], 100.0)
+        # 最晚 ETA 含春节 +60 天 = 2027-04-07 > 2027-03-29 → 保守情景不抵减
+        self.assertEqual(row["gap150_with"], 100.0)
+        # 最早 ETA 2027-02-06 ≤ 2027-03-29 → 乐观情景可抵减到 60
+        self.assertEqual(row["gap150_with_optimistic"], 60.0)
+
+    def test_candidate_after_bucket_end_does_not_reduce_gap(self):
+        tranches, _ = run([line(qty=100.0)],
+                          [bal("in_production", 40.0, record="WO-1")])
+        by_key = build_by_key(tranches, self._windows("2027-01-25T05:17:34+08:00"))
+        row = by_key.iloc[0]
+        self.assertEqual(row["gap150_with"], 100.0)
+
+    def test_transit_has_no_eta_and_never_offsets(self):
+        tranches, _ = run([line(qty=100.0)],
+                          [bal("shipped_in_transit", 60.0, record="DN-1")])
+        by_key = build_by_key(tranches, self._windows("2027-12-31T00:00:00+08:00"))
+        row = by_key.iloc[0]
+        self.assertEqual(row["transit_qty_no_eta"], 60.0)
+        self.assertEqual(row["candidate_dated_qty"], 0.0)
+        self.assertEqual(row["gap150_with"], 100.0)
+
+    def test_gap_matches_uom(self):
+        tranches, _ = run([line(qty=100.0, uom="件")],
+                          [bal("in_production", 40.0, record="WO-1", uom="件")])
+        by_key = build_by_key(tranches, self._windows("2027-03-29T05:17:34+08:00"))
+        row = by_key.iloc[0]
+        self.assertEqual(row["uom"], "件")
+        self.assertTrue(pd.isna(row["gap150_base"]))   # 个的缺口不能被子键抵减
+
+
+class DiffTests(unittest.TestCase):
+    def test_diff_reports_per_key_delta(self):
+        tranches, _ = run([line(qty=100.0)],
+                          [bal("in_production", 40.0, record="WO-1")])
+        by_key = build_by_key(tranches, pd.DataFrame())
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "v2.csv"
+            pd.DataFrame([dict(canonical_sku="KS1", branch_warehouse="美东-CENTRADE",
+                               uom="个", conditional_dated_qty=10.0,
+                               gap90_base=0.0, gap90_with=0.0,
+                               gap150_base=0.0, gap150_with=0.0)]).to_csv(
+                path, index=False, encoding="utf-8-sig")
+            diff = build_diff(by_key, path)
+        row = diff[diff["canonical_sku"] == "KS1"].iloc[0]
+        self.assertEqual(row["v2_candidate_qty"], 10.0)
+        self.assertEqual(row["candidate_dated_qty"], 40.0)
+        self.assertEqual(row["delta_qty"], 30.0)
+
+
+if __name__ == "__main__":
+    unittest.main()

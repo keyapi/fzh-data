@@ -135,3 +135,15 @@ updated: 2026-10-27
   `offset_allowed=false`，保持隔离。
 - 输出 `so-conservation-fix-2026-10-28-v2/`（行级 reclass + 逐单 + 报告）；只读不改净额；
   测试 273 通过。
+
+## 2026-10-28 — SO 条件供给 v3（逐行封顶候选，pending re-review）
+
+- 新增 `scripts/so_conditional_supply_v3.py`：基于守恒 v2 逐行重分类，只取
+  in_house/known/非首工序/逐行封顶的 attributable 量；duplicate=0 不补；over_ship 与
+  placeholder 的超出部分不计；按 UOM 分列。
+- 输出 `so-conditional-supply-2026-10-28-v3/`：1,208 条 tranche、候选 50,023
+  （个 49,923 + 件 100，其中 1,045 个有日期）；在途 48,978 无 ETA 只列不抵。
+- 剔除：first-op 10,298、FBA 14,277、异常占位 3,755、超产 3,020、超发 1,900、数量未证 216。
+- 90/150 天缺口保守情景不变（春节 +60 天把在产最晚 ETA 推到 3-29 之后），乐观情景
+  90 天不变、150 天可将相关键缺口抵减；与 v2 逐键差异 28 键、+900。
+- offset_allowed=false，仍为条件附件；不改 r6/h180/r2；测试 290 通过。
