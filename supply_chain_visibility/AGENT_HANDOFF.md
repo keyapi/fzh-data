@@ -20,12 +20,12 @@
 **必须记住的口径**：工序进度取**第一道工序**完成量、**不跨工序求和**；`WO.status/produced_qty` **不可信**；
 `Closed ≠ 已发完`；出库按 `item_code` 匹配、退货行负数**净额抵扣**；EN 的 `po_no` 不是客户 PO。
 
-## 3. 已落地产物（`key_test/`，测试机已验证，**生产未部署**）
+## 3. 已落地产物（`key_test/`，测试机已验证，**生产已部署** 2026-10-27 @ `c34fa53`）
 
 | Stage | 产物 | 部署 |
 |---|---|---|
-| 1 嵌入单据 | `key_test/so_chain.py`（whitelist 方法）+ 追加进 `key_test/public/js/sales_order.js` | 测试机 ✅ |
-| 2 原生报表 | `key_test/key_test__report__so_chain_overview__*`（Script Report） | 测试机 ✅ |
+| 1 嵌入单据 | `key_test/so_chain.py`（whitelist 方法）+ 追加进 `key_test/public/js/sales_order.js` | 测试机 ✅ / 生产 ✅ |
+| 2 原生报表 | `key_test/key_test/report/so_chain_overview/` + `supply_timeline/`（Script Report） | 测试机 ✅ / 生产 ✅ |
 | 3 独立屏 | 仅设计 | 未做 |
 
 **部署/回滚/移植步骤**：见 [key_test/AGENT_HANDOFF.md](key_test/AGENT_HANDOFF.md)。

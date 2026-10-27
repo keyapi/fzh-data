@@ -32,7 +32,7 @@
   - **JS 挂载验证**：`GET /api/method/frappe.desk.form.load.getdoctype?doctype=Sales Order`
     → `__js` 含 `so-chain-summary` 与 `so_chain.get_so_chain` ✅。
   - ⏳ **浏览器视觉未验证**（需登录 desk）；建议人工开一张 Sales Order 确认区块渲染。
-- ⏳ **生产（`阿里云-FZH-ERPNext-frappe`）未部署**。
+- ✅ **生产（`阿里云-FZH-ERPNext-frappe`）已部署**（2026-10-27，HEAD `c34fa53`；`pull --ff-only` → `bench migrate` → `clear-cache` → `bench restart`；Report 记录/冒烟通过，详见 `JACK_QA.md` 的 `P0-PROD-DEPLOY-2026-10-27`）。
 
 ## 3. 部署到生产（需确认后执行）
 
@@ -68,7 +68,8 @@ ssh $H "cd /home/frappe/frappe-bench && sudo -n -u frappe bench --site erpnext.v
 ### 状态
 - ✅ **测试机已部署并验证（2026-10-13）**：`query_report.run` 返回 **10 列 / 107 行 / KPI / 柱图**（耗时 0.10s）。
   文件已搬到正确路径；`bench restart` 后生效。
-- ⏳ 生产未部署。
+- ✅ **生产已部署（2026-10-27，HEAD `c34fa53`）**：`bench migrate` + `clear-cache` + `bench restart`；`SO Chain Overview` 与 `Supply Timeline` 记录存在，REST 冒烟通过。
+  部署/回滚记录见 `JACK_QA.md` 的 `P0-PROD-DEPLOY-2026-10-27`。
 
 ### 生产部署补丁（Stage 2）
 ```bash
