@@ -398,6 +398,17 @@ class SupplyTimelineTests(unittest.TestCase):
         self.assertTrue({row["date_confidence"] for row in rows} <= {"confirmed", "estimated", "unknown"})
         self.assertIn("run_verified", {row["snapshot_confidence"] for row in rows})
 
+    def test_placeholder_provenance_and_quantity_contract(self):
+        rows, _ = self.service.get_report_data({})
+        self.assertTrue(rows)
+        self.assertTrue(all(row["qty_status"] == "unknown" and row["qty"] is None for row in rows))
+        self.assertEqual({row["source_layer"] for row in rows}, {"not_reported"})
+        self._configure_complete_latest()
+        rows, _ = self.service.get_report_data({})
+        self.assertTrue(all(row["qty_status"] == "unknown" for row in rows))
+        self.assertTrue(any(row["evidence_qty_status"] == "known" for row in rows))
+        self.assertTrue(all(not row["b_min_eligible"] and not row["b_max_eligible"] for row in rows))
+
     def test_unknown_source_keys_include_sku_warehouse_and_batch(self):
         self._configure_complete_latest()
         rows, _ = self.service.get_report_data({})

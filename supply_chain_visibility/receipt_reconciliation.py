@@ -27,6 +27,8 @@ class ReceiptEvent:
     weak_event_key: Optional[tuple] = None
     possible_duplicate: bool = False
     dedup_assumed: bool = False
+    uom_proven: bool = False
+    quantity_semantics_proven: bool = False
 
 
 @dataclass(frozen=True)
@@ -144,7 +146,7 @@ def _identity(event: ReceiptEvent) -> tuple:
 
 
 def _has_stable_id(event: ReceiptEvent) -> bool:
-    return bool(event.receipt_id and event.receipt_id.strip() and event.line_id and event.line_id.strip())
+    return all(isinstance(value, str) and value.strip() for value in (event.receipt_id, event.line_id))
 
 
 def reconcile_receipts(
@@ -219,6 +221,12 @@ def reconcile_receipts(
             reason = "invalid_quantity"
         elif not event.uom:
             reason = "unknown_uom"
+        elif not event.uom_proven:
+            reason = "uom_unproven"
+        elif not event.quantity_semantics_proven:
+            reason = "quantity_semantics_unproven"
+        elif event.possible_duplicate or event.dedup_assumed:
+            reason = "identity_unproven"
         elif not effective:
             reason = _time_issue(event.stock_effective_at)
         elif not event.sku or not event.warehouse:

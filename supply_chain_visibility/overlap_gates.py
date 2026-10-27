@@ -6,11 +6,28 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import Iterable
 
-from supply_chain_visibility.supply_row import SupplyRow
+from supply_chain_visibility.supply_row import SupplyRow, aware_timestamp
 
 
 def _qty(row: SupplyRow) -> Decimal:
     return row.qty if row.qty is not None else Decimal(0)
+
+
+def classify_batch_overlap(po_qty, transit_qty, po_batches, transit_batches) -> str:
+    """Quantities can raise suspicion; only proven batch keys establish lineage."""
+    pos, transits = list(po_batches), list(transit_batches)
+    if pos and transits and all(proven and key for key, proven in pos + transits):
+        po_keys, transit_keys = {key for key, _ in pos}, {key for key, _ in transits}
+        if po_keys.isdisjoint(transit_keys):
+            return "distinct"
+        if len(po_keys | transit_keys) == 1:
+            if po_qty is not None and transit_qty is not None and po_qty == transit_qty:
+                return "proven"
+            return "batch_quantity_conflict"
+    if po_qty is not None and transit_qty is not None and po_qty > 0 and transit_qty > 0:
+        if abs(po_qty - transit_qty) < Decimal("0.000001"):
+            return "same_batch_suspected"
+    return "unknown"
 
 
 def apply_overlap_gates(rows: Iterable[SupplyRow]) -> list[SupplyRow]:
@@ -27,20 +44,28 @@ def apply_overlap_gates(rows: Iterable[SupplyRow]) -> list[SupplyRow]:
 
     gated = []
     for _, items in groups.items():
-        po_qty = sum(_qty(row) for row in items if row.source_layer == "po_open")
-        transit_qty = sum(_qty(row) for row in items if row.source_layer == "in_transit")
-        suspected = po_qty > 0 and transit_qty > 0 and abs(po_qty - transit_qty) < Decimal("0.000001")
-        if suspected:
-            status = "same_batch_suspected"
-        elif po_qty > 0 and transit_qty > 0:
-            status = "distinct"
-        else:
-            status = "unknown"
+        active = [row for row in items if row.exclusion_reason not in (
+            "exact_replay", "source_identity_conflict", "source_grain_conflict"
+        )]
+        pos = [row for row in active if row.source_layer == "po_open" and row.scope == "in_house"]
+        transits = [row for row in active if row.source_layer == "in_transit" and row.scope == "in_house"]
+        po_qty = sum(_qty(row) for row in pos)
+        transit_qty = sum(_qty(row) for row in transits)
+        supply_sources = [row for row in items if row.source_layer in ("inventory_snapshot", "po_open", "in_transit", "work_order")
+                          and row.b_min_eligible]
+        source_instants = {aware_timestamp(row.source_as_of) for row in supply_sources}
+        mixed_basis = len(source_instants) > 1
+        status = classify_batch_overlap(po_qty, transit_qty,
+                                        [(row.batch_key, row.batch_proven) for row in pos],
+                                        [(row.batch_key, row.batch_proven) for row in transits])
+        proven_distinct = status == "distinct"
 
         for row in items:
             b_min, b_max = row.b_min_eligible, row.b_max_eligible
             reason = row.exclusion_reason
-            if row.scope == "external_fba":
+            if reason in ("exact_replay", "source_identity_conflict", "source_grain_conflict"):
+                b_min = b_max = False
+            elif row.scope == "external_fba":
                 b_min = b_max = False
                 reason = "external_fba"
             elif row.warehouse_confidence == "unmapped":
@@ -49,16 +74,43 @@ def apply_overlap_gates(rows: Iterable[SupplyRow]) -> list[SupplyRow]:
             elif row.source_layer == "dn_trace":
                 b_min = b_max = False
                 reason = "trace_only"
+            elif row.source_layer in ("receipt_event", "demand"):
+                b_min = b_max = False
+                reason = reason or "evidence_only"
+            elif row.not_collected:
+                b_min = b_max = False
+                reason = "not_collected"
             elif row.qty is None:
                 b_min = b_max = False
                 reason = "qty_unknown"
             elif not row.uom_proven:
-                b_min = False
+                b_min = b_max = False
                 reason = "uom_unproven"
+            elif not row.source_complete or not row.source_key or row.identity_confidence != "proven":
+                b_min = b_max = False
+                reason = "source_unproven"
+            elif row.possible_duplicate or row.dedup_assumed:
+                b_min = b_max = False
+                reason = "duplicate_unproven"
+            elif status == "batch_quantity_conflict" and row.source_layer in ("po_open", "in_transit"):
+                b_min = b_max = False
+                reason = "batch_quantity_conflict"
+            elif status == "proven" and row.source_layer == "po_open":
+                b_min = b_max = False
+                reason = "proven_batch_replay"
+            elif row.timezone_status != "verified" or aware_timestamp(row.source_as_of) is None:
+                b_min = False
+                reason = "source_time_unverified"
+            elif row.warehouse_confidence != "confirmed" or row.role == "unknown":
+                b_min = False
+                reason = "mapping_unproven"
             elif row.role == "cover":
                 b_min = False
                 reason = "cover_conversion_unproven"
-            elif suspected and row.source_layer == "po_open":
+            elif mixed_basis:
+                b_min = False
+                reason = "source_time_mismatch"
+            elif pos and transits and not proven_distinct and row.source_layer == "po_open":
                 b_min = False
                 reason = "po_not_counted"
             gated.append(replace(

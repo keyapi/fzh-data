@@ -7,7 +7,7 @@ is added to available stock or deducted from in-transit.
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, time
 from typing import Iterable, Mapping, Optional
 
 from supply_chain_visibility.receipt_reconciliation import (
@@ -16,6 +16,7 @@ from supply_chain_visibility.receipt_reconciliation import (
     reconcile_receipts,
 )
 from tongtool_api.receipt_collector import CollectionResult
+from tongtool_api.purchase_receipts import BUSINESS_TIMEZONE
 
 
 def _first(row: dict, *names: str):
@@ -56,7 +57,7 @@ def events_from_collection(result: CollectionResult) -> list[ReceiptEvent]:
             stock_effective_at=_first(row, "warehousingDate", "warehousing_date"),
             weak_event_key=collected.weak_event_key,
             possible_duplicate=collected.possible_duplicate,
-            dedup_assumed=False,
+            dedup_assumed=collected.dedup_assumed,
         ))
     return events
 
@@ -70,6 +71,13 @@ def build_coverage_report(
 ) -> dict:
     """Aggregate-only coverage report; never includes row-level quantities."""
     events = events_from_collection(result)
+    if collection_windows is None:
+        # Request bounds use the documented API query timezone. Source event
+        # strings without an offset remain naive and are never localized here.
+        collection_windows = [SnapshotWindow(
+            datetime.combine(window.start, time.min, tzinfo=BUSINESS_TIMEZONE),
+            datetime.combine(window.end, time(23, 59, 59), tzinfo=BUSINESS_TIMEZONE),
+        ) for window in result.windows if window not in result.truncated_windows]
     reconciliation = reconcile_receipts(
         events,
         warehouse_windows or {},
@@ -103,6 +111,10 @@ def build_coverage_report(
             "unknown_reasons": dict(sorted(unknown_reasons.items())),
         },
         "coverage": {
+            "requested_windows": [{"start": w.start.isoformat(), "end": w.end.isoformat()} for w in result.windows],
+            "query_range_complete": bool(result.windows) and not result.truncated_windows,
+            "business_coverage_status": "unverified",
+            "source_timezone_status": "unverified",
             "distinct_po": len({e.po_code for e in events if e.po_code}),
             "distinct_sku": len({e.sku for e in events if e.sku}),
             "day_counts": dict(sorted(days.items())),

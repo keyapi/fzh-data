@@ -212,3 +212,8 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 - **部署前先 `git status` 干净 + 用真·原始基线**（`/tmp/sales_order.js.bak_20261013_112137`，190 行、不含 `SO_CHAIN_DEF_COLS`）；或直接用整份文件部署，别「基线+追加」累计。
 - **部署后必须验证服务端真值**：`getdoctype?doctype=Sales Order` 的 `__js` 是否含新代码、且无重复声明；再看浏览器 **console 无 error**。
 - **先在测试机验证无误，再动生产**（用户明确要求）。
+
+
+## 2026-10-26 复审后的库存证据字段
+
+Supply Timeline 的 qty_status 仅描述 qty；原始数量状态在 evidence_qty_status，未上报与仓库范围未知使用各自 source_layer。当前仍只读取库存证据，所有 B 资格为 false；无实时通途 API 调用，也不接入本仓库纯函数供给汇总。app 与扁平副本同时提交，测试站以已提交版本核对；生产不发布。本轮完整修复和测试记录见 JACK_QA 的 P0-REVIEW-FIX-2026-10-26。

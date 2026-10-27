@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from decimal import Decimal
+from datetime import datetime
 from typing import Optional
 
 STAGES = (
@@ -16,6 +17,36 @@ TIMEZONE_STATUSES = ("verified", "unverified")
 SCOPES = ("in_house", "external_fba")
 WAREHOUSE_CONFIDENCES = ("confirmed", "assumed", "unmapped")
 ROLES = ("finished", "component", "cover", "unknown")
+SOURCE_LAYERS = ("inventory_snapshot", "po_open", "in_transit", "receipt_event", "work_order",
+                 "dn_trace", "demand", "uncovered_chain", "not_reported", "warehouse_scope_unknown")
+
+
+@dataclass(frozen=True)
+class SourceProof:
+    """Caller-supplied evidence; a nonempty UOM or a timestamp is not proof."""
+
+    source_key: Optional[str] = None
+    uom_proven: bool = False
+    identity_proven: bool = False
+    complete: bool = False
+    scope: str = "in_house"
+    warehouse_confidence: str = "unmapped"
+    role: str = "unknown"
+    batch_key: Optional[str] = None
+    batch_proven: bool = False
+
+
+def aware_timestamp(value):
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    return parsed if parsed.tzinfo is not None and parsed.utcoffset() is not None else None
 
 
 @dataclass(frozen=True)
@@ -49,12 +80,40 @@ class SupplyRow:
     b_min_eligible: bool = False
     b_max_eligible: bool = False
     exclusion_reason: str = ""
+    source_key: Optional[str] = None
+    source_complete: bool = False
+    batch_key: Optional[str] = None
+    batch_proven: bool = False
+    document_key: Optional[str] = None
 
 
 def validate_supply_row(row: SupplyRow) -> list[str]:
     errors = []
+    if any(not isinstance(value, str) or (not value.strip() and row.source_layer != "receipt_event")
+           for value in (row.sku, row.warehouse)):
+        errors.append("sku and warehouse must be nonempty")
+    for field in ("uom_proven", "source_complete", "batch_proven", "not_collected", "possible_duplicate",
+                  "dedup_assumed", "b_min_eligible", "b_max_eligible"):
+        if not isinstance(getattr(row, field), bool):
+            errors.append(f"{field} must be boolean")
+    if row.source_key is not None and (not isinstance(row.source_key, str) or not row.source_key.strip()):
+        errors.append("source_key must be a nonempty string or null")
+    if row.document_key is not None and (not isinstance(row.document_key, str) or not row.document_key.strip()):
+        errors.append("document_key must be a nonempty string or null")
+    if row.batch_proven and (not isinstance(row.batch_key, str) or not row.batch_key.strip()):
+        errors.append("proven batch requires a nonempty key")
+    if row.qty is not None and (
+        not isinstance(row.qty, Decimal) or not row.qty.is_finite() or row.qty < 0
+    ):
+        errors.append("qty must be a finite nonnegative Decimal or null")
+    if row.uom_proven and (not isinstance(row.uom, str) or not row.uom.strip()):
+        errors.append("proven UOM requires a nonempty unit")
     if row.stage not in STAGES:
         errors.append(f"invalid stage: {row.stage}")
+    if row.source_layer not in SOURCE_LAYERS:
+        errors.append(f"invalid source_layer: {row.source_layer}")
+    if row.b_min_eligible and not row.b_max_eligible:
+        errors.append("B_min eligibility requires B_max eligibility")
     if row.qty_status not in QTY_STATUSES:
         errors.append(f"invalid qty_status: {row.qty_status}")
     if row.date_confidence not in DATE_CONFIDENCES:
@@ -81,6 +140,20 @@ def validate_supply_row(row: SupplyRow) -> list[str]:
         errors.append("unknown quantity cannot enter B_min/B_max")
     if not row.uom_proven and row.b_min_eligible:
         errors.append("B_min requires a proven UOM")
+    if not row.uom_proven and row.b_max_eligible:
+        errors.append("B_max requires a proven UOM")
+    if row.b_min_eligible or row.b_max_eligible:
+        if row.source_layer == "po_open" and not row.document_key:
+            errors.append("identified PO bounds require a document key")
+        if not row.source_complete or not row.source_key or row.identity_confidence != "proven":
+            errors.append("bounds require complete, identified source evidence")
+        if row.possible_duplicate or row.dedup_assumed:
+            errors.append("ambiguous duplicates cannot enter bounds")
+    if row.b_min_eligible:
+        if row.timezone_status != "verified" or aware_timestamp(row.source_as_of) is None:
+            errors.append("B_min requires a verified source instant")
+        if row.warehouse_confidence != "confirmed" or row.role not in ("finished", "component"):
+            errors.append("B_min requires a confirmed warehouse and material role")
     if row.scope == "external_fba" and (row.b_min_eligible or row.b_max_eligible):
         errors.append("external_fba rows cannot enter B_min/B_max")
     if row.warehouse_confidence == "unmapped" and (row.b_min_eligible or row.b_max_eligible):

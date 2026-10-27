@@ -4,16 +4,20 @@ import unittest
 from supply_chain_visibility.receipt_bridge import InventoryRow, PoOpenRow, TransitRow
 from supply_chain_visibility.receipt_reconciliation import ReceiptEvent, SnapshotWindow
 from supply_chain_visibility.supply_integration import build_supply_integration, report_only
+from supply_chain_visibility.supply_row import SourceProof
 
 
 def inputs(uom="Nos", receipt_when="2026-10-14T07:25:00+08:00", collection_windows=None):
+    def proof(key):
+        return SourceProof(source_key=key, complete=True, uom_proven=bool(uom),
+                           identity_proven=True, warehouse_confidence="confirmed", role="finished")
     po = PoOpenRow("PO1", "S1", "WH-A", Decimal("10"), uom,
-                   as_of="2026-10-14T00:00:00+08:00")
+                   as_of="2026-10-14T05:17:00+08:00", proof=proof("po"), status="3", status_semantics="open")
     inventory = InventoryRow(
-        "S1", "WH-A", Decimal("5"), uom, as_of="2026-10-14T05:17:00+08:00",
+        "S1", "WH-A", Decimal("5"), uom, proof=proof("stock"), as_of="2026-10-14T05:17:00+08:00",
         window_start="2026-10-14T05:17:00+08:00", window_end="2026-10-14T05:31:00+08:00",
     )
-    transit = TransitRow("S1", "WH-A", Decimal("10"), uom, as_of="2026-10-14T05:17:00+08:00")
+    transit = TransitRow("S1", "WH-A", Decimal("10"), uom, proof=proof("transit"), as_of="2026-10-14T05:17:00+08:00")
     receipt = ReceiptEvent(
         None, None, "PO1", "S1", "WH-A", uom, Decimal("10"), receipt_when,
         weak_event_key=("PO1", "S1", "WH-A", "2026-10-14T07:25:00+08:00", "10"),
@@ -38,11 +42,11 @@ class SupplyIntegrationTests(unittest.TestCase):
         self.assertTrue(summary["flags"]["same_batch_suspected"])
         self.assertGreaterEqual(summary["flags"]["unknown_rows"], 1)
 
-    def test_unknown_uom_blocks_bmin_but_stays_in_bmax_bucket(self):
+    def test_unknown_uom_is_excluded_from_both_quantity_bounds(self):
         po, inventory, transit, receipts = inputs(uom=None)
         summary = build_supply_integration(po, inventory, transit, receipts)["summary"]
         self.assertEqual(summary["b_min_by_uom"], {})
-        self.assertEqual(summary["b_max_by_uom"], {"(unknown)": "25"})
+        self.assertEqual(summary["b_max_by_uom"], {})
         self.assertTrue(summary["flags"]["uom_unknown"])
         self.assertEqual(summary["validation_errors"], 0)
 

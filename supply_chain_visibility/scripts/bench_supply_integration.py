@@ -21,6 +21,7 @@ from supply_chain_visibility.receipt_bridge import (
     build_receipt_bridge,
 )
 from supply_chain_visibility.receipt_reconciliation import ReceiptEvent
+from supply_chain_visibility.supply_row import SourceProof
 from supply_chain_visibility.supply_integration import build_supply_integration, report_only
 
 AS_OF = "2026-10-14T05:17:00+08:00"
@@ -34,12 +35,15 @@ def make_inputs(rows_per_source: int):
         sku = f"TEST-SKU-{index:06d}"
         warehouse = f"TEST-WH-{index % 5}"
         po_code = f"TEST-PO-{index:06d}"
-        po_rows.append(PoOpenRow(po_code, sku, warehouse, Decimal("10"), "Nos", as_of=AS_OF))
+        def proof(source):
+            return SourceProof(source_key=source + sku, uom_proven=True, identity_proven=True,
+                               complete=True, warehouse_confidence="confirmed", role="finished")
+        po_rows.append(PoOpenRow(po_code, sku, warehouse, Decimal("10"), "Nos", as_of=AS_OF, proof=proof("po"), status="3", status_semantics="open"))
         inventory_rows.append(InventoryRow(
             sku, warehouse, Decimal("5"), "Nos", as_of=AS_OF,
-            window_start=AS_OF, window_end=WINDOW_END,
+            window_start=AS_OF, window_end=WINDOW_END, proof=proof("stock"),
         ))
-        transit_rows.append(TransitRow(sku, warehouse, Decimal("10"), "Nos", as_of=AS_OF))
+        transit_rows.append(TransitRow(sku, warehouse, Decimal("10"), "Nos", as_of=AS_OF, proof=proof("transit")))
         receipts.append(ReceiptEvent(
             None, None, po_code, sku, warehouse, "Nos", Decimal("3"), RECEIPT_AT,
             weak_event_key=(po_code, sku, warehouse, RECEIPT_AT, "3"),

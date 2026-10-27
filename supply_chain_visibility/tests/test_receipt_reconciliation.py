@@ -12,6 +12,8 @@ from supply_chain_visibility.receipt_reconciliation import (
 def event(receipt_id="R1", line_id="1", **changes):
     values = {
         "receipt_id": receipt_id,
+        "uom_proven": True,
+        "quantity_semantics_proven": True,
         "line_id": line_id,
         "po_code": "PO-1",
         "sku": "SKU-A",

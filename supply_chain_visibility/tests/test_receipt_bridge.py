@@ -34,7 +34,7 @@ def inventory(**changes):
 
 def event(when="2026-10-14T07:25:00+08:00", quantity="5", uom="Nos", **changes):
     values = {
-        "receipt_id": None, "line_id": None, "po_code": "PO1", "sku": "S1",
+        "receipt_id": "R", "line_id": "1", "uom_proven": True, "quantity_semantics_proven": True, "po_code": "PO1", "sku": "S1",
         "warehouse": "WH-A", "uom": uom, "quantity": quantity,
         "stock_effective_at": when,
     }
@@ -65,7 +65,7 @@ class ReceiptBridgeTests(unittest.TestCase):
             [po(as_of="2026-10-14T08:00:00+08:00")], [event()], [inventory()]
         )[0]
         self.assertEqual(row["before_or_at_po_as_of_rows"], 1)
-        self.assertTrue(row["flags"]["po_remaining_may_include_receipts"])
+        self.assertTrue(row["flags"]["po_remaining_may_reflect_receipts"])
 
     def test_naive_time_is_unknown_and_not_compared(self):
         row = build_receipt_bridge([po()], [event(when="2026-10-14 07:25:00")], [inventory()])[0]
@@ -108,12 +108,12 @@ class ReceiptBridgeTests(unittest.TestCase):
         self.assertEqual(row["overlap_status"], "same_batch_suspected")
         self.assertTrue(row["flags"]["same_batch_suspected"])
 
-    def test_unequal_transit_is_distinct(self):
+    def test_unequal_transit_does_not_prove_distinct(self):
         row = build_receipt_bridge(
             [po()], [event()], [inventory()],
             transit_rows=[TransitRow("S1", "WH-A", Decimal("7"), "Nos")],
         )[0]
-        self.assertEqual(row["overlap_status"], "distinct")
+        self.assertEqual(row["overlap_status"], "unknown")
         self.assertFalse(row["flags"]["same_batch_suspected"])
 
 

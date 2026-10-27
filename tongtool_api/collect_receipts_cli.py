@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import tempfile
@@ -38,6 +39,8 @@ def main() -> int:
     parser.add_argument("--coverage-out", default=None,
                         help="optional aggregate coverage/reconciliation JSON path (outside the repo)")
     parser.add_argument("--no-cache", action="store_true")
+    parser.add_argument("--cache-mode", choices=("live", "frozen"), default="live")
+    parser.add_argument("--cache-ttl-seconds", type=float, default=3600)
     parser.add_argument("--allow-truncated", action="store_true")
     args = parser.parse_args()
 
@@ -46,6 +49,8 @@ def main() -> int:
     if cache_dir is not None:
         assert_outside_repo(cache_dir, "cache-dir")
     assert_outside_repo(out_path, "out")
+    if args.coverage_out:
+        assert_outside_repo(Path(args.coverage_out), "coverage-out")
 
     key, secret = primary_credentials()
     client = McpClient(key, secret, client_name="fzh-receipt-collector")
@@ -60,6 +65,9 @@ def main() -> int:
         max_pages=args.max_pages,
         cache_dir=cache_dir,
         interval=args.interval,
+        cache_mode=args.cache_mode,
+        cache_ttl_seconds=args.cache_ttl_seconds,
+        cache_namespace=hashlib.sha256(key.encode()).hexdigest(),
     )
     summary = build_summary(result)
     out_path.parent.mkdir(parents=True, exist_ok=True)

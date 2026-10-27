@@ -40,6 +40,7 @@ COLUMNS = [
     (_("来源覆盖"), "source_coverage", "Data", None, 175),
     (_("数据层"), "source_layer", "Data", None, 130),
     (_("数量状态"), "qty_status", "Data", None, 90),
+    (_("证据数量状态"), "evidence_qty_status", "Data", None, 110),
     (_("单位已证"), "uom_proven", "Check", None, 80),
     (_("时区状态"), "timezone_status", "Data", None, 100),
     (_("身份置信度"), "identity_confidence", "Data", None, 115),

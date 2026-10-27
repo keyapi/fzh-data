@@ -72,3 +72,12 @@ EN 的 Delivery Note 按钮将 logistic_number 放进 PO externalNumber，创建
 - 单元测试只用合成 fixture；自动通途 PO 入库、调度改点和库存写回不在本次范围。
 
 相关：[原生报表计划](../../../supply_chain_visibility/docs/research/2026-10-26-en-native-report-plan.md)、[供应整合设计](../../../supply_chain_visibility/docs/research/2026-10-26-receipt-supply-integration.md)、[PO API](purchase-orders.md)。
+
+
+## Review Update（2026-10-26）
+
+采集缓存默认 live：当日/未来查询窗口每次刷新，历史窗口受 TTL 限制；显式 `--cache-mode frozen` 才复用冻结结果。CLI 按账号摘要隔离，库调用者必须提供 cache_namespace；原始缓存及输出路径不得位于任何 Git checkout 中。
+
+跨窗弱键处理保留最大观测重数；仅相交窗口、完整弱键及完全相同响应才标重放，且传递 dedup_assumed。键不完整、内容变化或重数变化不会成为已证唯一事件。真实入库没有稳定身份、单位及数量语义证据，仍不进入供给，不自动回放库存或抵扣在途。
+
+coverage 传递实际完整请求窗口并区分 query_range_complete 与业务覆盖 unverified；来源时间无 offset 时继续未知。CLI 的 `--coverage-out` 路径在发起业务查询前验证。历史缓存可用 `--cache-ttl-seconds` 调整有效期，实时刷新可用 `--no-cache`。

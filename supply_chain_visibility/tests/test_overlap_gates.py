@@ -13,6 +13,9 @@ def row(**changes):
         "available_date": "2026-10-14", "date_confidence": "estimated",
         "timezone_status": "verified", "identity_confidence": "proven",
         "b_min_eligible": True, "b_max_eligible": True,
+        "source_key": "synthetic", "source_complete": True,
+        "source_as_of": "2026-10-14T05:17:00+08:00",
+        "role": "finished", "warehouse_confidence": "confirmed",
     }
     values.update(changes)
     return SupplyRow(**values)
@@ -34,13 +37,13 @@ class OverlapGateTests(unittest.TestCase):
         self.assertTrue(po.b_max_eligible)
         self.assertTrue(transit.b_max_eligible)
 
-    def test_unequal_po_and_transit_are_distinct(self):
+    def test_unequal_po_and_transit_are_unknown(self):
         rows = apply_overlap_gates([
             row(qty=Decimal("10")),
             row(qty=Decimal("7"), source_layer="in_transit", stage="shipped_in_transit"),
         ])
-        self.assertEqual({r.overlap_status for r in rows}, {"distinct"})
-        self.assertTrue(all(r.b_min_eligible for r in rows))
+        self.assertEqual({r.overlap_status for r in rows}, {"unknown"})
+        self.assertFalse(next(r for r in rows if r.source_layer == "po_open").b_min_eligible)
 
     def test_dn_trace_and_external_fba_are_excluded(self):
         rows = apply_overlap_gates([
@@ -55,7 +58,7 @@ class OverlapGateTests(unittest.TestCase):
         self.assertFalse(by_layer["in_transit"].b_min_eligible)
         self.assertFalse(by_layer["in_transit"].b_max_eligible)
 
-    def test_unknown_uom_and_cover_block_bmin_only(self):
+    def test_unknown_uom_blocks_both_and_cover_blocks_bmin(self):
         rows = apply_overlap_gates([
             row(uom=None, uom_proven=False),
             row(sku="S2", role="cover"),
@@ -64,7 +67,7 @@ class OverlapGateTests(unittest.TestCase):
         cover = [r for r in rows if r.sku == "S2"][0]
         self.assertFalse(unknown_uom.b_min_eligible)
         self.assertEqual(unknown_uom.exclusion_reason, "uom_unproven")
-        self.assertTrue(unknown_uom.b_max_eligible)
+        self.assertFalse(unknown_uom.b_max_eligible)
         self.assertFalse(cover.b_min_eligible)
         self.assertEqual(cover.exclusion_reason, "cover_conversion_unproven")
         self.assertTrue(cover.b_max_eligible)

@@ -6,7 +6,11 @@ title: supply_chain_visibility 变更日志
 
 # 变更日志
 
+## 2026-10-27
+- 完成复审收尾：160 项本地测试与 2 项子测试通过，app 41 项离线测试通过；保留业务未知与证据入口，未部署生产。
+
 ## 2026-10-26
+- 修复复审发现的资格、单位、批次重叠、逐 PO 时点、来源重放/冲突、采集覆盖和实时缓存问题；补充正式反例与边界测试。同步 app 数量/证据状态字段，保持证据入口与生产只读。
 - 原生筛选报表与库存证据入口仅部署测试站；PO 只读适配器与窗口对账核心完成，75 项本地测试、39 项测试服务器报表测试通过。交 Jack 的完整记录位于 `docs/research/supply-chain/2026-10-20/claude/control/handoffs/2026-10-26-codex-native-report-handoff.md`；完整 PO/WO/DN/入库整合仍待后续，未改生产。
 - 新增原生供应链报表计划：只读核实生产库存 DocType、七日 Parquet、BOM V2 Prepared Report 与 SO 报表单次执行基线；纠正把本机停用任务等同生产同步停用的判断，明确原生过滤查询、后台报表与业务预计算的分工。
 - **入库证据复核（2026-10-26）**：PO021704 头写 10-14，实际 38 行 10-14 + 12 行 10-19；按头日期 ±1.5 天采集漏 12/50。新增 `tongtool_api/receipt_collector.py` 重叠窗口 + 仓库外缓存 + 显式弱键；`receipt_reconciliation.py` 增加 `not_collected`、`weak_event_key`、`possible_duplicate`/`dedup_assumed`。本地 83 项测试通过；未改生产。

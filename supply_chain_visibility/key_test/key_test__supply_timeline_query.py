@@ -358,8 +358,11 @@ def _annotate_layer(rows):
         qty_known = row.get("evidence_qty") is not None
         uncovered = row.get("ledger") == "uncovered_chain"
         coverage = row.get("source_coverage")
-        row["source_layer"] = "uncovered_chain" if uncovered else "inventory_snapshot"
-        row["qty_status"] = "known" if qty_known else "unknown"
+        row["source_layer"] = ("uncovered_chain" if uncovered else
+                               coverage if coverage in ("not_reported", "warehouse_scope_unknown")
+                               else "inventory_snapshot")
+        row["qty_status"] = "known" if row.get("qty") is not None else "unknown"
+        row["evidence_qty_status"] = "known" if qty_known else "unknown"
         row["uom_proven"] = False
         row["timezone_status"] = "unverified"
         row["identity_confidence"] = "weak_identity"

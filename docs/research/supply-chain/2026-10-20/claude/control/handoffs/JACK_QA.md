@@ -286,6 +286,18 @@ channel: docs/jack-w1-channel
 - 业务/证据待确认：PO `status=4`、`warehousingNum` 本次/累计、绝对时区、`stock_change.parquet` 桶覆盖、部分入库/换货归属、是否发布“可承诺供给”。
 - 生产只读；未自动入库、未改主数据/调度。
 
+### [P0-REVIEW-FIX-2026-10-26] 复审修复与再次审核
+
+用户授权持续修复并复审。原审 8 个反例已收入 `supply_chain_visibility/tests/test_supply_safety.py`，全部通过；后续复审补充已证批次/冲突、来源版本/重放、时点混合、弱键内容冲突、缓存陈旧/隔离与 UI 契约用例。
+
+- 数据层：SourceProof 默认未证；单位字符串不自动变成证据；status=4 仍仅 B_max 情景；缺映射/身份/完整源/单位时不计数量。distinct 需已证独立批次；同批同量不重复，同批异量隔离。逐 receipt 用自己的 PO 时点，缺 PO/库存为 null；两种时间错配分别标 gap/overlap 风险，不自动修正。
+- 采集：保留最大观测重数，弱键内容冲突或键不完整保留疑似重复，dedup_assumed 传递；实际完整请求窗参与 coverage，业务覆盖仍未证。缓存必须账号隔离，live 刷新开放窗口/历史 TTL，frozen 仅显式重放。
+- App：qty_status 描述 qty；另增 evidence_qty_status；未上报/仓库范围未知来源单独标记，B 资格仍全部 false。未接入完整七阶段，不自动下单/入库/抵扣、不改生产。
+- 2026-10-27 收尾回归：160 passed / 2 subtests；app 两份报表 41 passed（Python 3.10）。原始业务数据和 W1 本地残留均不提交。生产没有写操作。
+- 复审后的 4k/20k/40k 合成基线：1.13/6.23/13.68 秒，peak 20.6/102.4/204.6 MB；4k 约 1.1 秒，仅本机含新增证据校验的测量，不代表生产 SLA。
+- 本轮 app 提交：`c34fa53`（PR #2 draft）；只提交修复，不部署测试站/生产。此前测试站的 Git HEAD/文件覆盖状态仍按上一条部署记录，后续发布应由已批准的 Git 版本和有权限的重启流程完成。
+- 业务未证项仍为 unknown：入库本次/累计、UOM、来源绝对时区、stock_change 覆盖、PO status=4、部分/替代入库归属。它们不被本次技术修复自行确认。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |
