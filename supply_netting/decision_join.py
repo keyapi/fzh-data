@@ -127,9 +127,12 @@ def join_actions(wide: pd.DataFrame, pack: pd.DataFrame) -> tuple[pd.DataFrame, 
                                    & (merged["action"].astype(str) != "")).sum()),
         suggested_total=int((destination == DEST_REPLENISH).sum()),
         destination_action_conflicts=int(conflicts),
-        missing_evidence_counts={str(k): int(v) for k, v in
-                                 merged.loc[merged["action_applicability"] == NO_EVIDENCE,
-                                            "missing_evidence"].value_counts().items()},
+        missing_evidence_counts=dict(
+            {slug: 0 for slug in MISSING_EVIDENCE_GROUPS.values()},
+            **{str(k): int(v) for k, v in
+               merged.loc[merged["action_applicability"] == NO_EVIDENCE,
+                          "missing_evidence"].value_counts().items()},
+        ),
         unmatched_reasons={
             DEST_PENDING: "宽表判待核：不在 r5 545 个有供给证据的键里（无 W1 阶段、无在途/PO）；"
                             "动作留空，不写补单",
@@ -140,11 +143,32 @@ def join_actions(wide: pd.DataFrame, pack: pd.DataFrame) -> tuple[pd.DataFrame, 
     return merged, stats
 
 
+def _lineage(previous: str | None) -> dict:
+    """记录上一版 actions 目录的 manifest 摘要（用于对照，不参与计算）。"""
+    if not previous:
+        return {}
+    path = Path(previous) / "manifest.json"
+    if not path.exists():
+        return {"previous": str(previous), "manifest_found": False}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        "previous": str(previous),
+        "manifest_found": True,
+        "generated_at": data.get("generated_at"),
+        "wide_sha256": (data.get("inputs") or {}).get("wide", {}).get("sha256"),
+        "pack_sha256": (data.get("inputs") or {}).get("pack", {}).get("sha256"),
+        "matched": (data.get("join") or {}).get("matched"),
+        "note": "上一版基于 F1 修复前的宽表；本版基于 r2（待核/不可算 demand/gap 为 null）",
+    }
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="r5 动作层 → 宽口径决策包（只 join，不改数量）")
     parser.add_argument("--wide", required=True)
     parser.add_argument("--pack", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--previous", default=None,
+                        help="上一版 actions 目录（仅记录 lineage，不读其数据）")
     args = parser.parse_args(argv)
 
     wide_path, pack_path, out_dir = Path(args.wide), Path(args.pack), Path(args.out)
@@ -175,6 +199,7 @@ def main(argv=None) -> int:
             "xlsx": dict(path=str(xlsx_path), sha256=sha256_of(xlsx_path)),
         },
         join=dict(key=JOIN_KEY, how="left", validate="one_to_one", **stats),
+        lineage=_lineage(args.previous),
         rules={
             "待核": "动作留空，action_applicability=no_supply_evidence，不写补单",
             "不可算": "action=不可算",

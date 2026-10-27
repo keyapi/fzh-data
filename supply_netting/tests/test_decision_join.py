@@ -103,7 +103,11 @@ def test_missing_evidence_groups_follow_destination_reason():
     )
     groups = frame.set_index("canonical_sku")["missing_evidence"].to_dict()
     assert groups == {"S1": "not_qualified", "S2": "stock_only_no_demand"}
-    assert stats["missing_evidence_counts"] == {"not_qualified": 1, "stock_only_no_demand": 1}
+    counts = stats["missing_evidence_counts"]
+    assert counts["not_qualified"] == 1 and counts["stock_only_no_demand"] == 1
+    # 四个分组始终出现（含 0），避免下游漏看某一类缺证
+    assert set(counts) == {"not_qualified_no_stock_basis", "not_qualified",
+                           "stock_only_no_demand", "no_forecast_no_stock"}
     # 原 reason 列不被改写
     assert frame.loc[frame.canonical_sku == "S1", "destination_reason"].iloc[0] == "预测键未过资格"
 
