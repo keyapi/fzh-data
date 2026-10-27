@@ -137,8 +137,13 @@ mv decision-pack-<date>-<rN> decision-pack-<date>-<rN>.rejected-<ts>
 - 失败演练：`--label rfail --forecast-run-id DOES-NOT-EXIST` →
   预测版本校验失败，未产生 `run-/decision-pack-2026-10-26-rfail`，
   暂存归档 `.failed-2026-10-26-rfail-221443`，`latest.json` 仍指向 r1。✅
-- 注意：演练时工作树含有未提交的新脚本，故 `decision-pack-2026-10-26-r1` manifest 记
+- 注意：r1 演练时工作树含有未提交的新脚本，故 `decision-pack-2026-10-26-r1` manifest 记
   `git_dirty=true`；**正式日请在已提交的干净树运行**，否则 manifest 会如实标脏。
+- 干净树复演（`95dc7333` detached worktree，`--label r2`）：**成功，127.7 秒**
+  （净额 57.0s / 决策包 16.2s / 动作 54.4s），决策包 manifest
+  `code=95dc7333、git_dirty=false`，去向仍 91/452/2/3,469，
+  与 r1 的决策列逐行一致（同输入 → 同结果）；`latest.json` 现指向 r2。
+  这也验证了同日多版本命名（r1/r2 共存互不覆盖）。
 
 ## 7. 已知限制
 
