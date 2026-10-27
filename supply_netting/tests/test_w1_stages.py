@@ -135,3 +135,41 @@ def test_unknown_stage_is_verify_not_buy():
     assert row["action"] == ACTION_VERIFY_STAGE
     assert "阶段未归类 40" in row["action_basis"]
     assert row["action_confidence"] == "measured"
+
+
+def test_unknown_without_start_evidence_is_produce_action():
+    frame = stage_rows([("SO13", "L13", "KS1", "半成品仓 - FZH", "个", "unknown", 120, "WO-13")])
+    frame["exclusion_reason"] = "工单覆盖只能证明计划，缺开工证据，不判为在产"
+    stages = map_stage_keys(frame, {"SO13": "美中-FZH-DANEEY"})
+    row = apply_actions(pack_row(), stages).iloc[0]
+    assert row["action"] == ACTION_PRODUCE
+    assert row["so_stage_unknown_missing_start"] == 120.0
+
+
+def test_conditional_uses_max_not_sum_to_avoid_double_count():
+    stages = mapped([("SO14", "L14", "KS1", "成品仓 - FZH", "个", "delivered_sellable", 1, "DN-14")])
+    row = apply_actions(pack_row(po_qty=143.0, intransit_qty=143.0), stages).iloc[0]
+    # 同一批量在 PO 与在途各出现一次：basis 只能写 143，不能写 286
+    assert "143" in row["action_basis"] and "286" not in row["action_basis"]
+    assert row["action"] == ACTION_VERIFY_ETA
+
+
+def test_other_branch_in_production_is_annotated_not_counted():
+    stages = mapped([
+        ("SO15", "L15", "KS1", "半成品仓 - FZH", "个", "not_planned", 5, None),
+    ], branch="美中-FZH-DANEEY")
+    other = mapped([("SO17", "L17", "KS1", "半成品仓 - FZH", "个", "in_production", 16, "WO-17")],
+                   branch="美东-CENTRADE")
+    combined = pd.concat([stages, other], ignore_index=True)
+    row = apply_actions(pack_row(), combined).iloc[0]
+    assert row["action"] == ACTION_WORK_ORDER        # 本仓未排产优先；别仓在产不算本仓
+    assert row["so_stage_in_production"] == 0.0       # 只算本仓
+    assert "别仓在产 16" in row["action_basis"]
+
+
+def test_nan_conditional_does_not_leak_into_basis():
+    import numpy as np
+    stages = mapped([("SO18", "L18", "KS1", "成品仓 - FZH", "个", "in_production", 2, "WO-18")])
+    row = apply_actions(pack_row(po_qty=np.nan, intransit_qty=np.nan), stages).iloc[0]
+    assert "nan" not in row["action_basis"].lower()
+    assert row["action"] == ACTION_PRODUCE

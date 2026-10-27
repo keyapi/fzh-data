@@ -44,7 +44,8 @@ def load_w1_stages(cache_path: str | Path) -> pd.DataFrame:
     path = Path(cache_path)
     if not path.exists():
         return pd.DataFrame(columns=["so", "so_line_id", "item_code", "warehouse", "uom",
-                                     "stage", "qty", "source_record", "qty_status"])
+                                     "stage", "qty", "source_record", "qty_status",
+                                     "exclusion_reason", "stage_detail"])
     rows = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.strip():
@@ -62,6 +63,8 @@ def load_w1_stages(cache_path: str | Path) -> pd.DataFrame:
                 qty_status=balance.get("qty_status", "known"),
                 source_record=balance.get("source_record"),
                 demand_status=balance.get("demand_status"),
+                exclusion_reason=balance.get("exclusion_reason") or "",
+                stage_detail=balance.get("stage_detail") or "",
             ))
     frame = pd.DataFrame(rows)
     if len(frame):
@@ -87,6 +90,7 @@ def aggregate_stages(stages: pd.DataFrame) -> pd.DataFrame:
     UOM 不合并：不同单位各成一行；单位缺失的行留空但单列（不塞进别单位）。
     """
     columns = ["canonical_sku", "canonical_warehouse", "uom"] + list(STAGE_FIELDS.values()) + [
+        "so_stage_unknown_missing_start", "so_stage_unknown_other",
         "so_stage_so_count", "wo_completed_count", "wo_in_process_count",
         "wo_not_started_count", "w1_stage_rows"]
     if not len(stages):
@@ -97,6 +101,8 @@ def aggregate_stages(stages: pd.DataFrame) -> pd.DataFrame:
     if not len(frame):
         return pd.DataFrame(columns=columns)
     frame["uom"] = frame["uom"].fillna("<unknown>")
+    if "exclusion_reason" not in frame.columns:
+        frame["exclusion_reason"] = ""
     frame["qty"] = pd.to_numeric(frame["qty"], errors="coerce")
 
     records = []
@@ -104,6 +110,12 @@ def aggregate_stages(stages: pd.DataFrame) -> pd.DataFrame:
         record = dict(zip(["canonical_sku", "canonical_warehouse", "uom"], key))
         for stage, column in STAGE_FIELDS.items():
             record[column] = round(float(group.loc[group["stage"] == stage, "qty"].sum()), 6)
+        unknown_rows = group[group["stage"] == "unknown"]
+        missing_start = unknown_rows["exclusion_reason"].fillna("").str.contains("缺开工证据")
+        record["so_stage_unknown_missing_start"] = round(
+            float(unknown_rows.loc[missing_start, "qty"].sum()), 6)
+        record["so_stage_unknown_other"] = round(
+            float(unknown_rows.loc[~missing_start, "qty"].sum()), 6)
         record["so_stage_so_count"] = int(group["so"].nunique())
         record["wo_completed_count"] = int(
             group.loc[group["stage"] == "produced_pending_dn", "source_record"]
@@ -118,11 +130,26 @@ def aggregate_stages(stages: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(records, columns=columns)
 
 
+def _num(value) -> float:
+    """NaN/None → 0.0；避免 ``float(nan)`` 被当成真值写进依据。"""
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return 0.0
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return 0.0 if pd.isna(number) else number
+
+
 def apply_actions(pack: pd.DataFrame, stages: pd.DataFrame) -> pd.DataFrame:
     """新增 ``action`` / ``action_basis`` / ``action_confidence``；不改原 ``recommendation``。"""
     out = pack.copy()
     key = ["canonical_sku", "canonical_warehouse", "canonical_uom"]
     agg = aggregate_stages(stages) if len(stages) else pd.DataFrame()
+    sku_in_prod_totals = {}
+    if len(agg):
+        sku_in_prod_totals = (agg.groupby(["canonical_sku", "uom"])["so_stage_in_production"]
+                              .sum().to_dict())
     if len(agg):
         agg = agg.rename(columns={"uom": "canonical_uom"})
         out = out.merge(agg, on=key, how="left")
@@ -131,7 +158,8 @@ def apply_actions(pack: pd.DataFrame, stages: pd.DataFrame) -> pd.DataFrame:
             out[column] = 0.0
         out[column] = pd.to_numeric(out[column], errors="coerce").fillna(0.0)
     for column in ("wo_completed_count", "wo_in_process_count", "wo_not_started_count",
-                   "so_stage_so_count", "w1_stage_rows"):
+                   "so_stage_so_count", "w1_stage_rows", "so_stage_unknown_missing_start",
+                   "so_stage_unknown_other"):
         if column not in out.columns:
             out[column] = 0
         out[column] = pd.to_numeric(out[column], errors="coerce").fillna(0).astype(int)
@@ -144,7 +172,11 @@ def apply_actions(pack: pd.DataFrame, stages: pd.DataFrame) -> pd.DataFrame:
         transit = float(row.get("so_stage_in_transit") or 0)
         not_planned = float(row.get("so_stage_not_planned") or 0)
         unknown_stage = float(row.get("so_stage_unknown") or 0)
-        conditional = float(row.get("po_qty") or 0) + float(row.get("intransit_qty") or 0)
+        unknown_missing_start = float(row.get("so_stage_unknown_missing_start") or 0)
+        # 通途 PO 与通途在途常是同一批量（r4 实测 143/291 两处数值相同），用 max 避免翻倍
+        conditional = max(_num(row.get("po_qty")), _num(row.get("intransit_qty")))
+        other_branch_in_prod = (sku_in_prod_totals.get(
+            (row.get("canonical_sku"), row.get("canonical_uom")), 0.0) - in_prod)
         pieces = []
         if row["so_stage_so_count"]:
             pieces.append(f"{row['so_stage_so_count']} 张 SO")
@@ -162,6 +194,8 @@ def apply_actions(pack: pd.DataFrame, stages: pd.DataFrame) -> pd.DataFrame:
             pieces.append(f"未排产 {not_planned:g}")
         if unknown_stage:
             pieces.append(f"阶段未归类 {unknown_stage:g}（有 W1 行但阶段 unknown）")
+        if other_branch_in_prod > 0:
+            pieces.append(f"别仓在产 {other_branch_in_prod:g}（未计入）")
         if conditional:
             pieces.append(f"在途/PO 条件量 {conditional:g}（无 ETA）")
 
@@ -177,8 +211,11 @@ def apply_actions(pack: pd.DataFrame, stages: pd.DataFrame) -> pd.DataFrame:
             action = ACTION_VERIFY_ARRIVAL
         elif not_planned > 0:
             action = ACTION_WORK_ORDER
+        elif unknown_missing_start > 0:
+            # 工单已覆盖但没有开工证据：动作按催生产，不判补单
+            action = ACTION_PRODUCE
         elif unknown_stage > 0:
-            # 有 W1 阶段行但 Jack 判成 unknown：不能直接判补单，先核实
+            # 有 W1 阶段行但 Jack 判成 unknown（非缺开工证据）：不能直接判补单，先核实
             action = ACTION_VERIFY_STAGE
         elif conditional > 0:
             action = ACTION_VERIFY_ETA
