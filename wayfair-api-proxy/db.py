@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from errors import PortalQuotaExceeded
+
 
 @dataclass(frozen=True)
 class CreatedApiKey:
@@ -54,6 +56,7 @@ class Database:
                     key_prefix TEXT NOT NULL,
                     name TEXT NOT NULL,
                     owner TEXT,
+                    source TEXT NOT NULL DEFAULT 'manual',
                     accounts TEXT NOT NULL,
                     operations TEXT NOT NULL,
                     rate_limit_rps REAL NOT NULL,
@@ -118,6 +121,17 @@ class Database:
             }
             if "owner" not in columns:
                 connection.execute("ALTER TABLE api_keys ADD COLUMN owner TEXT")
+            if "source" not in columns:
+                connection.execute(
+                    "ALTER TABLE api_keys ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'"
+                )
+            connection.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS uq_portal_active_owner
+                ON api_keys (owner)
+                WHERE source = 'portal' AND is_active = 1
+                """
+            )
 
             position_columns = {
                 row["name"]
@@ -138,6 +152,7 @@ class Database:
         operations: list[str],
         rate_limit_rps: float = 1.0,
         owner: str | None = None,
+        source: str = "manual",
     ) -> CreatedApiKey:
         raw_key = f"wf-{secrets.token_urlsafe(32)}"
         key_id = secrets.token_hex(16)
@@ -150,6 +165,7 @@ class Database:
             prefix,
             name,
             owner,
+            source,
             accounts,
             operations,
             rate_limit_rps,
@@ -163,6 +179,7 @@ class Database:
         prefix: str,
         name: str,
         owner: str | None,
+        source: str,
         accounts: list[str],
         operations: list[str],
         rate_limit_rps: float,
@@ -171,9 +188,9 @@ class Database:
             connection.execute(
                 """
                 INSERT INTO api_keys (
-                    id, key_hash, key_prefix, name, owner, accounts, operations,
-                    rate_limit_rps, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, key_hash, key_prefix, name, owner, source, accounts,
+                    operations, rate_limit_rps, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     key_id,
@@ -181,6 +198,7 @@ class Database:
                     prefix,
                     name,
                     owner,
+                    source,
                     json.dumps(accounts),
                     json.dumps(operations),
                     rate_limit_rps,
@@ -231,7 +249,7 @@ class Database:
         with self._connect() as connection:
             rows = connection.execute(
                 """
-                SELECT id, key_prefix, name, owner, accounts, operations,
+                SELECT id, key_prefix, name, owner, source, accounts, operations,
                        rate_limit_rps, is_active, created_at, last_used_at,
                        request_count
                 FROM api_keys
@@ -255,6 +273,126 @@ class Database:
         with self._connect() as connection:
             cursor = connection.execute(
                 "UPDATE api_keys SET is_active = 0 WHERE owner = ? AND is_active = 1",
+                (owner,),
+            )
+        return cursor.rowcount
+
+    async def get_portal_key(self, owner: str) -> dict | None:
+        return await asyncio.to_thread(self._get_portal_key, owner)
+
+    def _get_portal_key(self, owner: str) -> dict | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                """
+                SELECT id, key_prefix, created_at, last_used_at, request_count,
+                       accounts, operations
+                FROM api_keys
+                WHERE owner = ? AND source = 'portal' AND is_active = 1
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (owner,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            **dict(row),
+            "accounts": json.loads(row["accounts"]),
+            "operations": json.loads(row["operations"]),
+        }
+
+    async def replace_portal_key(
+        self,
+        *,
+        owner: str,
+        accounts: list[str],
+        operations: list[str],
+        rate_limit_rps: float,
+        daily_limit: int = 3,
+        cooldown_seconds: int = 60,
+    ) -> CreatedApiKey:
+        return await asyncio.to_thread(
+            self._replace_portal_key,
+            owner,
+            accounts,
+            operations,
+            rate_limit_rps,
+            daily_limit,
+            cooldown_seconds,
+        )
+
+    def _replace_portal_key(
+        self,
+        owner: str,
+        accounts: list[str],
+        operations: list[str],
+        rate_limit_rps: float,
+        daily_limit: int,
+        cooldown_seconds: int,
+    ) -> CreatedApiKey:
+        now = time.time()
+        raw_key = f"wf-{secrets.token_urlsafe(32)}"
+        key_id = secrets.token_hex(16)
+        prefix = raw_key[:12]
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            latest = connection.execute(
+                """
+                SELECT created_at FROM api_keys
+                WHERE owner = ? AND source = 'portal'
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (owner,),
+            ).fetchone()
+            if latest and now - latest["created_at"] < cooldown_seconds:
+                raise PortalQuotaExceeded("请稍后再重建 key")
+            created_today = connection.execute(
+                """
+                SELECT COUNT(*) FROM api_keys
+                WHERE owner = ? AND source = 'portal' AND created_at >= ?
+                """,
+                (owner, now - 86400),
+            ).fetchone()[0]
+            if created_today >= daily_limit:
+                raise PortalQuotaExceeded("今日重建次数已达上限")
+            connection.execute(
+                """
+                UPDATE api_keys SET is_active = 0
+                WHERE owner = ? AND source = 'portal' AND is_active = 1
+                """,
+                (owner,),
+            )
+            connection.execute(
+                """
+                INSERT INTO api_keys (
+                    id, key_hash, key_prefix, name, owner, source, accounts,
+                    operations, rate_limit_rps, created_at
+                ) VALUES (?, ?, ?, ?, ?, 'portal', ?, ?, ?, ?)
+                """,
+                (
+                    key_id,
+                    key_hash,
+                    prefix,
+                    f"portal-{owner}",
+                    owner,
+                    json.dumps(accounts),
+                    json.dumps(operations),
+                    rate_limit_rps,
+                    now,
+                ),
+            )
+        return CreatedApiKey(id=key_id, raw_key=raw_key, prefix=prefix)
+
+    async def deactivate_portal_key(self, owner: str) -> int:
+        return await asyncio.to_thread(self._deactivate_portal_key, owner)
+
+    def _deactivate_portal_key(self, owner: str) -> int:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE api_keys SET is_active = 0
+                WHERE owner = ? AND source = 'portal' AND is_active = 1
+                """,
                 (owner,),
             )
         return cursor.rowcount

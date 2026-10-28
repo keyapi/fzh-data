@@ -3,6 +3,12 @@ snapshot_stale_after_seconds: 3600
 # Keep this many days of runs on the VPS; long-term history belongs in EN/parquet.
 snapshot_retention_days: 7
 
+# 同事自助 key：固定账号、只读快照、一人一枚。
+portal_account: centrade
+portal_key_rps: 1.0
+portal_key_daily_limit: 3
+portal_key_cooldown_seconds: 60
+
 # 管理员入口仅在同时设置 WAYFAIR_ADMIN_SESSION_SECRET 时启用。
 # admin_identities 填 OIDC userinfo 的 sub（DingTalk 用户标识），留空 = 无人可管理。
 oidc:
@@ -11,6 +17,9 @@ oidc:
   client_secret: ${WAYFAIR_OIDC_CLIENT_SECRET}
   redirect_uri: https://wayfair-api.example.com/admin/oidc-callback
   admin_identities: []
+  # 自助门户：OIDC 应用需同时允许下面的回调地址。
+  portal_identities: []
+  portal_redirect_uri: https://wayfair-api.example.com/portal/oidc-callback
   cookie_secure: true
 
 accounts:

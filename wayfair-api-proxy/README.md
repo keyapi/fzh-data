@@ -20,6 +20,7 @@ Centrade CastleGate 库存，同时避免中国侧直接携带 Wayfair 凭证访
 | Wayfair OAuth / 库存 operation | 已实测：token 与 `inventorySummaryList` 存在；应用缺 `read:inventory_visibility` 生产权限 |
 | 在途（inbound）operation | 无官方独立 operation，`inbound_live` 保持关闭 |
 | 钉钉 OIDC 管理入口 | 已实现：管理员登录 + key 创建/停用（JSON API，无自动授权） |
+| 同事自助门户 | 代码已实现 `/portal`：白名单 + 一人一枚 snapshot-only key；配置 OIDC 后启用 |
 
 三个账号的 capability 在示例配置中全部为 `false`。在认证环境里用真实
 Centrade CastleGate SKU 完成字段对账之前，不得打开任何能力。

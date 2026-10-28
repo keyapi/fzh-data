@@ -17,6 +17,7 @@ from config import AppConfig, load_config
 from db import ApiKeyRecord, Database
 from errors import CapabilityUnavailable, SnapshotMissing, UpstreamError
 from models import InboundQuery, InventoryQuery, TransactionQuery
+from portal import build_portal_router
 from operations import (
     INBOUND_READ,
     INVENTORY_LIVE_READ,
@@ -134,6 +135,19 @@ def create_app(
         if not config.oidc.admin_identities:
             logger.warning("OIDC admin is enabled but admin_identities is empty")
 
+    portal_session_secret = os.getenv("WAYFAIR_PORTAL_SESSION_SECRET", "")
+    if (
+        config.oidc is not None
+        and config.oidc.portal_redirect_uri
+        and portal_session_secret
+        and config.portal_account in config.accounts
+    ):
+        app.include_router(build_portal_router(config, db, portal_session_secret))
+        if not config.oidc.portal_identities:
+            logger.warning("Wayfair portal is enabled but portal_identities is empty")
+    elif config.oidc is not None and portal_session_secret:
+        logger.warning("Wayfair portal is not enabled (missing redirect URI or account)")
+
     @app.middleware("http")
     async def audit_request(request: Request, call_next):
         request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
@@ -141,7 +155,7 @@ def create_app(
         response = await call_next(request)
         response.headers["X-Request-ID"] = request_id
         duration_ms = int((time.perf_counter() - started) * 1000)
-        log = logger.info if request.url.path.startswith(("/v1/", "/admin/")) else logger.debug
+        log = logger.info if request.url.path.startswith(("/v1/", "/admin/", "/portal/")) else logger.debug
         log(
             "request id=%s method=%s path=%s status=%s duration_ms=%s",
             request_id,
@@ -150,7 +164,7 @@ def create_app(
             response.status_code,
             duration_ms,
         )
-        if request.url.path.startswith(("/v1/", "/admin/")):
+        if request.url.path.startswith(("/v1/", "/admin/", "/portal/")):
             try:
                 await request.app.state.db.record_audit(
                     request_id=request_id,

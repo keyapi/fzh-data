@@ -164,6 +164,24 @@ POST /admin/api/keys
  "operations": ["inventory:snapshot:read"], "rate_limit_rps": 1.0}
 ```
 
+## 自助门户
+
+仅在配置了 `oidc.portal_redirect_uri`、`WAYFAIR_PORTAL_SESSION_SECRET` 且
+`portal_account` 存在时注册；否则 404。详细启用步骤见 [portal.md](portal.md)。
+
+| 方法与路径 | 说明 |
+|------------|------|
+| `GET /portal/` | 门户页；未登录显示钉钉登录入口 |
+| `GET /portal/oidc-login` | 跳转 OIDC |
+| `GET /portal/oidc-callback` | state + HttpOnly 会话 |
+| `POST /portal/key/issue` | 领取/重建（固定 snapshot 只读，一人一枚） |
+| `POST /portal/key/deactivate` | 停用本人 portal key |
+| `GET /portal/api/key` | 当前 key 元数据（无明文） |
+| `POST /portal/logout` | 退出 |
+
+写操作要求 CSRF double-submit + 同源校验；会话 cookie `Secure` + `SameSite=Lax`。
+门户停用不影响管理员/EN 发的 manual key。
+
 ## 请求标识
 
 每个响应带 `X-Request-ID`。Nginx 会注入 `$request_id`；应用也接受调用方传入的值用于

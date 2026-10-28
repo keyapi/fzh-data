@@ -139,6 +139,19 @@ WAYFAIR_DATABASE=/srv/wayfair-api-proxy/data/wayfair.db \
 
 管理员动作同样写入 `audit_events`（operation 为 `admin:keys:*`）。
 
+### 同事自助门户
+
+`/portal` 使用独立钉钉 OIDC 会话与白名单，允许同事自助领取
+`inventory:snapshot:read`（一人一枚，重建停旧）。启用条件：
+
+- `config.yaml` 的 `oidc.portal_redirect_uri` 指向
+  `https://wayfair-api.vilavi.cn/portal/oidc-callback`；
+- `/etc/wayfair-api-proxy/env` 设置 `WAYFAIR_PORTAL_SESSION_SECRET`；
+- `oidc.portal_identities` 填入允许的钉钉 `sub`。
+
+白名单为空时，本人登录会收到 403，错误里带自己的 `sub`；加入配置并重启即可。
+公网 `/admin` 继续 404，live/transactions 仍由管理员按需发 key。
+
 ## 快照 worker
 
 ```bash

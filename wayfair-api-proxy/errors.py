@@ -29,3 +29,7 @@ class UpstreamRateLimited(UpstreamError):
 
 class UpstreamUnavailable(UpstreamError):
     code = "upstream_unavailable"
+
+
+class PortalQuotaExceeded(RuntimeError):
+    code = "portal_quota_exceeded"

@@ -34,6 +34,8 @@ class OIDCConfig(BaseModel):
     client_secret: str
     redirect_uri: str
     admin_identities: list[str] = Field(default_factory=list)
+    portal_identities: list[str] = Field(default_factory=list)
+    portal_redirect_uri: str | None = None
     cookie_secure: bool = True
 
 
@@ -41,6 +43,10 @@ class AppConfig(BaseModel):
     accounts: dict[str, AccountConfig]
     snapshot_stale_after_seconds: int = 3600
     snapshot_retention_days: int = 7
+    portal_account: str = "centrade"
+    portal_key_rps: float = 1.0
+    portal_key_daily_limit: int = 3
+    portal_key_cooldown_seconds: int = 60
     oidc: OIDCConfig | None = None
 
     def resolve_secret(self, value: str) -> str:

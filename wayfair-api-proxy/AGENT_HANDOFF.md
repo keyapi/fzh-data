@@ -84,3 +84,11 @@ WAYFAIR_SMOKE_KEY=... WAYFAIR_SMOKE_SKU=... \
 - `docs/solutions/integration-issues/wayfair-castlegate-inventory-api.md` — 契约、权限、分页与 null 语义
 - `docs/solutions/architecture-patterns/shared-egress-vps-venv-systemd-no-docker.md` — 为什么这台 VPS 不用 Docker
 - `docs/solutions/developer-experience/gitignore-sensitive-pattern-hides-source-module.md` — `*token*` 忽略源码的教训
+
+## 同事自助门户
+
+- `/portal`：钉钉 OIDC 白名单登录；自助只能领 `inventory:snapshot:read`；
+  一人一枚，重建停旧，60 秒冷却/每日 3 次；明细见 `docs/portal.md`
+- 启用需 `oidc.portal_redirect_uri` + `WAYFAIR_PORTAL_SESSION_SECRET` +
+  `portal_identities`；未配置时路由不存在
+- live / transactions 仍由管理员发 key；EN 的 manual key 不受门户影响
