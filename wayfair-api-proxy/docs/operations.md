@@ -143,26 +143,30 @@ journalctl -u wayfair-snapshot.service --since today
 sqlite3 /srv/wayfair-api-proxy/data/wayfair.db ".backup '/backup/wayfair-$(date +%F).db'"
 ```
 
-恢复：停服务 → 用备份替换 `wayfair.db`（删除同目录 `-wal`/`-shm`）→ 启动 → 查 `/ready`。
+恢复：`systemctl stop wayfair-api-proxy.service wayfair-snapshot.timer` → 用备份替换
+`wayfair.db`（删除同目录 `-wal`/`-shm`）→ `systemctl start wayfair-api-proxy.service
+wayfair-snapshot.timer` → 查 `/ready`。
 
 ## 回滚
 
-1. `docker compose -f deploy/docker-compose.yml down`。
-2. 恢复上一版镜像 tag 与 Nginx 配置备份。
-3. `nginx -t && systemctl reload nginx`，再启动容器。
-4. 数据卷不回滚，除非确认新快照写坏；失败 run 本身不会覆盖成功快照。
+1. `systemctl stop wayfair-api-proxy.service wayfair-snapshot.timer`。
+2. 恢复上一版 `/opt/wayfair-api-proxy` 代码与 venv（或整目录备份）及 Nginx 配置备份。
+3. `nginx -t && systemctl reload nginx`。
+4. `systemctl daemon-reload && systemctl start wayfair-api-proxy.service wayfair-snapshot.timer`。
+5. 数据不回滚，除非确认新快照写坏；失败 run 本身不会覆盖成功快照。
 
 ## secret 轮换
 
 1. 在 Wayfair Portal 生成新 secret 并撤销旧值。
-2. 更新 `/etc/wayfair-api-proxy/env`（保持 `0600`）。
-3. 重启容器使新 secret 生效。
-4. 确认 worker 与 live 查询仍鉴权成功；失败时立即回滚环境文件。
+2. 更新 `/etc/wayfair-api-proxy/env`（保持 `640 root:wayfair`，不要世界可读）。
+3. `systemctl restart wayfair-api-proxy.service` 使新 secret 生效。
+4. `systemctl start wayfair-snapshot.service` 手工跑一次，确认 worker 与 live 查询仍鉴权成功；
+   失败时恢复旧 env 文件并重启。
 
 ## 日志
 
 - 应用按 request id 记录方法、路径、状态、耗时；不记录 header/body。
-- Nginx 单独 access log。
+- Nginx access log 使用 `$uri`（不含查询串），uvicorn 关闭 access log。
 - 审计事件在 `audit_events` 表，可按 `account`、`operation`、`status_code` 查询。
 
 ## 尚未实现
