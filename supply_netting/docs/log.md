@@ -279,3 +279,35 @@ updated: 2026-10-27
 - **定规**：frontier_v2 冻结（冻结面 6 个函数，测试守护），后续政策实验只包既有评估器；
   `frontier_v2` docstring 与 `docs/frontier-dedup-2026-10-28.md` 都写明。
 - 产物 `frontier-dedup-2026-10-28/`（report + comparison.json + manifest）；测试 9 条；全套 378 通过。
+
+## 2026-10-28 — 最新库存快照 + 决策包 r1（对比 10-26）
+
+- 新增 `scripts/fetch_stock_snapshot.py`：通途 ERP2 MCP `erp2_stocks_stocksquery` → `en_stock` 快照，
+  字段映射与历史快照逐列一致；12.5 秒限流（5 次/分钟）、526 退避、**不覆盖 `en_stock.parquet`**。
+- 新增 `scripts/compare_packs.py` + 4 条用例：两版决策包逐键对比，**只对两侧都有的键相减**，
+  `only_old` / `only_new` 单列落盘（`compare_one_sided.csv`），单位不同永不合并。
+- `decision_pack.py` / `decision_join.py` / `run_same_day.py` 增加 `--decision-date`
+  （默认 `2026-10-29`，**只影响标注与文件名，不参与任何数量计算**）；
+  顺带把硬编码的免责声明与「2.779 天」改成按本轮实际快照/计算值生成。
+- 授权排查：`wms_wms_wmsinventory_query`、`erp3_wms_wmswarehouse_query`、
+  `listing_warehouse_getwarehouse` 两把 key 均返 **524 未授权该接口**；
+  `erp2_product_goodsquery` 返 200 证明 key 有效 → 是**接口未授权**，不是凭证问题。
+- 快照：5,219 行 / 7 仓 / 56 次调用 / 零错误，`snapshot_at=2026-10-28T09:46:16`。
+  **CG 仓（WayfairCG-*3 个）不在通途仓库列表**，本轮缺失（10-26 有 98 行）。
+- 全链：`run/decision-pack/pack/actions-2026-10-28-r1`，176.2 秒，`latest.json` → r1，
+  `decision_date=2026-10-28`、`as_of=2026-10-28T09:46:16`、`gap_from_as_of_days=0.593`、`git_dirty=true`。
+- 对比（同 demand / 同预测，只换快照）：建议补货 91→**94**、待核 3,469→3,378、
+  `qty_current` 495→**524**、`gap_today` 449.97→**471.65**。仅 5 个键改判。
+- **归因**：待核 −91 = −92（CG 键消失）+1（波兰新键）；92 个 CG 键数量均为 null，
+  不影响 `qty_current` / `gap_today`，故 +29 / +21.68 是可比的库存变化。
+- 报告：`D:/Work/fzh-order-store/en-demand-v1/supply-netting/compare-2026-10-26-vs-2026-10-28/report.md`。
+
+## 2026-10-28 — 交期配置 2026-10-28.2（P50/P90）
+
+- 依据 leadtime-measurement：production P90 50 / P50 20，shipping P90 20 / P50 11.5，
+  ocean 35/40 不变；source=measured、sample_size=197（海运部分仍假设）。
+- leadtime.py 增 P50 分段（校验 P50≤P90），plan_dates 最早用 P50（11.5→12 天）、
+  最晚用 P90 + 春节 60；冻结测试期望。
+- 重跑 so_conditional_supply（v2），manifest 记 version 2026-10-28.2 + sha256
+  `bb82760a…`；条件量 145 与缺口不变（150 天乐观 -8 件）。
+- 未改 r6/h180/决策包；测试 405 通过。

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import math
 import importlib
 import json
 import tempfile
@@ -54,32 +55,37 @@ class FrozenValuesTests(unittest.TestCase):
         self.assertEqual(set(by_warehouse), {"美东-CENTRADE", "美中-FZH-DANEEY",
                                              "波兰-FZHPoland-covers"})
         self.assertEqual(by_warehouse["美东-CENTRADE"].segments,
-                         dict(production=60, shipping=7, ocean=35))
+                         dict(production=50, shipping=20, ocean=35))
+        self.assertEqual(by_warehouse["美东-CENTRADE"].p50_segments,
+                         dict(production=20, shipping=11.5, ocean=35))
         self.assertEqual(by_warehouse["波兰-FZHPoland-covers"].ocean_days, 40)
-        self.assertEqual(self.cfg.shared_days("shipping"), 7)
-        self.assertEqual(self.cfg.shared_days("production"), 60)
+        self.assertEqual(self.cfg.shared_days("shipping"), 20)
+        self.assertEqual(self.cfg.shared_days("production"), 50)
 
     def test_every_assumption_self_reports_provenance(self):
-        blocks = [self.cfg.so_pipeline, self.cfg.spring_festival, *self.cfg.routes]
-        for block in blocks:
+        for block in (self.cfg.so_pipeline, self.cfg.spring_festival):
             self.assertEqual(block.source, "assumed")
             self.assertEqual(block.sample_size, 0)
+        for route in self.cfg.routes:
+            # 2026-10-28.2：生产/发运为实测（197 张 SO；发运 n=26），海运仍部分假设
+            self.assertEqual(route.source, "measured")
+            self.assertEqual(route.sample_size, 197)
 
     def test_manifest_records_version_and_sources(self):
         manifest = self.cfg.to_manifest()
         self.assertEqual(manifest["version"], self.cfg.version)
         self.assertTrue(manifest["version"].startswith("2026-10-28"))
-        self.assertEqual(manifest["effective_from"], "2026-10-27")
+        self.assertEqual(manifest["effective_from"], "2026-10-28")
         self.assertEqual(manifest["config"], "supply_netting/config/leadtime_config.json")
         self.assertEqual(manifest["sha256"],
                          hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes()).hexdigest())
         self.assertEqual(len(manifest["sha256"]), 64)
-        self.assertEqual(manifest["sources"], ["assumed"])
+        self.assertEqual(manifest["sources"], ["assumed", "measured"])
         self.assertEqual(manifest["so_pipeline"]["source"], "assumed")
         self.assertEqual(manifest["so_pipeline"]["sample_size"], 0)
         self.assertEqual(len(manifest["routes"]), 3)
         self.assertEqual(manifest["routes"][0]["segments"],
-                         dict(production=60, shipping=7, ocean=35))
+                         dict(production=50, shipping=20, ocean=35))
         self.assertEqual(manifest["spring_festival"]["buffer_days"], 60)
 
 
@@ -252,7 +258,7 @@ class ConsumerWiringTests(unittest.TestCase):
                      "customer_item_code", "warehouse", "open_qty"]), as_of=AUDIT)
         summary = so_backlog.summarize_backlog(frame)
         self.assertEqual(summary["leadtime_config"]["version"], self.cfg.version)
-        self.assertEqual(summary["leadtime_config"]["sources"], ["assumed"])
+        self.assertEqual(summary["leadtime_config"]["sources"], ["assumed", "measured"])
         self.assertEqual(summary["order_to_branch_days"],
                          self.cfg.so_pipeline.order_to_branch_days)
 
@@ -260,7 +266,8 @@ class ConsumerWiringTests(unittest.TestCase):
         from supply_netting.scripts.so_conditional_supply import plan_dates
         route = self.cfg.route_for("波兰-FZHPoland-covers")
         pending = plan_dates("produced_pending_dn", AUDIT, "波兰-FZHPoland-covers")
-        expected = AUDIT + timedelta(days=route.shipping_days + route.ocean_days)
+        p50 = route.p50_segments
+        expected = AUDIT + timedelta(days=math.ceil(p50["shipping"]) + route.ocean_days)
         self.assertEqual(pending["eta_earliest"], expected.isoformat())
         self.assertEqual(pending["confidence"], "assumed")
         self.assertIn(self.cfg.version, pending["eta_basis"])
@@ -309,8 +316,9 @@ class ProvenanceTests(unittest.TestCase):
         self.assertEqual(block["version"], cfg.version)
         self.assertEqual(block["sha256"],
                          hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes()).hexdigest())
-        self.assertEqual(block["source"], "assumed")
-        self.assertEqual(block["sample_size"], 0)
+        # 2026-10-28.2：路线生产/发运为 measured(197)，so_pipeline/春节仍 assumed
+        self.assertEqual(block["source"], ["assumed", "measured"])
+        self.assertEqual(block["sample_size"], 0)   # 取最小值：仍有块未实测
         self.assertEqual(block["path"], "supply_netting/config/leadtime_config.json")
 
     def test_mixed_sources_listed_and_min_samples_used(self):
@@ -366,7 +374,7 @@ class V3ManifestTests(unittest.TestCase):
             self.assertEqual(block["sha256"],
                              hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes())
                              .hexdigest())
-            self.assertEqual(block["source"], "assumed")
+            self.assertEqual(block["source"], ["assumed", "measured"])
             self.assertEqual(block["sample_size"], 0)
             self.assertEqual(block["path"], "supply_netting/config/leadtime_config.json")
             self.assertEqual(manifest["offset_allowed"], False)

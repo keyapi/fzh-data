@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -77,22 +78,32 @@ def plan_dates(stage: str, audit_date: date, branch: str | None) -> dict:
         return dict(eta_earliest=None, eta_latest=None, eta_basis="非可供给阶段，不给日期",
                     confidence="unknown", spring_buffer_days=None, spring_crossing=None)
     ship, sea = route.shipping_days, route.ocean_days
+    p50 = route.p50_segments
+    # 天数为自然日；P50 的 11.5 天按「向上取整到整天」落到日期（保守、可复算）
+    ship_p50 = (math.ceil(p50["shipping"]) if p50 and p50.get("shipping") is not None
+                else ship)
+    production_p50 = (math.ceil(p50["production"]) if p50 and p50.get("production") is not None
+                      else route.production_days)
     source = f"交期配置 {LEADTIME.version}"
     if stage == "produced_pending_dn":
-        base = audit_date + timedelta(days=ship + sea)
-        basis = f"审计日+发运{ship:g}天+海运{sea:g}天（assumed；{source}）"
+        earliest = audit_date + timedelta(days=ship_p50 + sea)
+        latest_base = audit_date + timedelta(days=ship + sea)
+        basis = (f"P50 发运{ship_p50:g}+海运{sea:g}；P90 发运{ship:g}+海运{sea:g}"
+                 f"（measured；{source}）")
     else:
-        production = route.production_days
-        base = audit_date + timedelta(days=production + ship + sea)
-        basis = (f"审计日+生产{production:g}天+发运{ship:g}天+海运{sea:g}天"
-                 f"（assumed；{source}）")
-    spring = _crosses_festival(audit_date, base)
-    latest = base + timedelta(days=SPRING_BUFFER_DAYS) if spring else base
+        earliest = audit_date + timedelta(days=production_p50 + ship_p50 + sea)
+        latest_base = audit_date + timedelta(days=route.production_days + ship + sea)
+        basis = (f"P50 生产{production_p50:g}+发运{ship_p50:g}+海运{sea:g}；"
+                 f"P90 生产{route.production_days:g}+发运{ship:g}+海运{sea:g}"
+                 f"（measured；{source}）")
+    spring = _crosses_festival(audit_date, latest_base)
+    latest = latest_base + timedelta(days=SPRING_BUFFER_DAYS) if spring else latest_base
     if spring:
         basis = (f"{basis}；路径穿越 {SPRING_FESTIVAL_ANCHOR.isoformat()} 窗口，"
                  f"最晚 +{SPRING_BUFFER_DAYS:g} 天")
-    return dict(eta_earliest=base.isoformat(), eta_latest=latest.isoformat(), eta_basis=basis,
-                confidence="assumed", spring_buffer_days=SPRING_BUFFER_DAYS if spring else 0,
+    return dict(eta_earliest=earliest.isoformat(), eta_latest=latest.isoformat(), eta_basis=basis,
+                confidence="assumed",
+                spring_buffer_days=SPRING_BUFFER_DAYS if spring else 0,
                 spring_crossing=bool(spring))
 
 

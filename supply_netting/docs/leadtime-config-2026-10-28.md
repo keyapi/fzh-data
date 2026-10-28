@@ -2,7 +2,7 @@
 okf: v0.1
 type: Reference
 title: 版本化交期配置（A4 接线）
-description: 90/75-90/7/60/35/40/春节 60 从硬编码改为读 config/leadtime_config.json，manifest 记版本与来源
+description: 交期从硬编码改为读 config/leadtime_config.json；2026-10-28.2 起 production/shipping 为 P50+P90 双口径
 tags: [leadtime, config, versioning, so-backlog, so-conditional-supply, asset-reuse]
 date: 2026-10-28
 status: implemented
@@ -15,8 +15,11 @@ status: implemented
 > 交期分段（90 / 7 / 60 / 35 / 40 / 春节 60）硬编码，未接 sc13 版本化合约。
 > 证据：`so_backlog.py:41`、`so_conditional_supply.py:32-34`；`leadtime_config.py` 零 import。
 
-本篇记录接线结果。**只换来源、不改数字**：所有取值与改造前逐一相等，r6/h180 净额、
-决策包与已验收产物不受影响（测试 301 通过，含新增 22）。
+本篇记录接线结果。初版（2026-10-28.1）只换来源、不改数字；**2026-10-28.2** 依据
+`reviews/2026-10-28-leadtime-measurement.md` 换成 P50/P90 双口径：
+production P90 50 / P50 20、shipping P90 20 / P50 11.5、ocean 35/40 不变；
+`plan_dates` 最早 ETA 用 P50（11.5 向上取整 12）、最晚 ETA 用 P90。
+r6/h180 净额与决策包不受影响；测试 405 通过。
 
 ## 1. 落点
 
@@ -36,6 +39,8 @@ cfg = load_default_config()
 cfg.so_pipeline.order_to_branch_days        # 90
 cfg.spring_festival.buffer_days             # 60（shutdown 30 + recovery 30）
 cfg.route_for("波兰-FZHPoland-covers").ocean_days   # 40
+cfg.route_for("美东-CENTRADE").segments              # production 50 / shipping 20 / ocean 35
+cfg.route_for("美东-CENTRADE").p50_segments          # production 20 / shipping 11.5 / ocean 35
 cfg.to_manifest()                           # 写进 manifest 的版本/来源留痕
 ```
 

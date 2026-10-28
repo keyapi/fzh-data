@@ -39,18 +39,19 @@ class DateRuleTests(unittest.TestCase):
     def test_finished_pending_uses_ship_plus_sea(self):
         centrade = plan_dates("produced_pending_dn", pd.Timestamp(AUDIT).date(),
                               "美东-CENTRADE")
-        self.assertEqual(centrade["eta_earliest"], "2026-12-08")   # +7+35
-        self.assertEqual(centrade["eta_latest"], "2026-12-08")     # 不跨春节
+        # 配置 2026-10-28.2：P50 发运 11.5（向上取整 12）/ P90 发运 20；海运 35/40
+        self.assertEqual(centrade["eta_earliest"], "2026-12-13")   # +12+35（P50）
+        self.assertEqual(centrade["eta_latest"], "2026-12-21")     # +20+35（P90），不跨春节
         poland = plan_dates("produced_pending_dn", pd.Timestamp(AUDIT).date(),
                             "波兰-FZHPoland-covers")
-        self.assertEqual(poland["eta_earliest"], "2026-12-13")     # +7+40
+        self.assertEqual(poland["eta_earliest"], "2026-12-18")     # +12+40（P50）
 
     def test_in_production_adds_60_days_and_spring_buffer(self):
         result = plan_dates("in_production", pd.Timestamp(AUDIT).date(), "美东-CENTRADE")
-        self.assertEqual(result["eta_earliest"], "2027-02-06")     # +60+7+35
+        self.assertEqual(result["eta_earliest"], "2027-01-02")     # +20+12+35（P50）
         self.assertTrue(result["spring_crossing"])
         self.assertEqual(result["spring_buffer_days"], 60)
-        self.assertEqual(result["eta_latest"], "2027-04-07")
+        self.assertEqual(result["eta_latest"], "2027-04-10")       # +50+20+35（P90）+60
         self.assertEqual(result["confidence"], "assumed")
 
     def test_in_transit_has_no_date(self):

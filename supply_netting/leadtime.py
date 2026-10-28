@@ -50,6 +50,9 @@ from typing import Any
 MODES = ("slow_boat", "fast_boat", "air", "3pl")
 SOURCES = ("measured", "assumed", "business")
 SEGMENT_KEYS = ("production", "shipping", "ocean")
+#: 可选的中位数分段（P50）；缺省为 None，不默认等于 P90
+P50_SEGMENT_KEYS = ("production_p50", "shipping_p50")
+SEGMENT_ALL_KEYS = SEGMENT_KEYS + P50_SEGMENT_KEYS
 ROUTE_KEYS = ("route_id", "warehouse", "mode", "segments", "source", "sample_size", "notes")
 PIPELINE_KEYS = ("order_to_branch_days", "order_to_branch_range_days",
                  "stage_eta_assumption_days", "source", "sample_size", "notes")
@@ -114,10 +117,20 @@ class Route:
     source: str
     sample_size: int
     notes: str
+    production_p50_days: int | float | None = None
+    shipping_p50_days: int | float | None = None
 
     @property
     def segments(self) -> dict[str, int | float]:
         return dict(production=self.production_days, shipping=self.shipping_days,
+                    ocean=self.ocean_days)
+
+    @property
+    def p50_segments(self) -> dict[str, int | float] | None:
+        """P50 分段；未配置时返回 None（不把 P90 冒充中位）。"""
+        if self.production_p50_days is None and self.shipping_p50_days is None:
+            return None
+        return dict(production=self.production_p50_days, shipping=self.shipping_p50_days,
                     ocean=self.ocean_days)
 
     @property
@@ -412,7 +425,15 @@ def load_config(path: str | Path | None = None, *, expected_version: str | None 
             raise ConfigSchemaError(f"{where}segments", "需要对象")
         for key in SEGMENT_KEYS:
             _number(segments, key, f"{where}segments.")
-        for extra in sorted(set(segments) - set(SEGMENT_KEYS)):
+        for key in P50_SEGMENT_KEYS:
+            if key in segments:
+                value = _number(segments, key, f"{where}segments.")
+                p90_key = key.replace("_p50", "")
+                p90 = _number(segments, p90_key, f"{where}segments.")
+                if value > p90:
+                    raise ConfigSchemaError(
+                        f"{where}segments.{key}", f"P50={value} 大于 P90={p90}，分位顺序不成立")
+        for extra in sorted(set(segments) - set(SEGMENT_ALL_KEYS)):
             warnings.append(f"未知字段 {where}segments.{extra} 已忽略")
         seg = {k: _number(segments, k, f"{where}segments.") for k in SEGMENT_KEYS}
 
@@ -420,7 +441,9 @@ def load_config(path: str | Path | None = None, *, expected_version: str | None 
         route = Route(route_id=route_id, warehouse=warehouse, mode=mode,
                       production_days=seg["production"], shipping_days=seg["shipping"],
                       ocean_days=seg["ocean"], source=source, sample_size=sample_size,
-                      notes=_text(item, "notes", where))
+                      notes=_text(item, "notes", where),
+                      production_p50_days=segments.get("production_p50"),
+                      shipping_p50_days=segments.get("shipping_p50"))
         if (route.route_id, route.warehouse, route.mode) in seen:
             raise ConfigSchemaError(
                 f"routes[{i}]",
