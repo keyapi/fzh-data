@@ -87,6 +87,15 @@ curl -fsS http://127.0.0.1:8410/ready
 | Tailscale Serve | 备线，仅 tailnet | 已启用：`http://vultr.alpines-grouper.ts.net:8080` |
 | SSH 隧道 | 应急 | `ssh -N -L 8410:127.0.0.1:8410 us-ubuntu-proxy` |
 
+Serve 实测：EN 测试机（已在 tailnet）可用 tailnet IP + Host 头访问（200）；
+MagicDNS 名称在部分主机不解析，脚本可用：
+
+```bash
+curl -H 'Host: vultr.alpines-grouper.ts.net' http://100.126.133.106:8080/health
+```
+
+EN **生产机**当前没有 Tailscale，不能走 Serve；必须走公网 HTTPS（或另行安装 Tailscale）。
+
 公网开启前必须：
 
 1. 子域名 A 记录指向本机（例如 `wayfair-api.<domain>`）；

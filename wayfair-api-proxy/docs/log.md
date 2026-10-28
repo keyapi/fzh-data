@@ -53,6 +53,8 @@ tags: [wayfair, api-proxy, changelog]
   `http://vultr.alpines-grouper.ts.net:8080`，SSH 隧道应急。
 - Nginx 1.24 已安装但保持 disabled；实际模板用自签证书 `nginx -t` 通过，
   `/health` 200、`/admin` 与 `/ready` 404；公网 443 尚未开放。
+- certbot 2.9 + cloudflare 插件已安装（未签发证书）；EN 生产机无 Tailscale，
+  EN 测试机可用 Serve（tailnet IP + Host 头），公网仍是 EN 生产的主路径。
 - 核对通途 `stock_latest`：确有 WayfairCG-Cranbury/Perris/Romeoville 三个仓，但覆盖
   仅 92/4/2 个 SKU；Cranbury 与 Wayfair 交集 76，45 个完全一致，存在最大 +104 的偏差。
   结论：CG 以 Wayfair 为准，通途 CG 行不并入合计，只作交叉校验。
