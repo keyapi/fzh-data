@@ -228,3 +228,38 @@ updated: 2026-10-27
   正常 18 键/162 件、批量（>4 周覆盖）71 键/328 件；月补→周补的周期库存约 −273.3 件（个）。
 - 产物：`moq-replenish-policy-2026-10-28/`（report.md + 4 张 csv/json + EN 快照）；
   测试 14 条（解析/证据/分档/MOQ 取整/政策表/落盘只写 out 目录）。
+
+## 2026-10-28 — M3 刷新/调度/异常清单设计（不部署）
+
+- 新增 `docs/m3-refresh-schedule-exceptions-2026-10-28.md`（Design，proposed）。
+- **不改任何代码、cron、生产配置**；只定义口径与落地步骤。
+- 复核既有能力：`scripts/run_same_day.py` 已实现「暂存 → 全成功才改名 → `latest.json` 只在成功时更新」，
+  失败态改名 `.failed-*` 留证——**M3 不再重造失败语义**。
+- 三个真缺口（本次给出设计，未实施）：① 调度触发口径与幂等键 `(snapshot_date, label, code_commit)`；
+  ② 六类异常（快照陈旧 / ETA 过期 / PO 无 ETA / SO 不守恒 / 单位未证 / 占位 SKU）此前散在六个产物里、
+  无汇总无闸门；③ 版本只有「谁是最新」，没有「谁批了哪一版、批了什么范围」。
+- 闸门设计：`blocking_count>0 → 决策包 partial=true 且不得 approved`；
+  例外须记 `accepted_risk` + 批准人。
+- 版本/审批：`pipeline-manifest` 加 `version` 块；`approvals.jsonl` 只追加；
+  三条不变式（无审批不得下单 / blocking 不得批准 / approved 即冻结）。
+- 回滚从「手工 mv + 手改 `latest.json`」改为命令化（`latest.json.previous` + `--rollback`），
+  目录改 `.rejected-*` 不删除，并记入 `approvals.jsonl`。
+- 数据基线（用于验收对账，非新结论）：97 张开放 SO → 55 守恒 / 30 逐行封顶解释 / 未解释余差 0；
+  在途 48,978 无 ETA 只列不抵；`item_uom_cache` 1,627 行，`PP10LB` 为已知 unknown；
+  `placeholder_skus` 阈值 100,000 来自 `Buttonkit-pl` 9,999,866。
+- 落地分 5 步（异常清单生成器 → 版本块 → 回滚命令化 → 审批校验器 → 调度），
+  每步独立验收；**Step 5 调度需用户另行批准，本次不部署**。
+
+## 2026-10-28 — FULL-CATALOG-NEXT
+
+- 新增 `scripts/catalog_next.py`：读 `catalog-coverage-2026-10-28/` 的明细与 summary，
+  把 4,949 个未进包物料按四类给出动作、责任角色、优先级与红线；对账（四类合计 =
+  未覆盖数、有库存条目 = 64、库存件 = 1,324）不过即报错。
+- **关键发现**：64 个「有库存但 UOM 未证」实查 EN `Item.stock_uom` **64/64 都有单位**
+  （全「个」）——缺口在本层缓存（1,627 条只覆盖进包物料），不是 EN 主数据缺失。
+  63 项刷新缓存即可进库存侧事实，1 项 EN `disabled=1` 转停售确认。
+- 动作表：P0 补单位（本层）/ P1 补映射 761（运营）/ P1 停售确认 284（业务）/
+  P2 组件皮壳口径 3,840（业务，不建独立 SKU）。
+- 报告固定写入两条边界：4,014 键 ≠ 全目录、未覆盖 ≠ 零需求；不改主表、不 push。
+- 产物 `catalog-next-2026-10-28/`（report + 2 CSV + EN 快照 + manifest）；
+  测试 8 条（原因对账、未知原因报错、优先清单状态与排序、落盘只写 out）；全套 369 通过。
