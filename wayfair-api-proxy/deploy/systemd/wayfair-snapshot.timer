@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Wayfair snapshot at 07:00 Beijing (23:00 UTC)
+
+[Timer]
+OnCalendar=*-*-* 23:00:00 UTC
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

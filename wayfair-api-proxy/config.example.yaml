@@ -1,0 +1,43 @@
+# Snapshot responses older than this are marked stale=true.
+snapshot_stale_after_seconds: 3600
+# Keep this many days of runs on the VPS; long-term history belongs in EN/parquet.
+snapshot_retention_days: 7
+
+# 管理员入口仅在同时设置 WAYFAIR_ADMIN_SESSION_SECRET 时启用。
+# admin_identities 填 OIDC userinfo 的 sub（DingTalk 用户标识），留空 = 无人可管理。
+oidc:
+  issuer: https://<OIDC_ISSUER>
+  client_id: ${WAYFAIR_OIDC_CLIENT_ID}
+  client_secret: ${WAYFAIR_OIDC_CLIENT_SECRET}
+  redirect_uri: https://wayfair-api.example.com/admin/oidc-callback
+  admin_identities: []
+  cookie_secure: true
+
+accounts:
+  centrade:
+    upstream: https://api.wayfair.io/v1/supplier-order-api/graphql
+    supplier_id: 0  # Wayfair parent supplier ID
+    credentials:
+      client_id: ${WAYFAIR_CENTRADE_CLIENT_ID}
+      client_secret: ${WAYFAIR_CENTRADE_CLIENT_SECRET}
+    capabilities:
+      inventory_snapshot: false
+      inventory_live: false
+      inventory_transactions: false
+      inbound_live: false
+    account_rate_limit_rps: 2.0
+    live_rate_limit_rps: 0.2
+  account-two:
+    upstream: https://api.wayfair.io/v1/supplier-order-api/graphql
+    supplier_id: 0
+    credentials:
+      client_id: ${WAYFAIR_ACCOUNT_TWO_CLIENT_ID}
+      client_secret: ${WAYFAIR_ACCOUNT_TWO_CLIENT_SECRET}
+    capabilities: {}
+  account-three:
+    upstream: https://api.wayfair.io/v1/supplier-order-api/graphql
+    supplier_id: 0
+    credentials:
+      client_id: ${WAYFAIR_ACCOUNT_THREE_CLIENT_ID}
+      client_secret: ${WAYFAIR_ACCOUNT_THREE_CLIENT_SECRET}
+    capabilities: {}

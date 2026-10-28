@@ -177,6 +177,7 @@ uv sync
 | `pb-orders` | `pb_orders/` | Pottery Barn 出件：SPS 库存预检（明细级）→ 通途导入 xlsx + 标签/背贴 PDF；CLI + 网页版 |
 | `pb-reconciliation` | `pb_reconciliation/` | Pottery Barn 对账月度更新 + TM 佣金结算表 |
 | `sellfox-api-proxy` | `sellfox-api-proxy/` | 赛狐 API 代理网关（破 IP 白名单 + 凭证安全分发） |
+| `wayfair-api-proxy` | `wayfair-api-proxy/` | Wayfair 库存/在途只读网关（Vultr；契约未验证能力保持 501） |
 | `sps-api` | `sps_api/` | SPS Commerce API 可行性探测（EDI / ASN / 发票 / 库存） |
 | `ups-track` | `ups_track/` | UPS 官方 Track API 批量查询（当前状态 + 完整节点时间线） |
 | `web-automation` | `.agents/skills/{web-automation,playwright-setup,tongtu-automation,sellfox-automation}/` | 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright），子项目在 `web_automation/` |
