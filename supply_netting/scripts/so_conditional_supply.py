@@ -68,6 +68,54 @@ def _crosses_festival(start: date, end: date, anchor: date = SPRING_FESTIVAL_ANC
     return start <= window_end and end >= window_start
 
 
+_ROUNDING = {"ceil": math.ceil, "floor": math.floor}
+
+
+def _rounding_policy(route):
+    """取整策略必须可执行；未知/缺失 → fail closed（不默认 ceil 掩盖配置问题）。"""
+    policy = getattr(route, "rounding_rule", None)
+    if policy not in _ROUNDING:
+        raise ValueError(
+            f"路线 {route.route_id} 的 rounding_rule={policy!r} 不是可执行策略 "
+            f"{sorted(_ROUNDING)}；拒绝猜测取整方式")
+    return _ROUNDING[policy]
+
+
+def _segment_labels(route) -> dict:
+    """从已校验的 segment_sources / measured_p90 / plan_override 推导 ETA 标签。
+
+    缺证据直接抛错（fail closed），**不允许回退成 measured**。
+    """
+    sources = getattr(route, "segment_sources", None)
+    if not isinstance(sources, dict) or set(sources) != {"production", "shipping", "ocean"}:
+        raise ValueError(f"路线 {route.route_id} 缺 segment_sources，无法标注 ETA 来源")
+    measured = getattr(route, "measured_p90", None) or {}
+    override = getattr(route, "plan_override", None) or {}
+    values = route.segments
+    labels = {"sources": dict(sources)}
+    for key in ("production", "shipping", "ocean"):
+        source = sources[key]
+        value = values[key]
+        if source == "measured":
+            labels[key] = f"{_CN[key]}{value:g}（measured）"
+        elif source == "plan_override":
+            plan = override.get(key) or {}
+            labels[key] = (f"规划上值 {_CN[key]}{value:g}（实测P90="
+                           f"{float(plan.get('measured_p90_days')):g}，plan_override）")
+        elif source == "assumed":
+            labels[key] = f"{_CN[key]}{value:g}（assumed）"
+        elif source == "business":
+            labels[key] = f"{_CN[key]}{value:g}（business）"
+        else:
+            raise ValueError(f"路线 {route.route_id} 分段 {key} 来源 {source!r} 不可标注")
+        if source == "measured" and measured.get(key) is None:
+            raise ValueError(f"路线 {route.route_id} 分段 {key} 标 measured 但缺 measured_p90")
+    return labels
+
+
+_CN = {"production": "生产", "shipping": "发运", "ocean": "海运"}
+
+
 def plan_dates(stage: str, audit_date: date, branch: str | None) -> dict:
     """返回 earliest/latest ETA、依据与置信度（全部 assumed / unknown，绝不 confirmed）。"""
     if stage == "shipped_in_transit":
@@ -77,30 +125,28 @@ def plan_dates(stage: str, audit_date: date, branch: str | None) -> dict:
     if route is None or stage not in ("produced_pending_dn", "in_production"):
         return dict(eta_earliest=None, eta_latest=None, eta_basis="非可供给阶段，不给日期",
                     confidence="unknown", spring_buffer_days=None, spring_crossing=None)
+    # 取整：从配置的可执行策略推导，不再硬编码 ceil
+    rounding = _rounding_policy(route)
     ship, sea = route.shipping_days, route.ocean_days
     p50 = route.p50_segments
-    # 天数为自然日；P50 的 11.5 天按「向上取整到整天」落到日期（保守、可复算）
-    ship_p50 = (math.ceil(p50["shipping"]) if p50 and p50.get("shipping") is not None
-                else ship)
-    production_p50 = (math.ceil(p50["production"]) if p50 and p50.get("production") is not None
+    ship_p50 = rounding(p50["shipping"]) if p50 and p50.get("shipping") is not None else ship
+    production_p50 = (rounding(p50["production"]) if p50 and p50.get("production") is not None
                       else route.production_days)
+    # 分段标签全部从**已校验的** segment_sources 推导；缺证据 fail closed
+    labels = _segment_labels(route)
     source = f"交期配置 {LEADTIME.version}"
-    # 分段来源各自标注：发运是规划覆盖（不是实测 P90），海运是假设
-    ship_p90_measured = ((route.plan_override or {}).get("shipping") or {}).get("measured_p90_days")
-    ship_label = (f"规划上值 发运{ship:g}（实测P90={ship_p90_measured:g}，plan_override）"
-                  if ship_p90_measured is not None else f"发运{ship:g}（measured）")
-    sea_label = f"海运{sea:g}（assumed）"
+    source_note = "、".join(f"{k}={labels['sources'][k]}" for k in ("production", "shipping", "ocean"))
     if stage == "produced_pending_dn":
         earliest = audit_date + timedelta(days=ship_p50 + sea)
         latest_base = audit_date + timedelta(days=ship + sea)
-        basis = (f"P50 发运{ship_p50:g}+海运{sea:g}；{ship_label}+{sea_label}"
-                 f"（分段来源：production=measured、shipping=plan_override、ocean=assumed；{source}）")
+        basis = (f"P50 发运{ship_p50:g}+海运{sea:g}；{labels['shipping']}+{labels['ocean']}"
+                 f"（分段来源：{source_note}；{source}）")
     else:
         earliest = audit_date + timedelta(days=production_p50 + ship_p50 + sea)
         latest_base = audit_date + timedelta(days=route.production_days + ship + sea)
         basis = (f"P50 生产{production_p50:g}+发运{ship_p50:g}+海运{sea:g}；"
-                 f"生产{route.production_days:g}（measured）+{ship_label}+{sea_label}"
-                 f"（分段来源：production=measured、shipping=plan_override、ocean=assumed；{source}）")
+                 f"{labels['production']}+{labels['shipping']}+{labels['ocean']}"
+                 f"（分段来源：{source_note}；{source}）")
     spring = _crosses_festival(audit_date, latest_base)
     latest = latest_base + timedelta(days=SPRING_BUFFER_DAYS) if spring else latest_base
     if spring:

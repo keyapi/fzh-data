@@ -9,6 +9,7 @@ import math
 import importlib
 import json
 import tempfile
+from dataclasses import replace
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
@@ -69,7 +70,8 @@ class FrozenValuesTests(unittest.TestCase):
         for route in self.cfg.routes:
             # P2 返修：route 级不再笼统写 measured；来源下放到分段
             self.assertEqual(route.source, "mixed")
-            self.assertEqual(route.sample_size, 0)
+            # F1 返修：mixed 路线的样本量保留 None，不写成测得的 0
+            self.assertIsNone(route.sample_size)
             self.assertEqual(route.segment_sources,
                              {"production": "measured", "shipping": "plan_override",
                               "ocean": "assumed"})
@@ -101,9 +103,12 @@ class FrozenValuesTests(unittest.TestCase):
         route0 = manifest["routes"][0]
         self.assertEqual(route0["p50_segments"],
                          dict(production=20, shipping=11.5, ocean=35))
+        self.assertIsNone(route0["sample_size"])           # F1：manifest 里也必须是 null
+        self.assertFalse(route0["sample_size_applicable"])
         self.assertEqual(route0["segment_sources"]["shipping"], "plan_override")
         self.assertEqual(route0["measured_p90"]["shipping"], 24)
-        self.assertIn("向上取整", route0["rounding_rule"])
+        # F2：rounding_rule 是可执行策略，不是文字说明
+        self.assertEqual(route0["rounding_rule"], "ceil")
         self.assertEqual(manifest["spring_festival"]["buffer_days"], 60)
 
 
@@ -346,6 +351,10 @@ class ProvenanceTests(unittest.TestCase):
             doc = _raw()
             doc["routes"][0]["source"] = "measured"
             doc["routes"][0]["sample_size"] = 5
+            # 改成单一来源后不得再留分段证据（F2 校验会拒绝混用）
+            for key in ("segment_sources", "segment_sample_size", "measured_p90",
+                        "plan_override", "rounding_rule"):
+                doc["routes"][0].pop(key, None)
             block = load_config(_write(tmp, doc)).provenance()
             self.assertEqual(block["source"],
                              ["assumed", "measured", "mixed", "plan_override"])
@@ -412,3 +421,78 @@ class V3ManifestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class EvidenceContractTests(unittest.TestCase):
+    """F1/F2 返修：null 保留、分段证据必校验、ETA 标签不得回退 measured。"""
+
+    def test_route_sample_size_stays_null_through_manifest(self):
+        cfg = load_default_config()
+        manifest = cfg.to_manifest()
+        for route in manifest["routes"]:
+            self.assertIsNone(route["sample_size"])          # 不是 0
+            self.assertFalse(route["sample_size_applicable"])
+            self.assertIsNone(next(r for r in cfg.routes
+                                   if r.route_id == route["route_id"]).sample_size)
+
+    def test_aggregate_sample_size_treats_null_as_unmeasured(self):
+        cfg = load_default_config()
+        self.assertEqual(cfg.provenance()["sample_size"], 0)  # 聚合仍是「不声称实测样本」
+
+    def test_missing_evidence_fields_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for key in ("segment_sources", "segment_sample_size", "measured_p90",
+                        "plan_override", "rounding_rule"):
+                doc = _raw()
+                doc["routes"][0].pop(key, None)
+                with self.subTest(key=key), self.assertRaises(ConfigSchemaError) as ctx:
+                    load_config(_write(tmp, doc))
+                self.assertIn(key, ctx.exception.field)
+
+    def test_invalid_segment_values_are_rejected(self):
+        cases = {
+            "source": lambda d: d["routes"][0]["segment_sources"].__setitem__(
+                "shipping", "guessed"),
+            "sample": lambda d: d["routes"][0]["segment_sample_size"].__setitem__(
+                "shipping", 0),
+            "planning": lambda d: d["routes"][0]["plan_override"]["shipping"].__setitem__(
+                "planning_days", 999),
+            "measured": lambda d: d["routes"][0]["plan_override"]["shipping"].__setitem__(
+                "measured_p90_days", 99),
+            "rounding": lambda d: d["routes"][0].__setitem__("rounding_rule", "round_half"),
+            "override_on_non_override": lambda d: d["routes"][0]["segment_sources"].__setitem__(
+                "ocean", "plan_override"),
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, mutate in cases.items():
+                doc = _raw()
+                mutate(doc)
+                with self.subTest(case=name), self.assertRaises(ConfigSchemaError):
+                    load_config(_write(tmp, doc))
+
+    def test_evidence_fields_on_single_source_route_are_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = _raw()
+            doc["routes"][0]["source"] = "measured"
+            doc["routes"][0]["sample_size"] = 5
+            with self.assertRaises(ConfigSchemaError):
+                load_config(_write(tmp, doc))
+
+    def test_rounding_policy_is_executed_not_echoed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = _raw()
+            doc["routes"][0]["rounding_rule"] = "floor"
+            cfg = load_config(_write(tmp, doc))
+            route = cfg.route_for("美东-CENTRADE")
+            self.assertEqual(route.rounding_rule, "floor")
+            from supply_netting.scripts import so_conditional_supply as sc
+            rounding = sc._rounding_policy(route)
+            self.assertEqual(rounding(11.5), 11)          # floor 会被真正执行
+
+    def test_segment_labels_fail_closed_without_evidence(self):
+        from supply_netting.scripts import so_conditional_supply as sc
+        cfg = load_default_config()
+        route = cfg.route_for("美东-CENTRADE")
+        stripped = replace(route, segment_sources=None)
+        with self.assertRaises(ValueError):
+            sc._segment_labels(stripped)

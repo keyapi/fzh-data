@@ -119,7 +119,7 @@ class Route:
     shipping_days: int | float
     ocean_days: int | float
     source: str
-    sample_size: int
+    sample_size: int | None
     notes: str
     production_p50_days: int | float | None = None
     shipping_p50_days: int | float | None = None
@@ -154,7 +154,7 @@ class SpringFestival:
     recovery_days: int | float
     window_days: int | float
     source: str
-    sample_size: int
+    sample_size: int | None
     notes: str
 
     @property
@@ -168,7 +168,7 @@ class SoPipeline:
     order_to_branch_range_days: tuple[int | float, int | float]
     stage_eta_assumption_days: int | float
     source: str
-    sample_size: int
+    sample_size: int | None
     notes: str
 
 
@@ -233,8 +233,7 @@ class LeadTimeConfig:
             version=self.version,
             sha256=self.config_sha256,
             source=sources[0] if len(sources) == 1 else sources,
-            sample_size=min(self.so_pipeline.sample_size, self.spring_festival.sample_size,
-                            *(r.sample_size for r in self.routes)),
+            sample_size=_aggregate_sample_size(self),
             path=self.config_label,
         )
 
@@ -268,6 +267,7 @@ class LeadTimeConfig:
                          segments=r.segments,
                          p50_segments=r.p50_segments,
                          source=r.source, sample_size=r.sample_size,
+                         sample_size_applicable=r.sample_size is not None,
                          segment_sources=r.segment_sources,
                          segment_sample_size=r.segment_sample_size,
                          measured_p90=r.measured_p90,
@@ -314,7 +314,105 @@ def _number(doc: dict, key: str, where: str, *, minimum: float = 0.0) -> int | f
     return _number_value(_require(doc, key, where), f"{where}{key}", minimum=minimum)
 
 
-def _provenance(doc: dict, where: str) -> tuple[str, int]:
+ROUNDING_POLICIES = ("ceil", "floor")
+
+
+def _aggregate_sample_size(cfg) -> int:
+    """聚合最小样本量（只用于「整体是否可声称实测」的单一数字）。
+
+    ``None``（mixed 路线）表示该块没有单一来源样本 → 视作「未实测」，聚合值为 0；
+    这样既有 5 字段 provenance 的语义不变，又不会把 None 写成测得的 0 个样本。
+    """
+    values = [cfg.so_pipeline.sample_size, cfg.spring_festival.sample_size,
+              *(r.sample_size for r in cfg.routes)]
+    if any(v is None or v <= 0 for v in values):
+        return 0
+    return int(min(values))
+
+
+def _validate_route_evidence(item: dict, seg: dict, source: str, where: str) -> None:
+    """``source=mixed`` 的路线必须带完整、类型正确、且与执行分段一致的分段证据。
+
+    缺证据/类型错/来源非法/样本非正/与 segments 不一致 → **fail closed**（抛 ConfigSchemaError），
+    不允许回退成「measured」之类的默认断言。
+    """
+    if source != "mixed":
+        for key in ("segment_sources", "segment_sample_size", "measured_p90", "plan_override"):
+            if key in item:
+                raise ConfigSchemaError(f"{where}{key}",
+                                        f"只有 source=mixed 才允许 {key}（避免与单一来源混淆）")
+        return
+
+    sources = item.get("segment_sources")
+    if not isinstance(sources, dict):
+        raise ConfigSchemaError(f"{where}segment_sources", "source=mixed 必须给 segment_sources 对象")
+    if set(sources) != set(SEGMENT_KEYS):
+        raise ConfigSchemaError(f"{where}segment_sources",
+                                f"分段必须恰好是 {list(SEGMENT_KEYS)}，收到 {sorted(sources)}")
+    for key, value in sources.items():
+        if not isinstance(value, str) or value not in SEGMENT_SOURCES:
+            raise ConfigSchemaError(f"{where}segment_sources.{key}",
+                                    f"{value!r} 不在允许值 {list(SEGMENT_SOURCES)} 中")
+
+    samples = item.get("segment_sample_size")
+    if not isinstance(samples, dict) or set(samples) != set(SEGMENT_KEYS):
+        raise ConfigSchemaError(f"{where}segment_sample_size",
+                                f"必须恰好覆盖 {list(SEGMENT_KEYS)}")
+    for key, value in samples.items():
+        if sources[key] in ("measured", "plan_override"):
+            # plan_override 的样本量正是「实测 P90=24」的依据，必须为正
+            if value is None or isinstance(value, bool) or not isinstance(value, (int, float))                     or value <= 0:
+                raise ConfigSchemaError(
+                    f"{where}segment_sample_size.{key}",
+                    f"{sources[key]} 分段必须给正整数样本量（实测依据）")
+        elif value is not None:
+            raise ConfigSchemaError(f"{where}segment_sample_size.{key}",
+                                    f"assumed/business 分段（{sources[key]}）样本量应为 null")
+
+    measured = item.get("measured_p90")
+    if not isinstance(measured, dict) or set(measured) != set(SEGMENT_KEYS):
+        raise ConfigSchemaError(f"{where}measured_p90", f"必须恰好覆盖 {list(SEGMENT_KEYS)}")
+    for key, value in measured.items():
+        if sources[key] == "measured" and value is None:
+            raise ConfigSchemaError(f"{where}measured_p90.{key}", "measured 分段必须给实测 P90")
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+            raise ConfigSchemaError(f"{where}measured_p90.{key}", "实测 P90 必须是数字")
+
+    if "plan_override" not in item:
+        raise ConfigSchemaError(f"{where}plan_override",
+                                "source=mixed 必须显式给 plan_override（无覆盖时写 {}）")
+    override = item.get("plan_override")
+    if not isinstance(override, dict):
+        raise ConfigSchemaError(f"{where}plan_override", "必须是对象")
+    for key, plan in override.items():
+        if key not in SEGMENT_KEYS:
+            raise ConfigSchemaError(f"{where}plan_override.{key}", "分段名不合法")
+        if not isinstance(plan, dict):
+            raise ConfigSchemaError(f"{where}plan_override.{key}", "必须是对象")
+        if sources[key] != "plan_override":
+            raise ConfigSchemaError(
+                f"{where}plan_override.{key}",
+                f"只有 segment_sources={key!r} 为 plan_override 时才允许覆盖（当前 "
+                f"{sources[key]!r}）")
+        planning = plan.get("planning_days")
+        # 规划值必须**等于实际执行的分段值**
+        if planning is None or float(planning) != float(seg[key]):
+            raise ConfigSchemaError(
+                f"{where}plan_override.{key}.planning_days",
+                f"必须等于实际执行分段 {seg[key]!r}，收到 {planning!r}")
+        measured_value = plan.get("measured_p90_days")
+        if measured_value is None or float(measured_value) != float(measured[key]):
+            raise ConfigSchemaError(
+                f"{where}plan_override.{key}.measured_p90_days",
+                f"必须等于 measured_p90.{key}={measured[key]!r}，收到 {measured_value!r}")
+
+    rounding = item.get("rounding_rule")
+    if rounding not in ROUNDING_POLICIES:
+        raise ConfigSchemaError(f"{where}rounding_rule",
+                                f"{rounding!r} 不是可执行取整策略 {list(ROUNDING_POLICIES)}")
+
+
+def _provenance(doc: dict, where: str) -> tuple[str, int | None]:
     """每条假设都必须自报 source / sample_size；measured 不得样本为零。"""
     source = _non_empty_str(doc, "source", where)
     if source not in SOURCES:
@@ -328,7 +426,7 @@ def _provenance(doc: dict, where: str) -> tuple[str, int]:
         if raw is not None:
             raise ConfigSchemaError(f"{where}sample_size",
                                     "source=mixed 时不得给单一 sample_size，请用 segment_sample_size")
-        return source, 0
+        return source, None
     sample_size = _number(doc, "sample_size", where)
     if sample_size != int(sample_size):
         raise ConfigSchemaError(f"{where}sample_size", f"需要整数，收到 {sample_size}")
@@ -468,6 +566,7 @@ def load_config(path: str | Path | None = None, *, expected_version: str | None 
         seg = {k: _number(segments, k, f"{where}segments.") for k in SEGMENT_KEYS}
 
         source, sample_size = _provenance(item, where)
+        _validate_route_evidence(item, seg, source, where)
         route = Route(route_id=route_id, warehouse=warehouse, mode=mode,
                       production_days=seg["production"], shipping_days=seg["shipping"],
                       ocean_days=seg["ocean"], source=source, sample_size=sample_size,

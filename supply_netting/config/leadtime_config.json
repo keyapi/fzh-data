@@ -58,7 +58,7 @@
           "reason": "发运段实测 P90=24（n=26），规划取 20 天做上值；这是规划覆盖，不是实测 P90，不得写 measured"
         }
       },
-      "rounding_rule": "P50 分段按自然日向上取整（如 11.5 → 12）"
+      "rounding_rule": "ceil"
     },
     {
       "route_id": "CN->US-WEST",
@@ -96,7 +96,7 @@
           "reason": "发运段实测 P90=24（n=26），规划取 20 天做上值；这是规划覆盖，不是实测 P90，不得写 measured"
         }
       },
-      "rounding_rule": "P50 分段按自然日向上取整（如 11.5 → 12）"
+      "rounding_rule": "ceil"
     },
     {
       "route_id": "CN->PL",
@@ -134,7 +134,7 @@
           "reason": "发运段实测 P90=24（n=26），规划取 20 天做上值；这是规划覆盖，不是实测 P90，不得写 measured"
         }
       },
-      "rounding_rule": "P50 分段按自然日向上取整（如 11.5 → 12）"
+      "rounding_rule": "ceil"
     }
   ],
   "notes_global": "分段来源：生产段实测（n=197）、发运段规划覆盖（实测 P90=24，规划取 20）、海运 assumed；分段分位相加未经整条路径校准，不构成到仓承诺"
