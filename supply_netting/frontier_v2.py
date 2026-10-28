@@ -13,6 +13,13 @@
 5. 名称改为「观测销售路径模拟」；额外占用是**库存数量**，不是资金占用。
 
 明确：这是情景模拟，不是承诺，也不改决策包。
+
+**冻结（A1/A3，2026-10-28）**：本模块只承载已验收的情景产物，**不再扩写**模拟/评估入口。
+实测逐日复核（R=1）与既有评估器 `experiments/business_phase/inventory_policy.py`
+（`simulate_policy` / `metrics` / `bisect_order_up_to`）逐项相等，差异只在数据管道
+（复核相位、暖机在途、目标来源）与指标口径（α ≠ CSL、无 backorder）。后续政策实验请直接包
+既有评估器。依据与数值见 `docs/frontier-dedup-2026-10-28.md`，
+冻结由 `tests/test_frontier_dedup.py::test_public_surface_is_frozen` 守护。
 """
 
 from __future__ import annotations

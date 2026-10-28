@@ -263,3 +263,19 @@ updated: 2026-10-27
 - 报告固定写入两条边界：4,014 键 ≠ 全目录、未覆盖 ≠ 零需求；不改主表、不 push。
 - 产物 `catalog-next-2026-10-28/`（report + 2 CSV + EN 快照 + manifest）；
   测试 8 条（原因对账、未知原因报错、优先清单状态与排序、落盘只写 out）；全套 369 通过。
+
+## 2026-10-28 — FRONTIER-DEDUP（A1/A2/A3 落地）
+
+- 新增 `scripts/frontier_dedup_check.py`：从 git 取回既有评估器（`e3727683`
+  inventory_policy.py）导入执行，与 `frontier_v2.simulate` 跑同一合成需求矩阵；只读、
+  不改任何数字、不重跑已验收产物。
+- **实测结论**：逐日复核（R=1）两边满足量/缺货量/β/平均库存**完全相等**（差 0）→ 核心语义
+  同一套；周复核（R=7）差异来自**复核相位**（期初 t≡0 vs 期末 t≡R−1）与暖机在途，
+  提前期越长越被稀释（L=7 差 36 件、L=30 差 1、L=60 差 3）。
+- **α ≠ CSL**：α 按「有需求期间」计（198 个），CSL 按「复核周期」计（29 个），同一次回放
+  α=0.8586 vs CSL=0.2759；β 与 fill_rate 公式相同。
+- **backorder**：既有评估器有 `semantics` 显式参数（S=25 场景：lost_sales 丢 935/期末欠单 0；
+  backorder 丢 0/期末欠单 935）；frontier_v2 只有 lost_sales。
+- **定规**：frontier_v2 冻结（冻结面 6 个函数，测试守护），后续政策实验只包既有评估器；
+  `frontier_v2` docstring 与 `docs/frontier-dedup-2026-10-28.md` 都写明。
+- 产物 `frontier-dedup-2026-10-28/`（report + comparison.json + manifest）；测试 9 条；全套 378 通过。

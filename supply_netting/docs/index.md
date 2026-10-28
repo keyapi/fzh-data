@@ -30,6 +30,7 @@ updated: 2026-10-27
 | **版本化交期配置**（A4 接线：90/7/60/35/40/春节 60 读 JSON） | [leadtime-config-2026-10-28.md](leadtime-config-2026-10-28.md) |
 | **MOQ 与补货频率政策**（21 个 MOQ 物料 / 周补 / 小额阈值） | [moq-replenish-policy-2026-10-28.md](moq-replenish-policy-2026-10-28.md) |
 | **目录覆盖后续动作**（4,949 未覆盖四类动作 + 64 项 UOM 优先） | [catalog-next-2026-10-28.md](catalog-next-2026-10-28.md) |
+| **FRONTIER-DEDUP**（frontier_v2 vs 既有评估器：R=1 相等 / α≠CSL / 冻结） | [frontier-dedup-2026-10-28.md](frontier-dedup-2026-10-28.md) |
 | **M3 刷新/调度/异常清单设计**（六类异常闸门、版本与审批记录、回滚，不部署） | [m3-refresh-schedule-exceptions-2026-10-28.md](m3-refresh-schedule-exceptions-2026-10-28.md) |
 | 变更时间线 | [log.md](log.md) |
 
