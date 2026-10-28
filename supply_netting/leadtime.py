@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import date
@@ -330,6 +331,20 @@ def _aggregate_sample_size(cfg) -> int:
     return int(min(values))
 
 
+def _strict_number(value, where: str, *, integer: bool = False) -> int | float:
+    """严格数值契约：只接受非布尔、有限、非负的 int/float；不做字符串归一化。"""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigSchemaError(where, f"必须是数字（不接受字符串或布尔），收到 {value!r}")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ConfigSchemaError(where, f"必须是有限数字，收到 {value!r}")
+    if number < 0:
+        raise ConfigSchemaError(where, f"必须非负，收到 {value!r}")
+    if integer and number != int(number):
+        raise ConfigSchemaError(where, f"必须是整数，收到 {value!r}")
+    return value
+
+
 def _validate_route_evidence(item: dict, seg: dict, source: str, where: str) -> None:
     """``source=mixed`` 的路线必须带完整、类型正确、且与执行分段一致的分段证据。
 
@@ -360,11 +375,15 @@ def _validate_route_evidence(item: dict, seg: dict, source: str, where: str) -> 
                                 f"必须恰好覆盖 {list(SEGMENT_KEYS)}")
     for key, value in samples.items():
         if sources[key] in ("measured", "plan_override"):
-            # plan_override 的样本量正是「实测 P90=24」的依据，必须为正
-            if value is None or isinstance(value, bool) or not isinstance(value, (int, float))                     or value <= 0:
+            # plan_override 的样本量正是「实测 P90」的依据，必须为正整数
+            if value is None:
                 raise ConfigSchemaError(
                     f"{where}segment_sample_size.{key}",
                     f"{sources[key]} 分段必须给正整数样本量（实测依据）")
+            _strict_number(value, f"{where}segment_sample_size.{key}", integer=True)
+            if float(value) <= 0:
+                raise ConfigSchemaError(
+                    f"{where}segment_sample_size.{key}", "样本量必须为正整数")
         elif value is not None:
             raise ConfigSchemaError(f"{where}segment_sample_size.{key}",
                                     f"assumed/business 分段（{sources[key]}）样本量应为 null")
@@ -373,10 +392,12 @@ def _validate_route_evidence(item: dict, seg: dict, source: str, where: str) -> 
     if not isinstance(measured, dict) or set(measured) != set(SEGMENT_KEYS):
         raise ConfigSchemaError(f"{where}measured_p90", f"必须恰好覆盖 {list(SEGMENT_KEYS)}")
     for key, value in measured.items():
-        if sources[key] == "measured" and value is None:
-            raise ConfigSchemaError(f"{where}measured_p90.{key}", "measured 分段必须给实测 P90")
-        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
-            raise ConfigSchemaError(f"{where}measured_p90.{key}", "实测 P90 必须是数字")
+        if value is None:
+            if sources[key] in ("measured", "plan_override"):
+                raise ConfigSchemaError(f"{where}measured_p90.{key}",
+                                        f"{sources[key]} 分段必须给实测 P90")
+            continue
+        _strict_number(value, f"{where}measured_p90.{key}")
 
     if "plan_override" not in item:
         raise ConfigSchemaError(f"{where}plan_override",
@@ -384,6 +405,12 @@ def _validate_route_evidence(item: dict, seg: dict, source: str, where: str) -> 
     override = item.get("plan_override")
     if not isinstance(override, dict):
         raise ConfigSchemaError(f"{where}plan_override", "必须是对象")
+    # F2b：override 键必须**恰好**等于标为 plan_override 的分段集合
+    need = {k for k, v in sources.items() if v == "plan_override"}
+    if set(override) != need:
+        raise ConfigSchemaError(
+            f"{where}plan_override",
+            f"override 键必须恰好是 {sorted(need)}（当前 {sorted(override)}）")
     for key, plan in override.items():
         if key not in SEGMENT_KEYS:
             raise ConfigSchemaError(f"{where}plan_override.{key}", "分段名不合法")
@@ -394,17 +421,27 @@ def _validate_route_evidence(item: dict, seg: dict, source: str, where: str) -> 
                 f"{where}plan_override.{key}",
                 f"只有 segment_sources={key!r} 为 plan_override 时才允许覆盖（当前 "
                 f"{sources[key]!r}）")
-        planning = plan.get("planning_days")
+        if "planning_days" not in plan:
+            raise ConfigSchemaError(f"{where}plan_override.{key}.planning_days", "必填")
+        planning = _strict_number(plan["planning_days"],
+                                  f"{where}plan_override.{key}.planning_days")
         # 规划值必须**等于实际执行的分段值**
-        if planning is None or float(planning) != float(seg[key]):
+        if float(planning) != float(seg[key]):
             raise ConfigSchemaError(
                 f"{where}plan_override.{key}.planning_days",
                 f"必须等于实际执行分段 {seg[key]!r}，收到 {planning!r}")
-        measured_value = plan.get("measured_p90_days")
-        if measured_value is None or float(measured_value) != float(measured[key]):
+        if "measured_p90_days" not in plan:
+            raise ConfigSchemaError(f"{where}plan_override.{key}.measured_p90_days", "必填")
+        measured_value = _strict_number(
+            plan["measured_p90_days"], f"{where}plan_override.{key}.measured_p90_days")
+        if float(measured_value) != float(measured[key]):
             raise ConfigSchemaError(
                 f"{where}plan_override.{key}.measured_p90_days",
                 f"必须等于 measured_p90.{key}={measured[key]!r}，收到 {measured_value!r}")
+        reason = plan.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ConfigSchemaError(f"{where}plan_override.{key}.reason",
+                                    "必填：说明为何用规划值覆盖实测 P90")
 
     rounding = item.get("rounding_rule")
     if rounding not in ROUNDING_POLICIES:

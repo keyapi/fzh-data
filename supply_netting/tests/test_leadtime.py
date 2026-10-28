@@ -496,3 +496,69 @@ class EvidenceContractTests(unittest.TestCase):
         stripped = replace(route, segment_sources=None)
         with self.assertRaises(ValueError):
             sc._segment_labels(stripped)
+
+
+class StrictEvidenceTests(unittest.TestCase):
+    """F2a/F2b：严格数值契约 + override 记录完整性（复审探针回归）。"""
+
+    def test_non_integer_sample_size_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = _raw()
+            doc["routes"][0]["segment_sample_size"]["production"] = 197.5
+            with self.assertRaises(ConfigSchemaError) as ctx:
+                load_config(_write(tmp, doc))
+            self.assertIn("segment_sample_size.production", ctx.exception.field)
+
+    def test_string_numbers_are_rejected_not_coerced(self):
+        for field, mutate in (
+            ("planning_days", lambda d: d["routes"][0]["plan_override"]["shipping"]
+             .__setitem__("planning_days", "20")),
+            ("measured_p90_days", lambda d: d["routes"][0]["plan_override"]["shipping"]
+             .__setitem__("measured_p90_days", "24")),
+        ):
+            with tempfile.TemporaryDirectory() as tmp:
+                doc = _raw()
+                mutate(doc)
+                with self.subTest(field=field), self.assertRaises(ConfigSchemaError) as ctx:
+                    load_config(_write(tmp, doc))
+                self.assertIn(field, ctx.exception.field)
+
+    def test_negative_measured_p90_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = _raw()
+            doc["routes"][0]["measured_p90"]["production"] = -1
+            with self.assertRaises(ConfigSchemaError) as ctx:
+                load_config(_write(tmp, doc))
+            self.assertIn("measured_p90.production", ctx.exception.field)
+
+    def test_boolean_sample_size_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = _raw()
+            doc["routes"][0]["segment_sample_size"]["production"] = True
+            with self.assertRaises(ConfigSchemaError):
+                load_config(_write(tmp, doc))
+
+    def test_plan_override_segment_requires_matching_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = _raw()
+            doc["routes"][0]["plan_override"] = {}
+            with self.assertRaises(ConfigSchemaError) as ctx:
+                load_config(_write(tmp, doc))
+            self.assertIn("plan_override", ctx.exception.field)
+
+    def test_override_entry_requires_all_three_fields(self):
+        for missing in ("planning_days", "measured_p90_days", "reason"):
+            with tempfile.TemporaryDirectory() as tmp:
+                doc = _raw()
+                doc["routes"][0]["plan_override"]["shipping"].pop(missing)
+                with self.subTest(missing=missing), self.assertRaises(ConfigSchemaError) as ctx:
+                    load_config(_write(tmp, doc))
+                self.assertIn(f"plan_override.shipping.{missing}", ctx.exception.field)
+
+    def test_extra_override_entry_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            doc = _raw()
+            doc["routes"][0]["plan_override"]["production"] = dict(
+                planning_days=50, measured_p90_days=50.4, reason="不该有")
+            with self.assertRaises(ConfigSchemaError):
+                load_config(_write(tmp, doc))
