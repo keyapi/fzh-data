@@ -75,10 +75,29 @@ curl -fsS http://127.0.0.1:8410/ready
 `/ready` 是 503 时先查数据库目录权限与磁盘，不要直接重启。uvicorn 使用
 `--no-access-log`，请求日志由应用中间件统一输出，避免 OIDC 回调 query 进入访问日志。
 
-## 防火墙
+## 防火墙与访问路径
 
-只保留 SSH（key-only）、80/443、Tailscale。应用端口不对公网开放。
-Tailscale 客户端同样走 `https://<域名>`，不直连 `127.0.0.1`。
+现状：UFW active，仅放行 22；443 空闲；应用只监听 `127.0.0.1:8410`。
+
+推荐通道（Codex 评审结论）：
+
+| 通道 | 用途 | 状态 |
+|------|------|------|
+| 公网 HTTPS（Nginx 443） | EN 定时拉取 + 同事查询的主通道 | 模板已备、localhost TLS 已验证；待域名/证书/UFW 443 |
+| Tailscale Serve | 备线，仅 tailnet | 已启用：`http://vultr.alpines-grouper.ts.net:8080` |
+| SSH 隧道 | 应急 | `ssh -N -L 8410:127.0.0.1:8410 us-ubuntu-proxy` |
+
+公网开启前必须：
+
+1. 子域名 A 记录指向本机（例如 `wayfair-api.<domain>`）；
+2. 证书用 DNS-01（只需 443）或 HTTP-01（需额外 80）；
+3. `nginx -t` 通过后再 `ufw allow 443/tcp`；**绝不放行 8410**；
+4. 校验 `cliproxyapi`、`tailscaled` 仍 active，8317 仍只绑定 Tailscale IP；
+5. 公网访问 `/health` 正常，`/admin`、`/ready` 返回 404；
+6. 从北京验证办公室应急 AI 出口未受影响。
+
+公网 Nginx 拒绝 `/admin` 与 `/ready`；管理员用 Tailscale Serve 或 SSH 隧道访问管理入口。
+Tailscale 客户端不要直连 `127.0.0.1`，用 Serve URL。
 
 ## 创建与停用 key
 

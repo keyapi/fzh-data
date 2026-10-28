@@ -20,8 +20,10 @@ tags: [wayfair, handoff, api-proxy, verification]
   首快照 1255 仓位 / 1007 parts / 11 仓；每日 23:00 UTC（北京 07:00）timer 已启用。
 - 未安装 Docker：Docker 会改 iptables，可能影响该机现有的 Tailscale/CLIProxyAPI
   应急出口；如需容器化，先单独评估网络规则。
-- 尚未在 Vultr 上配置公网 Nginx/TLS；EN 拉取整份快照可用
-  `GET /v1/accounts/{account}/inventory/snapshot`，建议北京 07:20 后执行。
+- 尚未开放公网 443：Nginx 1.24 已安装但 disabled，实际模板用自签证书 `nginx -t` 通过；
+  公网主通道待子域名 A 记录、证书与 `ufw allow 443/tcp`。
+- Tailscale Serve 备线已启用：`http://vultr.alpines-grouper.ts.net:8080`（仅 tailnet）。
+  EN 拉取整份快照可用 `GET /v1/accounts/{account}/inventory/snapshot`，建议北京 07:20 后执行。
 
 ## 不可违反的约束
 
