@@ -2,6 +2,7 @@
 Description=Wayfair inventory snapshot (one-shot)
 After=network-online.target wayfair-api-proxy.service
 Wants=network-online.target
+PartOf=wayfair-snapshot.timer
 
 [Service]
 Type=oneshot

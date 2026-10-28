@@ -11,7 +11,7 @@ tags: [wayfair, operations, deployment, secrets, rollback]
 ## 前置闸门（未满足不得部署）
 
 1. 用户明确授权本次共享 VPS 操作。
-2. Wayfair secret 只写入 `/etc/wayfair-api-proxy/env`（`0600`，root 所有），
+2. Wayfair secret 只写入 `/etc/wayfair-api-proxy/env`（`640 root:wayfair`），
    不进 Git、不进聊天、不进日志。用户已决定不轮换现有 secret。
 3. 认证环境完成最小只读探测：token 获取、库存 operation、字段、分页、限流。
    已完成，见 [contract.md](contract.md)。
@@ -33,7 +33,7 @@ tags: [wayfair, operations, deployment, secrets, rollback]
 
 ```text
 /etc/wayfair-api-proxy/config.yaml   非敏感配置，只读挂载
-/etc/wayfair-api-proxy/env           secret 环境变量，0600
+/etc/wayfair-api-proxy/env           secret 环境变量，640 root:wayfair
 /srv/wayfair-api-proxy/data/         SQLite（WAL）持久目录
 ```
 
@@ -143,13 +143,15 @@ journalctl -u wayfair-snapshot.service --since today
 sqlite3 /srv/wayfair-api-proxy/data/wayfair.db ".backup '/backup/wayfair-$(date +%F).db'"
 ```
 
-恢复：`systemctl stop wayfair-api-proxy.service wayfair-snapshot.timer` → 用备份替换
-`wayfair.db`（删除同目录 `-wal`/`-shm`）→ `systemctl start wayfair-api-proxy.service
+恢复：`systemctl stop wayfair-snapshot.timer wayfair-snapshot.service
+wayfair-api-proxy.service`（确保正在采集的 worker 已退出）→ 用备份替换 `wayfair.db`
+（删除同目录 `-wal`/`-shm`）→ `systemctl start wayfair-api-proxy.service
 wayfair-snapshot.timer` → 查 `/ready`。
 
 ## 回滚
 
-1. `systemctl stop wayfair-api-proxy.service wayfair-snapshot.timer`。
+1. `systemctl stop wayfair-snapshot.timer wayfair-snapshot.service wayfair-api-proxy.service`，
+   确认没有残留的 snapshot/uvicorn 进程。
 2. 恢复上一版 `/opt/wayfair-api-proxy` 代码与 venv（或整目录备份）及 Nginx 配置备份。
 3. `nginx -t && systemctl reload nginx`。
 4. `systemctl daemon-reload && systemctl start wayfair-api-proxy.service wayfair-snapshot.timer`。
