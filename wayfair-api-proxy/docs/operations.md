@@ -77,15 +77,19 @@ curl -fsS http://127.0.0.1:8410/ready
 
 ## 防火墙与访问路径
 
-现状：UFW active，仅放行 22；443 空闲；应用只监听 `127.0.0.1:8410`。
-
-推荐通道（Codex 评审结论）：
+现状：UFW active，仅放行 22 与 443；应用只监听 `127.0.0.1:8410`。
 
 | 通道 | 用途 | 状态 |
 |------|------|------|
-| 公网 HTTPS（Nginx 443） | EN 定时拉取 + 同事查询的主通道 | 模板已备、localhost TLS 已验证；待域名/证书/UFW 443 |
+| 公网 HTTPS | EN 定时拉取 + 同事查询的主通道 | **已上线**：`https://wayfair-api.vilavi.cn` |
 | Tailscale Serve | 备线，仅 tailnet | 已启用：`http://vultr.alpines-grouper.ts.net:8080` |
 | SSH 隧道 | 应急 | `ssh -N -L 8410:127.0.0.1:8410 us-ubuntu-proxy` |
+
+证书与入口：
+
+- Let's Encrypt，DNS-01，cloudflare 凭证在 `/etc/wayfair-api-proxy/cloudflare.ini`（`600 root`）；
+- `certbot.timer` 已启用，`certbot renew --dry-run` 通过；
+- 公网 `/health` 200；`/admin`、`/ready` 返回 404；管理入口只走 Tailscale Serve 或 SSH。
 
 Serve 实测：EN 测试机（已在 tailnet）可用 tailnet IP + Host 头访问（200）；
 MagicDNS 名称在部分主机不解析，脚本可用：
@@ -94,19 +98,17 @@ MagicDNS 名称在部分主机不解析，脚本可用：
 curl -H 'Host: vultr.alpines-grouper.ts.net' http://100.126.133.106:8080/health
 ```
 
-EN **生产机**当前没有 Tailscale，不能走 Serve；必须走公网 HTTPS（或另行安装 Tailscale）。
+EN **生产机**没有 Tailscale，但已实测可访问公网 HTTPS 并拉取整份快照（1255 条）。
+EN 只读 key 放在 VPS `/etc/wayfair-api-proxy/en.key`（`600 root`），
+operation 为 `inventory:snapshot:read` 与 `inventory:transactions:read`；
+接入 EN 时复制到 EN 的 secret manager，不要写入仓库。
 
-公网开启前必须：
+公网变更时仍须：
 
-1. 子域名 A 记录指向本机（例如 `wayfair-api.<domain>`）；
-2. 证书用 DNS-01（只需 443）或 HTTP-01（需额外 80）；
-3. `nginx -t` 通过后再 `ufw allow 443/tcp`；**绝不放行 8410**；
-4. 校验 `cliproxyapi`、`tailscaled` 仍 active，8317 仍只绑定 Tailscale IP；
-5. 公网访问 `/health` 正常，`/admin`、`/ready` 返回 404；
-6. 从北京验证办公室应急 AI 出口未受影响。
-
-公网 Nginx 拒绝 `/admin` 与 `/ready`；管理员用 Tailscale Serve 或 SSH 隧道访问管理入口。
-Tailscale 客户端不要直连 `127.0.0.1`，用 Serve URL。
+1. 校验 `cliproxyapi`、`tailscaled` active，8317 仍只绑定 Tailscale IP；
+2. `nginx -t` 通过后再 reload；
+3. 公网 `/health` 200，`/admin`、`/ready` 404；
+4. 从北京验证办公室应急 AI 出口未受影响。
 
 ## 创建与停用 key
 

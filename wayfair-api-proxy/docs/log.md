@@ -55,6 +55,9 @@ tags: [wayfair, api-proxy, changelog]
   `/health` 200、`/admin` 与 `/ready` 404；公网 443 尚未开放。
 - certbot 2.9 + cloudflare 插件已安装（未签发证书）；EN 生产机无 Tailscale，
   EN 测试机可用 Serve（tailnet IP + Host 头），公网仍是 EN 生产的主路径。
+- 公网 HTTPS 已上线：`https://wayfair-api.vilavi.cn`（Cloudflare A 记录 DNS-only、
+  Let's Encrypt DNS-01、UFW 443、Nginx；`/admin` 与 `/ready` 公网 404）。
+- EN 生产实拉整份快照成功（1255 条）；只读 key 存于 VPS 受控文件。
 - 核对通途 `stock_latest`：确有 WayfairCG-Cranbury/Perris/Romeoville 三个仓，但覆盖
   仅 92/4/2 个 SKU；Cranbury 与 Wayfair 交集 76，45 个完全一致，存在最大 +104 的偏差。
   结论：CG 以 Wayfair 为准，通途 CG 行不并入合计，只作交叉校验。
