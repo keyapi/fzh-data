@@ -67,9 +67,19 @@ class FrozenValuesTests(unittest.TestCase):
             self.assertEqual(block.source, "assumed")
             self.assertEqual(block.sample_size, 0)
         for route in self.cfg.routes:
-            # 2026-10-28.2：生产/发运为实测（197 张 SO；发运 n=26），海运仍部分假设
-            self.assertEqual(route.source, "measured")
-            self.assertEqual(route.sample_size, 197)
+            # P2 返修：route 级不再笼统写 measured；来源下放到分段
+            self.assertEqual(route.source, "mixed")
+            self.assertEqual(route.sample_size, 0)
+            self.assertEqual(route.segment_sources,
+                             {"production": "measured", "shipping": "plan_override",
+                              "ocean": "assumed"})
+            self.assertEqual(route.segment_sample_size["production"], 197)
+            self.assertEqual(route.segment_sample_size["shipping"], 26)
+            self.assertIsNone(route.segment_sample_size["ocean"])
+            # 发运 20 是规划覆盖，实测 P90=24
+            self.assertEqual(route.segments["shipping"], 20)
+            self.assertEqual(route.measured_p90["shipping"], 24)
+            self.assertEqual(route.plan_override["shipping"]["planning_days"], 20)
 
     def test_manifest_records_version_and_sources(self):
         manifest = self.cfg.to_manifest()
@@ -80,12 +90,20 @@ class FrozenValuesTests(unittest.TestCase):
         self.assertEqual(manifest["sha256"],
                          hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes()).hexdigest())
         self.assertEqual(len(manifest["sha256"]), 64)
-        self.assertEqual(manifest["sources"], ["assumed", "measured"])
+        self.assertEqual(manifest["sources"],
+                         ["assumed", "measured", "mixed", "plan_override"])
         self.assertEqual(manifest["so_pipeline"]["source"], "assumed")
         self.assertEqual(manifest["so_pipeline"]["sample_size"], 0)
         self.assertEqual(len(manifest["routes"]), 3)
         self.assertEqual(manifest["routes"][0]["segments"],
                          dict(production=50, shipping=20, ocean=35))
+        # P2-2：manifest 必须带 p50_segments / 分段来源 / 规划覆盖 / 取整规则
+        route0 = manifest["routes"][0]
+        self.assertEqual(route0["p50_segments"],
+                         dict(production=20, shipping=11.5, ocean=35))
+        self.assertEqual(route0["segment_sources"]["shipping"], "plan_override")
+        self.assertEqual(route0["measured_p90"]["shipping"], 24)
+        self.assertIn("向上取整", route0["rounding_rule"])
         self.assertEqual(manifest["spring_festival"]["buffer_days"], 60)
 
 
@@ -258,7 +276,8 @@ class ConsumerWiringTests(unittest.TestCase):
                      "customer_item_code", "warehouse", "open_qty"]), as_of=AUDIT)
         summary = so_backlog.summarize_backlog(frame)
         self.assertEqual(summary["leadtime_config"]["version"], self.cfg.version)
-        self.assertEqual(summary["leadtime_config"]["sources"], ["assumed", "measured"])
+        self.assertEqual(summary["leadtime_config"]["sources"],
+                         ["assumed", "measured", "mixed", "plan_override"])
         self.assertEqual(summary["order_to_branch_days"],
                          self.cfg.so_pipeline.order_to_branch_days)
 
@@ -317,7 +336,8 @@ class ProvenanceTests(unittest.TestCase):
         self.assertEqual(block["sha256"],
                          hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes()).hexdigest())
         # 2026-10-28.2：路线生产/发运为 measured(197)，so_pipeline/春节仍 assumed
-        self.assertEqual(block["source"], ["assumed", "measured"])
+        self.assertEqual(block["source"],
+                         ["assumed", "measured", "mixed", "plan_override"])
         self.assertEqual(block["sample_size"], 0)   # 取最小值：仍有块未实测
         self.assertEqual(block["path"], "supply_netting/config/leadtime_config.json")
 
@@ -327,7 +347,8 @@ class ProvenanceTests(unittest.TestCase):
             doc["routes"][0]["source"] = "measured"
             doc["routes"][0]["sample_size"] = 5
             block = load_config(_write(tmp, doc)).provenance()
-            self.assertEqual(block["source"], ["assumed", "measured"])
+            self.assertEqual(block["source"],
+                             ["assumed", "measured", "mixed", "plan_override"])
             self.assertEqual(block["sample_size"], 0)   # 取最小值：仍有一块未实测
 
 
@@ -374,7 +395,8 @@ class V3ManifestTests(unittest.TestCase):
             self.assertEqual(block["sha256"],
                              hashlib.sha256(leadtime.DEFAULT_CONFIG_PATH.read_bytes())
                              .hexdigest())
-            self.assertEqual(block["source"], ["assumed", "measured"])
+            self.assertEqual(block["source"],
+                             ["assumed", "measured", "mixed", "plan_override"])
             self.assertEqual(block["sample_size"], 0)
             self.assertEqual(block["path"], "supply_netting/config/leadtime_config.json")
             self.assertEqual(manifest["offset_allowed"], False)

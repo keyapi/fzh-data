@@ -48,12 +48,16 @@ from pathlib import Path
 from typing import Any
 
 MODES = ("slow_boat", "fast_boat", "air", "3pl")
-SOURCES = ("measured", "assumed", "business")
+SOURCES = ("measured", "assumed", "business", "mixed", "plan_override")
+#: 分段级来源：measured=实测分位；plan_override=规划覆盖（不是实测 P90）；assumed=假设
+SEGMENT_SOURCES = ("measured", "assumed", "business", "plan_override")
 SEGMENT_KEYS = ("production", "shipping", "ocean")
 #: 可选的中位数分段（P50）；缺省为 None，不默认等于 P90
 P50_SEGMENT_KEYS = ("production_p50", "shipping_p50")
 SEGMENT_ALL_KEYS = SEGMENT_KEYS + P50_SEGMENT_KEYS
-ROUTE_KEYS = ("route_id", "warehouse", "mode", "segments", "source", "sample_size", "notes")
+ROUTE_KEYS = ("route_id", "warehouse", "mode", "segments", "source", "sample_size", "notes",
+              "segment_sources", "segment_sample_size", "measured_p90", "plan_override",
+              "rounding_rule")
 PIPELINE_KEYS = ("order_to_branch_days", "order_to_branch_range_days",
                  "stage_eta_assumption_days", "source", "sample_size", "notes")
 FESTIVAL_KEYS = ("anchor", "shutdown_days", "recovery_days", "window_days",
@@ -119,6 +123,11 @@ class Route:
     notes: str
     production_p50_days: int | float | None = None
     shipping_p50_days: int | float | None = None
+    segment_sources: dict | None = None
+    segment_sample_size: dict | None = None
+    measured_p90: dict | None = None
+    plan_override: dict | None = None
+    rounding_rule: str | None = None
 
     @property
     def segments(self) -> dict[str, int | float]:
@@ -217,7 +226,9 @@ class LeadTimeConfig:
         声称有实测样本。
         """
         sources = sorted({self.so_pipeline.source, self.spring_festival.source,
-                          *(r.source for r in self.routes)})
+                          *(r.source for r in self.routes),
+                          *(seg for r in self.routes
+                            for seg in (r.segment_sources or {}).values())})
         return dict(
             version=self.version,
             sha256=self.config_sha256,
@@ -238,7 +249,9 @@ class LeadTimeConfig:
             sha256=self.config_sha256,
             effective_from=self.effective_from.isoformat(),
             sources=sorted({self.so_pipeline.source, self.spring_festival.source,
-                            *(r.source for r in self.routes)}),
+                            *(r.source for r in self.routes),
+                            *(seg for r in self.routes
+                              for seg in (r.segment_sources or {}).values())}),
             so_pipeline=dict(days=self.so_pipeline.order_to_branch_days,
                              range_days=list(self.so_pipeline.order_to_branch_range_days),
                              stage_eta_assumption_days=self.so_pipeline.stage_eta_assumption_days,
@@ -252,7 +265,14 @@ class LeadTimeConfig:
                                  source=self.spring_festival.source,
                                  sample_size=self.spring_festival.sample_size),
             routes=[dict(route_id=r.route_id, warehouse=r.warehouse, mode=r.mode,
-                         segments=r.segments, source=r.source, sample_size=r.sample_size)
+                         segments=r.segments,
+                         p50_segments=r.p50_segments,
+                         source=r.source, sample_size=r.sample_size,
+                         segment_sources=r.segment_sources,
+                         segment_sample_size=r.segment_sample_size,
+                         measured_p90=r.measured_p90,
+                         plan_override=r.plan_override,
+                         rounding_rule=r.rounding_rule)
                     for r in self.routes],
             warnings=list(self.warnings),
         )
@@ -299,6 +319,16 @@ def _provenance(doc: dict, where: str) -> tuple[str, int]:
     source = _non_empty_str(doc, "source", where)
     if source not in SOURCES:
         raise ConfigSchemaError(f"{where}source", f"{source!r} 不在允许值 {list(SOURCES)} 中")
+    if source == "mixed":
+        # 混合来源：route 级必须显式 sample_size: null，来源/样本改由 segment_* 承载
+        if "sample_size" not in doc:
+            raise ConfigSchemaError(f"{where}sample_size",
+                                    "source=mixed 需要显式 sample_size: null（不隐式省略）")
+        raw = doc.get("sample_size")
+        if raw is not None:
+            raise ConfigSchemaError(f"{where}sample_size",
+                                    "source=mixed 时不得给单一 sample_size，请用 segment_sample_size")
+        return source, 0
     sample_size = _number(doc, "sample_size", where)
     if sample_size != int(sample_size):
         raise ConfigSchemaError(f"{where}sample_size", f"需要整数，收到 {sample_size}")
@@ -443,7 +473,12 @@ def load_config(path: str | Path | None = None, *, expected_version: str | None 
                       ocean_days=seg["ocean"], source=source, sample_size=sample_size,
                       notes=_text(item, "notes", where),
                       production_p50_days=segments.get("production_p50"),
-                      shipping_p50_days=segments.get("shipping_p50"))
+                      shipping_p50_days=segments.get("shipping_p50"),
+                      segment_sources=item.get("segment_sources"),
+                      segment_sample_size=item.get("segment_sample_size"),
+                      measured_p90=item.get("measured_p90"),
+                      plan_override=item.get("plan_override"),
+                      rounding_rule=item.get("rounding_rule"))
         if (route.route_id, route.warehouse, route.mode) in seen:
             raise ConfigSchemaError(
                 f"routes[{i}]",

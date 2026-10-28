@@ -85,17 +85,22 @@ def plan_dates(stage: str, audit_date: date, branch: str | None) -> dict:
     production_p50 = (math.ceil(p50["production"]) if p50 and p50.get("production") is not None
                       else route.production_days)
     source = f"交期配置 {LEADTIME.version}"
+    # 分段来源各自标注：发运是规划覆盖（不是实测 P90），海运是假设
+    ship_p90_measured = ((route.plan_override or {}).get("shipping") or {}).get("measured_p90_days")
+    ship_label = (f"规划上值 发运{ship:g}（实测P90={ship_p90_measured:g}，plan_override）"
+                  if ship_p90_measured is not None else f"发运{ship:g}（measured）")
+    sea_label = f"海运{sea:g}（assumed）"
     if stage == "produced_pending_dn":
         earliest = audit_date + timedelta(days=ship_p50 + sea)
         latest_base = audit_date + timedelta(days=ship + sea)
-        basis = (f"P50 发运{ship_p50:g}+海运{sea:g}；P90 发运{ship:g}+海运{sea:g}"
-                 f"（measured；{source}）")
+        basis = (f"P50 发运{ship_p50:g}+海运{sea:g}；{ship_label}+{sea_label}"
+                 f"（分段来源：production=measured、shipping=plan_override、ocean=assumed；{source}）")
     else:
         earliest = audit_date + timedelta(days=production_p50 + ship_p50 + sea)
         latest_base = audit_date + timedelta(days=route.production_days + ship + sea)
         basis = (f"P50 生产{production_p50:g}+发运{ship_p50:g}+海运{sea:g}；"
-                 f"P90 生产{route.production_days:g}+发运{ship:g}+海运{sea:g}"
-                 f"（measured；{source}）")
+                 f"生产{route.production_days:g}（measured）+{ship_label}+{sea_label}"
+                 f"（分段来源：production=measured、shipping=plan_override、ocean=assumed；{source}）")
     spring = _crosses_festival(audit_date, latest_base)
     latest = latest_base + timedelta(days=SPRING_BUFFER_DAYS) if spring else latest_base
     if spring:

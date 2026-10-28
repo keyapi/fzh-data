@@ -3,7 +3,10 @@
   "effective_from": "2026-10-28",
   "so_pipeline": {
     "order_to_branch_days": 90,
-    "order_to_branch_range_days": [75, 90],
+    "order_to_branch_range_days": [
+      75,
+      90
+    ],
     "stage_eta_assumption_days": 14,
     "source": "assumed",
     "sample_size": 0,
@@ -30,9 +33,32 @@
         "shipping_p50": 11.5,
         "ocean": 35
       },
-      "source": "measured",
-      "sample_size": 197,
-      "notes": "生产段 SO 建单→首张 DN 过账：P50 20 / P90 50.4（n=197，2025-01..2026-10，含等料排队）；发运段 DN→实际开船：P50 11.5 / P90 24（n=26，规划取 20）；海运开船→到港 35 仅部分实测（美东 n=2，实测中位 24）+假设，不标 confirmed。见 reviews/2026-10-28-leadtime-measurement.md。"
+      "source": "mixed",
+      "sample_size": null,
+      "notes": "生产段 SO 建单→首张 DN 过账：P50 20 / P90 50.4（n=197，2025-01..2026-10，含等料排队）；发运段 DN→实际开船：P50 11.5 / P90 24（n=26，规划取 20）；海运开船→到港 35 仅部分实测（美东 n=2，实测中位 24）+假设，不标 confirmed。见 reviews/2026-10-28-leadtime-measurement.md。",
+      "segment_sources": {
+        "production": "measured",
+        "shipping": "plan_override",
+        "ocean": "assumed"
+      },
+      "segment_sample_size": {
+        "production": 197,
+        "shipping": 26,
+        "ocean": null
+      },
+      "measured_p90": {
+        "production": 50.4,
+        "shipping": 24,
+        "ocean": null
+      },
+      "plan_override": {
+        "shipping": {
+          "planning_days": 20,
+          "measured_p90_days": 24,
+          "reason": "发运段实测 P90=24（n=26），规划取 20 天做上值；这是规划覆盖，不是实测 P90，不得写 measured"
+        }
+      },
+      "rounding_rule": "P50 分段按自然日向上取整（如 11.5 → 12）"
     },
     {
       "route_id": "CN->US-WEST",
@@ -45,9 +71,32 @@
         "shipping_p50": 11.5,
         "ocean": 35
       },
-      "source": "measured",
-      "sample_size": 197,
-      "notes": "生产段 P50 20 / P90 50.4（n=197）；发运 P50 11.5 / P90 24（n=26，规划取 20）；海运 35 部分实测（美中实测中位 19，n=4）+假设，不标 confirmed。见 reviews/2026-10-28-leadtime-measurement.md。"
+      "source": "mixed",
+      "sample_size": null,
+      "notes": "生产段 P50 20 / P90 50.4（n=197）；发运 P50 11.5 / P90 24（n=26，规划取 20）；海运 35 部分实测（美中实测中位 19，n=4）+假设，不标 confirmed。见 reviews/2026-10-28-leadtime-measurement.md。",
+      "segment_sources": {
+        "production": "measured",
+        "shipping": "plan_override",
+        "ocean": "assumed"
+      },
+      "segment_sample_size": {
+        "production": 197,
+        "shipping": 26,
+        "ocean": null
+      },
+      "measured_p90": {
+        "production": 50.4,
+        "shipping": 24,
+        "ocean": null
+      },
+      "plan_override": {
+        "shipping": {
+          "planning_days": 20,
+          "measured_p90_days": 24,
+          "reason": "发运段实测 P90=24（n=26），规划取 20 天做上值；这是规划覆盖，不是实测 P90，不得写 measured"
+        }
+      },
+      "rounding_rule": "P50 分段按自然日向上取整（如 11.5 → 12）"
     },
     {
       "route_id": "CN->PL",
@@ -60,9 +109,33 @@
         "shipping_p50": 11.5,
         "ocean": 40
       },
-      "source": "measured",
-      "sample_size": 197,
-      "notes": "生产段 P50 20 / P90 50.4（n=197；波兰分组 P90 63.6，未单独建档，按总体口径并标注）；发运 P50 11.5 / P90 24（n=26，规划取 20）；海运 40 部分实测（波兰开船→到港 35，n=1）+假设，不标 confirmed。见 reviews/2026-10-28-leadtime-measurement.md。"
+      "source": "mixed",
+      "sample_size": null,
+      "notes": "生产段 P50 20 / P90 50.4（n=197；波兰分组 P90 63.6，未单独建档，按总体口径并标注）；发运 P50 11.5 / P90 24（n=26，规划取 20）；海运 40 部分实测（波兰开船→到港 35，n=1）+假设，不标 confirmed。见 reviews/2026-10-28-leadtime-measurement.md。",
+      "segment_sources": {
+        "production": "measured",
+        "shipping": "plan_override",
+        "ocean": "assumed"
+      },
+      "segment_sample_size": {
+        "production": 197,
+        "shipping": 26,
+        "ocean": null
+      },
+      "measured_p90": {
+        "production": 50.4,
+        "shipping": 24,
+        "ocean": null
+      },
+      "plan_override": {
+        "shipping": {
+          "planning_days": 20,
+          "measured_p90_days": 24,
+          "reason": "发运段实测 P90=24（n=26），规划取 20 天做上值；这是规划覆盖，不是实测 P90，不得写 measured"
+        }
+      },
+      "rounding_rule": "P50 分段按自然日向上取整（如 11.5 → 12）"
     }
-  ]
+  ],
+  "notes_global": "分段来源：生产段实测（n=197）、发运段规划覆盖（实测 P90=24，规划取 20）、海运 assumed；分段分位相加未经整条路径校准，不构成到仓承诺"
 }
