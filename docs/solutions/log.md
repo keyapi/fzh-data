@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-28（Wayfair CG 库存网关 / Codex 审核）
+
+- **新增**: `integration-issues/wayfair-castlegate-inventory-api.md` — Wayfair OAuth/GraphQL 契约、sandbox 权限解锁、库存与变动分页（adjustment page 从 0）、PO/WSA/CGF 边界、null≠0、通途 CG 数据不可作权威源。
+- **新增**: `architecture-patterns/shared-egress-vps-venv-systemd-no-docker.md` — 共享出口 VPS 新服务用 venv+systemd，不装 Docker，避免 iptables 影响 Tailscale/CLIProxyAPI。
+- **新增**: `developer-experience/gitignore-sensitive-pattern-hides-source-module.md` — `*token*` 忽略规则会静默漏掉源码/测试，须用 `git ls-files` 与 clean-tree import 验证。
+
 ## 2026-10-27（供应分型 / frePPLe / 先搜分支）
 
 - **更新**: `workflow-issues/search-first-before-implementing.md`（`last_updated: 2026-10-27`）—— 补 Case 4：**main 上 grep 不到 ≠ 项目没有**。预测（statsforecast 2.1.1）、供应净额、库存政策、交期配置分别在本地的 `keyapi/forecast-refresh-oct27`、`keyapi/supply-integrate-oct27` 分支和 PR #300；先查 `git branch -a` / `git log --all` / `gh pr list --state all` / `git ls-tree`，再决定“复用 / 接线 / 重造”。

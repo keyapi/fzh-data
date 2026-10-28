@@ -75,3 +75,9 @@ WAYFAIR_SMOKE_KEY=... WAYFAIR_SMOKE_SKU=... \
 - 快照 worker 的重叠防护（flock/数据库租约）等真实采集落地时再加。
 - 数据库只有轻量列迁移（`owner`），无完整版本化。
 - TestClient 的 `httpx2` 弃用警告未处理，不影响功能。
+
+## 相关经验（docs/solutions）
+
+- `docs/solutions/integration-issues/wayfair-castlegate-inventory-api.md` — 契约、权限、分页与 null 语义
+- `docs/solutions/architecture-patterns/shared-egress-vps-venv-systemd-no-docker.md` — 为什么这台 VPS 不用 Docker
+- `docs/solutions/developer-experience/gitignore-sensitive-pattern-hides-source-module.md` — `*token*` 忽略源码的教训
