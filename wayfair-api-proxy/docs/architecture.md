@@ -87,8 +87,7 @@ systemd timer ── docker run --rm ── snapshot.py ── 同一 SQLite 卷
 
 - 限流是进程内 token bucket，因此部署固定单 worker。多 worker 会把额度放大。
 - `live_rate_limit_rps` 可为小数，`0.2` 表示平均每 5 秒一次，带 1 次突发容量。
-- `token_cache.py` 为每账号复用同一个 `asyncio.Lock`，避免并发刷新风暴；当前尚未接入
-  主流程，接入真实 OAuth 时使用。
+- `oauth_cache.py` 为每账号复用同一个 `asyncio.Lock`，避免并发刷新风暴；已接入主流程。
 
 ## 为什么不用更重的组件
 

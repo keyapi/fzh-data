@@ -1,0 +1,28 @@
+[Unit]
+Description=Wayfair API Proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=wayfair
+Group=wayfair
+WorkingDirectory=/opt/wayfair-api-proxy
+Environment=WAYFAIR_CONFIG=/etc/wayfair-api-proxy/config.yaml
+Environment=WAYFAIR_DATABASE=/srv/wayfair-api-proxy/data/wayfair.db
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=/etc/wayfair-api-proxy/env
+ExecStart=/opt/wayfair-api-proxy/.venv/bin/uvicorn main:create_runtime_app --factory --host 127.0.0.1 --port 8410 --log-level info --no-access-log
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/wayfair-api-proxy/data
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

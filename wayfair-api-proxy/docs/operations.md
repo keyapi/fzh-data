@@ -39,20 +39,32 @@ tags: [wayfair, operations, deployment, secrets, rollback]
 
 ## 部署步骤（需授权）
 
+本机实际采用 **venv + systemd**；不要在共享美国 VPS 上安装 Docker，Docker 会改
+iptables，可能影响现有 Tailscale/CLIProxyAPI 应急出口。`deploy/docker-compose.yml`
+仅作其他环境的备选。
+
 ```bash
-# 1. 构建镜像（在仓库内）
-docker build -t wayfair-api-proxy:latest wayfair-api-proxy
+# 1. 代码与 venv（系统需 python3.12-venv）
+install -d -o wayfair -g wayfair /opt/wayfair-api-proxy
+tar -xzf wayfair-api-proxy.tar.gz -C /opt/wayfair-api-proxy
+python3 -m venv /opt/wayfair-api-proxy/.venv
+/opt/wayfair-api-proxy/.venv/bin/pip install -r /opt/wayfair-api-proxy/requirements.txt
+chown -R wayfair:wayfair /opt/wayfair-api-proxy
 
-# 2. 准备配置与 secret
-install -d -m 700 /etc/wayfair-api-proxy
-install -d -m 700 -o 10001 -g 10001 /srv/wayfair-api-proxy/data
-install -m 600 deploy/env.example /etc/wayfair-api-proxy/env   # 逐项填值
-install -m 600 config.example.yaml /etc/wayfair-api-proxy/config.yaml
+# 2. 配置与 secret
+install -d -m 755 /etc/wayfair-api-proxy
+install -d -m 750 -o wayfair -g wayfair /srv/wayfair-api-proxy/data
+install -m 640 -o root -g wayfair deploy/env.example /etc/wayfair-api-proxy/env
+install -m 644 config.example.yaml /etc/wayfair-api-proxy/config.yaml
 
-# 3. 启动 Web
-docker compose -f wayfair-api-proxy/deploy/docker-compose.yml up -d
+# 3. systemd
+install -m 644 deploy/systemd/wayfair-api-proxy.service /etc/systemd/system/
+install -m 644 deploy/systemd/wayfair-snapshot.service /etc/systemd/system/
+install -m 644 deploy/systemd/wayfair-snapshot.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now wayfair-api-proxy.service wayfair-snapshot.timer
 
-# 4. Nginx：替换占位域名后启用
+# 4. Nginx（可选，公网/Tailscale HTTPS 时）：替换占位域名后启用
 nginx -t && systemctl reload nginx
 
 # 5. 本机验收
@@ -60,7 +72,8 @@ curl -fsS http://127.0.0.1:8410/health
 curl -fsS http://127.0.0.1:8410/ready
 ```
 
-`/ready` 是 503 时先查数据库目录权限与磁盘，不要直接重启。
+`/ready` 是 503 时先查数据库目录权限与磁盘，不要直接重启。uvicorn 使用
+`--no-access-log`，请求日志由应用中间件统一输出，避免 OIDC 回调 query 进入访问日志。
 
 ## 防火墙
 
@@ -70,11 +83,11 @@ Tailscale 客户端同样走 `https://<域名>`，不直连 `127.0.0.1`。
 ## 创建与停用 key
 
 ```bash
-docker run --rm --env-file /etc/wayfair-api-proxy/env \
-  -v /etc/wayfair-api-proxy/config.yaml:/etc/wayfair-api-proxy/config.yaml:ro \
-  -v /srv/wayfair-api-proxy/data:/data \
-  wayfair-api-proxy:latest \
-  python manage.py create --name forecast --owner <dingtalk-sub> \
+cd /opt/wayfair-api-proxy
+set -a; . /etc/wayfair-api-proxy/env; set +a
+WAYFAIR_CONFIG=/etc/wayfair-api-proxy/config.yaml \
+WAYFAIR_DATABASE=/srv/wayfair-api-proxy/data/wayfair.db \
+.venv/bin/python manage.py create --name forecast --owner <dingtalk-sub> \
   --account centrade --operation inventory:snapshot:read
 ```
 

@@ -5,7 +5,7 @@ import hmac
 import os
 import secrets
 import time
-from urllib.parse import quote, unquote, urlencode
+from urllib.parse import quote, unquote, urlencode, urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request
@@ -17,6 +17,7 @@ from db import Database
 from operations import ALL_OPERATIONS
 
 SESSION_COOKIE = "wayfair_admin_session"
+STATE_COOKIE = "wayfair_oidc_state"
 SESSION_TTL = 28800
 STATE_TTL = 300
 
@@ -93,6 +94,15 @@ def build_admin_router(config: AppConfig, db: Database, session_secret: str) -> 
             raise _error(403, "forbidden_admin", "Administrator access required")
         return session
 
+    def require_same_origin(request: Request) -> None:
+        origin = request.headers.get("origin")
+        if origin:
+            if urlparse(origin).netloc != request.headers.get("host", ""):
+                raise _error(403, "forbidden_origin", "Cross-origin admin request rejected")
+            return
+        if request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
+            raise _error(403, "forbidden_origin", "Cross-origin admin request rejected")
+
     def client_secret() -> str:
         if oidc.client_secret.startswith("${") and oidc.client_secret.endswith("}"):
             value = os.getenv(oidc.client_secret[2:-1], "")
@@ -102,7 +112,7 @@ def build_admin_router(config: AppConfig, db: Database, session_secret: str) -> 
         return oidc.client_secret
 
     @router.get("/oidc-login")
-    async def oidc_login():
+    async def oidc_login(request: Request):
         _prune_states()
         state = secrets.token_urlsafe(32)
         _states[state] = time.time()
@@ -115,12 +125,28 @@ def build_admin_router(config: AppConfig, db: Database, session_secret: str) -> 
                 "state": state,
             }
         )
-        return RedirectResponse(f"{oidc.issuer.rstrip('/')}/authorize?{query}")
+        response = RedirectResponse(f"{oidc.issuer.rstrip('/')}/authorize?{query}")
+        response.set_cookie(
+            STATE_COOKIE,
+            state,
+            max_age=STATE_TTL,
+            httponly=True,
+            secure=oidc.cookie_secure,
+            samesite="lax",
+            path="/admin",
+        )
+        return response
 
     @router.get("/oidc-callback")
-    async def oidc_callback(code: str = "", state: str = ""):
+    async def oidc_callback(request: Request, code: str = "", state: str = ""):
         _prune_states()
-        if not state or state not in _states:
+        cookie_state = request.cookies.get(STATE_COOKIE, "")
+        if (
+            not state
+            or state not in _states
+            or not cookie_state
+            or not hmac.compare_digest(state, cookie_state)
+        ):
             raise _error(400, "invalid_state", "Invalid or expired OIDC state")
         del _states[state]
         if not code:
@@ -176,10 +202,12 @@ def build_admin_router(config: AppConfig, db: Database, session_secret: str) -> 
             samesite="lax",
             path="/",
         )
+        response.delete_cookie(STATE_COOKIE, path="/admin")
         return response
 
     @router.post("/logout")
-    async def logout():
+    async def logout(request: Request):
+        require_same_origin(request)
         response = HTMLResponse("<p>Signed out.</p>")
         response.delete_cookie(SESSION_COOKIE, path="/")
         return response
@@ -214,6 +242,7 @@ def build_admin_router(config: AppConfig, db: Database, session_secret: str) -> 
 
     @router.post("/api/keys", status_code=201)
     async def create_key(request: Request, payload: KeyCreate):
+        require_same_origin(request)
         require_admin(request)
         request.state.operation = "admin:keys:create"
         unknown_accounts = sorted(set(payload.accounts) - set(config.accounts))
@@ -246,6 +275,7 @@ def build_admin_router(config: AppConfig, db: Database, session_secret: str) -> 
 
     @router.post("/api/keys/{key_id}/deactivate")
     async def deactivate_key(request: Request, key_id: str):
+        require_same_origin(request)
         require_admin(request)
         request.state.operation = "admin:keys:deactivate"
         if not await db.set_api_key_active(key_id, False):
@@ -254,6 +284,7 @@ def build_admin_router(config: AppConfig, db: Database, session_secret: str) -> 
 
     @router.post("/api/owners/{owner}/deactivate")
     async def deactivate_owner(request: Request, owner: str):
+        require_same_origin(request)
         require_admin(request)
         request.state.operation = "admin:owners:deactivate"
         deactivated = await db.deactivate_keys_by_owner(owner)

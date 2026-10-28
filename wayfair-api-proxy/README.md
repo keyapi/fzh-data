@@ -35,7 +35,7 @@ wayfair-api-proxy/
 ├── db.py                SQLite：key、快照、审计
 ├── auth.py              账号 + operation 双重授权
 ├── rate_limit.py        进程内 token bucket
-├── token_cache.py       每账号持久锁的 single-flight token 缓存
+├── oauth_cache.py       每账号持久锁的 single-flight token 缓存
 ├── snapshot.py          一次性快照 worker（当前 BLOCKED 退出）
 ├── manage.py            API key 创建/列出/停用
 ├── smoke_test.py        localhost 与公网双路径验收

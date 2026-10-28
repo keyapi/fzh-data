@@ -194,6 +194,30 @@ async def test_adjustments_map_and_paginate():
 
 
 @pytest.mark.anyio
+async def test_missing_cursor_is_an_error_not_partial_success():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/oauth/token"):
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600})
+        result = {
+            "data": {
+                "inventorySummaryList": {
+                    "pageInfo": {"hasNextPage": True, "endCursor": None},
+                    "edges": [_edge("SKU-1", [])],
+                }
+            }
+        }
+        return httpx.Response(200, json=result)
+
+    from errors import UpstreamUnavailable
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        with pytest.raises(UpstreamUnavailable):
+            await WayfairClient(_config().accounts, http).query_inventory(
+                "centrade", ["SKU-1"]
+            )
+
+
+@pytest.mark.anyio
 async def test_operation_not_authorized_maps_to_forbidden():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/oauth/token"):

@@ -14,7 +14,7 @@ from errors import (
     UpstreamRateLimited,
     UpstreamUnavailable,
 )
-from token_cache import TokenCache
+from oauth_cache import TokenCache
 
 TOKEN_URL = "https://sso.auth.wayfair.com/oauth/token"
 AUDIENCE = "https://api.wayfair.com/"
@@ -324,10 +324,13 @@ class WayfairClient:
                         rows.append(row)
 
             page_info = result.get("pageInfo") or {}
-            if not page_info.get("hasNextPage"):
-                break
-            after = page_info.get("endCursor")
-            if not after:
+            if page_info.get("hasNextPage"):
+                after = page_info.get("endCursor")
+                if not after:
+                    raise UpstreamUnavailable(
+                        "Wayfair reported more pages but returned no cursor"
+                    )
+            else:
                 break
         else:
             raise UpstreamUnavailable("Wayfair pagination exceeded the safety limit")

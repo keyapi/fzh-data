@@ -406,6 +406,7 @@ class Database:
 
     def _read_inventory(self, account: str, skus: list[str]):
         with self._connect() as connection:
+            connection.execute("BEGIN")
             snapshot = connection.execute(
                 """
                 SELECT r.id, r.finished_at
@@ -543,6 +544,7 @@ class Database:
 
     def _read_all_inventory(self, account: str):
         with self._connect() as connection:
+            connection.execute("BEGIN")
             snapshot = connection.execute(
                 """
                 SELECT r.id, r.finished_at

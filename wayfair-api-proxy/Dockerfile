@@ -13,4 +13,4 @@ USER appuser
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 EXPOSE 8410
 
-CMD ["uvicorn", "main:create_runtime_app", "--factory", "--host", "0.0.0.0", "--port", "8410", "--log-level", "info"]
+CMD ["uvicorn", "main:create_runtime_app", "--factory", "--host", "0.0.0.0", "--port", "8410", "--log-level", "info", "--no-access-log"]

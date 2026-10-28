@@ -70,6 +70,43 @@ def test_oidc_login_rejects_unknown_state(tmp_path, monkeypatch):
     assert response.json()["detail"]["code"] == "invalid_state"
 
 
+def test_oidc_callback_requires_state_cookie(tmp_path, monkeypatch):
+    monkeypatch.setenv("WAYFAIR_ADMIN_SESSION_SECRET", "session-secret")
+    monkeypatch.setattr(
+        admin,
+        "_client",
+        lambda: httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(200, json={}))),
+    )
+    app = create_app(_config(), db_path=tmp_path / "wayfair.db")
+    with TestClient(app) as client:
+        start = client.get("/admin/oidc-login", follow_redirects=False)
+        state = parse_qs(urlparse(start.headers["location"]).query)["state"][0]
+        client.cookies.clear()
+        response = client.get(f"/admin/oidc-callback?code=abc&state={state}")
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "invalid_state"
+
+
+def test_admin_write_rejects_cross_origin(tmp_path, monkeypatch):
+    monkeypatch.setenv("WAYFAIR_ADMIN_SESSION_SECRET", "session-secret")
+    app = create_app(_config(), db_path=tmp_path / "wayfair.db")
+    with TestClient(app) as client:
+        _login(client, monkeypatch)
+        response = client.post(
+            "/admin/api/keys",
+            json={
+                "name": "x",
+                "accounts": ["centrade"],
+                "operations": ["inventory:snapshot:read"],
+            },
+            headers={"Origin": "https://evil.example"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "forbidden_origin"
+
+
 def test_non_admin_identity_is_rejected(tmp_path, monkeypatch):
     monkeypatch.setenv("WAYFAIR_ADMIN_SESSION_SECRET", "session-secret")
     app = create_app(_config(), db_path=tmp_path / "wayfair.db")

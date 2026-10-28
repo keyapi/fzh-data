@@ -44,7 +44,7 @@ tags: [wayfair, handoff, api-proxy, verification]
 | 快照发布/读取 | `db.py` 的 `publish_inventory_snapshot` / `read_inventory` |
 | freshness 与 501 语义 | `service.py`、`errors.py` |
 | 限流 | `rate_limit.py`（进程内，单 worker 前提） |
-| token single-flight | `token_cache.py`（尚未接入主流程） |
+| token single-flight | `oauth_cache.py` |
 | 快照 worker | `snapshot.py` |
 | key 管理 | `manage.py` |
 
