@@ -28,6 +28,7 @@ updated: 2026-10-27
 | **180 天视界 vs 35 天**（r4 预测、春节统计） | [horizon-180-vs-35-2026-10-29.md](horizon-180-vs-35-2026-10-29.md) |
 | **资产复用审计**（inventory_policy / sc08 / leadtime 是否被重造） | [asset-reuse-audit-2026-10-28.md](asset-reuse-audit-2026-10-28.md) |
 | **版本化交期配置**（A4 接线：90/7/60/35/40/春节 60 读 JSON） | [leadtime-config-2026-10-28.md](leadtime-config-2026-10-28.md) |
+| **MOQ 与补货频率政策**（21 个 MOQ 物料 / 周补 / 小额阈值） | [moq-replenish-policy-2026-10-28.md](moq-replenish-policy-2026-10-28.md) |
 | 变更时间线 | [log.md](log.md) |
 
 ## 产物路径（本地，不进 git）
