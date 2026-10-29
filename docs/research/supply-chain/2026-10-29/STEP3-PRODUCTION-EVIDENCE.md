@@ -432,16 +432,17 @@ SQL
 ## 11. 实现状态（第一批，2026-10-29）
 
 - key_test 提交 `b0ccc6b`（初版）、`0b45144`（第一轮复审）、`3819db1`（第二轮复审）、
-  `0be88d7`（第三轮复审）：新增 `key_test/production_evidence.py` 与
-  `key_test/tests/test_production_evidence.py`。
-- 测试：新证据层 **62 passed + 4 subtests**；key_test 全量 **183 passed / 3 skipped**。
+  `0be88d7`（第三轮复审）、`62932ed`（输入归属与 JC 去重）：
+  新增 `key_test/production_evidence.py` 与 `key_test/tests/test_production_evidence.py`。
+- 测试：新证据层 **66 passed + 4 subtests**；key_test 全量 **187 passed / 3 skipped**。
 - 复审修正：有效记录筛选统一用于已证/估算池；批卡与菲号共用缺量/非有限数校验；
   冲突结果转 `unknown`（不再 proven 0）；退货原单必须有效已提交、非退货、非自身且物料/单位/WO 匹配；
   权限门槛覆盖数量、时间、来源、分量、冲突详情与顶层 `required_operations`；
   TN 主数据同值去重、异值冲突，JC 引用缺失显式 unknown；JC 按名称与完整载荷判重放，
-  不同 JC 落同一工序/菲号一律冲突；重复菲号载荷与 JC 冲突均与输入顺序无关；
-  QI 不求和、覆盖量保持 unknown；完成时间只跟随有效贡献记录；每类证据补
-  `source_records` 与注入式 `observed_at`。
+  不同 JC 落同一工序/菲号一律冲突；路由/JC/TN 显式跨 WO 一律阻断；
+  JC 去重在划分菲号池/批卡池之前统一执行，批卡重复重放不改变数量、时间与来源；
+  重复菲号载荷与 JC 冲突均与输入顺序无关；QI 不求和、覆盖量保持 unknown；
+  完成时间只跟随有效贡献记录；每类证据补 `source_records` 与注入式 `observed_at`。
 - 第一批只实现只读证据层：`supply_facts` / `so_chain` / 人工视图**未切换**，规则/实现版本未 bump。
 - 差异报告（本地 gitignore，不提交）：
   `EN_API/out/supply_facts/_acceptance/step3_evidence_diff.md`。
