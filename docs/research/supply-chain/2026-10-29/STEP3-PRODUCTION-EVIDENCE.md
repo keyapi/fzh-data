@@ -431,9 +431,12 @@ SQL
 
 ## 11. 实现状态（第一批，2026-10-29）
 
-- key_test 提交 `b0ccc6b`：新增 `key_test/production_evidence.py` 与
-  `key_test/tests/test_production_evidence.py`。
-- 测试：新证据层 **34 passed + 2 subtests**；key_test 全量 **155 passed / 3 skipped**。
+- key_test 提交 `b0ccc6b`（初版）与 `0b45144`（复审修正）：新增
+  `key_test/production_evidence.py` 与 `key_test/tests/test_production_evidence.py`。
+- 测试：新证据层 **47 passed + 2 subtests**；key_test 全量 **168 passed / 3 skipped**。
+- 复审修正：有效记录筛选统一用于已证/估算池；冲突结果转 `unknown`（不再 proven 0）；
+  SE/明细身份去重与退货引用校验；单位存在且匹配是 proven 必要条件；QI 不求和、覆盖量保持 unknown；
+  完成时间只跟随有效贡献记录；每类证据补 `source_records` 与注入式 `observed_at`。
 - 第一批只实现只读证据层：`supply_facts` / `so_chain` / 人工视图**未切换**，规则/实现版本未 bump。
 - 差异报告（本地 gitignore，不提交）：
   `EN_API/out/supply_facts/_acceptance/step3_evidence_diff.md`。
