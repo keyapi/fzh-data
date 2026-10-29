@@ -1,66 +1,92 @@
 ---
 okf: v0.1
 type: Review
-title: Jack EN供应链与timeline的补货证据就绪度审核
+title: Jack EN供应链能否作为补货证据：只读实查
 date: 2026-10-29
-status: complete-read-only
-verdict: partial-not-replenishment-ready
-scope: local code and handoffs plus 8 production GET requests
+verdict: partial-not-ready-for-confirmed-supply
 ---
 
-# EN供应链/timeline补货证据审核
+# 结论
 
-**结论：已达0项、部分5项、未达1项。** 这里的“未达1项”只指**签收→通途入库的时间差对账与在途关闭**；**不是**要求扫外箱号或逐件实收。业务口径已明确：目前没有扫箱收货，**签收即默认全部到达**。当前 EN 可供人工追溯与条件情景消费，但不能把工厂在产/Shipment在途自动变成某日目的仓已证可售供给。 应复用现有`supply-facts/v1`与Shipment自定义字段补齐，不能根据旧`fulfillment_query`的范围说明，误判为EN完全没有头程数据。
+**六项：已达0、部分5、未达1。** 已有可用的SO→WO/JC→DN生产追溯和运输单结构化字段，不能说Jack未做；但尚未形成“按SKU×目的仓×阶段互斥数量、目的仓可售日期、实收关闭”的补货证据接口。今天最阻塞的是**生产完成误升格、预计到港/起运仓与目的仓可售混淆、无逐行目的仓实收/在途关闭闭环**。可以继续消费已证现货，未知在途独列；不能把这条链中的全部数量当确定供给，也不能因链条缺证就默认应新下单。
 
-审核基准是10/23交接W1/W3的SKU×仓×UOM、阶段互斥、日期分层、实收入库及来源追溯要求；不是“有页面/接口返回200”即达标。已读10/23 Jack交接、10/22 SO关联评审、EN_API全部AGENT_HANDOFF通配文档（相关链路详细核读）、fulfillment_query及实际实现。旧关联评审的四段/每段15单样本结论只作历史证据，不外推到10/29全量。UOM仍按已固化口径：个/套分列，TJ#按套，PK#皮壳1:1，未知单位不合计。
+取证窗口2026-10-29 09:31:39～09:36:34（+08:00）；**27次GET=24生产+3测试，26次200、1次404**，无超时/5xx，无重试，无写入。列表page_length最大100；每次请求前固定等待0.25秒（首个除外）。首个测试SO-26-00110返回404是**该SO不存在于测试数据**，不是方法未部署；随后测试SO-24-00000调用同方法200。源文档/脚本与实时响应互相核对，未将历史10/22、10/28统计冒充今日全量。
 
-## 六项逐项判定
+路径简称：E=`D:/Work/赛狐/Cursor/EN_API/`；V=`D:/Work/赛狐/Cursor/supply_chain_visibility/`。生产base=`https://erpnext.vilavi.cn`，测试base=`https://ensh.vilavi.cn`。
 
-| # | 要求 | 判定 | 已有字段/端点/单据证据 | 还缺什么，失败会怎样 |
-|---|---|---|---|---|
-| 1 | SO→WO/JC→DN→Shipment→头程→目的仓入库统一只读视图，SKU×仓×阶段数量/日期 | **部分** | `GET /api/resource/Sales Order/{name}` items.name；WO.sales_order_item、JC.work_order；DN Item.against_sales_order/so_detail；DN.custom_zmt_shipment、Shipment.shipment_delivery_note[]。新`GET /api/method/key_test.supply_facts.get_supply_facts`已有lines/stage_balances/milestones/availability_schedule/links，schema/rule版本、qty/uom/source_record/date_confidence。10/29样本有SO-26-00103/i4ntaautrv、PK#KS0001-CMGDTH-140-LIGHTBEIGE，stage=unknown、qty20、已提交生产计划未建工单。 | supply-facts仍partial=true；external_sources中tongtool_po/receipt/warehouse_receipt均not_integrated。阶段行warehouse仍可能是“半成品仓-FZH”而非海外目的仓，必须另证客户→分公司→目的仓映射。旧CLI只到阶段0–3；尚不能端到端输出已证到仓数量/可售日。 |
-| 2 | 头程运单/ETA结构化 | **部分** | 生产Custom Field元数据证实Shipment有custom_zmt_logistic_number/tracking/transport/dest/region/source/snapshot_date/synced_at、eta（预计到港）、atd（离港）、ata（到港）、clr（清关）、dlvr（签收）、appt（派送预约）、events/actual_progress。DN-26-00114→SHIPMENT-00050，logistic_number=91451178，tracking=879260357666，运输美森速快线、region美中、eta11/16。 | 仍有ETD/航次/港口只在description；缺统一事件类型/来源优先级/原始值与修订历史/目的仓可售ETA。SHIPMENT-00007结构化eta=11/18，事件description又含ETA11/08；event_name为空，无法不经规则直接决定哪条有效。预计到港不能当可售日。 |
-| 3 | 目的仓到达（签收口径）→通途入库对账、在途关闭 | **未达（仅对账/关闭）** | 业务口径：无扫箱，**签收=默认全部到达**（`receipt_basis=signed_assumed`）；不需要目的仓实收行/逐件数量。supply-facts manifest 明确 receipt/warehouse_receipt not_integrated，`availability_schedule.available_date=null`、`eligible=false`。 | 缺的是**签收时间→通途PO入库时间**的结构化对账：`shipment_signed_at`、`tongtool_receipt_at`、`receipt_lag_days`、`stock_state`（在途/已签收待通途入库/已入库）与关闭记录。Shipment.custom_zmt_wms_in_time 不能当目的仓到达（SHIPMENT-00050 的 warehouse_in 在深圳转运中心、尚报关）；它不能用于关在途。签收状态可用于到达假设，但不能替代通途入库对账。 |
-| 4 | 下单/开工/完工/出库/开船/到港/清关/入仓事件时间戳与来源 | **部分** | SO.transaction_date/Item.delivery_date；WO.planned_start_date/actual_start_date/actual_end_date；JC.actual_start_date/actual_end_date，单查可读time_logs；DN.posting_date；Shipment事件event_time/event_date/event_name/location/description/seq。supply-facts milestones有node、baseline_planned_at/committed_due_at/latest_expected_at/actual_at、qty、source_record、observed_at、date_precision/timezone_status。实测WO-26-02609 actual_start=09/01 15:16，actual_end=09/14 17:07。 | cached v10/27.7节点为order_placed/promised_delivery/production_start/production_end/dispatch/departure/arrival/delivery，尚无独立清关/目的仓实收入库节点；不少日期null，timezone_status=unverified。event_time可能是消息记录时间而非实际开船日，预计ETD不得写actual_at。完工须区分首工序完成、全工序/质检完成与真实入库。 |
-| 5 | DN缺运单、运单无DN、ETA过期、阶段不明巡检 | **部分** | 旧CLI已有有计划无工单/WO回写滞后/草稿DN/交付逾期/工序停滞等机器码，含影响量、单据、owner_role、recommended_action；Shipment.match_status有Matched/Unmatched/Stale；supply-facts保留unknown、exclusion_reason及manifest覆盖状态。 | 在被审代码/接口中未见四类要求合并成一次可复算巡检：未匹配DN与Shipment全量差集、active/primary多链接冲突、ETA过期且未关闭、阶段unknown及未证目的仓分布。状态字段存在不等于已交付巡检。应给母集/成功/跳过/异常数及逐行证据，不把unknown改0、不自动补号/关在途。 |
-| 6 | 只读导出/API字段稳定、分页 | **部分** | CLI支持JSON/Excel；旧REST列表默认name asc、limit_start递增、父子查询去重、in分块40、非200列表报错。生产Shipment列表实测page_length2、start0/2，得到00001/2及00003/4，无交叉。supply-facts有schema_version=supply-facts/v1、rule_version=2026-10-27.7、implementation_version、run_id、as_of、counts、coverage/restricted、partial。 | 未见该综合接口明确过滤/分页/稳定字段契约及契约测试。此次GET携sales_order=SO-26-00103&include_delivered=1，实际manifest.scope={}、返回299 SO/5166 lines；说明这个调用形式未实现期望限域，需确认正确filters格式或明确拒绝未知参数，不能默默扩大范围。旧get_single对HTTP错误可返回{}，200页上限可静默截断，JSON导出无自身schema版本/完整性manifest。分页须报告exhausted/partial并校验缺列。 |
+# 六项判定
 
-## 独立样本与关键风险
+| 项目 | 判定 | 当前已具备及实证 | 未达补货要求的具体缺口 |
+|---|---|---|---|
+| 1. SO→WO/JC→DN→Shipment→头程→目的仓入库统一视图 | **部分** | GET `/api/method/key_test.so_chain.get_so_chain?sales_order=SO-26-00110`200，214条SO行；SO-25-00169为82行。返回so_line/item_code/qty/open_qty/shipped_dn/work_orders/dns/生产计划，支持行级WO关联和菲号/工序。DN→Shipment已有正式桥，见DN-26-00111→SHIPMENT-00002。 | RPC行无uom、stock_uom/conversion_factor、canonical_destination_warehouse、available_date/confidence/source_version；不含运输和目的仓实收数量。`E/fulfillment/stages.py:1–4`明确只做0–3段。更严重的是首工序量会触发“生产完成待出库”（详见下）。不可直接转成各阶段互斥供给。 |
+| 2. 头程运单与ETA结构化 | **部分** | Shipment自定义字段实际已存在：custom_zmt_logistic_number/tracking/source/transport/dest/region；Date字段atd/ata/clr/dlvr/eta/appt，Datetime synced_at，事件子表events。DN有logistic_number、custom_zmt_shipment及custom_zmt_logistic_numbers子表。不能再一概说只在备注。 | Custom Field明确eta标签为**预计到港**，不是可售；dest为Data，不是目的仓外键；carrier常空。SHIPMENT-00002结构eta=11/17，而节点描述预计到港11/8，缺优先级/解释。SHIPMENT-00051 eta=12/20、无事件，待证来源。当前账号56 Shipment里9个eta空，含FBA/历史失效单，不能直接当9张分公司待催。 |
+| 3. 目的仓入库确认/在途关闭 | **未达** | 可复用正式PO桥与通途回执：本次28张分公司DN（8/1..10/27）已有**9**张正式PO链接（较旧8张新增DN-26-00114→PO021742）。缓存po_receipts_8linked_2026-10-28.csv有PO021724的8行、143/143、美中仓、10/28 09:39:07。 | EN统一链未返回目的仓receipt_id/line/received_qty/reversed_qty/available_at，也未将回执和库存快照去重。Shipment.wms_in_time不能代替目的仓入库：SHIPMENT-00002入仓10/21早于开船10/27；SHIPMENT-00041“已入仓”但节点说11/3才开船。不能自动关闭在途。Purchase Receipt首100条抽样存在，但未作海外归属/全量核验，**不据此断言EN不存在入库单**。 |
+| 4. 八事件统一timeline与时间戳来源 | **部分** | SO.transaction_date/creation，WO/JC.actual_start_date/actual_end_date，DN.posting_date/posting_time，Shipment.atd/ata/clr/dlvr及events已可读取。WO-26-03268真实工序开始10/9、最近报工10/12可追。 | 尚未统一event_code、actual/estimated、origin/destination、timezone/precision、source_doc+line与observed_at。Shipment Logistics Event.event_time是**Data**，event_name/location在抽样为空，description混实际与预计；SHIPMENT-00044含未来10/30起飞、10/31落地，不能作为已发生事件。WO.actual_end_date可只是最近报工，不能代表整单最终完工。 |
+| 5. 质量巡检 | **部分** | `E/fulfillment/rules.py:15,31,113–132`已有生产停滞/工单异常规则。实时字段足以生成物流检查：28张分公司DN中00084/00085/00103缺主logistic_number与custom_zmt_shipment；SHIPMENT-00004为Unmatched，活动DN数0；阶段冲突可定位行。 | 未见Jack交付的统一巡检接口/定时异常账及闭环状态，不能把本轮手工GET审计当成W4已实现。须反查DN运单子表并按纯内胆/FBA/材料规则分流后才催；Shipment-00004原DN链接已is_active=0/removed_at，不应再算有效关联。ETA是到港日期，若ATA已实现就不应误报“过期未到港”：本轮11个旧eta且非签收/POD状态中，**全部已有ATA**，按正确条件此次0个到港ETA过期未兑现；不得凭旧ETA误催。 |
+| 6. 只读导出/API稳定性与分页 | **部分** | 标准REST支持fields/filters/limit_start/limit_page_length/order_by；实测Shipment第0、2偏移各取2条，00001/00002与00003/00004无重复；单页100得到56个可见Shipment。生产/测试SO方法均200。CLI可导出JSON/Excel。 | 自定义RPC返回全部SO行，无schema_version/as_of/snapshot_id/分页/穷尽标识，214行响应不能当可增量冻结的批接口。原客户端get_single在HTTP失败后取data默认{}（item_shipment_status.py:304–307），字段回退后可能缺数量证据；分页最多200页却无截断失败。必须输出missing_fields/truncated并fail closed，不能把缺字段/失败读成0或没单。 |
 
-### A. 新旧两个入口不是同一覆盖范围
+# 最阻塞的三项：单据级反例
 
-`D:/Work/赛狐/Cursor/EN_API/fulfillment_query.py:17`只转到fulfillment.cli；`fulfillment/assemble.py:117`–129只取DN/WO/JC/PP；`fulfillment/stages.py:1`明确阶段4–8不产出。`FulfillmentLine`粒度SO行，`model.py:71`–91没有海外目的仓/UOM/全链事件字段；JSON虽有原始DN，不等于稳定SKU×目的仓×UOM供给接口。不要继续在这个阶段0–3输出上假定头程已接通；新`supply-facts/v1`已有更适合的字段，应统一消费适配、避免另起一套阶段算法。
+## A. 首工序完成被升成可发货（今天阻断“催发运/确定在产转待发量”）
 
-### B. 首道工序完成不是成品可发证明（高风险）
+生产RPC：`/api/method/key_test.so_chain.get_so_chain?sales_order=SO-26-00110`，行 `so_line=5qsq01tuue`、`PK#KS0001-DM-100-ANTHRACITE`，qty/open_qty=140，stage=3/substate=生产完成待出库，但reported=0、instock=0、prog=3/6。工单`WO-26-03268`直接GET确认：裁剪/锁扣眼/拷边Completed，皮壳整件/翻面/质检Pending，produced_qty=0；Job Card列表36张可追，首工序批量合计140。
 
-`item_shipment_status.py:666`–703的done_qty取首道工序完成量；`fulfillment/stages.py:49`–56据该量达到订单量即判“生产完成待出库”。本次**纯内存**样例：订单10，裁剪Completed10，包装Open0，resolve_stage仍返回阶段3“生产完成待出库”。这不能进入已证供给。应分开生产进度、完工入库、质检/可发状态，阶段推进必须有相应证据；不能仅靠WO.status，亦不能用首工序替代完工。新supply-facts对首工序/推断量须同样保留qty_basis/置信度，未证不计入已证可售。
+`V/key_test/key_test__so_chain.py:133–138,275–280`以首道必经量累加判断stage；虽`:218–236`另给reported/instock并避免成品/组件相加，stage却没有改用这个更严格证据。`E/fulfillment/stages.py:49–56`也以first_op_total_completed_qty触发完成。SO-26-00110共51行标待出库，其中37行与末道报工/工厂入库至少一项不足有冲突；这不是说37行全部都物理未完成，**但都不能未经澄清当确定可发量**。同一工序的整批卡与菲号卡、成品/皮壳/内胆亦不能跨层相加。
 
-### C. 头程“入仓”与目的仓“入库”必须分开（最阻塞）
+Jack应分出started_qty、operation_reported_qty、terminal_qualified_qty、factory_received_qty、finished_pending_dn_qty，明确部分完工、超产和冲突隔离；“首工序做完”只证明开工下界，不能给末工序事实。reported若取“最大sequence有卡”的工序也必须检查真正的必经末工序已完成，不能退化到中间工序后仍叫最终完工。
 
-SHIPMENT-00050的warehouse_in为深圳转运中心10/27，尚报关；其结构化wms_in_time与预计11/16到港并存，已经证明“入仓”并非目的仓到达。该Shipment关联DN-26-00114；DN混有ND#行100件及PK#行17个，禁止跨UOM/角色相加成一个可售量。按业务口径，**签收即默认全部到达**；需要的是签收状态 + 签收时间 + 通途PO入库时间/状态，按批次对账，**不要求逐箱实收行**。credited_qty仍不得代替通途入库。
+## B. 到港ETA/起运仓入仓不是目的仓可售（今天阻断按日抵扣在途）
 
-### D. 接口版本有了，但限域和完整性还需实证
+- DN-26-00111→SHIPMENT-00002，物流号999261021003333；atd10/27，eta11/17（字段标签预计到港），appt11/22；节点文本却写预计到港11/8。必须给eta_port、eta_destination_receipt、available_at及各自来源/修订/冲突，不可任选较早值。
+- DN-26-00100→SHIPMENT-00041，status11=已入仓、status4=待发、wms_in_time10/17；10/27节点明示大船晚靠、预计11/3开船。这里“入仓”显然不能当波兰仓入库。DN-26-00104-1→SHIPMENT-00044也有10/22入仓、后续预计10/30起飞，字段dest=53-411，需结构化映射目的仓。
+- 全56个可见Shipment的docstatus均0（Draft）。这不表示所有物流事件是假数据；应按来源与事件真实性分层，而不是简单要求Shipment提交，也不能把Draft一律当confirmed供应。
 
-新接口本次返回manifest：schema supply-facts/v1、rule2026-10-27.7、as_of10/29、run_id b5b5eb6e67364188a51caf7651484625；input/output均5166、stage_balances5993、milestones17181、availability_schedule4423、links14063、partial=true。**这些是一次非预期限域响应的样本计数，不是全EN完整性结论，也不是完成Jack验收的SKU母集。** 不继续全量拉取；请Jack先公开正确调用方式，并让响应回显生效scope/过滤器、页号/next_cursor与完整性状态。
+Jack应保留当前结构化字段，补event_location_role=origin_hub/port/destination_warehouse、event_kind=actual/estimated、canonical_destination_warehouse和source/conflict。`custom_zmt_pieces`是包件数，不是SKU件数，不得用于物料供给量。
 
-旧分页代码证据：`item_shipment_status.py:270`–301默认稳定排序、按实收行推进，但达到200页直接退出且无partial标识；`get_single:304`–307经api_get只取data，不检查HTTP，失败可变空单据。CLI`--sleep`默认0.15仅控制部分单文档循环，列表翻页无全局限速；本次审核没有运行该CLI，使用独立全局≥250ms GET包装。
+## C. 逐行实收与链路数量分配缺失（今天阻断在途关闭与防重复下单）
 
-## Jack先做三件事（顺序即优先级）
+Shipment.shipment_delivery_note只有DN引用、金额及is_active/is_primary，没有DN-item→Shipment的分配数量；一张DN多运单/拆批不能把全DN量分别复制进每个运单。正式PO字段是DN.custom_tongtool_purchase_order，不是LH旧po_no。按本轮固定DN日期范围，9个正式链接已实读；未知/候选链接不能升正式。
 
-1. **交付“签收→通途入库”的时间差与在途关闭。** 按业务口径，**不扫箱、不要求逐件实收，签收即默认全部到达**（`receipt_basis=signed_assumed`）。先拿10/23指定10个代表SKU及DN-26-00114/Shipment00050样本，按原始SKU×目的仓×UOM×批次输出：DN行、官方PO、Shipment分配、`shipment_signed_at`、`tongtool_receipt_at`、`receipt_lag_days`、`stock_state`（在途/已签收待通途入库/已入库）、关闭量/余额、source/observed_at。验收：一个数量只在一个状态里（未签收=在途；已签收未入库=已到未入库；通途已入库=库存）；签收后不得继续算在途，也不得同时算通途库存；无通途关联时null并单列。深圳集货入仓**不能**冒充海外到达；但海外Shipment签收可以作为到达假设。
-2. **在现有Shipment与supply-facts上统一“双线进度/事件/ETA/完工证据”契约。** Shipment已有物流商爬虫与人工两条线：**以进度更靠后的一条为准**，暴露`latest_progress_status/at/source/source_updated_at/is_final/conflict_flag`；不需要爬虫原始报文。明确SO行→WO/JC→DN行→Shipment批次关联；目的仓映射独立于工厂warehouse；ETA预计到港与预计入仓/可售分列，保留计划/预计/实际、来源/优先级、消息时间与事件时间、版本修订。先处理Shipment00007两套ETA、00050深圳入仓，以及首道完成误判样例。验收：下单/开工/完工/出库/开船/到港/清关/签收八节点逐项有来源或显式未知；PK#1:1、TJ#套、ND#组件和个/套分列；未证日期/数量永不自动进入confirmed supply。
-3. **交付一个有稳定过滤/分页的只读导出和同批巡检。** 公布supply-facts参数与schema，单SO查询必须回显且只含该SO，未知参数报错；分页稳定排序/游标、唯一键、分页穷尽/截断/权限失败均显式partial，不把单文档失败当空。导出附输入范围/observed_at/规则版本/哈希/行数对账；同一次快照产出DN无有效Shipment/运单、Shipment无DN、多primary、ETA过期未关闭、unknown阶段/未证目的仓五类异常及责任角色。验收：10样本先跑通、相同快照重跑一致、缺列/失败不静默、两页不漏不重，再扩Top50；不是先重拉全量或人工补号。
+补货接口需要receipt_doc/receipt_line、PO行/sku、DN行分配量、目的仓实收量、冲销/退货量、received_at、available_at、来源更新时间及与库存快照的包含关系。通途应取入库统计`erp2_purchase_purchasestockquery`对应真实回执，而非purchaseorderquery.in_quantity；本轮仅读既有本地缓存，没有请求通途。PO021724缓存143/143可作为回执样例，仍须保留原回执行ID/UOM/撤销字段，不能把已有库存再加143。EN Stock Entry的Material Consumption for Manufacture是工厂耗料，不是海外入库证明。
 
-以上三件都是事实与只读接口工作，不含预测、采购量政策、自动写回或下单。用户已确认约3个月普通路径、多窗口/最长6个月、春节+60天应进入合适供应路径情景；不能加到需求或已到仓/已在途路径上，更不能用“SO下单+3个月”替代这次缺失的逐笔ETA证据。这里不再重做交期模型。
+# Jack先做三件具体的事
 
-## GET审计与范围限制
+1. **修数量/阶段判定并给10个代表键的只读对账。** 首先以SO-26-00110/WO-26-03268作负例：3/6工序不得待发；用SO-25-00169保留已出库/Closed未发区分；在现有get_so_chain增加uom/stock_uom/conversion_factor、角色/目的仓、互斥阶段向量、source_doc+line与unknown_reason。按已归属订单行封顶，超产/超发隔离；不重做界面。今天先交可复算JSON及阶段守恒/拆批断言。
+2. **结构化可售日并解决两张运单的冲突。** 以SHIPMENT-00002与00041/00044为验收：实际/预计、起运/目的分别标；eta_port与available_at分开；日期精度不足保留Date而非补00:00假时间；给source_provider/source_event_id/source_updated_at/observed_at/timezone+precision/confidence与修订优先级。11/17与11/8未决时写冲突/日期未知，不默取较早值。物流补事实，Jack负责接线和门禁。
+3. **交目的仓回执闭环+机器接口/巡检，不再只交截图。** 先用DN-00087/PO021724缓存回执验证实收与库存去重，再用00041证明“起运入仓不关闭”。补DN行↔Shipment↔PO行↔目的仓receipt行分配及remaining_in_transit。扩展现有RPC或新增只读批量导出（**建议，未声称已部署**），带schema_version、as_of、snapshot_id、cursor/has_more、source_counts和缺证清单；输出下面巡检队列，按角色分派并在新事实到达后重算。
 
-本次生产GET共**8次**，单线程，每次前休眠0.25秒，无自动重试，全部HTTP200；凭证仅内存读取EN_API/.env，未打印/落盘。端点明细：
+# 可验收的字段/事件/巡检清单
 
-- GET Shipment/SHIPMENT-00007、Delivery Note/DN-26-00114、Work Order/WO-26-02609，各1次；
-- GET key_test.supply_facts.get_supply_facts，携sales_order/include_delivered，1次（响应范围超出预期，已停止继续此接口）；
-- GET Custom Field，dt=Shipment、字段名/标签/类型/选项，1次；
-- GET Shipment/SHIPMENT-00050，1次；
-- GET Shipment列表，name asc、page_length2、start0与2，各1次。
+**供应行最小契约**：`canonical_sku, source_item_code, customer_item_code, canonical_destination_warehouse, warehouse_mapping_basis, role, uom, conversion_factor, so/so_line, wo, jc/tracking_group, dn/dn_line, shipment/shipment_dn_row, po/po_line, source_key, lot_allocation_id, stage, attributed_qty, excess_qty, available_at, date_confidence, as_of, source_updated_at, observed_at, schema_version, missing_evidence`。个/套分列；TJ#按套、PK#按1:1皮壳代理，内胆配套不再作为另一份成品数量；FBA/分公司/第三方分scope。已收货是历史流量，不与当前库存简单相加。
 
-另只读10/27本地97 SO缓存，观察milestones节点覆盖和manifest外部源未接入；不是重新请求97单。本审核没有写EN/通途、修改配置/权限、运行生成/导入脚本或push；仅新增用户指定本评审文件。报告按OKF带frontmatter，未扩改索引或其他项目文件，以遵守本次只读评审范围。结论限本地被审实现与这些生产样本；未见验收产物不等于断言其他未审分支/页面绝对不存在能力。
+| 业务事件 | 现有读取端点/字段 | Jack必须补的语义 |
+|---|---|---|
+| 下单 | GET resource/Sales Order/{so}:transaction_date、creation、items.name/qty/uom | business_order_date与系统创建时间分开；SO-26-00110=9/2、creation15:54不是承诺供给日 |
+| 开工 | GET resource/Work Order/{wo}、Job Card/{jc}:actual_start_date/time_logs | 用已证作业/报工来源，排除虚拟一键完工/重复卡；不是WO.status |
+| 完工 | JC必经末工序total_completed_qty/actual_end_date及工厂合格入库凭证 | 终检/角色合格量，不取首工序或WO最后一次报工冒充全完 |
+| 工厂出库 | GET resource/Delivery Note/{dn}:docstatus、posting_date+posting_time、items.name/so_detail/item_code/stock_qty/uom | 退货带符号、拆批归属，出库不等于海外可用 |
+| 开船 | Shipment.custom_zmt_atd + events/人工节点 | actual_departure_at，区分预计ETD和source观察时间 |
+| 到港 | custom_zmt_ata / eta | actual_arrival_port_at与eta_port分开，解决provider冲突 |
+| 清关 | custom_zmt_clr / events | customs_cleared_at与报关放行/目的地清关区分，保留事件ID |
+| 目的仓实收/可售 | 通途入库回执或已证EN目的仓凭证 | destination_received_at、qty、receipt_line、available_at、冲销与快照包含关系 |
+
+**巡检每条输出**：异常码/严重度、SKU+仓+scope、影响量（未知为空）、源单据行、观察日、具体缺项、事实责任角色、首次发现/最后变化、处理状态。至少有：
+- DN主运单/Shipment缺失并反查子表；纯ND/FBA/取消/退货与8/1历史政策分层，不把例外当错误催物流。
+- Shipment无**活动**DN/重复主关联；SHIPMENT-00004旧链接removed_at=10/23、is_active=0，不得借旧DN再次计量。
+- 同DN多运单分配量超DN净量、同运单SKU量未分配；候选PO与正式PO分列。
+- 到港ETA已过且无ATA/后继已实现事件；不可把已到港后等待派送误报为到港逾期。目的仓预约/可售延期另列。
+- 报完工但末工序/质量/工厂入库未证（本次140个反例）；头部actual_end_date已填但必经工序Pending；阶段向量不守恒/数量超发。
+- status11“已入仓”但地点起运或未知，或入仓早于开船；预计节点未来时间不得进实际事件。
+- 陈旧同步、缺日期/缺单位/缺目的仓、403/字段回退/截页。失败/缺数保留unknown，不能当0继续净算。
+
+# 今天如何使用，不误停整个补货项目
+
+- **可用**：正式SO/WO/JC/DN行追溯、已证目的仓现货、正式DN→PO桥、已证开船事件；结构化字段可直接复用。
+- **有条件用**：到港ETA只能作运输情景；阶段未明/单位/分配未证的量不抵扣，但必须先查现有SO避免重复新购。个别键证据闭环可单独释放，不等全目录。
+- **不能用**：首工序量当可发成品、入仓标签当海外实收、Shipment包件数当SKU量、无ETA在途当及时到、把旧单修改时间当事件时间。缺这三类证据会阻塞今天该键的确定补货量/动作与在途关闭；它们不阻塞需求预测或已证现货分析。
+
+# 取证边界和来源
+
+已读指定Jack交接、10/22关联审计、EN_API全部AGENT_HANDOFF文件（重点物料发货状态/DN追溯）、fulfillment_query.py及其实现、en-server-access.md。已有Fulfillment FieldValue能承载kind/source/source_record/observed_at，但observed_at来自查询时刻（evidence.py:11–35），不是业务事件发生时刻，仍需两者分列。旧DP样本覆盖和98GET统计只作历史，不外推今日。
+
+分页只做小样本：两页各2条无重叠；Shipment单页56<100为当前账号可见范围。Purchase Receipt首100条为样本且未穷尽，不报全量覆盖/缺失率。自定义SO响应214行是单SO方法返回，非列表page_length被设为214。本次无5xx/超时，按规则未发生需停止的故障；404已查明为测试SO不存在。未执行源CLI默认重试/扇出，无POST/PUT/PATCH/DELETE、无EN/通途修改、无push。只写本报告；响应和无凭据请求计数临时保留在本机Temp，不把凭据/请求头写入报告。
