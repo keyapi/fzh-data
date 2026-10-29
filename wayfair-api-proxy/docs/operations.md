@@ -163,6 +163,8 @@ Authorization: Bearer <offboarding key>
 
 - `config.yaml` 的 `oidc.portal_redirect_uri` 指向
   `https://wayfair-api.vilavi.cn/portal/oidc-callback`；
+- OIDC 桥的 `ALLOWED_REDIRECT_URIS` 精确包含该回调（当前已加入；修改后
+  `docker compose up -d --no-deps bridge`，不要只 restart）；
 - `/etc/wayfair-api-proxy/env` 设置 `WAYFAIR_PORTAL_SESSION_SECRET`。
 
 任何能通过公司钉钉 OIDC 的员工都可登录，不维护逐人白名单。公网 `/admin` 继续 404，

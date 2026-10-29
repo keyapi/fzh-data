@@ -40,8 +40,12 @@ Codex 评审建议白名单，但用户明确要求：**不维护 per-user 白�
 
 1. `config.yaml` 配置 `oidc`：issuer、client_id、client_secret、`portal_redirect_uri`
    （例如 `https://wayfair-api.vilavi.cn/portal/oidc-callback`）。
-2. OIDC issuer 必须接受该回调地址。当前公司钉钉 OIDC 桥会保存任意 redirect_uri，
-   但仍建议在桥侧确认。
+2. OIDC issuer 必须接受该回调地址。当前公司钉钉 OIDC 桥使用**精确白名单**
+   `ALLOWED_REDIRECT_URIS`；必须显式加入
+   `https://wayfair-api.vilavi.cn/portal/oidc-callback`，不能加通配/前缀。
+   桥在 `/opt/new-api/docker-compose.yml`，改后执行
+   `docker compose up -d --no-deps bridge` 重建（只重启不会更新环境变量），
+   并保留原有的 new-api 与 pb 回调。
 3. `/etc/wayfair-api-proxy/env` 设置 `WAYFAIR_PORTAL_SESSION_SECRET`
    （`openssl rand -hex 32`，独立于 admin）。
 4. Nginx 公网放行 `/portal/`（当前 `location /` 已覆盖）；`/admin` 保持 404。
