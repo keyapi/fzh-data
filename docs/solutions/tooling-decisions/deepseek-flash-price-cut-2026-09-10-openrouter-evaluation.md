@@ -23,12 +23,20 @@ tags: [new-api, deepseek, pricing, openrouter, cache-hit, cost-analysis, cron, m
 
 # DeepSeek flash 系列 2026-09-10 降价改价 + OpenRouter 迁移评估（结论：不迁）
 
+> **2026-10-29 更正**：本文「2026-09-14 12:00 起 V4 Pro 下线」的判断有误。复核官方定价页
+> <https://api-docs.deepseek.com/zh-cn/quick_start/pricing/>，`deepseek-v4-pro` 仍是直接提供的在售模型
+> （高峰 ¥9 / ¥27 / 缓存 ¥0.30），只有旧模型名 `deepseek-v4-flash` 被路由到 DeepSeek-V4.1-Flash-1017。
+> 据此已从 `deepseek_time_pricing.py` 移除 `PRO_EOL`/`PRO_ROUTES_TO`，pro 恢复自有价目；生产同时暂停了
+> pro 上游（渠道 4 移除模型 + 删除 `abilities`），详见 `new-api-deployment/AGENT_HANDOFF.md` 第四节。
+> 下文保留原始记录，相关段落已就地标注更正。
+
 ## Context
 
 DeepSeek 官方 2026-09-09 公告，两件事：
 
 1. **2026-09-10 12:00（北京时间）起 flash 系列降价**：空闲时段 缓存命中 ¥0.02 / 缓存未命中 ¥1 / 输出 ¥4（每百万 tokens）；高峰为空闲的 2 倍 → ¥0.04 / ¥2 / ¥8。**只涉 `deepseek-v4-flash` 与 `deepseek-v4-flash-vision-exp`，V4 Pro 不变。**
 2. **2026-09-14 12:00 起 V4 Pro 下线**，请求路由到 V4.1 Flash，**按 V4.1 Flash 计费**。
+   （**2026-10-29 更正：此条有误——pro 并未下线，仍是官方在售模型。**）
 
 公司 new-api 网关（`api.vilavi.cn`）的 `deepseek_time_pricing.py` 内置价目表仍是 2026-08-17 的旧价（flash 空闲 ¥1.5/¥4.5/¥0.05、高峰 ¥3/¥9/¥0.10）。若不改，12:00 的 cron 会按旧价写生产库，用户被多收，直到脚本更新。
 
@@ -109,8 +117,9 @@ flash 家族 token 结构：**缓存命中 97.2%**、输入未命中 2.37%、输
    换算结果：flash 空闲 `ModelRatio=0.068493` / 高峰 `0.136986`；`CompletionRatio` 恒为 `4.0`；`CacheRatio` 恒为 `0.02`。（pro 不变：高峰 `0.616438` / 空闲 `0.308219`，Completion `3.0`，Cache `0.033333`。）
 
 2. 新增 **`PRO_EOL = datetime(2026, 9, 14, 12, 0, tzinfo=TZ)`** 与 `PRO_ROUTES_TO`：`now >= PRO_EOL` 时把 `deepseek-v4-pro` 的价目替换为 flash 的（路由到 V4.1 Flash 按其计费）。**V4.1 Flash 单价官方未单独公布**，暂等同 flash 系列，9/14 后必须用真实账单核对。
+   > 更正（2026-10-29）：该常量与分支已移除——复核官方页，pro 仍在售，不应按 flash 计价。移除后 pro 自动回到 `PRICING` 中的自有价目（高峰 0.616438 / 闲时 0.308219）。
 
-3. 新增 **`--at "YYYY-MM-DD HH:MM"`**：覆盖当前时间，**只打印不写库**（dry-run），用于在 9/14 前演练 Pro 下线分支。刻意做成 dry-run——否则会提前把生产的 pro 价改成 flash 价，造成真实错账。
+3. 新增 **`--at "YYYY-MM-DD HH:MM"`**：覆盖当前时间，**只打印不写库**（dry-run），用于演练任意时段的定价。刻意做成 dry-run——否则会提前把生产的 pro 价改成 flash 价，造成真实错账。
 
 **`sync_pricing.py`**：`PRICING` 同步为新价（该脚本只 PRINT 不写库，是换算公式的参照）。
 
@@ -122,6 +131,7 @@ flash 家族 token 结构：**缓存命中 97.2%**、输入未命中 2.37%、输
 - **按行单价反解峰谷占比**：官方账单把两档拆成不同单价行，这比「假设 8 小时/24 小时」之类的估算精确得多，也让「我们用量是否集中在高峰」变成可验证事实（答案：79.4%，是）。
 - **`--at` 必须是 dry-run**：任何「改时间」的测试开关如果会写库，就会在生产上提前应用未来价格。测试开关的副作用面必须为零。
 - **`PRO_EOL` 是已知的未来变更，写进常量而不是等 9/14 再说**：cron 脚本无人值守，未来生效的规则必须提前编码，否则 9/14 当天必然错账。
+  > 更正（2026-10-29）：这条经验的方法论仍成立，但**前提错了**——pro 并未下线。教训是：把第三方报道写进计费常量前，必须回官方定价页复核；错误常量在无人值守 cron 下会静默少计费一个多月。
 - **量化上游不是等价替换**：OpenRouter 最便宜档是 fp4/fp8，且不同上游质量/上下文/uptime 不同；「同一个模型名」不等于「同一个服务」。
 
 ## When to Apply
@@ -142,7 +152,7 @@ CacheRatio      {"deepseek-v4-pro": 0.033333, "deepseek-v4-flash": 0.02,    "dee
 
 连跑第二次全部「无需变更」，幂等成立。
 
-**Pro 下线分支 dry-run（`--at "2026-09-15 12:00"`）**：
+**Pro 下线分支 dry-run（已作废，2026-10-29 移除该分支；保留作历史记录）**：
 
 ```
 V4 Pro 已下线(>= 2026-09-14 12:00)，按 deepseek-v4-flash 价目计费
@@ -153,7 +163,8 @@ ModelRatio 将更新 -> {..., "deepseek-v4-pro": 0.068493}
 
 ## 待办 / 风险
 
-- [ ] **9/14 后用真实账单核对 V4.1 Flash 单价**是否等于 flash 系列价；不等则改 `PRO_ROUTES_TO` 或为 pro 单列价目。
+- [x] ~~9/14 后用真实账单核对 V4.1 Flash 单价~~ — 2026-10-29 复核：pro 并未下线，此项前提不成立；`PRO_ROUTES_TO` 已移除。
+- [ ] **重新启用 pro 前**：确认渠道 4 已加回 `deepseek-v4-pro`、`abilities` 已重建，且 ModelRatio/CompletionRatio/CacheRatio 为 pro 自有价（高峰 0.616438 / 闲时 0.308219、3.0、0.033333）。
 - [ ] **模型改名风险**：V4.1 Flash 上线后 DeepSeek 可能把 `deepseek-v4-flash` 改名（内测名 `deepseek-v4.1-flash-expires-on-0910`）。需拉 `GET https://api.deepseek.com/models` 核对；若改名，`ModelRatio`/`CompletionRatio`/`CacheRatio` 要加新 key，**且用户客户端配置要同步改**（影响面大，先报告再动）。
 - [ ] OpenRouter 未接入，仅作降级备选记录在案。
 
@@ -173,7 +184,7 @@ ModelRatio 将更新 -> {..., "deepseek-v4-pro": 0.068493}
 - <https://www.techweb.com.cn/it/2026-09-09/2978890.shtml>
 - <https://cbgc.scol.com.cn/news/7938588>
 
-**V4 Pro 下线 / V4.1 Flash**
+**V4 Pro 下线 / V4.1 Flash**（2026-10-29 复核：以下第三方报道与官方定价页不符，以官方页为准）
 - <https://www.chinaz.com/ainews/30949.shtml>
 - <https://dahecube.com/spiderdetail.html?spidid=857614>
 - <https://www.cls.cn/detail/2479030>

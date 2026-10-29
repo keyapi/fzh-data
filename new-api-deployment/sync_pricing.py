@@ -28,7 +28,7 @@ PASSWORD = os.getenv("NEWAPI_PASSWORD", "")
 
 # DeepSeek V4 官方定价（单位：人民币元/1M tokens）
 # 2026-09-10 12:00 起 flash 系列降价（下表取高峰档；空闲档为高峰的一半）
-# 2026-09-14 12:00 起 V4 Pro 下线，路由到 V4.1 Flash 并按 flash 价计费
+# 2026-10-29 复核：V4 Pro 仍在售、未下线；只有旧名 deepseek-v4-flash 路由到 V4.1 Flash
 # 上游调价时，只需修改这里
 PRICING = {
     "deepseek-v4-flash": {
@@ -37,7 +37,7 @@ PRICING = {
         "cache": 0.04,    # 输入（缓存命中）— 高峰档
     },
     "deepseek-v4-pro": {
-        "input": 9.00,    # V4 Pro 下线前价（高峰档）
+        "input": 9.00,    # V4 Pro 高峰档
         "output": 27.00,
         "cache": 0.30,
     }
