@@ -83,7 +83,9 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 - **资格**：只有 `confidence ∈ {proven, mixed}` 时 `qty_proven` 才可用于完成/阶段 3/待出库/known 里程碑；`estimated` 可披露但不触发完成。
 - **物料**：行级数量只汇总 `production_item == SO 行 item_code` 的 WO；`PK#/ND#/DKND#` 子装配件进入 `subassemblies`，**不并入成品数量**。
 - **单位**：UOM 缺失或与订单单位不一致 → 不求和，`qty_*=null` + `unit_missing/unit_mismatch`。
-- **物理身份**：多 WO 行级 proven 需每张 WO 为 `proven` 且 `proven_tracking_numbers` 两两不相交；否则 `null` + `tracking_identity_overlap`，保留 per-WO 明细。WO 重放同载荷幂等，异载荷 `duplicate_wo_evidence_payload` → unknown。
+- **物理身份**：`confidence ∈ {proven, mixed}` 的行均可贡献其 `qty_proven` 子集；`estimated` 余量独立保留，不并入已证。
+  多 WO 行级 proven 仅当各自 `proven_tracking_numbers` 两两不相交时成立；身份重叠 → `null` + `tracking_identity_overlap`，保留 per-WO 明细。
+  WO 重放同载荷幂等，异载荷 `duplicate_wo_evidence_payload` → unknown。
 - **取消工单**：不参与计划/工序进度；其已提交 Manufacture 入库净额作为独立事实保留，并输出 `wo_cancelled_with_valid_stock_in`。
 - **时间**：优先取 Job Card 顶层 `actual_start_date/actual_end_date`；缺失时回退 `Job Card Time Log`
   的 `from_time/to_time`。仅当所有贡献记录时间完整时输出 `started_at=min` / `completed_at=max`，
@@ -122,7 +124,7 @@ filters = JSON object
 
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
 - Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
-- 当前 `implementation_version=key_test.supply_facts@2026-10-29.3`；接口/分页行为变更必须 bump，混合版本继续拒绝。
+- 当前 `implementation_version=key_test.supply_facts@2026-10-29.4`；接口/分页行为变更必须 bump，混合版本继续拒绝。
 - 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
 - `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。
 - `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。
@@ -177,7 +179,7 @@ QC 状态、confidence、主要原因/冲突，以及子装配件（PK#/ND#）�
 ## 5. 验收（测试站）
 
 - 契约单测：49 项（8 类案例 + 草稿 + estimated + 单位校验/继承 + 退货原明细归属/容量账本/顺序不变性/超退/引用冲突/无法归属/同仓聚合 + 退货逐明细读取贯穿 + 工单覆盖/开工证据 + 生产计划覆盖/单位校验 + 超产现存与累计 + 取消实物 + 片段仓库/ID + 运单状态齐全性 + 出库节点拆分 + 已发完行 include_delivered + 弹窗参数 + 行级权限 + 全部受限 + 版本字段 + 历史 as_of 拒绝 + 空结果完整性），另有 7 项批次合并/版本一致性测试；本地全绿。
-- **2026-10-29 第二批复审整改（本地）**：key_test 全量 236 passed / 3 skipped / 4 subtests；导出器 26 passed；`supply_chain_visibility` 103 passed / 5 subtests；Node 渲染 7 项。覆盖：真实 `get_so_chain` 不报错、KS/PK#/ND# 不串量、跨 UOM 不求和、重叠/重复 WO 不重复、mixed 行保留已证子集、unknown/estimated 不触发 complete/阶段 3/known、Job Card Time Log 补足时间、PP/DN/JC/TN 行级权限不泄露、多行来源状态保守聚合、取消 WO 入库事实可达、导出 JSON/Excel/manifest 行数与 SHA-256 一致且失败不切换 `latest.json`。版本 `RULE=2026-10-29.4` / `IMPL=key_test.supply_facts@2026-10-29.3`；测试站与生产均未部署。
+- **2026-10-29 第二批复审整改（本地）**：key_test 全量 237 passed / 3 skipped / 4 subtests；导出器 27 passed；`supply_chain_visibility` 104 passed / 5 subtests；Node 渲染 7 项。覆盖：真实 `get_so_chain` 不报错、KS/PK#/ND# 不串量、跨 UOM 不求和、重叠/重复 WO 不重复、mixed 行保留已证子集、unknown/estimated 不触发 complete/阶段 3/known、Job Card Time Log 补足时间且失败只降级时间、PP/DN/JC/TN 行级权限不泄露、多行来源状态保守聚合且保留 reason、取消 WO 入库事实可达、导出 JSON/Excel/manifest 行数与 SHA-256 一致且失败不切换 `latest.json`。版本 `RULE=2026-10-29.5` / `IMPL=key_test.supply_facts@2026-10-29.4`；测试站与生产均未部署。
 - 单 SO `SO-26-00026`：3 行 / 8 阶段余额 / 16 里程碑 / 6 可售片段 / 17 关联；查询约 0.8s。
   三行阶段余额守恒 10 / 5 / 8（草稿不计数量；KS 无工序卡时用 produced_qty 标 estimated）。
 - 全范围（含取消订单）：292 行 / 308 阶段余额 / 656 里程碑 / 287 片段 / 404 关联；查询 0.30s，总计 0.85s。

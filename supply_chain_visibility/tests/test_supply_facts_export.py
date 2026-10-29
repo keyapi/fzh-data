@@ -109,6 +109,15 @@ class MergeSemanticsTest(unittest.TestCase):
         with self.assertRaises(self.exporter.BatchVersionError):
             self.exporter._merge(target, batch)
 
+    def test_previous_and_current_implementation_versions_are_rejected(self):
+        target = _empty_target()
+        target["implementation_version"] = "key_test.supply_facts@2026-10-29.3"
+        batch = _batch()
+        batch["manifest"]["implementation_version"] = \
+            "key_test.supply_facts@2026-10-29.4"
+        with self.assertRaises(self.exporter.BatchVersionError):
+            self.exporter._merge(target, batch)
+
     def test_mixed_rule_schema_or_as_of_is_rejected(self):
         target = _empty_target()
         self.exporter._merge(target, _batch())

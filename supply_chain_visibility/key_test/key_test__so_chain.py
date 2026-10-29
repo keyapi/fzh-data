@@ -576,6 +576,9 @@ def get_so_chain(sales_order):
                  "job_card", "tracking_number", "stock_entry",
                  "quality_inspection"):
         source_status.setdefault(name, {"available": True})
+    for state in source_status.values():
+        state.setdefault("restricted", False)
+        state.setdefault("reason", "")
     partial_reasons = [
         "%s source unavailable: %s" % (name.replace("_", " "),
                                        status.get("reason", "unknown"))

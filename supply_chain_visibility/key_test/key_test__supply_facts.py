@@ -22,8 +22,8 @@ from key_test.production_evidence import (
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v1"
-RULE_VERSION = "2026-10-29.4"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-29.3"
+RULE_VERSION = "2026-10-29.5"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-29.4"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -83,6 +83,20 @@ def _qty_status(qty, uom):
     if qty is None:
         return "unknown"
     return "known" if uom else "unknown"
+
+
+def _source_state(available, restricted=False, status=None):
+    """Uniform source status: available/restricted plus preserved reason/error."""
+    state = {"available": bool(available), "restricted": bool(restricted),
+             "reason": ""}
+    if status:
+        if status.get("reason"):
+            state["reason"] = status["reason"]
+        if status.get("error"):
+            state["error"] = status["error"]
+    if not state["available"] and not state["reason"]:
+        state["reason"] = "permission"
+    return state
 
 
 def _balance(line, stage, qty, uom, detail="", batch_key="", source="",
@@ -1038,8 +1052,9 @@ def load_wos(lines, pps):
             jc_rows = [j for j in jc_rows if j.name in permitted_jc]
         time_logs, time_log_status = load_job_card_time_logs([j.name for j in jc_rows])
         if not time_log_status["available"]:
+            # Time-log failure only degrades time fields; JC/TN quantity
+            # evidence stays usable.
             status["job_card_time_log"] = time_log_status
-            status["restricted"] = True
         for j in jc_rows:
             j["time_logs"] = time_logs.get(j.name, [])
             jcs[j.work_order].append(j)
@@ -1330,7 +1345,7 @@ def get_supply_facts(filters=None, **kwargs):
         pagination = _pagination(filters, 0, total_lines)
         applied = {k: v for k, v in filters.items() if k not in ("limit", "offset")}
         empty_source_status = {
-            name: {"available": bool(ok)} for name, ok in permissions.items()}
+            name: _source_state(ok) for name, ok in permissions.items()}
         coverage = {
             "sales_orders": 0, "so_lines": 0, "so_lines_total": total_lines,
             "sources": permissions,
@@ -1490,29 +1505,39 @@ def get_supply_facts(filters=None, **kwargs):
         "availability_schedule": sum(len(f["availability_schedule"]) for f in facts),
         "links": sum(len(f["links"]) for f in facts),
     }
+    jc_unavailable = bool(wo_status.get("job_card_unavailable_wos"))
+    tn_unavailable = bool(wo_status.get("tracking_unavailable_wos"))
     source_status = {
-        "sales_order": {"available": bool(permissions["sales_order"]),
-                        "restricted": bool(so_restricted)},
-        "production_plan": {"available": bool(permissions["production_plan"]),
-                            "restricted": bool(pp_restricted)},
-        "work_order": {"available": bool(wo_status.get("available", True)),
-                       "restricted": bool(wo_restricted)},
-        "job_card": {"available": bool(permissions["job_card"])
-                     and not bool(wo_status.get("job_card_unavailable_wos")),
-                     "restricted": bool(wo_status.get("job_card_unavailable_wos"))},
-        "tracking_number": {"available":
-                            not bool(wo_status.get("tracking_unavailable_wos")),
-                            "restricted":
-                            bool(wo_status.get("tracking_unavailable_wos"))},
-        "stock_entry": stock_status,
-        "quality_inspection": qc_status,
-        "delivery_note": {"available": bool(permissions["delivery_note"]),
-                          "restricted": bool(dn_restricted)},
-        "shipment": {"available": bool(permissions["shipment"]),
-                     "restricted": bool(ship_restricted)},
+        "sales_order": _source_state(
+            permissions["sales_order"], so_restricted,
+            {"reason": "permission"} if not permissions["sales_order"] else None),
+        "production_plan": _source_state(
+            permissions["production_plan"], pp_restricted,
+            {"reason": "permission"} if not permissions["production_plan"] else None),
+        "work_order": _source_state(
+            wo_status.get("available", True), wo_restricted, wo_status),
+        "job_card": _source_state(
+            permissions["job_card"] and not jc_unavailable, jc_unavailable,
+            {"reason": "permission"}
+            if (not permissions["job_card"] or jc_unavailable) else None),
+        "tracking_number": _source_state(
+            not tn_unavailable, tn_unavailable,
+            {"reason": "permission"} if tn_unavailable else None),
+        "stock_entry": _source_state(
+            stock_status.get("available", True), False, stock_status),
+        "quality_inspection": _source_state(
+            qc_status.get("available", True), False, qc_status),
+        "delivery_note": _source_state(
+            permissions["delivery_note"], dn_restricted,
+            {"reason": "permission"} if not permissions["delivery_note"] else None),
+        "shipment": _source_state(
+            permissions["shipment"], ship_restricted,
+            {"reason": "permission"} if not permissions["shipment"] else None),
     }
     if "job_card_time_log" in wo_status:
-        source_status["job_card_time_log"] = wo_status["job_card_time_log"]
+        source_status["job_card_time_log"] = _source_state(
+            wo_status["job_card_time_log"].get("available", True), False,
+            wo_status["job_card_time_log"])
     for name, state in source_status.items():
         if not state.get("available", True):
             partial_reasons.append("%s source unavailable: %s" % (

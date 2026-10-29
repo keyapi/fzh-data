@@ -453,6 +453,69 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertIn("empty_result", " ".join(manifest["notes"]))
         self.assertIn("source_status", result)
         self.assertEqual(manifest["coverage"]["source_status"], result["source_status"])
+        for state in result["source_status"].values():
+            self.assertIn("available", state)
+            self.assertIn("restricted", state)
+            self.assertIn("reason", state)
+
+    def test_time_log_failure_only_degrades_time(self):
+        line = _AttrDict(_line(qty=10.0))
+        wo_row = _AttrDict(
+            wo="WO-1", qty=10.0, produced_qty=10.0, status="Completed",
+            docstatus=1, production_item="SKU-1", stock_uom="个",
+            sales_order_item="SOI-1", fg_sales_order_item=None,
+            production_plan_item=None, planned_start_date=None,
+            planned_end_date=None)
+        op_row = _AttrDict(name="OP1", parent="WO-1", operation="裁剪",
+                           sequence_id=1, status="Completed", completed_qty=10.0)
+        jc_row = _AttrDict(
+            name="JC1", work_order="WO-1", operation_id="OP1",
+            operation="裁剪", status="Completed", total_completed_qty=10.0,
+            for_quantity=10.0, actual_start_date=None,
+            actual_end_date="2026-10-20 17:00:00", tracking_number="T1",
+            docstatus=1, quality_inspection=None)
+        tn_row = _AttrDict(name="T1", work_order="WO-1", qty=10.0)
+
+        def get_all(doctype, filters=None, fields=None, order_by=None):
+            if doctype == "Work Order Operation":
+                return [op_row]
+            if doctype == "Job Card":
+                return [jc_row]
+            if doctype == "Tracking Number":
+                return [tn_row]
+            if doctype == "Job Card Time Log":
+                raise RuntimeError("boom")
+            return []
+
+        def get_list(doctype, filters=None, fields=None, limit_page_length=0):
+            return {
+                "Work Order": [_AttrDict(name="WO-1")],
+                "Job Card": [_AttrDict(name="JC1")],
+                "Tracking Number": [_AttrDict(name="T1")],
+            }.get(doctype, [])
+
+        def sql(query, values=None, as_dict=False):
+            if "from `tabWork Order` w" in query:
+                return [wo_row]
+            return []
+
+        with mock.patch.object(self.facts.frappe, "get_all", side_effect=get_all), \
+             mock.patch.object(self.facts.frappe, "get_list", side_effect=get_list), \
+             mock.patch.object(self.facts.frappe.db, "sql", side_effect=sql):
+            grouped, status = self.facts.load_wos([line], {})
+        self.assertTrue(status["available"])
+        self.assertFalse(status["restricted"])
+        self.assertEqual(status["job_card_time_log"]["reason"], "query_error")
+        wo = grouped["SOI-1"][0]
+        evidence = self.facts.build_wo_evidence(
+            {"name": wo["wo"], "qty": wo["qty"], "stock_uom": wo["stock_uom"],
+             "production_item": wo["item_code"], "docstatus": wo["docstatus"]},
+            wo["operations"], wo["job_cards"], wo["tracking_number_rows"],
+            [], [], order_uom="个",
+            availability={"job_cards": True, "work_order": True,
+                          "tracking_numbers": True, "stock_entries": True,
+                          "quality_inspections": True})
+        self.assertEqual(evidence["all_process_done"]["qty_proven"], 10.0)
 
     def test_response_carries_source_status_and_recomputes_partial(self):
         self.fake.so_rows = [self._row(1)]
@@ -470,12 +533,17 @@ class SupplyFactsContractTest(unittest.TestCase):
                 filters={"sales_order": "SO-1", "limit": 1})
         self.assertFalse(result["source_status"]["work_order"]["available"])
         self.assertFalse(result["source_status"]["stock_entry"]["available"])
+        self.assertEqual(result["source_status"]["work_order"]["reason"],
+                         "query_error")
+        self.assertEqual(result["source_status"]["stock_entry"]["reason"],
+                         "query_error")
+        self.assertIn("restricted", result["source_status"]["work_order"])
         self.assertEqual(result["manifest"]["coverage"]["source_status"],
                          result["source_status"])
         self.assertTrue(result["manifest"]["partial"])
         reasons = " ".join(result["manifest"]["partial_reasons"]).lower()
-        self.assertIn("work order source unavailable", reasons)
-        self.assertIn("stock entry source unavailable", reasons)
+        self.assertIn("work order source unavailable: query_error", reasons)
+        self.assertIn("stock entry source unavailable: query_error", reasons)
 
     def test_in_production_capped_by_wo_coverage(self):
         stages = self.facts.build_stage_balances(
@@ -995,7 +1063,7 @@ class SupplyFactsContractTest(unittest.TestCase):
 
     def test_implementation_version_bumped_for_interface_change(self):
         self.assertEqual(self.facts.IMPLEMENTATION_VERSION,
-                         "key_test.supply_facts@2026-10-29.3")
+                         "key_test.supply_facts@2026-10-29.4")
 
     def test_manifest_carries_rule_and_implementation_versions(self):
         self.fake.so_rows = []

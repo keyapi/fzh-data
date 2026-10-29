@@ -561,3 +561,20 @@ SQL
 - 镜像 `cmp` 逐字一致（含 tests、JS、harness）。
 - 仍未部署测试站/生产；测试站真实受限用户 HTTP、真实时间日志样本与浏览器视觉验收待 Codex
   通过后安排；第二步权限待验项仍不得写成通过。
+
+## 15. 第二批复审第三轮小修（2026-10-29）
+
+- **Time Log 失败只降级时间**：`load_wos()` 不再因 `Job Card Time Log` 查询失败设置
+  `restricted=True`；JC/TN 数量证据保持 proven，仅时间字段与
+  `source_status.job_card_time_log` 受影响；顶层 JC 时间仍可用，顶层也缺失才 `time_incomplete`。
+- **来源状态保留原因**：`_source_state()` 统一输出 `{available, restricted, reason}` 并保留
+  `error`；`query_error` 不再退化为 `unknown`，空结果路径同样带 `reason`。导出器按页保守合并
+  `source_status`。
+- **版本递增**：`RULE_VERSION=2026-10-29.5`、`IMPLEMENTATION_VERSION=key_test.supply_facts@2026-10-29.4`；
+  新增 `@2026-10-29.3` 与 `@2026-10-29.4` 混合批次拒绝测试。
+- **契约同步**：物理身份条款改为 `confidence ∈ {proven, mixed}` 可贡献 `qty_proven` 子集，
+  `estimated` 余量独立；仅 proven 身份重叠阻断行级 proven。
+
+验收（本地）：key_test **237 passed / 3 skipped / 4 subtests**；导出器 **27 passed**；
+`supply_chain_visibility` **104 passed / 5 subtests**；镜像 `cmp` 一致。仍未部署；测试站权限、
+真实 Time Log、浏览器视觉与 latest.json 失败保护复验待 Codex 通过后安排；第二步权限项继续 pending。
