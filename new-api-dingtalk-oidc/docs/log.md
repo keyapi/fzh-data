@@ -7,6 +7,25 @@ summary: 开发与部署记录
 
 # new-api-dingtalk-oidc — 变更日志
 
+## 2026-10-29
+
+### v0.5.0 — `redirect_uri` 白名单（堵授权码外送 / 账号接管）
+
+- **问题**：`/authorize` 接受任意 `redirect_uri`，`/token` 也不校验客户端。攻击者可先用自己
+  浏览器取一个合法 `state`，再把 `/authorize?redirect_uri=https://evil&state=<自己的>`
+  发给员工；员工完成钉钉授权后授权码落到攻击者站点，攻击者拿该 code 到 new-api 回调换会话 ——
+  即以该员工身份登录（员工只需点一次链接，且域名是真的 `api.vilavi.cn`）。
+- **改法**：`/authorize` 校验 `redirect_uri` 必须精确命中白名单，否则 400 + 告警日志。
+  白名单默认值是 nginx 访问日志里两个真实客户端：
+  `https://api.vilavi.cn/oauth/dingtalk`（new-api）与 `https://api.vilavi.cn/pb/oidc-callback`（pb-orders），
+  可用 `ALLOWED_REDIRECT_URIS`（逗号分隔）覆盖。**只做精确匹配**，不做前缀 —— 前缀放行会让
+  `dingtalk.evil.example` 这类尾巴混进来。
+- **新增文件** `redirect_policy.py`（纯函数、无副作用，便于单测）+ `tests/test_redirect_policy.py`（6 例）。
+- **部署**：拷 `main.py` / `redirect_policy.py` / `Dockerfile` 到 `/opt/new-api-dingtalk-oidc/` →
+  `docker build -t new-api-dingtalk-oidc:latest .` → `docker compose up -d --no-deps bridge`；
+  compose 的 bridge 段加 `ALLOWED_REDIRECT_URIS`。实测：合法两个地址返回 307 跳钉钉，
+  `https://evil.example/cb` 与 `dingtalk.evil.example` 均 400。
+
 ## 2026-09-22
 
 ### v0.4.0 — 登录闸门只放本公司员工（收口「任何钉钉账号都能登录」）

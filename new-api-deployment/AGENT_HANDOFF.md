@@ -96,6 +96,55 @@
 - Windows 下 Python 的 `python3` 命令找不到 `/tmp` 路径
 - **解决**: 使用 Windows 绝对路径 `C:\Users\DEV01\AppData\Local\Temp\` 或直接写文件用 `python`（不带 3）
 
+### 问题 9：公网端口暴露 → 陌生账号密码注册（2026-10-29）
+
+- **表现**: 用户表出现 ID 26-30 五个陌生账号，无 email / 无 oidc_id，来源为阿里云新加坡
+  与纽约 VPN；nginx 日志里这些 IP 0 条记录。
+- **原因**: 生产 compose 曾把容器映射为 `'3000:3000'`（实际监听 `0.0.0.0:3000`），
+  公网可直连网关、绕过 nginx 的注册封堵；应用层 `PasswordRegisterEnabled` 未设置，默认 `true`。
+- **修复**: 关 `PasswordRegisterEnabled` + 端口改 `'127.0.0.1:3000:3000'` + nginx 改正则匹配；
+  5 个账号与 6 个令牌先禁用观察。**实际消耗 0**（3 次模型调用被"用户额度不足"挡下）。
+- **注册开关分工（别改错）**：
+
+  | 键 | 作用 | 本项目取值 |
+  |----|------|-----------|
+  | `RegisterEnabled` | 是否允许创建新账号（密码注册**和** OIDC 自动建号都看它） | **true**（关掉新员工无法首登） |
+  | `PasswordRegisterEnabled` | 是否允许账号密码注册 | **false** |
+
+- `options` 表直写后需**重启容器**才生效（OptionMap 常驻内存）。
+- **排查提示**: 本版本鉴权失败返回 `HTTP 200 + success:false`，看 `/api/option/` 之类的
+  访问日志不能只看状态码。
+- **验收**: `ss -lntp | grep 3000` 必须只有 `127.0.0.1:3000`。
+- 详细复盘: `../docs/solutions/integration-issues/new-api-open-registration-exposure.md`
+
+### 问题 10：OIDC 桥 `redirect_uri` 未校验 + `SESSION_SECRET` 是弱口令（2026-10-29）
+
+- **桥接器**：`/authorize` 原本接受任意 `redirect_uri`，`/token` 不校验客户端。攻击者可把授权码
+  引到自己站点，再用该 code 换 new-api 会话，接管点开链接的员工账号。已加白名单
+  （`ALLOWED_REDIRECT_URIS`，精确匹配；默认两个真实客户端），详见
+  `../new-api-dingtalk-oidc/docs/log.md` v0.5.0。
+- **SESSION_SECRET**：生产 compose 里原本是 `new-api-session-secret-shanghai` 这种可猜的字面量。
+  gin cookie session 用它做 HMAC，secret 一旦被猜到即可伪造任意会话。已轮换为 32 字节随机值。
+  **轮换只让浏览器登录态失效，不改变任何 API 令牌（`tokens.key` 是库里的随机串）**。
+- **未做（已知项）**：
+  - `auto-bind-subscription.py` 只按 `user_oauth_bindings` 判断，不区分 provider ——
+    再加第三方登录渠道时要补过滤，否则任一新 provider 的首登用户都会自动拿到订阅与默认令牌。
+  - 主机上 `mariadbd`(3306) 与 frappe socketio(9000) 监听 `0.0.0.0`，目前靠云安全组挡住
+    （外部三地探测超时）；MariaDB 用户全为 `@localhost`。属纵深不足，建议改绑回环。
+
+### 问题 11：白名单漏项 → 赛狐 API 代理钉钉登录全 400（2026-11-17）
+
+- **表现**: 打开 `https://api.vilavi.cn/sellfox/admin` 点钉钉登录，跳 `/oidc/authorize` 后
+  显示「登录回调地址不合法，请从公司系统重新进入」，返回 400。
+- **原因**: 问题 10 的白名单只登记了 `/oauth/dingtalk`、`/pb/oidc-callback`（外加 wayfair），
+  漏了赛狐代理的 `https://api.vilavi.cn/sellfox/admin/oidc-callback`。
+- **修复**: 生产 compose 第 69 行追加该回调 → `docker compose up -d bridge`。
+  仓库 `redirect_policy.py` 默认值同步补上，避免下次部署回退。
+- **新增 OIDC 客户端时必须同步两处**：服务器 `/opt/new-api/docker-compose.yml` 的
+  `ALLOWED_REDIRECT_URIS` + 仓库 `new-api-dingtalk-oidc/redirect_policy.py` 默认值。
+  只改仓库不改 compose，生产仍会拒绝；只改 compose 不改仓库，下次重建镜像就回退。
+- 详细复盘: `../docs/solutions/integration-issues/oidc-redirect-allowlist-missing-client.md`
+
 ---
 
 ## 三、部署后初始化配置流程
