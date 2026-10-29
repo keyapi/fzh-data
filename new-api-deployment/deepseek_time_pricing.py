@@ -19,16 +19,18 @@ cron（准点触发，幂等）:
   0 0  * * 0,6  python3 /opt/new-api/deepseek_time_pricing.py >> /var/log/deepseek_time_pricing.log 2>&1
 
 价格来源: 内置常量，从 https://api-docs.deepseek.com/zh-cn/quick_start/pricing/ 拷贝。
-2026-08-17 峰谷计价生效；2026-09-10 12:00 起 flash 系列降价（pro 不变）；
-2026-09-14 12:00 起 V4 Pro 下线，请求路由到 V4.1 Flash 并按 V4.1 Flash 计费
-（V4.1 Flash 单价未单独公布，暂按 flash 系列价目处理，待账单核对）。
-DeepSeek 官方调价时只需改 PRICING / PRO_EOL。
+2026-08-17 峰谷计价生效；2026-09-10 12:00 起 flash 系列降价（pro 不变）。
+2026-10-29 复核官方定价页：deepseek-v4-pro 仍是直接提供的在售模型
+（高峰 ¥9 / ¥27 / 缓存 ¥0.30），并未下线；只有旧模型名 deepseek-v4-flash
+被路由到 DeepSeek-V4.1-Flash-1017 并按 flash 价计费。
+此前误把 pro 也按 flash 价处理，已移除 PRO_EOL/PRO_ROUTES_TO，pro 恢复自有价目。
+DeepSeek 官方调价时只需改 PRICING。
 
 幂等: 只有当前值与期望值不一致时才写入 options 表，否则零副作用。
 
 测试参数:
   --simulate peak|off       强制指定时段（会写库）
-  --at "YYYY-MM-DD HH:MM"   覆盖当前时间，只打印不写库，用于演练 9/14 Pro 下线分支
+  --at "YYYY-MM-DD HH:MM"   覆盖当前时间，只打印不写库，用于演练任意时段的定价
 """
 
 import json
@@ -61,16 +63,10 @@ PRICING = {
     },
 }
 
-# V4 Pro 下线（2026-09-14 12:00）：此后 pro 请求路由到 V4.1 Flash，按其价目计费。
-# V4.1 Flash 单价官方未单独公布，暂等同 flash 系列；9/14 后用真实账单核对。
-PRO_ROUTES_TO = "deepseek-v4-flash"
-
 # MySQL root 密码不硬编码：从环境变量 MYSQL_ROOT_PASSWORD 或 /opt/new-api/.secrets.env 读取
 SECRETS_FILE = Path("/opt/new-api/.secrets.env")
 
 TZ = ZoneInfo("Asia/Shanghai")
-
-PRO_EOL = datetime(2026, 9, 14, 12, 0, tzinfo=TZ)
 # ============================
 
 
@@ -153,7 +149,7 @@ def main() -> int:
         if idx + 1 < len(args):
             period = args[idx + 1]
 
-    # --at "YYYY-MM-DD HH:MM" 覆盖当前时间，仅演练不写库（用于验证 9/14 Pro 下线分支）
+    # --at "YYYY-MM-DD HH:MM" 覆盖当前时间，仅演练不写库
     now = datetime.now(TZ)
     dry_run = False
     if "--at" in args:
@@ -174,11 +170,7 @@ def main() -> int:
 
     print(f"[{now:%Y-%m-%d %H:%M:%S %Z}] 时段: {period}{'（演练，不写库）' if dry_run else ''}")
 
-    # V4 Pro 已于 PRO_EOL 下线，此后路由到 V4.1 Flash 并按其价目计费
-    pricing = dict(PRICING)
-    if now >= PRO_EOL:
-        pricing["deepseek-v4-pro"] = PRICING[PRO_ROUTES_TO]
-        print(f"  V4 Pro 已下线(>= {PRO_EOL:%Y-%m-%d %H:%M})，按 {PRO_ROUTES_TO} 价目计费")
+    pricing = PRICING
 
     # 计算期望 ratios
     expected = {key: {} for key in ("ModelRatio", "CompletionRatio", "CacheRatio")}

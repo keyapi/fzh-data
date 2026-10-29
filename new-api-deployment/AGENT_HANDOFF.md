@@ -246,7 +246,7 @@ Web 后台 → 设置 → 运营设置 → 勾选**合规确认**（`payment_set
 
 > **⚠️ 2026-08-17 起 DeepSeek 实行峰谷分时计价，DeepSeek 的 ModelRatio 不再是静态值。**
 > 生产环境由 `deepseek_time_pricing.py`（cron 准点触发）按北京时间在高峰/空闲两档间自动切换。
-> **2026-09-10 12:00 起 flash 系列降价；2026-09-14 12:00 起 V4 Pro 下线（路由到 V4.1 Flash 并按 flash 价计费）。**
+> **2026-09-10 12:00 起 flash 系列降价。2026-10-29 复核：V4 Pro 未下线（此前记录有误），仅旧名 `deepseek-v4-flash` 路由到 V4.1 Flash。**
 > 详见 [docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md](../docs/solutions/tooling-decisions/new-api-deepseek-time-based-pricing-automation.md)
 > 与 [docs/solutions/tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md](../docs/solutions/tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md)。
 
@@ -263,9 +263,12 @@ DeepSeek 官方闲时为高峰的一半；高峰 = 周一至周五 9-12 / 14-18�
 | deepseek-v4-pro | 高峰 | ¥9.00 | ¥27.00 | ¥0.30 | 0.616438 | 3.0 | 0.033333 |
 | deepseek-v4-pro | 闲时 | ¥4.50 | ¥13.50 | ¥0.15 | 0.308219 | 3.0 | 0.033333 |
 
-> **2026-09-14 12:00 起**：`deepseek-v4-pro` 下线，请求路由到 V4.1 Flash 并按 V4.1 Flash 计费。
-> 脚本以 `PRO_EOL` 常量自动切换——该时刻后 pro 的三个 ratio 被写成与 flash 相同的值。
-> **V4.1 Flash 单价官方未单独公布，暂等同 flash 系列，9/14 后必须用真实账单核对。**
+> **2026-10-29 更正**：此前误判 `deepseek-v4-pro` 于 9-14 下线。复核官方定价页，pro 仍是直接提供的在售模型，
+> 上表 pro 价目继续有效；只有旧名 `deepseek-v4-flash` 被路由到 V4.1 Flash。`PRO_EOL`/`PRO_ROUTES_TO` 已从脚本移除。
+> **同日处置**：pro 曾被长期按 flash 价计费（每笔约 4.5 倍差价），已从渠道 4 `DeepSeek公司账户` 的 `models` 移除
+> `deepseek-v4-pro` 并删除对应 `abilities` 记录，上游暂停该模型。**重新启用前必须确认**：渠道已加回 pro、
+> `abilities` 已重建，且三个 ratio 为上表值（高峰 0.616438 / 闲时 0.308219、Completion 3.0、Cache 0.033333），
+> 否则会继续少计费。备份在服务器 `/opt/new-api/backup/channel4-20261029-*.tsv`。
 
 ### 历史价（2026-08-17 ~ 2026-09-10 12:00，仅供对账旧账单）
 
@@ -297,7 +300,7 @@ cron 切换：`0 9/12/14/18 * * 1-5` + `0 0 * * 0,6` 保险 + `*/30 * * * *` 兜
 ### 同步脚本
 - `deepseek_time_pricing.py` — **分时定价自动切换**（当前生产核心脚本）
   - `--simulate peak|off` 强制时段（会写库）
-  - `--at "YYYY-MM-DD HH:MM"` 覆盖当前时间，**只打印不写库**，用于演练 9/14 Pro 下线分支
+  - `--at "YYYY-MM-DD HH:MM"` 覆盖当前时间，**只打印不写库**，用于演练任意时段的定价
 - `sync_pricing.py` — 修改顶部定价数字后运行（只 PRINT 计算结果，不写库；分时脚本内部已复用其公式）
 
 ---

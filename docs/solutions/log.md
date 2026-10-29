@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-29（更正 Pro 下线误判 + 禁用 pro 上游）
+
+- **更正**: `tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md` —— 2026-09-10 记录中「2026-09-14 V4 Pro 下线、按 V4.1 Flash 计费」**有误**。复核官方定价页：`deepseek-v4-pro` 仍在售（高峰 ¥9 / ¥27 / 缓存 ¥0.30），只有旧名 `deepseek-v4-flash` 被路由到 V4.1 Flash。正文已就地标注更正，原始记录保留。
+- **更新**: `new-api-deployment/deepseek_time_pricing.py` / `sync_pricing.py` —— 移除 `PRO_EOL` / `PRO_ROUTES_TO` 与对应替换分支，pro 恢复自有价目；`--at` 保留为通用 dry-run。`AGENT_HANDOFF.md` 第四节同步更正，并记录 2026-10-29 已从渠道 4 移除 pro、删除 `abilities`（重新启用前须核对三个 ratio）。
+
 ## 2026-10-27（供应分型 / frePPLe / 先搜分支）
 
 - **更新**: `workflow-issues/search-first-before-implementing.md`（`last_updated: 2026-10-27`）—— 补 Case 4：**main 上 grep 不到 ≠ 项目没有**。预测（statsforecast 2.1.1）、供应净额、库存政策、交期配置分别在本地的 `keyapi/forecast-refresh-oct27`、`keyapi/supply-integrate-oct27` 分支和 PR #300；先查 `git branch -a` / `git log --all` / `gh pr list --state all` / `git ls-tree`，再决定“复用 / 接线 / 重造”。
