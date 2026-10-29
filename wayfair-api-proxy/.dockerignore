@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/
+docs/
+deploy/
+config.yaml
+data/
+*.db
+*.db-wal
+*.db-shm

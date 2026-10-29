@@ -1,0 +1,23 @@
+[Unit]
+Description=Wayfair inventory snapshot (one-shot)
+After=network-online.target wayfair-api-proxy.service
+Wants=network-online.target
+PartOf=wayfair-snapshot.timer
+
+[Service]
+Type=oneshot
+User=wayfair
+Group=wayfair
+WorkingDirectory=/opt/wayfair-api-proxy
+Environment=WAYFAIR_CONFIG=/etc/wayfair-api-proxy/config.yaml
+Environment=WAYFAIR_DATABASE=/srv/wayfair-api-proxy/data/wayfair.db
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=/etc/wayfair-api-proxy/env
+ExecStart=/opt/wayfair-api-proxy/.venv/bin/python snapshot.py --account centrade
+TimeoutStartSec=10min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/wayfair-api-proxy/data
+CapabilityBoundingSet=

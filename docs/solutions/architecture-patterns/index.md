@@ -3,13 +3,15 @@ okf: v0.1
 type: Index
 title: architecture-patterns — 索引
 tags: [solutions, architecture-patterns]
-timestamp: 2026-07-28
+timestamp: 2026-10-29
 ---
 
 # architecture-patterns
 
 | 标题 | 文件 |
 |------|------|
+| Wayfair CG 库存表与 Parquet 粒度设计（总计行 + 分仓行、一表一粒度） | [wayfair-cg-stock-table-and-parquet-grain.md](wayfair-cg-stock-table-and-parquet-grain.md) |
+| 共享出口 VPS 上新服务用 venv+systemd，不装 Docker（iptables 风险） | [shared-egress-vps-venv-systemd-no-docker.md](shared-egress-vps-venv-systemd-no-docker.md) |
 | EN 端到端供应链履约可视化蓝图 | [en-end-to-end-supply-chain-fulfillment-visibility.md](en-end-to-end-supply-chain-fulfillment-visibility.md) |
 | 公开代码仓与私有公司知识分层——兼顾 Agent 检索、同事使用与防泄露 | [public-private-agent-knowledge-split.md](public-private-agent-knowledge-split.md) |
 | 办公室出口拓扑与应急链路（OpenClash ↔ 上海跳板 ↔ 美国 Vultr） | [office-egress-fallback-chain.md](office-egress-fallback-chain.md) |

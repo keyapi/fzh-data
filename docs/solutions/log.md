@@ -7,6 +7,18 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-29（Wayfair CG 变动流水 / 总计与分仓合并 / 仓库名映射）
+
+- **更新**: `integration-issues/wayfair-castlegate-inventory-api.md` — 补微秒时间窗被 ErrorCode 104 拒绝、transfer 页码 1 索引、仓库名只能从调拨/变动事件取、外层汇总与分仓合计实测相等、`castleGate=null` 的语义。
+- **新增**: `architecture-patterns/wayfair-cg-stock-table-and-parquet-grain.md` — 一张 DocType 放 CG 总计行（`warehouse_id=CG`）和分仓行；无 CG 位置的 part 进目录；Parquet 按粒度拆 `total` / `warehouse` 两份，避免混合 SUM；同事务发布与五口径对账。
+- **新增**: `developer-experience/erpnext-wayfair-sync-timezone-pitfalls.md` — Frappe 本地 naive 当 UTC、tz-aware 进 MariaDB/DuckDB、Parquet 去重方向、Single 默认值、bulk_insert、远程跑 bench 脚本的坑。
+
+## 2026-10-28（Wayfair CG 库存网关 / Codex 审核）
+
+- **新增**: `integration-issues/wayfair-castlegate-inventory-api.md` — Wayfair OAuth/GraphQL 契约、sandbox 权限解锁、库存与变动分页（adjustment page 从 0）、PO/WSA/CGF 边界、null≠0、通途 CG 数据不可作权威源。
+- **新增**: `architecture-patterns/shared-egress-vps-venv-systemd-no-docker.md` — 共享出口 VPS 新服务用 venv+systemd，不装 Docker，避免 iptables 影响 Tailscale/CLIProxyAPI。
+- **新增**: `developer-experience/gitignore-sensitive-pattern-hides-source-module.md` — `*token*` 忽略规则会静默漏掉源码/测试，须用 `git ls-files` 与 clean-tree import 验证。
+
 ## 2026-10-27（供应分型 / frePPLe / 先搜分支）
 
 - **更新**: `workflow-issues/search-first-before-implementing.md`（`last_updated: 2026-10-27`）—— 补 Case 4：**main 上 grep 不到 ≠ 项目没有**。预测（statsforecast 2.1.1）、供应净额、库存政策、交期配置分别在本地的 `keyapi/forecast-refresh-oct27`、`keyapi/supply-integrate-oct27` 分支和 PR #300；先查 `git branch -a` / `git log --all` / `gh pr list --state all` / `git ls-tree`，再决定“复用 / 接线 / 重造”。

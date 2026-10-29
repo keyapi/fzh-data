@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-28 | Wayfair CastleGate 库存 API——契约、权限与分页坑（含 CG/通途口径） | [wayfair-castlegate-inventory-api.md](wayfair-castlegate-inventory-api.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [layout-field-in-list-view-breaks-metadata-writes.md](layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-09-23 | grok-bot（美东）SSH 接入——对称 NAT 下打不成直连，只有经上海跳板有收益（235ms vs DERP 373ms），Vultr 跳板实为绕远路 | [grokbot-ssh-via-shanghai-jump-symmetric-nat.md](grokbot-ssh-via-shanghai-jump-symmetric-nat.md) |
 | 2026-09-22 | 重定向用 307 会让浏览器重放 POST —— 退出登录报 405 | [redirect-307-replays-post-405.md](redirect-307-replays-post-405.md) |

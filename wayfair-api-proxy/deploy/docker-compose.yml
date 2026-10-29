@@ -1,0 +1,24 @@
+services:
+  wayfair-api-proxy:
+    build:
+      context: ..
+    image: wayfair-api-proxy:latest
+    container_name: wayfair-api-proxy
+    restart: unless-stopped
+    env_file: /etc/wayfair-api-proxy/env
+    environment:
+      WAYFAIR_CONFIG: /etc/wayfair-api-proxy/config.yaml
+      WAYFAIR_DATABASE: /data/wayfair.db
+      PYTHONDONTWRITEBYTECODE: "1"
+    ports:
+      - "127.0.0.1:8410:8410"
+    volumes:
+      - /etc/wayfair-api-proxy/config.yaml:/etc/wayfair-api-proxy/config.yaml:ro
+      - /srv/wayfair-api-proxy/data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
