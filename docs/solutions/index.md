@@ -13,6 +13,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-29 | Wayfair CG 库存表与 Parquet 粒度设计——总量与分仓怎么放 | [architecture-patterns/wayfair-cg-stock-table-and-parquet-grain.md](architecture-patterns/wayfair-cg-stock-table-and-parquet-grain.md) |
+| 2026-10-29 | ERPNext 每日同步的时区与批量写入坑（Wayfair CG 实测） | [developer-experience/erpnext-wayfair-sync-timezone-pitfalls.md](developer-experience/erpnext-wayfair-sync-timezone-pitfalls.md) |
 | 2026-10-28 | 共享出口 VPS 上新服务用 venv+systemd，不装 Docker（iptables 风险） | [architecture-patterns/shared-egress-vps-venv-systemd-no-docker.md](architecture-patterns/shared-egress-vps-venv-systemd-no-docker.md) |
 | 2026-10-28 | Wayfair CastleGate 库存 API——契约、权限与分页坑 | [integration-issues/wayfair-castlegate-inventory-api.md](integration-issues/wayfair-castlegate-inventory-api.md) |
 | 2026-10-28 | .gitignore 的 *token* 会静默漏掉源码与测试——提交后干净 clone 启动失败 | [developer-experience/gitignore-sensitive-pattern-hides-source-module.md](developer-experience/gitignore-sensitive-pattern-hides-source-module.md) |

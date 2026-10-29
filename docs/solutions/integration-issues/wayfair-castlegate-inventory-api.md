@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: Wayfair CastleGate 库存 API——契约、权限与分页坑
 date: 2026-10-28
+last_updated: 2026-10-29
 category: integration-issues
 module: wayfair-api-proxy
 problem_type: integration_issue
@@ -11,6 +12,7 @@ severity: high
 applies_when:
   - "要从 Wayfair 读 CastleGate（CG）库存、PO、WSA 或在途"
   - "排查 Wayfair 客户端 'not authorized'、空分页、SKU 对不上或数量为 0"
+  - "设计库存总量/分仓表、解释 castleGate 为 null 或仓库只有数字 ID 时"
 tags: [wayfair, castlegate, graphql, oauth, pagination, inventory]
 ---
 
@@ -74,6 +76,41 @@ tags: [wayfair, castlegate, graphql, oauth, pagination, inventory]
   否则会把部分数据当成功快照发布，覆盖最后一次完整 run。
 - `inventoryAdjustmentList`：`page` 是 **0 索引**，第一页传 `page: 0`；
   从 1 开始会跳过首页。不要因为“第 2 页为空”就判定上游 pageSize 有 bug。
+- `inventoryTransferList`：`page` 是 **1 索引**（合法范围 1–1000），传 0 直接报
+  `range must be between 1 and 1000`。三个列表接口的页码规则不统一，接入前逐个实测。
+
+### 变动查询的时间窗（2026-10-29 实测）
+
+- **不要带微秒**：`from/to` 用 `datetime.isoformat()` 默认会带 `.123456`，上游返回
+  GraphQL `Unexpected failure has occurred` + `debugInfo.ErrorCode=104`（HTTP 仍 200）。
+  序列化用 `isoformat(timespec="seconds")`。
+- 窗口下界还有两个隐藏约束：最早只能到 **2023-06-01**；且该边界必须写成
+  `2023-06-01T00:00:00-05:00`，传 `...Z`/`+00:00` 会报
+  “must be same or after 2023-06-01T00:00:00-05:00”。
+- EN 端（Frappe）的 `now_datetime()` 是**站点本地 naive 时间**；代理把 naive 当 UTC
+  会整体偏移 8 小时。窗口应使用 `datetime.now(timezone.utc)`，历史时间先按站点时区转 UTC。
+
+### 仓库名从哪来
+
+- 上游**没有仓库清单查询**。内省可见 `legacySuppliersOrWarehousesByFilters` 声明为非空
+  列表，但实际返回 null 并报 `NullValueInNonNullableField`，不可用。
+- 仓名只出现在 `inventoryTransferList` 和 `inventoryAdjustmentList` 的
+  `SupplierWarehouse { warehouseId name }` 字段里。
+  `inventorySummaryList` 只给 `warehouseId`，不给名字。
+- 做法：代理 `GET /v1/accounts/{account}/inventory/warehouses` 回看 3 年调拨记录汇总
+  id→name（缓存 6h）；EN 每日变动同步再补调整事件里出现过的仓。新仓在第一次调拨/盘点
+  事件后才会出现。
+- 实测 10 个仓：323003 Erlanger、323004 Cranbury、323005 McDonough、
+  323006 PerrisSmallParcel、323010 Lancaster、323011 Port Wentworth、323012 Lathrop、
+  323013 Jacksonville、323015 Aberdeen、323020 Romeoville。
+
+### 汇总与分仓的关系
+
+- `castleGate.onHandQty / onHand.*` 是**所有 CG 仓的汇总**，`warehouses[]` 是分仓明细；
+  外层四项与逐仓合计完全相等（对全部 1007 个 part 实测，0 处不一致）。
+- 因此总量既可直接用外层，也可对分仓求和；落库时二选一，**不要同时保留再相加**。
+- `castleGate = null` 表示 **这个 part 没有 CG 库存位置**，既不是“总计为 0”，
+  也不是“汇总行”；它应进 part 目录（`has_cg_position=0`），不要写成库存 0。
 
 ### 数据源权威性
 
@@ -86,7 +123,10 @@ tags: [wayfair, castlegate, graphql, oauth, pagination, inventory]
 - 用错 SKU 键会把多物料合并、下游按物料查不到；
 - 把 `null` 当 0 会造成虚假断货与错误补货；
 - 缺游标静默成功会发布不完整快照，且很难在事后发现；
-- 调整流水分页从 1 开始会永久丢失首页，审计结论偏差却不报错。
+- 调整流水分页从 1 开始会永久丢失首页，审计结论偏差却不报错；
+- 带微秒的时间窗会被上游以 200 + GraphQL error 拒绝，客户端若只检查 HTTP 状态码
+  会误判成功；
+- 把 `castleGate=null` 当“总计 0”或“汇总行”会同时制造假库存和重复计数。
 
 ## When to Apply
 
@@ -117,3 +157,5 @@ query($supplierId: Int!, $filter: InventoryFilterInput, $page: InventoryPageInpu
 - `wayfair-api-proxy/docs/contract.md` — 已冻结的字段与探测记录
 - `wayfair-api-proxy/docs/sandbox-test.md` — sandbox 测试步骤
 - `wayfair-api-proxy/docs/en-integration.md` — EN/DuckDB 接入与通途 CG 对比
+- [Wayfair CG 库存表与 Parquet 粒度设计](../architecture-patterns/wayfair-cg-stock-table-and-parquet-grain.md)
+- [ERPNext 每日同步的时区与批量写入坑](../developer-experience/erpnext-wayfair-sync-timezone-pitfalls.md)

@@ -15,7 +15,7 @@ tags: [wayfair, api-proxy, index]
 | 开通生产权限、跑 sandbox 测试 | [sandbox-test.md](sandbox-test.md) |
 | 接 EN/DuckDB：原始层、分析层、统一层 | [en-integration.md](en-integration.md) |
 | 同事自助 key（钉钉登录、一人一枚只读） | [portal.md](portal.md) |
-| 相关踩坑（API 契约、共享 VPS 不装 Docker、gitignore 漏源码） | `../../docs/solutions/integration-issues/wayfair-castlegate-inventory-api.md`、`../../docs/solutions/architecture-patterns/shared-egress-vps-venv-systemd-no-docker.md`、`../../docs/solutions/developer-experience/gitignore-sensitive-pattern-hides-source-module.md` |
+| 相关踩坑（API 契约、库存表粒度、EN 时区、共享 VPS 不装 Docker、gitignore 漏源码） | `../../docs/solutions/integration-issues/wayfair-castlegate-inventory-api.md`、`../../docs/solutions/architecture-patterns/wayfair-cg-stock-table-and-parquet-grain.md`、`../../docs/solutions/developer-experience/erpnext-wayfair-sync-timezone-pitfalls.md`、`../../docs/solutions/architecture-patterns/shared-egress-vps-venv-systemd-no-docker.md`、`../../docs/solutions/developer-experience/gitignore-sensitive-pattern-hides-source-module.md` |
 | 了解为什么这样设计、数据怎么流 | [architecture.md](architecture.md) |
 | 调接口、看错误码与 freshness | [api.md](api.md) |
 | 部署、轮换 secret、验收、回滚 | [operations.md](operations.md) |

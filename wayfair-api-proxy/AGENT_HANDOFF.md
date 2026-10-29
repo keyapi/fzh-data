@@ -81,9 +81,23 @@ WAYFAIR_SMOKE_KEY=... WAYFAIR_SMOKE_SKU=... \
 
 ## 相关经验（docs/solutions）
 
-- `docs/solutions/integration-issues/wayfair-castlegate-inventory-api.md` — 契约、权限、分页与 null 语义
+- `docs/solutions/integration-issues/wayfair-castlegate-inventory-api.md` — 契约、权限、分页与 null 语义（2026-10-29 补：微秒 ErrorCode 104、transfer 页码 1 索引、仓库名来源、汇总=分仓合计）
+- `docs/solutions/architecture-patterns/wayfair-cg-stock-table-and-parquet-grain.md` — EN 库存表为什么把 CG 总计行和分仓行放同一张表、Parquet 为什么按粒度拆文件
+- `docs/solutions/developer-experience/erpnext-wayfair-sync-timezone-pitfalls.md` — 本地 naive 时间、MariaDB/DuckDB 时区、Single 默认值、bulk_insert、远程跑 bench 脚本
 - `docs/solutions/architecture-patterns/shared-egress-vps-venv-systemd-no-docker.md` — 为什么这台 VPS 不用 Docker
 - `docs/solutions/developer-experience/gitignore-sensitive-pattern-hides-source-module.md` — `*token*` 忽略源码的教训
+
+## 契约细节（2026-10-29 实测）
+
+- 变动查询 `from/to` **不能带微秒**：`isoformat(timespec="seconds")`；否则 HTTP 200 但
+  GraphQL 返回 `Unexpected failure` / `ErrorCode=104`。
+- `inventoryAdjustmentList` 页码 0 索引；`inventoryTransferList` 页码 1 索引（1–1000）。
+- 仓库名没有清单查询：`legacySuppliersOrWarehousesByFilters` 实际返回 null 报错；
+  仓名只能从调拨/变动记录的 `SupplierWarehouse {warehouseId name}` 汇总。
+- 新增 `GET /v1/accounts/{account}/inventory/warehouses`（回看 3 年调拨、缓存 6h、
+  复用 `inventory:transactions:read`）。
+- `castleGate.onHandQty` 等外层字段 = `warehouses[]` 逐仓合计（1007 part 实测 0 差异）；
+  `castleGate=null` 表示无 CG 库存位置，不是 0、不是总计行。
 
 ## 同事自助门户
 

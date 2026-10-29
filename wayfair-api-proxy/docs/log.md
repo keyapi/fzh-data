@@ -8,6 +8,12 @@ tags: [wayfair, api-proxy, changelog]
 
 # 变更日志
 
+## 2026-10-29
+
+- 变动查询时间窗按秒序列化：上游对带微秒的 `from/to` 返回 HTTP 200 + GraphQL `Unexpected failure`（ErrorCode 104）。
+- 新增 `GET /v1/accounts/{account}/inventory/warehouses`：上游无仓库清单接口，从近 3 年调拨记录汇总 `warehouseId → name`，缓存 6h，复用 `inventory:transactions:read`。
+- 实测外层 `castleGate` 与逐仓合计完全相等（1007 part，0 差异），供 EN 生成 SKU 总计行。
+
 ## 2026-10-28
 
 - 建立模块骨架：FastAPI 固定业务路由、账号 + operation 授权、SHA-256 key 存储。

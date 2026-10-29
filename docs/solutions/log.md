@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-29（Wayfair CG 变动流水 / 总计与分仓合并 / 仓库名映射）
+
+- **更新**: `integration-issues/wayfair-castlegate-inventory-api.md` — 补微秒时间窗被 ErrorCode 104 拒绝、transfer 页码 1 索引、仓库名只能从调拨/变动事件取、外层汇总与分仓合计实测相等、`castleGate=null` 的语义。
+- **新增**: `architecture-patterns/wayfair-cg-stock-table-and-parquet-grain.md` — 一张 DocType 放 CG 总计行（`warehouse_id=CG`）和分仓行；无 CG 位置的 part 进目录；Parquet 按粒度拆 `total` / `warehouse` 两份，避免混合 SUM；同事务发布与五口径对账。
+- **新增**: `developer-experience/erpnext-wayfair-sync-timezone-pitfalls.md` — Frappe 本地 naive 当 UTC、tz-aware 进 MariaDB/DuckDB、Parquet 去重方向、Single 默认值、bulk_insert、远程跑 bench 脚本的坑。
+
 ## 2026-10-28（Wayfair CG 库存网关 / Codex 审核）
 
 - **新增**: `integration-issues/wayfair-castlegate-inventory-api.md` — Wayfair OAuth/GraphQL 契约、sandbox 权限解锁、库存与变动分页（adjustment page 从 0）、PO/WSA/CGF 边界、null≠0、通途 CG 数据不可作权威源。
