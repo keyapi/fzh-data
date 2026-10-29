@@ -5,7 +5,7 @@ title: 第三步：四类生产证据的权威来源、数量推导与验收矩�
 date: 2026-10-29
 updated: 2026-10-29
 owner: claude-worker
-status: design-revised-v2; no implementation; no production deploy; step-2 permission acceptance still pending
+status: batch-1-evidence-layer-implemented-locally; consumers not switched; no production deploy; step-2 permission acceptance still pending
 scope: read-only; test-station evidence only; no business data writes; no permission expansion
 tags: [supply-chain, production-evidence, job-card, stock-entry, quality-inspection, work-order, acceptance]
 ---
@@ -428,3 +428,15 @@ SQL
 - [供应事实契约 v1](../../../../supply_chain_visibility/docs/reference/supply-facts-contract.md) —
   现有 `stage_balances` / `qty_status` / `partial` 口径。
 - [第二步接口与分页契约](STEP2-INTERFACE-SCOPING.md) — filters/分页/版本一致性；权限待验项独立追踪。
+
+## 11. 实现状态（第一批，2026-10-29）
+
+- key_test 提交 `b0ccc6b`：新增 `key_test/production_evidence.py` 与
+  `key_test/tests/test_production_evidence.py`。
+- 测试：新证据层 **34 passed + 2 subtests**；key_test 全量 **155 passed / 3 skipped**。
+- 第一批只实现只读证据层：`supply_facts` / `so_chain` / 人工视图**未切换**，规则/实现版本未 bump。
+- 差异报告（本地 gitignore，不提交）：
+  `EN_API/out/supply_facts/_acceptance/step3_evidence_diff.md`。
+- 未部署生产、未写业务数据、未扩权；第二步权限待验项独立保留。
+- 下一批（待 Codex 审核）：接入阶段余额/旧查询/人工视图，bump 规则与实现版本，
+  回归第二步接口、分页与导出保护；保持 `qc_passed.qty=unknown`。
