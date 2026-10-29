@@ -99,6 +99,11 @@ class SalesOrderRenderTest(unittest.TestCase):
         self.assertIn("Accepted", html)
         self.assertIn("known", html)
 
+    def test_footer_describes_full_process_evidence(self):
+        html = render([_line()])
+        self.assertIn("全工序已证", html)
+        self.assertNotIn("末道必经工序报工", html)
+
     def test_restricted_identity_is_not_rendered(self):
         html = render([_line(subassemblies=[], evidence_conflicts=["permission"])])
         self.assertNotIn("HIDDEN-DOC", html)
