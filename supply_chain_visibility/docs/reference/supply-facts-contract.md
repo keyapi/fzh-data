@@ -22,7 +22,7 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 | 字段 | 说明 |
 |---|---|
 | `so`, `so_line_id`, `item_code`, `warehouse`, `uom` | 订单行身份 |
-| `stage` | `not_planned` / `in_production` / `produced_pending_dn` / `shipped_in_transit` / `arrived_not_sellable` / `delivered_sellable` / `cancelled` / `returned` / `draft_dn` / `over_produced` / `unknown` |
+| `stage` | `not_planned` / `in_production` / `produced_pending_dn` / `shipped_in_transit` / `arrived_not_sellable`（legacy，仅过滤兼容） / `signed_pending_tongtool_receipt` / `tongtool_received` / `delivered_sellable` / `cancelled` / `returned` / `draft_dn` / `over_produced` / `unknown` |
 | `qty`, `qty_status`, `qty_basis` | 数量、证据状态（known/estimated/unknown）、依据（job_card_first_op / wo_produced_qty / dn_submitted / …） |
 | `cumulative_excess_qty` | 仅 `over_produced` 行：累计超订单完工量（异常指标）；该行 `qty` 为当前超订单现存实物 |
 | `batch_key`, `source_record` | DN / 工单 / 来源单据 |
@@ -36,7 +36,10 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 - **阶段分配**：工单覆盖量 `wo_coverage=min(Σ工单数量, 订单量)`；实际在产只按有开工证据的工单计算（工序卡有实际开工时间或已完工），`在产量=min(余额, max(0, 已开工覆盖-已完工))`；已下达但无开工记录的工单覆盖只证明计划，进 `unknown`；超出覆盖的余额进 `not_planned`。工单单位与订单单位不一致时完工量不可归一，生产类阶段整体进 `unknown`。已提交生产计划（同物料）覆盖但尚未建工单的部分进 `unknown`（不判为未计划）；计划不可读时同样进 `unknown`；计划单位缺失或与订单单位不一致时不计覆盖量，剩余余额整体进 `unknown`（不计算未覆盖差额）。
 - **行级权限**：SO/DN/WO/PP/Shipment 均先取当前用户可读单据集合再取数；受限来源写入 `coverage.restricted` 并置 `partial=true`；因受限无法判断的阶段一律 `unknown`，不得解释为「没有」。
 - **单位**：出库单位与订单单位不一致**或缺失**且无换算证据时，不归一运算；输出「数量归属未知」+ 原单位实物片段；缺失单位标 `qty_status=unknown`。`milestones` 与 `links` 中的派生数量同样只在来源单位与订单单位一致时输出，否则 qty=null 并给原因。
-- **到货判定**：只有全部关联运单状态齐全且均为到港/签收/POD 时才判 `arrived_not_sellable`；任一运单缺状态时保留在途并标注原因，不按已知子集判定整单到港。
+- **物流阶段裁决（v2）**：终态粘性 + 实际优先 + 阶段顺序。到港/清关/转运/派送仍属
+  `shipped_in_transit`；只有已签收/POD 才进入 `signed_pending_tongtool_receipt`；
+  多运单全部签收时 DN 进入待入库但每条 Shipment 不复制 DN 数量；部分签收/状态未知保守留在途；
+  冲突/异常/撤销 → `unknown` + `conflict_flag`。详见 STEP4。
 - **退货**：按 `return_against` 锁定原出库单，再**按原出库明细（`dn_detail`）逐条校验身份与剩余可抵扣量**，匹配量汇总到 DN；读取时不同原明细的退货行不合并，聚合组同时保留逐明细数量（`item_qty`）。`dn_detail` 指向的明细不存在于原单 → **明细引用冲突**，不抵扣、不做单行兜底，单独报冲突；缺 `dn_detail` 时只有原单**恰好一条原始明细**才按该明细剩余容量兜底——原单有多条原始明细（即使同仓同单位聚合成一组）一律视为归属未知、不抵扣；未参与冲突的其他明细保留已证净额。所有路径共用同一份按原始明细记账的容量账本：结果与退货处理顺序无关，且每条明细累计抵扣不超过其原始数量。`returned` 行按来源拆分：实际抵扣、超退（超出该明细可抵扣量）、明细引用冲突、未关联原单 / 无法归属；各项之和等于退货原值，不得把超退或冲突描述为已抵扣。退货缺口 `min(退货量, 需求余额)` 记 `unknown`，不得推断为「待出库」或「在产」，扣除后余额再分配在产/未计划。
 - **取消**：需求取消与已生产/已发实物分开记录；实物片段带 `demand_status=cancelled`，不随订单状态删除。
 - **as_of**：服务端只支持当前快照；历史 `as_of` 直接拒绝（HTTP 错误），不能由客户端校验替代。
@@ -96,9 +99,25 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
   查询失败写 `source_status` + `partial_reasons`，`partial` 在全部来源检查后重算。
 
 
+### `shipment_progress`（最终物流状态，per Shipment）
+
+`so`、`so_line_id`、`item_code`、`dn`、`shipment`、`logistic_number`、`tongtool_po`、
+`warehouse`、`uom`、`status11`、`status4`、`status_semantics=unproven`、`eta/atd/ata/dlvr`、
+`latest_progress_status`、`latest_progress_at`、`progress_source`、`is_final`、
+`conflict_flag`、`conflict_reasons`、`progress_candidates`、`stage`、
+`shipment_signed_at`、`tongtool_first/last/receipt_at`、`receipt_lag_days`、
+`receipt_completion`、`received_qty/pending_qty`(+evidence_status)、
+`receipt_basis=signed_assumed`、`identity_confidence`、`receipt_source_status`、
+`inventory_inclusion_status`。
+
+规则：证据等级 + 阶段顺序裁决；终态粘性；实际优先；`source_updated_at` 不提升阶段；
+同时间冲突/异常/撤销/缺时间 → unknown+conflict 并保留候选。通途入库与库存未接入时
+`receipt_completion=unknown`、`received/pending=null`、`receipt_source_status=not_integrated`、
+`inventory_inclusion_status=unknown`。详见 STEP4/STEP5。
+
 ### `manifest`
 
-`schema_version=supply-facts/v1`、`rule_version`（数量规则版本）、`implementation_version`（实现/构建版本，服务端返回与本地导出产物都携带）、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`source_status`（逐来源 `{available, reason}`）/`external_sources`）、`counts`、`partial`、`truncated`、`termination_reason`（`exhausted`/`page_limit`）、`pagination`、`partial_reasons`、`notes`、`files`（相对路径 + sha256）、`performance`。响应顶层同样返回 `source_status`。
+`schema_version=supply-facts/v2`、`rule_version`（数量规则版本）、`implementation_version`（实现/构建版本，服务端返回与本地导出产物都携带）、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`source_status`（逐来源 `{available, reason}`）/`external_sources`）、`counts`、`partial`、`truncated`、`termination_reason`（`exhausted`/`page_limit`）、`pagination`、`partial_reasons`、`notes`、`files`（相对路径 + sha256）、`performance`。响应顶层同样返回 `source_status`。
 
 ## 2. 批量入口
 
@@ -124,7 +143,7 @@ filters = JSON object
 
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
 - Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
-- 当前 `implementation_version=key_test.supply_facts@2026-10-29.4`；接口/分页行为变更必须 bump，混合版本继续拒绝。
+- 当前 `implementation_version=key_test.supply_facts@2026-10-30.1`；`rule_version=2026-10-29.6`；接口/分页行为变更必须 bump，混合版本继续拒绝。
 - 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
 - `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。
 - `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。
@@ -146,7 +165,7 @@ filters={"bogus":1}                 # Unknown filter(s)
 ?sales_order=SO-26-00103            # Unknown parameter(s)
 ```
 
-输出：`EN_API/out/supply_facts/runs/run-<ts>-<id>/` 下 6 个 JSON（含 `production_evidence.json`）+ `supply_facts.xlsx` + `manifest.json`；
+输出：`EN_API/out/supply_facts/runs/run-<ts>-<id>/` 下 9 个 JSON（含 `production_evidence.json`、`shipment_progress.json`、`receipt_reconciliation.json`、`inventory_bridge.json`）+ `supply_facts.xlsx` + `manifest.json`；
 `latest.json` 原子指针指向最后一次成功版本。写失败不切换指针，旧版本保持可读；`partial` 显式标记缺源。多批次合并前校验 `schema_version` / `rule_version` / `implementation_version` / `as_of`，任一不一致即拒绝该批次并终止导出，不写新版本，`latest.json` 仍指向上次成功版本。
 
 ## 3. 人工视图

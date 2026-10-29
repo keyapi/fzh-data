@@ -381,6 +381,28 @@ function so_chain_tree_html(line) {
         });
         h += '</tbody></table></div>';
     }
+    if (line.shipment_progress && line.shipment_progress.length) {
+        h += '<div style="margin-bottom:6px;font-size:12px"><b>物流进度</b>'
+           + '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
+           + '<thead><tr><th>运单</th><th>最新进度</th><th>阶段</th><th>签收</th><th>通途入库</th><th>库存包含</th><th>可售</th></tr></thead><tbody>';
+        line.shipment_progress.forEach(function (s) {
+            const stageTxt = s.stage === 'signed_pending_tongtool_receipt' ? '已签收·待通途入库'
+                : s.stage === 'tongtool_received' ? '通途已入库'
+                : s.stage === 'shipped_in_transit' ? '运输中' : '未知/冲突';
+            const receipt = (s.receipt_completion && s.receipt_completion !== 'unknown')
+                ? s.receipt_completion : '通途入库未接入';
+            const incl = s.inventory_inclusion_status === 'included' ? '已包含'
+                : (s.inventory_inclusion_status || 'unknown');
+            h += '<tr><td>' + so_chain_esc(s.logistic_number || '—')
+               + '</td><td>' + so_chain_esc(s.latest_progress_status || '—')
+               + '</td><td>' + stageTxt
+               + '</td><td>' + so_chain_esc(s.shipment_signed_at || '—')
+               + '</td><td>' + so_chain_esc(receipt)
+               + '</td><td>' + so_chain_esc(incl)
+               + '</td><td>不可售</td></tr>';
+        });
+        h += '</tbody></table></div>';
+    }
     if (!line.work_orders || !line.work_orders.length) {
         return h + '<div class="text-muted">无工单</div>';
     }

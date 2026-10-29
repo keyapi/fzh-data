@@ -753,8 +753,13 @@ class SupplyFactsContractTest(unittest.TestCase):
         arrived = self.facts.build_stage_balances(
             _line(), _ctx(dns=[_dn(qty=100.0)], numbers_by_dn=numbers,
                           shipment_by_number=both))
-        self.assertEqual(sum(r["qty"] for r in arrived
-                             if r["stage"] == self.facts.STAGE_ARRIVED), 100.0)
+        # Arrival is still part of transport; only signed/POD changes stage.
+        self.assertFalse([r for r in arrived
+                          if r["stage"] == self.facts.STAGE_ARRIVED])
+        transit_both = [r for r in arrived
+                        if r["stage"] == self.facts.STAGE_IN_TRANSIT]
+        self.assertEqual(sum(r["qty"] for r in transit_both), 100.0)
+        self.assertIn("运输", transit_both[0]["stage_detail"])
 
     def test_submitted_plan_without_wo_is_unknown_not_unplanned(self):
         pp = {"pp": "PP-1", "ppi": "PPI-1", "item_code": "SKU-1",
@@ -1063,7 +1068,7 @@ class SupplyFactsContractTest(unittest.TestCase):
 
     def test_implementation_version_bumped_for_interface_change(self):
         self.assertEqual(self.facts.IMPLEMENTATION_VERSION,
-                         "key_test.supply_facts@2026-10-29.4")
+                         "key_test.supply_facts@2026-10-30.1")
 
     def test_manifest_carries_rule_and_implementation_versions(self):
         self.fake.so_rows = []
@@ -1084,6 +1089,75 @@ class SupplyFactsContractTest(unittest.TestCase):
                          [("2026-10-01", 20.0), ("2026-10-10", 80.0)])
         self.assertTrue(all(r["qty_status"] == "known" for r in rows))
         self.assertTrue(all(r["source_record"] for r in rows))
+
+    def test_signed_single_shipment_enters_pending_receipt(self):
+        fact = self.facts.build_line_facts(
+            _line(), _ctx(
+                dns=[_dn(qty=100.0)],
+                numbers_by_dn={"DN-1": [{"number": "A"}]},
+                shipment_by_number={"A": _ship("A", "已签收",
+                                               dlvr="2026-10-20")}))
+        signed = [r for r in fact["stage_balances"]
+                  if r["stage"] == self.facts.STAGE_SIGNED_PENDING]
+        self.assertEqual(sum(r["qty"] for r in signed), 100.0)
+        row = fact["shipment_progress"][0]
+        self.assertTrue(row["is_final"])
+        self.assertEqual(row["shipment_signed_at"], "2026-10-20")
+        self.assertEqual(row["status_semantics"], "unproven")
+        self.assertEqual(row["receipt_completion"], "unknown")
+        self.assertIsNone(row["received_qty"])
+        self.assertEqual(row["receipt_basis"], "signed_assumed")
+        self.assertEqual(row["receipt_source_status"], "not_integrated")
+        self.assertEqual(row["inventory_inclusion_status"], "unknown")
+
+    def test_multi_signed_shipments_do_not_copy_dn_qty_to_each(self):
+        fact = self.facts.build_line_facts(
+            _line(), _ctx(
+                dns=[_dn(qty=100.0)],
+                numbers_by_dn={"DN-1": [{"number": "A"}, {"number": "B"}]},
+                shipment_by_number={
+                    "A": _ship("A", "已签收", dlvr="2026-10-20"),
+                    "B": _ship("B", "已上传POD", dlvr="2026-10-21")}))
+        signed = [r for r in fact["stage_balances"]
+                  if r["stage"] == self.facts.STAGE_SIGNED_PENDING]
+        self.assertEqual(sum(r["qty"] for r in signed), 100.0)
+        rows = fact["shipment_progress"]
+        self.assertEqual(len(rows), 2)
+        for row in rows:
+            self.assertIsNone(row["received_qty"])
+            self.assertIsNone(row["pending_qty"])
+            self.assertEqual(row["receipt_completion"], "unknown")
+
+    def test_conflicting_progress_is_unknown_and_keeps_candidates(self):
+        progress = {"latest_progress_status": None, "latest_progress_at": None,
+                    "progress_source": None, "is_final": False,
+                    "conflict_flag": True,
+                    "conflict_reasons": ["same_time_conflict"],
+                    "progress_candidates": [{"raw_status": "已到港"},
+                                            {"raw_status": "清关中"}]}
+        shipment = {"shipment": "SHIP-1", "status11": "已到港", "eta": None,
+                    "atd": None, "ata": None, "dlvr": None,
+                    "progress": progress}
+        fact = self.facts.build_line_facts(
+            _line(), _ctx(
+                dns=[_dn(qty=100.0)],
+                numbers_by_dn={"DN-1": [{"number": "A"}]},
+                shipment_by_number={"A": shipment}))
+        unknown = [r for r in fact["stage_balances"]
+                   if r["stage"] == self.facts.STAGE_UNKNOWN]
+        self.assertEqual(sum(r["qty"] for r in unknown), 100.0)
+        row = fact["shipment_progress"][0]
+        self.assertTrue(row["conflict_flag"])
+        self.assertEqual(len(row["progress_candidates"]), 2)
+
+    def test_receipt_and_inventory_are_reported_not_integrated(self):
+        result = self.facts.get_supply_facts({})
+        self.assertEqual(result["source_status"]["receipt"]["reason"],
+                         "not_integrated")
+        self.assertEqual(result["source_status"]["inventory"]["reason"],
+                         "not_integrated")
+        self.assertEqual(result["manifest"]["coverage"]["external_sources"]["inventory"],
+                         "not_integrated")
 
     def test_wo_without_start_evidence_is_unknown_not_in_production(self):
         for docstatus in (0, 1):

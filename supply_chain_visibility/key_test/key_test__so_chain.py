@@ -27,8 +27,10 @@ from key_test.production_evidence import (
     rollup_line_evidence,
 )
 from key_test.supply_facts import (
+    build_shipment_progress,
     load_job_card_time_logs,
     load_quality_inspections,
+    load_shipments,
     load_stock_entries,
 )
 from key_test.supply_query import dn_logistic_numbers
@@ -505,6 +507,15 @@ def get_so_chain(sales_order):
         else:
             source_status.setdefault("delivery_note", {
                 "available": False, "reason": "permission"})
+        if dns and frappe.has_permission("Shipment", "read"):
+            ship_numbers, shipment_by_number, _ship_restricted = load_shipments(
+                sorted({d.get("dn") for d in dns if d.get("dn")}))
+        else:
+            ship_numbers, shipment_by_number = {}, {}
+        shipment_progress = build_shipment_progress(
+            {"so": doc.name, "so_line": it.name, "item_code": it.item_code},
+            {"dns": dns, "numbers_by_dn": ship_numbers,
+             "shipment_by_number": shipment_by_number})
         # 阶段 0–3
         active_wos = [w for w in wos if _num(w.docstatus) != 2]
         if doc.docstatus == 2 and doc.amended_from:
@@ -545,6 +556,7 @@ def get_so_chain(sales_order):
             "qc_status": qc_status, "qc_confidence": qc_ev.get("confidence"),
             "qc_passed_status": qc_passed_ev.get("status"),
             "subassemblies": line_evidence.get("subassemblies") or [],
+            "shipment_progress": shipment_progress,
             "evidence_reasons": all_ev.get("reasons") or [],
             "evidence_conflicts": sorted(
                 {conflict.get("code") for conflict in (all_ev.get("conflicts") or [])
@@ -576,6 +588,9 @@ def get_so_chain(sales_order):
                  "job_card", "tracking_number", "stock_entry",
                  "quality_inspection"):
         source_status.setdefault(name, {"available": True})
+    for name in ("tongtool_po", "receipt", "inventory"):
+        source_status.setdefault(name, {"available": False,
+                                        "reason": "not_integrated"})
     for state in source_status.values():
         state.setdefault("restricted", False)
         state.setdefault("reason", "")

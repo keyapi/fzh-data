@@ -33,7 +33,8 @@ def _line(**overrides):
         "stage": 3, "substate": "全工序完成待出库", "delivery_date": "2026-10-30",
         "overdue_days": 0, "wo_count": 1, "tn_count": 1, "prog": None,
         "work_orders": [], "forgot_complete": [], "dns": [],
-        "subassemblies": [], "evidence_reasons": [], "evidence_conflicts": [],
+        "subassemblies": [], "shipment_progress": [],
+        "evidence_reasons": [], "evidence_conflicts": [],
     }
     line.update(overrides)
     return line
@@ -99,6 +100,18 @@ class SalesOrderRenderTest(unittest.TestCase):
         self.assertIn("QC", html)
         self.assertIn("Accepted", html)
         self.assertIn("known", html)
+
+    def test_logistics_progress_renders_signed_pending(self):
+        progress = [{"logistic_number": "ZMT1", "latest_progress_status": "已签收",
+                     "stage": "signed_pending_tongtool_receipt",
+                     "shipment_signed_at": "2026-10-20",
+                     "receipt_completion": "unknown",
+                     "inventory_inclusion_status": "unknown"}]
+        html = _render_doc([_line(shipment_progress=progress,
+                                  work_orders=[])])["tree"]
+        self.assertIn("物流进度", html)
+        self.assertIn("已签收·待通途入库", html)
+        self.assertIn("通途入库未接入", html)
 
     def test_footer_describes_full_process_evidence(self):
         html = render([_line()])

@@ -29,6 +29,10 @@ class ReceiptEvent:
     dedup_assumed: bool = False
     uom_proven: bool = False
     quantity_semantics_proven: bool = False
+    po_line_id: Optional[str] = None
+    dn_line_id: Optional[str] = None
+    shipment_id: Optional[str] = None
+    inclusion_proof: bool = False
 
 
 @dataclass(frozen=True)

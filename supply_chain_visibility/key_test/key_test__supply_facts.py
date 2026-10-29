@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Supply facts contract v1: stage balances, milestones, availability, links.
+"""Supply facts contract v2: stage balances, milestones, availability, links, shipment progress.
 
 One calculation shared by the machine batch entry and the SO human view.
 This module never writes to ERPNext and never guesses quantities or dates:
@@ -19,17 +19,26 @@ from key_test.production_evidence import (
     rollup_line_evidence,
     unknown_line_evidence,
 )
+from key_test.shipment_progress import (
+    SIGNED_PENDING_STAGE,
+    TRANSPORT_STAGE,
+    UNKNOWN_STAGE,
+    classify_stage,
+    progress_from_shipment,
+)
 from key_test.supply_query import dn_logistic_numbers
 
-SCHEMA_VERSION = "supply-facts/v1"
-RULE_VERSION = "2026-10-29.5"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-29.4"
+SCHEMA_VERSION = "supply-facts/v2"
+RULE_VERSION = "2026-10-29.6"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.1"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
 STAGE_PRODUCED_PENDING = "produced_pending_dn"
 STAGE_IN_TRANSIT = "shipped_in_transit"
 STAGE_ARRIVED = "arrived_not_sellable"
+STAGE_SIGNED_PENDING = "signed_pending_tongtool_receipt"
+STAGE_TONGTOOL_RECEIVED = "tongtool_received"
 STAGE_DELIVERED = "delivered_sellable"
 STAGE_CANCELLED = "cancelled"
 STAGE_RETURNED = "returned"
@@ -44,7 +53,8 @@ FILTER_KEYS = {
 }
 STAGE_VALUES = {
     STAGE_NOT_PLANNED, STAGE_IN_PRODUCTION, STAGE_PRODUCED_PENDING,
-    STAGE_IN_TRANSIT, STAGE_ARRIVED, STAGE_DELIVERED, STAGE_CANCELLED,
+    STAGE_IN_TRANSIT, STAGE_ARRIVED, STAGE_SIGNED_PENDING,
+    STAGE_TONGTOOL_RECEIVED, STAGE_DELIVERED, STAGE_CANCELLED,
     STAGE_RETURNED, STAGE_DRAFT, STAGE_UNKNOWN, STAGE_OVER_PRODUCED,
 }
 DEFAULT_LIMIT = 500
@@ -60,7 +70,8 @@ ARRIVED_STATUSES = {
 RECEIVED_STATUSES = {"已签收", "已上传POD"}
 EXECUTED_STAGES = {
     STAGE_NOT_PLANNED, STAGE_IN_PRODUCTION, STAGE_PRODUCED_PENDING,
-    STAGE_IN_TRANSIT, STAGE_ARRIVED, STAGE_DELIVERED,
+    STAGE_IN_TRANSIT, STAGE_ARRIVED, STAGE_SIGNED_PENDING,
+    STAGE_TONGTOOL_RECEIVED, STAGE_DELIVERED,
 }
 
 
@@ -295,26 +306,51 @@ def build_stage_balances(line, ctx):
             if net_qty <= 1e-9:
                 continue
             dn_numbers = [n["number"] for n in numbers.get(dn_name, [])]
-            statuses = [((shipment_by_number.get(number) or {}).get("status11") or "")
-                        for number in dn_numbers]
-            known = [s for s in statuses if s]
+            progresses = []
+            missing_progress = False
+            for number in dn_numbers:
+                shipment = shipment_by_number.get(number) or {}
+                progress = (shipment.get("progress")
+                            or progress_from_shipment(shipment)) if shipment else None
+                if not progress:
+                    missing_progress = True
+                    progress = {}
+                progresses.append((number, progress))
             stage, detail, reason = STAGE_IN_TRANSIT, "在途", ""
             if not dn_numbers:
                 detail, reason = "运单未登记", ""
-            elif (len(known) == len(statuses)
-                  and all(s in RECEIVED_STATUSES for s in known)):
-                stage, detail, reason = STAGE_ARRIVED, "已签收/POD（不等于可售）", "缺入库/上架证据"
-            elif (len(known) == len(statuses)
-                  and all(s in ARRIVED_STATUSES for s in known)):
-                stage, detail, reason = STAGE_ARRIVED, "到港/清关/派送（未证可售）", "缺入库/上架证据"
-            elif len(known) < len(statuses):
-                detail = ("运单状态未知（未匹配 Shipment）" if not known
-                          else "部分运单状态未知，不判定到港")
-                reason = "缺运单状态证据"
-            elif len(dn_numbers) > 1:
-                detail, reason = "多运单，到货分配未知", "多运单未提供数量分配证据"
-            if not ctx.get("shipment_permission"):
+            elif not ctx.get("shipment_permission"):
                 detail, reason = "状态未知（无 Shipment 读取权限）", "缺 Shipment 权限"
+            elif missing_progress:
+                stage, detail, reason = (STAGE_IN_TRANSIT,
+                                         "部分运单无状态，保守计在途",
+                                         "缺运单状态证据")
+            else:
+                classes = [classify_stage(progress) for _, progress in progresses]
+                conflicts = sorted({reason_code
+                                    for _, progress in progresses
+                                    for reason_code in progress.get("conflict_reasons") or []})
+                if all(item == SIGNED_PENDING_STAGE for item in classes):
+                    stage = STAGE_SIGNED_PENDING
+                    detail = ("已签收/POD，待通途入库" if len(dn_numbers) == 1
+                              else "多运单均已签收，单箱分配未知")
+                    reason = "缺通途采购入库证据"
+                    if len(dn_numbers) > 1:
+                        reason += "；多运单未提供数量分配证据"
+                    if conflicts:
+                        reason = reason + "；" + ",".join(conflicts)
+                elif any(item == SIGNED_PENDING_STAGE for item in classes):
+                    stage = STAGE_IN_TRANSIT
+                    detail = "部分运单已签收，分配未知，保守计在途"
+                    reason = "签收运单与在途运单未提供数量分配证据"
+                elif all(item == TRANSPORT_STAGE for item in classes):
+                    stage = STAGE_IN_TRANSIT
+                    detail = "运输中（到港/清关/转运/派送仍属运输）"
+                    reason = "未签收"
+                else:
+                    stage = STAGE_UNKNOWN
+                    detail = "物流进度冲突或未知"
+                    reason = ",".join(conflicts) or "物流状态未知"
             rows.append(_balance(line, stage, net_qty, uom, detail=detail,
                                  batch_key=dn_name, source=dn_name, reason=reason,
                                  warehouse=dn.get("warehouse"),
@@ -640,7 +676,8 @@ def build_availability(line, ctx, stage_rows):
             continue
         unit = stage_row.get("uom")
         warehouse = stage_row.get("warehouse")
-        if stage_row["stage"] in (STAGE_IN_TRANSIT, STAGE_ARRIVED):
+        if stage_row["stage"] in (STAGE_IN_TRANSIT, STAGE_ARRIVED,
+                                  STAGE_SIGNED_PENDING, STAGE_TONGTOOL_RECEIVED):
             dn = stage_row["batch_key"]
             dn_item = dn_items.get((dn, warehouse, unit), "")
             dn_numbers = [n["number"] for n in numbers.get(dn, [])]
@@ -653,8 +690,12 @@ def build_availability(line, ctx, stage_rows):
                 continue
             shipment = shipment_by_number.get(dn_numbers[0]) if dn_numbers else {}
             eta = (shipment or {}).get("eta")
-            reason = ("到货/POD 未证可售" if stage_row["stage"] == STAGE_ARRIVED
-                      else "ETA 未经入库/上架验证")
+            reason = ("已签收/待通途入库，未证可售"
+                      if stage_row["stage"] == STAGE_SIGNED_PENDING else
+                      "到货/POD 未证可售" if stage_row["stage"] == STAGE_ARRIVED else
+                      "通途入库不自动等于海外可售"
+                      if stage_row["stage"] == STAGE_TONGTOOL_RECEIVED else
+                      "ETA 未经入库/上架验证")
             rows.append(_tranche(
                 line, "%s::%s::%s::%s" % (dn, warehouse or "", dn_item,
                                           dn_numbers[0] if dn_numbers else "NO_NUMBER"),
@@ -729,6 +770,64 @@ def build_links(line, ctx):
                  uom=dn_uom or None,
                  proof="dn_logistics_number", allocation=allocation,
                  target_is_record=bool(shipment.get("shipment")))
+        if dn.get("tongtool_po"):
+            edge("Delivery Note", dn.get("dn"), None, "tongtool_purchase_order",
+                 "Tongtool Purchase Order", dn.get("tongtool_po"),
+                 proof="dn.custom_tongtool_purchase_order",
+                 allocation="code_only", target_is_record=False)
+    return rows
+
+
+def build_shipment_progress(line, ctx):
+    """Per Shipment progress evidence for one SO line; receipt side is unknown."""
+    rows = []
+    for dn in ctx.get("dns") or []:
+        numbers = (ctx.get("numbers_by_dn") or {}).get(dn.get("dn"), [])
+        for entry in numbers:
+            number = entry.get("number")
+            shipment = (ctx.get("shipment_by_number") or {}).get(number) or {}
+            progress = shipment.get("progress") or progress_from_shipment(shipment)
+            stage = classify_stage(progress)
+            is_final = bool(progress.get("is_final"))
+            rows.append({
+                "so": line.get("so"), "so_line_id": line.get("so_line"),
+                "item_code": line.get("item_code"), "dn": dn.get("dn"),
+                "shipment": shipment.get("shipment"), "logistic_number": number,
+                "tongtool_po": dn.get("tongtool_po"),
+                "warehouse": dn.get("warehouse"), "uom": dn.get("uom"),
+                "status11": shipment.get("status11"),
+                "status4": shipment.get("status4"),
+                "status_semantics": "unproven",
+                "eta": _day(shipment.get("eta")),
+                "atd": _day(shipment.get("atd")),
+                "ata": _day(shipment.get("ata")),
+                "dlvr": _day(shipment.get("dlvr")),
+                "latest_progress_status": progress.get("latest_progress_status"),
+                "latest_progress_at": progress.get("latest_progress_at"),
+                "progress_source": progress.get("progress_source"),
+                "is_final": is_final,
+                "conflict_flag": progress.get("conflict_flag"),
+                "conflict_reasons": progress.get("conflict_reasons") or [],
+                "progress_candidates": progress.get("progress_candidates") or [],
+                "stage": stage,
+                "shipment_signed_at": (progress.get("latest_progress_at")
+                                       if is_final else None),
+                "tongtool_first_receipt_at": None,
+                "tongtool_last_receipt_at": None,
+                "tongtool_receipt_at": None,
+                "receipt_lag_days": None,
+                "receipt_completion": "unknown",
+                "received_qty": None,
+                "pending_qty": None,
+                "received_evidence_status": "unknown",
+                "pending_evidence_status": "unknown",
+                "receipt_basis": ("signed_assumed" if is_final else None),
+                "identity_confidence": ("shipment_dn_link" if dn.get("dn") else "unproven"),
+                "receipt_source_status": "not_integrated",
+                "inventory_inclusion_status": "unknown",
+                "source_status": {"receipt": "not_integrated",
+                                  "inventory": "not_integrated"},
+            })
     return rows
 
 
@@ -744,6 +843,7 @@ def build_line_facts(line, ctx):
         "availability_schedule": build_availability(line, ctx, stage_rows),
         "links": build_links(line, ctx),
         "production_evidence": ctx.get("evidence") or {},
+        "shipment_progress": build_shipment_progress(line, ctx),
     }
 
 
@@ -1233,10 +1333,14 @@ def load_dns(lines):
     line_ids = [l.so_line for l in lines]
     if not line_ids:
         return {}, False
+    po_expr = ("dn.custom_tongtool_purchase_order"
+               if frappe.db.has_column("Delivery Note", "custom_tongtool_purchase_order")
+               else "null")
     rows = frappe.db.sql(
-        """select dn.name as dn, dn.posting_date as date, dn.status as status,
+        f"""select dn.name as dn, dn.posting_date as date, dn.status as status,
                   dn.docstatus as docstatus, ifnull(dn.is_return, 0) as is_return,
                   dn.return_against as return_against,
+                  {po_expr} as tongtool_po,
                   dni.so_detail as so_line, dni.name as dn_item, dni.dn_detail,
                   dni.qty, dni.uom, dni.warehouse
            from `tabDelivery Note Item` dni
@@ -1285,7 +1389,7 @@ def load_shipments(dn_names):
                       custom_zmt_status11 as status11, custom_zmt_status4 as status4,
                       custom_zmt_eta as eta, custom_zmt_atd as atd,
                       custom_zmt_ata as ata, custom_zmt_dlvr as dlvr,
-                      custom_zmt_match_status as match_status
+                      custom_zmt_match_status as match_status, modified
                from `tabShipment`
                where custom_zmt_logistic_number in %(numbers)s and docstatus in (0, 1)""",
             {"numbers": tuple(all_numbers)}, as_dict=True)
@@ -1296,6 +1400,7 @@ def load_shipments(dn_names):
         restricted = {c.shipment for c in candidates} != permitted
         for row in candidates:
             if row.shipment in permitted:
+                row["progress"] = progress_from_shipment(row)
                 shipments[row.number] = row
     return numbers, shipments, restricted
 
@@ -1334,6 +1439,7 @@ def get_supply_facts(filters=None, **kwargs):
         external = {
             "tongtool_po": "not_integrated",
             "receipt": "not_integrated",
+            "inventory": "not_integrated",
             "warehouse_receipt": "not_integrated",
         }
         if total_lines:
@@ -1346,6 +1452,9 @@ def get_supply_facts(filters=None, **kwargs):
         applied = {k: v for k, v in filters.items() if k not in ("limit", "offset")}
         empty_source_status = {
             name: _source_state(ok) for name, ok in permissions.items()}
+        for name in ("tongtool_po", "receipt", "inventory"):
+            empty_source_status[name] = {"available": False, "restricted": False,
+                                         "reason": "not_integrated"}
         coverage = {
             "sales_orders": 0, "so_lines": 0, "so_lines_total": total_lines,
             "sources": permissions,
@@ -1369,6 +1478,7 @@ def get_supply_facts(filters=None, **kwargs):
             "implementation_version": IMPLEMENTATION_VERSION,
             "as_of": str(as_of), "lines": [], "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [], "production_evidence": [],
+            "shipment_progress": [],
             "source_status": empty_source_status,
             "manifest": manifest,
             "applied_filters": applied, "pagination": pagination,
@@ -1504,6 +1614,7 @@ def get_supply_facts(filters=None, **kwargs):
         "milestones": sum(len(f["milestones"]) for f in facts),
         "availability_schedule": sum(len(f["availability_schedule"]) for f in facts),
         "links": sum(len(f["links"]) for f in facts),
+        "shipment_progress": sum(len(f.get("shipment_progress", [])) for f in facts),
     }
     jc_unavailable = bool(wo_status.get("job_card_unavailable_wos"))
     tn_unavailable = bool(wo_status.get("tracking_unavailable_wos"))
@@ -1538,8 +1649,12 @@ def get_supply_facts(filters=None, **kwargs):
         source_status["job_card_time_log"] = _source_state(
             wo_status["job_card_time_log"].get("available", True), False,
             wo_status["job_card_time_log"])
+    for name in ("tongtool_po", "receipt", "inventory"):
+        source_status[name] = {"available": False, "restricted": False,
+                               "reason": "not_integrated"}
     for name, state in source_status.items():
-        if not state.get("available", True):
+        if (not state.get("available", True)
+                and state.get("reason") != "not_integrated"):
             partial_reasons.append("%s source unavailable: %s" % (
                 name.replace("_", " "), state.get("reason", "unknown")))
     partial = bool(partial_reasons)
@@ -1554,6 +1669,7 @@ def get_supply_facts(filters=None, **kwargs):
         "external_sources": {
             "tongtool_po": "not_integrated",
             "receipt": "not_integrated",
+            "inventory": "not_integrated",
             "warehouse_receipt": "not_integrated",
         },
     }
@@ -1584,6 +1700,8 @@ def get_supply_facts(filters=None, **kwargs):
                  **(f.get("production_evidence") or {}))
             for f in facts
         ],
+        "shipment_progress": [
+            row for f in facts for row in f.get("shipment_progress", [])],
         "source_status": source_status,
         "manifest": manifest,
         "applied_filters": applied, "pagination": pagination,

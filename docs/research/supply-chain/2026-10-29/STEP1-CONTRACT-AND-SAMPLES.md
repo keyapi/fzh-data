@@ -17,7 +17,7 @@ scope: read-only; no production deploy; no business data writes
 
 | 问题 | 确认结果 |
 |---|---|
-| 双线进度裁决 | **终态粘性 + 否则取更晚时间**：已签收/已完结为终态，不被后续非终态人工更新覆盖；非终态按 `latest_progress_at` 更晚者胜 |
+| 双线进度裁决 | **终态粘性 + 实际优先 + 阶段顺序**：已签收/已完结为终态；实际事件优先于预计；非终态按物流阶段顺序比较，`event_at` 只用于同阶段内选择更晚实际事件；`source_updated_at` 不得提升阶段（STEP4 修正） |
 | 时间相同、状态不同 | `conflict_flag=true`，`latest_progress_status=unknown/null`，交人工复核；不静默选 |
 | 时间缺失 | 按 §0.2 唯一决策表：单缺时间选有时间者并标 `conflict_flag=true`；双缺时间 `unknown`；终态缺时间仍按终态粘性优先 |
 | 异常状态 | 两条都非终态时 `unknown` + `conflict_flag=true`；若另一条是终态，终态粘性优先（§0.2） |
@@ -40,11 +40,14 @@ line = {
    - 若两条都是终态且时间不同：选时间更晚的终态；
    - 若两条终态时间相同但状态不同：`unknown` + `conflict_flag=true`。
 2. 两条都不是终态：
-   - 两条都有 `event_time`：取更晚者；
+   - 实际事件优先于预计事件；
+   - 实际事件按物流阶段顺序比较（订舱→入仓→装柜→报关→离港→运输→到港→清关→转运→派送）；
+   - `event_at` 只用于同一阶段内选择更晚的实际事件；
+   - `source_updated_at` 只用于同来源同事件修订，不能提升阶段；
    - 只有一条有时间：选该条，但 `conflict_flag=true`；
-   - 两条都没有时间：`unknown` + `conflict_flag=true`；
+   - 两条都没有时间：同状态稳定，不同状态 `unknown` + `conflict_flag=true`；
    - 时间相同但状态不同：`unknown` + `conflict_flag=true`；
-   - 两条都非终态且任一条是异常状态：`unknown` + `conflict_flag=true`；若另一条是终态，终态粘性优先（见 §0.2）。
+   - 任一条是异常/撤销/退回/修正：`unknown` + `conflict_flag=true`；若另一条是终态，终态粘性优先（见 §0.2）。
 3. 输出必须同时保留两条原始线（状态、事件时间、来源、来源更新时间），便于追溯。
 
 示例（用户给的歧义案例）：

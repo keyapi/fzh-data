@@ -27,13 +27,26 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 import item_shipment_status as iss  # noqa: E402
 
+ROOT = EN_API.parent
+sys.path.insert(0, str(ROOT))
+from supply_chain_visibility.receipt_bridge import (  # noqa: E402
+    SnapshotRow, build_inventory_bridge,
+)
+from supply_chain_visibility.receipt_reconciliation import (  # noqa: E402
+    ReceiptEvent, SnapshotWindow,
+)
+from supply_chain_visibility.receipt_state import (  # noqa: E402
+    ReceiptLine, ShipmentLink, reconcile_signed_receipts,
+)
+
 METHOD = "/api/method/key_test.supply_facts.get_supply_facts"
 DATASETS = ("lines", "stage_balances", "milestones", "availability_schedule",
-            "links", "production_evidence")
+            "links", "production_evidence", "shipment_progress",
+            "receipt_reconciliation", "inventory_bridge")
 EVIDENCE_CLASSES = ("first_process_done", "all_process_done", "qc_performed",
                     "qc_passed", "stock_in_posted")
 DEFAULT_OUT = EN_API / "out" / "supply_facts"
-SCHEMA_VERSION = "supply-facts/v1"
+SCHEMA_VERSION = "supply-facts/v2"
 
 
 def _call(base_url, key, secret, filters):
@@ -319,6 +332,70 @@ def _flatten_production_evidence(rows):
     return flat
 
 
+def _flatten_shipment_progress(rows):
+    out = []
+    for row in rows or []:
+        item = dict(row)
+        for key in ("conflict_reasons", "progress_candidates", "source_status"):
+            if key in item and not isinstance(item[key], str):
+                item[key] = json.dumps(item[key], ensure_ascii=False, default=str)
+        out.append(item)
+    return out
+
+
+def _load_json(path):
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _receipt_event(row):
+    return ReceiptEvent(
+        receipt_id=row.get("receipt_id"), line_id=row.get("line_id"),
+        po_code=row.get("po_code"), sku=row.get("sku"),
+        warehouse=row.get("warehouse"), uom=row.get("uom"),
+        quantity=row.get("qty", row.get("quantity")),
+        stock_effective_at=row.get("receipt_effective_at",
+                                   row.get("stock_effective_at")),
+        uom_proven=bool(row.get("uom_proven")),
+        quantity_semantics_proven=bool(row.get("quantity_semantics_proven")),
+        po_line_id=row.get("po_line_id"), dn_line_id=row.get("dn_line_id"),
+        shipment_id=row.get("shipment_id"),
+        inclusion_proof=bool(row.get("inclusion_proof")))
+
+
+def _receipt_line(row):
+    return ReceiptLine(
+        receipt_id=row.get("receipt_id"), line_id=row.get("line_id"),
+        po_code=row.get("po_code"), sku=row.get("sku"),
+        warehouse=row.get("warehouse"), uom=row.get("uom"),
+        qty=row.get("qty", row.get("quantity")),
+        effective_at=row.get("effective_at", row.get("receipt_effective_at")),
+        quantity_semantics=row.get("quantity_semantics", "unknown"),
+        uom_proven=bool(row.get("uom_proven")),
+        identity_proven=bool(row.get("identity_proven")))
+
+
+def _shipment_link(row):
+    return ShipmentLink(
+        shipment=row.get("shipment"), dn=row.get("dn"),
+        po_codes=tuple(row.get("po_codes") or ()),
+        signed_at=row.get("signed_at"), qty=row.get("qty"),
+        uom=row.get("uom"), sku=row.get("sku"),
+        warehouse=row.get("warehouse"),
+        identity_confidence=row.get("identity_confidence", "unproven"),
+        status_semantics=row.get("status_semantics", "unproven"))
+
+
+def _snapshot_row(row):
+    return SnapshotRow(
+        inventory_snapshot_id=row.get("inventory_snapshot_id"),
+        sku=row.get("sku"), warehouse=row.get("warehouse"),
+        uom=row.get("uom"), available=row.get("available"),
+        as_of=row.get("as_of"), window_start=row.get("window_start"),
+        window_end=row.get("window_end"),
+        inclusion_proof=bool(row.get("inclusion_proof")))
+
+
 def _write_xlsx(path, result):
     from openpyxl import Workbook
     wb = Workbook()
@@ -350,12 +427,48 @@ def _write_xlsx(path, result):
                                 "started_at", "completed_at", "time_status",
                                 "observed_at", "gross_qty", "return_qty", "net_qty",
                                 "source_records", "reasons", "conflicts"],
+        "shipment_progress": ["so", "so_line_id", "item_code", "dn", "shipment",
+                              "logistic_number", "warehouse", "uom", "status11",
+                              "status4", "status_semantics", "eta", "atd", "ata",
+                              "dlvr", "latest_progress_status", "latest_progress_at",
+                              "progress_source", "is_final", "conflict_flag",
+                              "conflict_reasons", "progress_candidates", "stage",
+                              "shipment_signed_at", "tongtool_first_receipt_at",
+                              "tongtool_last_receipt_at", "tongtool_receipt_at",
+                              "receipt_lag_days", "receipt_completion",
+                              "received_qty", "pending_qty",
+                              "received_evidence_status", "pending_evidence_status",
+                              "receipt_basis", "identity_confidence",
+                              "receipt_source_status", "inventory_inclusion_status",
+                              "source_status"],
+        "receipt_reconciliation": ["shipment", "dn", "po_codes", "sku", "warehouse",
+                                   "uom", "status", "status_semantics",
+                                   "shipment_signed_at", "tongtool_first_receipt_at",
+                                   "tongtool_last_receipt_at", "tongtool_receipt_at",
+                                   "receipt_lag_days", "receipt_completion",
+                                   "received_qty", "pending_qty",
+                                   "received_evidence_status",
+                                   "pending_evidence_status", "receipt_basis",
+                                   "identity_confidence", "exclusion_reason",
+                                   "receipt_duplicates", "unmatched_receipt_rows"],
+        "inventory_bridge": ["receipt_id", "line_id", "po_code", "po_line_id",
+                             "dn_line_id", "shipment_id", "sku", "warehouse", "uom",
+                             "qty", "receipt_effective_at",
+                             "receipt_inclusion_status", "inclusion_proof",
+                             "post_snapshot_delta_qty", "conditional_delta_qty",
+                             "eligible", "count_in_inventory", "inventory_snapshot_id",
+                             "source_as_of", "snapshot_window_start",
+                             "snapshot_window_end", "exclusion_reason", "duplicate_of"],
     }
     for name in DATASETS:
         ws = wb.create_sheet(name)
         headers = columns[name]
-        rows = (_flatten_production_evidence(result[name])
-                if name == "production_evidence" else result[name])
+        if name == "production_evidence":
+            rows = _flatten_production_evidence(result[name])
+        elif name == "shipment_progress":
+            rows = _flatten_shipment_progress(result[name])
+        else:
+            rows = result[name]
         ws.append(headers)
         for row in rows:
             ws.append([row.get(key) for key in headers])
@@ -402,6 +515,10 @@ def main(argv=None):
     parser.add_argument("--page-size", type=int, default=500)
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--no-excel", action="store_true")
+    parser.add_argument("--receipt-state-json",
+                        help="本地只读：{links:[...],receipts:[...]} 生成 receipt_reconciliation")
+    parser.add_argument("--inventory-bridge-json",
+                        help="本地只读：{snapshots:[...],receipts:[...]} 生成 inventory_bridge")
     args = parser.parse_args(argv)
 
     if not (args.codes or args.so or args.all):
@@ -418,6 +535,8 @@ def main(argv=None):
 
     result = {"lines": [], "stage_balances": [], "milestones": [],
               "availability_schedule": [], "links": [], "production_evidence": [],
+              "shipment_progress": [], "receipt_reconciliation": [],
+              "inventory_bridge": [],
               "partial": False,
               "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
               "restricted": {}, "external_sources": {},
@@ -469,6 +588,21 @@ def main(argv=None):
         return 1
 
     _finalize_coverage(result)
+    if args.receipt_state_json:
+        payload = _load_json(args.receipt_state_json)
+        result["receipt_reconciliation"] = reconcile_signed_receipts(
+            [_shipment_link(row) for row in payload.get("links") or []],
+            [_receipt_line(row) for row in payload.get("receipts") or []])
+    if args.inventory_bridge_json:
+        payload = _load_json(args.inventory_bridge_json)
+        windows = [SnapshotWindow(row["start"], row["end"])
+                   for row in payload.get("collection_windows") or []]
+        bridge = build_inventory_bridge(
+            [_snapshot_row(row) for row in payload.get("snapshots") or []],
+            [_receipt_event(row) for row in payload.get("receipts") or []],
+            collection_windows=windows or None)
+        result["inventory_bridge"] = bridge["rows"]
+        result["_inventory_bridge_summary"] = bridge["summary"]
     query_seconds = time.perf_counter() - started
     run_id = hashlib.sha1(("%s|%s|%s|%s|%s|%s" % (
         result["as_of"], args.codes, args.so, args.all, len(result["lines"]),
@@ -523,7 +657,23 @@ def main(argv=None):
             "production_evidence": {
                 "lines": len(result["production_evidence"]),
                 "rows": len(_flatten_production_evidence(result["production_evidence"])),
-            }
+            },
+            "shipment_progress": {
+                "rows": len(result["shipment_progress"]),
+                "source": "server",
+            },
+            "receipt_reconciliation": {
+                "rows": len(result["receipt_reconciliation"]),
+                "source": ("local_receipt_state"
+                           if args.receipt_state_json else "not_integrated"),
+            },
+            "inventory_bridge": {
+                "rows": len(result["inventory_bridge"]),
+                "source": ("local_inventory_bridge"
+                           if args.inventory_bridge_json else "not_integrated"),
+                "summary": result.get("_inventory_bridge_summary"),
+                "eligible": False,
+            },
         }
         manifest["files"] = files
         _write_json(tmp_dir / "manifest.json", manifest)

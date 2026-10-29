@@ -19,7 +19,8 @@ def _load_exporter():
 def _empty_target():
     return {"lines": [], "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [], "production_evidence": [],
-            "partial": False,
+            "shipment_progress": [], "receipt_reconciliation": [],
+            "inventory_bridge": [], "partial": False,
             "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
             "restricted": {}, "external_sources": {},
             "notes": [], "schema_version": "", "rule_version": "",
@@ -29,6 +30,8 @@ def _empty_target():
 def _batch(**coverage):
     return {"lines": [], "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [], "production_evidence": [],
+            "shipment_progress": [], "receipt_reconciliation": [],
+            "inventory_bridge": [],
             "manifest": {"schema_version": "supply-facts/v1",
                          "implementation_version": "impl-v1",
                          "partial": True, "coverage": coverage,
@@ -426,6 +429,13 @@ class ProductionEvidenceExportTest(unittest.TestCase):
             "availability_schedule": [], "links": [],
             "production_evidence": [self._pe_line("SOI-%05d" % i)
                                     for i in range(offset, end)],
+            "shipment_progress": [{"so": "SO-1",
+                                   "so_line": "SOI-%05d" % i,
+                                   "shipment": "SHIP-1",
+                                   "stage": "shipped_in_transit"}
+                                  for i in range(offset, end)],
+            "receipt_reconciliation": [],
+            "inventory_bridge": [],
             "manifest": {
                 "schema_version": "supply-facts/v1", "rule_version": "v1",
                 "implementation_version": "impl-v1", "as_of": "2026-10-29",
@@ -442,7 +452,7 @@ class ProductionEvidenceExportTest(unittest.TestCase):
             },
         }
 
-    def _run(self, total=2, excel=False):
+    def _run(self, total=2, excel=False, extra_argv=()):
         def fake_call(base, key, secret, filters):
             return self._page(total, int(filters.get("offset") or 0),
                               int(filters["limit"]))
@@ -450,6 +460,7 @@ class ProductionEvidenceExportTest(unittest.TestCase):
         argv = ["--so", "SO-1", "--test", "--page-size", "1"]
         if not excel:
             argv.append("--no-excel")
+        argv.extend(extra_argv)
         with mock.patch.object(self.exporter.iss, "load_credentials",
                                return_value=("k", "s")), \
              mock.patch.object(self.exporter.iss, "resolve_env_files",
@@ -467,6 +478,10 @@ class ProductionEvidenceExportTest(unittest.TestCase):
                                       .read_text(encoding="utf-8"))
                 digest = hashlib.sha256(
                     (run / "production_evidence.json").read_bytes()).hexdigest()
+                datasets = {name: json.loads((run / (name + ".json"))
+                                               .read_text(encoding="utf-8"))
+                            for name in ("shipment_progress", "receipt_reconciliation",
+                                         "inventory_bridge")}
                 xlsx_rows = None
                 if excel:
                     from openpyxl import load_workbook
@@ -474,10 +489,10 @@ class ProductionEvidenceExportTest(unittest.TestCase):
                     xlsx_rows = list(wb["production_evidence"].iter_rows(
                         values_only=True))
                     wb.close()
-                return payload, manifest, digest, xlsx_rows
+                return payload, manifest, digest, xlsx_rows, datasets
 
     def test_production_evidence_is_exported_with_checksum_and_rows(self):
-        payload, manifest, digest, _ = self._run(total=2)
+        payload, manifest, digest, _, _ = self._run(total=2)
         self.assertEqual(len(payload), 2)
         entry = manifest["files"]["production_evidence.json"]
         self.assertEqual(entry["rows"], 2)
@@ -499,11 +514,66 @@ class ProductionEvidenceExportTest(unittest.TestCase):
         self.assertEqual(stock["line_role"], "primary")
 
     def test_excel_sheet_matches_json_row_count(self):
-        payload, manifest, _, xlsx_rows = self._run(total=2, excel=True)
+        payload, manifest, _, xlsx_rows, _ = self._run(total=2, excel=True)
         self.assertEqual(len(xlsx_rows) - 1,
                          manifest["datasets"]["production_evidence"]["rows"])
         self.assertEqual(len(xlsx_rows) - 1,
                          len(self.exporter._flatten_production_evidence(payload)))
+
+    def test_shipment_progress_and_unintegrated_sources_are_exported(self):
+        _, manifest, _, _, datasets = self._run(total=2)
+        self.assertEqual(manifest["datasets"]["shipment_progress"]["rows"], 2)
+        self.assertEqual(len(datasets["shipment_progress"]), 2)
+        self.assertIn("shipment_progress.json", manifest["files"])
+        self.assertEqual(
+            manifest["datasets"]["receipt_reconciliation"]["source"],
+            "not_integrated")
+        self.assertEqual(manifest["datasets"]["inventory_bridge"]["source"],
+                         "not_integrated")
+        self.assertFalse(manifest["datasets"]["inventory_bridge"]["eligible"])
+
+    def test_local_receipt_and_inventory_inputs_are_exported(self):
+        state = {
+            "links": [{"shipment": "SHIP-1", "dn": "DN-1",
+                       "po_codes": ["PO-1"], "signed_at": "2026-10-20",
+                       "qty": 10, "uom": "个", "sku": "SKU-1",
+                       "warehouse": "WH-1", "identity_confidence": "proven"}],
+            "receipts": [{"receipt_id": "R1", "line_id": "L1",
+                          "po_code": "PO-1", "sku": "SKU-1",
+                          "warehouse": "WH-1", "uom": "个", "qty": 10,
+                          "effective_at": "2026-10-25",
+                          "quantity_semantics": "increment",
+                          "uom_proven": True, "identity_proven": True}],
+        }
+        bridge = {
+            "snapshots": [{"inventory_snapshot_id": "SNAP-1", "sku": "SKU-1",
+                           "warehouse": "WH-1", "uom": "个", "available": 100,
+                           "as_of": "2026-10-05T00:00:00+00:00",
+                           "window_start": "2026-10-01T00:00:00+00:00",
+                           "window_end": "2026-10-05T23:59:59+00:00"}],
+            "receipts": [{"receipt_id": "R1", "line_id": "L1",
+                          "po_code": "PO-1", "sku": "SKU-1",
+                          "warehouse": "WH-1", "uom": "个", "qty": 10,
+                          "receipt_effective_at": "2026-10-10T10:00:00+00:00",
+                          "uom_proven": True,
+                          "quantity_semantics_proven": True}],
+        }
+        with tempfile.TemporaryDirectory() as inputs:
+            state_path = Path(inputs) / "state.json"
+            bridge_path = Path(inputs) / "bridge.json"
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            bridge_path.write_text(json.dumps(bridge), encoding="utf-8")
+            _, manifest, _, _, datasets = self._run(
+                total=1, extra_argv=["--receipt-state-json", str(state_path),
+                                     "--inventory-bridge-json", str(bridge_path)])
+        self.assertEqual(datasets["receipt_reconciliation"][0]["status"],
+                         "tongtool_received")
+        self.assertEqual(datasets["inventory_bridge"][0]["receipt_inclusion_status"],
+                         "after_snapshot")
+        self.assertEqual(manifest["datasets"]["receipt_reconciliation"]["source"],
+                         "local_receipt_state")
+        self.assertEqual(manifest["datasets"]["inventory_bridge"]["source"],
+                         "local_inventory_bridge")
 
     def test_write_failure_does_not_switch_latest_pointer(self):
         with tempfile.TemporaryDirectory() as td:
