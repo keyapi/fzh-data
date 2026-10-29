@@ -96,6 +96,27 @@
 - Windows 下 Python 的 `python3` 命令找不到 `/tmp` 路径
 - **解决**: 使用 Windows 绝对路径 `C:\Users\DEV01\AppData\Local\Temp\` 或直接写文件用 `python`（不带 3）
 
+### 问题 9：公网端口暴露 → 陌生账号密码注册（2026-10-29）
+
+- **表现**: 用户表出现 ID 26-30 五个陌生账号，无 email / 无 oidc_id，来源为阿里云新加坡
+  与纽约 VPN；nginx 日志里这些 IP 0 条记录。
+- **原因**: 生产 compose 曾把容器映射为 `'3000:3000'`（实际监听 `0.0.0.0:3000`），
+  公网可直连网关、绕过 nginx 的注册封堵；应用层 `PasswordRegisterEnabled` 未设置，默认 `true`。
+- **修复**: 关 `PasswordRegisterEnabled` + 端口改 `'127.0.0.1:3000:3000'` + nginx 改正则匹配；
+  5 个账号与 6 个令牌先禁用观察。**实际消耗 0**（3 次模型调用被"用户额度不足"挡下）。
+- **注册开关分工（别改错）**：
+
+  | 键 | 作用 | 本项目取值 |
+  |----|------|-----------|
+  | `RegisterEnabled` | 是否允许创建新账号（密码注册**和** OIDC 自动建号都看它） | **true**（关掉新员工无法首登） |
+  | `PasswordRegisterEnabled` | 是否允许账号密码注册 | **false** |
+
+- `options` 表直写后需**重启容器**才生效（OptionMap 常驻内存）。
+- **排查提示**: 本版本鉴权失败返回 `HTTP 200 + success:false`，看 `/api/option/` 之类的
+  访问日志不能只看状态码。
+- **验收**: `ss -lntp | grep 3000` 必须只有 `127.0.0.1:3000`。
+- 详细复盘: `../docs/solutions/integration-issues/new-api-open-registration-exposure.md`
+
 ---
 
 ## 三、部署后初始化配置流程
@@ -403,6 +424,10 @@ cron 每日 3 点 → offboarding-check: 离职兜底（支持 --dry-run / --uni
 cron 0 9/12/14/18 工作日 + 0 0 周末 + */30 → deepseek_time_pricing: 分时切价
 Stream 实时 → user_leave_org → 即刻封号
 ```
+
+> ⚠️ **端口硬约束（2026-10-29）**：`new-api` 容器必须绑 `127.0.0.1:3000`，对外只经 nginx。
+> 曾因 `'3000:3000'` 暴露公网被扫描器批量注册（见问题 9）。改 compose 后用
+> `ss -lntp | grep 3000` 复核，出现 `0.0.0.0:3000` 即为回退。
 
 > ⚠️ **离职封号双通道（2026-09-08 加固 + 当日已部署生产）**：每日检查用 `getbyunionid` 60121
 > 判定离职（不是旧逻辑的 `active` 字段）；实时事件优先查本地 `dingtalk_identity_map`(unionId↔userId)
