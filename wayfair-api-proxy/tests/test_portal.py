@@ -130,6 +130,22 @@ def test_portal_requires_csrf_and_same_origin(tmp_path, monkeypatch):
         assert cross.json()["detail"]["code"] == "forbidden_origin"
 
 
+def test_portal_accepts_same_host_with_proxy_scheme_difference(tmp_path, monkeypatch):
+    monkeypatch.setenv("WAYFAIR_PORTAL_SESSION_SECRET", "portal-secret")
+    app = create_app(_config(), db_path=tmp_path / "wayfair.db")
+    with TestClient(app) as client:
+        _login(client, monkeypatch)
+        csrf = _csrf(client)
+        response = client.post(
+            "/portal/key/issue",
+            data={"csrf": csrf},
+            headers={"Origin": "https://testserver"},
+        )
+
+    assert response.status_code == 200
+    assert "wf-" in response.text
+
+
 def test_portal_does_not_touch_manual_keys(tmp_path, monkeypatch):
     monkeypatch.setenv("WAYFAIR_PORTAL_SESSION_SECRET", "portal-secret")
     app = create_app(_config(), db_path=tmp_path / "wayfair.db")

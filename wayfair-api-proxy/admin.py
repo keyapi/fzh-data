@@ -95,12 +95,17 @@ def build_admin_router(config: AppConfig, db: Database, session_secret: str) -> 
         return session
 
     def require_same_origin(request: Request) -> None:
+        """Loose same-host check; admin writes also require a session cookie."""
         origin = request.headers.get("origin")
-        if origin:
-            if urlparse(origin).netloc != request.headers.get("host", ""):
+        if not origin:
+            if request.headers.get("sec-fetch-site") == "cross-site":
                 raise _error(403, "forbidden_origin", "Cross-origin admin request rejected")
             return
-        if request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
+        if origin == "null":
+            return
+        expected_host = (request.headers.get("host", "").split(":")[0]).lower()
+        origin_host = (urlparse(origin).hostname or "").lower()
+        if origin_host and origin_host != expected_host:
             raise _error(403, "forbidden_origin", "Cross-origin admin request rejected")
 
     def client_secret() -> str:

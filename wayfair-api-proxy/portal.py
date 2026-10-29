@@ -146,14 +146,21 @@ def build_portal_router(config: AppConfig, db: Database, session_secret: str) ->
         return session
 
     def require_same_origin(request: Request) -> None:
+        """Loose same-host check; CSRF token is the primary protection.
+
+        Browsers/proxies differ on scheme and default-port formatting, so only
+        the hostname is compared. Cross-site hosts are still rejected.
+        """
         origin = request.headers.get("origin")
-        if origin:
-            scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-            scheme = scheme.split(",")[0].strip()
-            if urlparse(origin).scheme != scheme or urlparse(origin).netloc != request.headers.get("host", ""):
+        if not origin:
+            if request.headers.get("sec-fetch-site") == "cross-site":
                 raise _error(403, "forbidden_origin", "跨源请求被拒绝")
             return
-        if request.headers.get("sec-fetch-site") in ("cross-site", "same-site"):
+        if origin == "null":
+            return
+        expected_host = (request.headers.get("host", "").split(":")[0]).lower()
+        origin_host = (urlparse(origin).hostname or "").lower()
+        if origin_host and origin_host != expected_host:
             raise _error(403, "forbidden_origin", "跨源请求被拒绝")
 
     async def read_form(request: Request) -> dict:
