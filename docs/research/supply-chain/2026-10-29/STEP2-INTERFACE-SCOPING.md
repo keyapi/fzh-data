@@ -174,6 +174,10 @@ fzh-data supply_chain_visibility: 90 passed + 5 subtests
   （含 501 行单 SO/客户码导出、分页越界、排序、版本混合拒绝）
 ```
 
+真实 Frappe 分发探针（测试站，只读、未部署）：用测试站 `frappe.call/get_newargs` 调新代码的 `_normalize_filters`：
+- 携带 `cmd` / `csrf_token` / `_` 的合法请求：返回 `sales_order=SO-TEST`、`limit=500`，未被拒绝；
+- 顶层误传 `sales_order`：被拒绝（无 site 上下文的探针抛 `RuntimeError: object is not bound`；在 bench site 上应抛 `frappe.ValidationError`，见 `test_supply_facts_dispatch.py` 的 endpoint 用例）。
+
 ## 7. 未解决 / 下一阶段
 
 1. 测试站部署与普通角色端到端验证尚未做（需用户授权部署/重启）；生产未部署。
