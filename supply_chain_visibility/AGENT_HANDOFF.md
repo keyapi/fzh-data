@@ -40,6 +40,14 @@
 - **物料需求 / 采购订单 / 采购入库**：EN 侧基本空白，**先记录不做**。
 - 呈现形式**建议路线**（嵌入单据 → 原生 KPI/例外 → 小范围独立屏；AI/MCP 仅内部受监督助手）：
   [docs/research/presentation-forms.md](docs/research/presentation-forms.md)。
+- **预测/库存/交期/分型研究**（先读再动手，别重造）：
+  `docs/research/supply-chain/2026-10-20/claude/control/reviews/` 下的
+  `2026-10-27-existing-assets-forecast-inventory.md`（已有资产）、
+  `2026-10-27-frepple-evaluation.md`（借逻辑不部署）、
+  `2026-10-27-sku-segmentation-stockout-promotion.md`（分型/断货/9 月异动）。
+- **经验沉淀**：
+  `docs/solutions/tooling-decisions/frepple-evaluation-and-borrow-logic.md`（frePPLe 借逻辑不部署）、
+  `docs/solutions/workflow-issues/supply-sku-segmentation-and-stockout-evidence.md`（分型/断货口径）。
 
 ## 5. 维护约定
 

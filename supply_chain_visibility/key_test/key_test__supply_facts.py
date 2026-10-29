@@ -86,7 +86,7 @@ def _qty_status(qty, uom):
 
 
 def _source_state(available, restricted=False, status=None):
-    """Uniform source status: available/restricted plus preserved reason/error."""
+    """Uniform source status. available/restricted plus preserved reason/error."""
     state = {"available": bool(available), "restricted": bool(restricted),
              "reason": ""}
     if status:

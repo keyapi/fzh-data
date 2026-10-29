@@ -59,3 +59,27 @@ date: 2026-10-23
   检查项、业务确认、禁止项），给审核/合并会话直接使用。
 - **2026-10-27 key_test #2 生产部署**：`key_test` 生产同步 `c34fa53`（PR #2）；`bench migrate` + `clear-cache` +
   `bench restart`；`SO Chain Overview` / `Supply Timeline` 冒烟通过。详见 `JACK_QA.md` 的 `P0-PROD-DEPLOY-2026-10-27`。
+
+- **2026-10-27 frePPLe 评估（只读研究，已按反馈修订）**：新增 `reviews/2026-10-27-frepple-evaluation.md`。
+  事实：社区版 9.19.0（2026-10-09）为 MIT（8.0 起，7.x 为 AGPLv3），企业/云闭源；库存规划与承诺交期 UI 仅商业版；
+  **但社区源码含预测（Croston/Holt-Winters/离群值）、buffer 安全库存/短缺求解、`STATUS_QUOTE/INQUIRY`**；
+  ERPNext 连接器为第三方 GPL-3.0、2022-02 后未更新，但 `export_*()` 实体映射可读可借（LICENSE 与 hooks 的 MIT 声明不一致，以 GPL-3.0 为准）。
+  结论：**复用已有、按需借逻辑**——预测/交期/净额已有资产，库存补政策表；frePPLe 只借分配/CTP 逻辑；
+  B 只在结果有争议时做对照；C 不做。不改生产、不接 EN、不下单。
+
+- **2026-10-27 已有资产审计（先搜再造）**：新增 `reviews/2026-10-27-existing-assets-forecast-inventory.md`。
+  核实：statsforecast **2.1.1** 已在 `keyapi/forecast-refresh-oct27` 声明并实际使用（run `forecast-20261027-r2`，45 tests，
+  2,413/2,423 可预测）；库存政策已有 `inventory_policy.py`/`sc08_conformal.py` 与 SC08 结论；
+  交期已有 `sc13/leadtime_config.py`；供应净额已有 `supply_netting/`（35 tests，run-2026-10-23）。
+  但 forecast/netting 两条分支**未 push、无 PR**，预测未接净额，库存政策未生产化。
+  结论：**复用已有，不重造**；frePPLe 只借分配/CTP 逻辑。同步修订 frePPLe 评估文档的推荐与工作量。
+- **2026-10-27 RESEARCH_ADOPTION 状态更正**：第 2–4 行从“statsforecast 未安装/无实现”改为实际状态
+  （Croston/TSB 已对照未采用；AutoETS 已实现且为规则默认；combo 已对照未采用），并加 2026-10-27 状态说明。
+- **2026-10-27 SKU 分型与 9 月异动归因（只读，修正版）**：新增/重写 `reviews/2026-10-27-sku-segmentation-stockout-promotion.md`。
+  先排包装费/无 `sku_item` 的非商品（`497268621` 通途品名“礼盒包装费 ETSY”），再按成品/半成品/皮壳、全渠道销量分型：
+  2,253 个产品 SKU，正常 557（24.7%）+ 断货/季节干扰 11；慢销 513；长尾 509；短史 663。
+  “历史有销量、近6月无销量”993 个：成品 47 个有库存（395 件）、122 个无库存；皮壳 124 个有库存（1,509 件）；
+  `CENKZ159410289-BLACK-153` 等全渠道畅销皮壳是正常，不是长尾。
+  9 月全渠道 26 个候选，Amazon-only 14 个；PJ 22 个检查点、6 个间隔 >7 天，不能证明“断货超过一周”；
+  零库存当日有销量仅 1.3%；Jeck 表是成本系数表不是促销表。
+  本地名单：`D:/Work/fzh-order-store/analysis/sku_classification_by_role_20261027.csv`。

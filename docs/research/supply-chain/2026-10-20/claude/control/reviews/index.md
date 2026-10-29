@@ -29,6 +29,14 @@ date: 2026-10-23
 | [2026-10-22-t19-wo-dn](2026-10-22-t19-wo-dn.md) | WO/DN 覆盖率：0 可验证 / 32 有材料不可用 / 2,277 无材料 |
 | [2026-10-22-eta-cover-uom-evidence](2026-10-22-eta-cover-uom-evidence.md) | ETA 0/524、Cover 情景、UOM unknown |
 
+## 工具与选型评估
+
+| 文档 | 内容 |
+|---|---|
+| [2026-10-27-sku-segmentation-stockout-promotion](2026-10-27-sku-segmentation-stockout-promotion.md) | 修正版 SKU 分型（先排包装费/费用；按成品/半成品/皮壳；全渠道）；PJ 检查点非每周；断货 30 天相关 vs 当日 1.3%；9 月全渠道 26 / Amazon-only 14；Jeck 表是成本表非促销 |
+| [2026-10-27-existing-assets-forecast-inventory](2026-10-27-existing-assets-forecast-inventory.md) | 先搜再造资产审计：预测/statsforecast、库存政策、交期配置、供应净额的代码/分支/PR/测试/缺口；结论：复用，不重造 |
+| [2026-10-27-frepple-evaluation](2026-10-27-frepple-evaluation.md) | frePPLe 版本/许可证/功能映射/ERPNext 集成/源码借用清单/其他开源；结论：复用已有预测/交期/净额，补库存政策表；frePPLe 只借分配/CTP 逻辑 |
+
 ## 映射与目录
 
 | 文档 | 内容 |

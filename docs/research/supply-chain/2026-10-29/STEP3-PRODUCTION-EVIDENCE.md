@@ -1,11 +1,11 @@
 ---
 okf: v0.1
 type: Spec
-title: 第三步：四类生产证据的权威来源、数量推导与验收矩阵（只读设计 v2）
+title: 第三步：四类生产证据的权威来源、数量推导与验收（含测试站功能验收）
 date: 2026-10-29
 updated: 2026-10-29
 owner: claude-worker
-status: batch-2-consumers-integrated-locally; no production deploy; step-2 permission acceptance still pending
+status: test-station functional acceptance passed; ordinary restricted-user permission acceptance pending; production not deployed
 scope: read-only; test-station evidence only; no business data writes; no permission expansion
 tags: [supply-chain, production-evidence, job-card, stock-entry, quality-inspection, work-order, acceptance]
 ---

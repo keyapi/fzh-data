@@ -42,7 +42,7 @@ def _num(v):
 
 
 def _merge_source_status(current, incoming):
-    """Conservative aggregation: unavailable/restricted is never overwritten."""
+    """Conservative aggregation. Unavailable/restricted is never overwritten."""
     incoming = dict(incoming or {})
     if current is None:
         return incoming

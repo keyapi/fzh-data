@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HARNESS = Path(__file__).resolve().parent / "js" / "render_harness.js"
 JS_PRIMARY = ROOT / "public" / "js" / "sales_order.js"
 JS_MIRROR = ROOT / "key_test__sales_order_chain_append.js"
+QC_RESULT = "Accepted"
 
 
 def _js_path():
@@ -28,7 +29,7 @@ def _line(**overrides):
         "all_process_estimated": None, "instock_estimated": None,
         "reported_status": "known", "instock_status": "known",
         "reported_confidence": "proven", "instock_confidence": "proven",
-        "qc_status": "known", "qc_passed_status": "Accepted",
+        "qc_status": "known", "qc_passed_status": QC_RESULT,
         "stage": 3, "substate": "全工序完成待出库", "delivery_date": "2026-10-30",
         "overdue_days": 0, "wo_count": 1, "tn_count": 1, "prog": None,
         "work_orders": [], "forgot_complete": [], "dns": [],
