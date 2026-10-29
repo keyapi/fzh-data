@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-29 | new-api 公网端口暴露导致陌生账号密码注册 | [integration-issues/new-api-open-registration-exposure.md](integration-issues/new-api-open-registration-exposure.md) |
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |
 | 2026-10-27 | 供应分型与断货证据 — 先排费用/组件，再按角色分型；PJ 检查点不是每周 | [workflow-issues/supply-sku-segmentation-and-stockout-evidence.md](workflow-issues/supply-sku-segmentation-and-stockout-evidence.md) |
 | 2026-10-27 | frePPLe 评估 — 社区 MIT、企业闭源；借求解逻辑，不部署 | [tooling-decisions/frepple-evaluation-and-borrow-logic.md](tooling-decisions/frepple-evaluation-and-borrow-logic.md) |

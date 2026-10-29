@@ -96,6 +96,42 @@
 - Windows 下 Python 的 `python3` 命令找不到 `/tmp` 路径
 - **解决**: 使用 Windows 绝对路径 `C:\Users\DEV01\AppData\Local\Temp\` 或直接写文件用 `python`（不带 3）
 
+### 问题 9：公网端口暴露 → 陌生账号密码注册（2026-10-29）
+
+- **表现**: 用户表出现 ID 26-30 五个陌生账号，无 email / 无 oidc_id，来源为阿里云新加坡
+  与纽约 VPN；nginx 日志里这些 IP 0 条记录。
+- **原因**: 生产 compose 曾把容器映射为 `'3000:3000'`（实际监听 `0.0.0.0:3000`），
+  公网可直连网关、绕过 nginx 的注册封堵；应用层 `PasswordRegisterEnabled` 未设置，默认 `true`。
+- **修复**: 关 `PasswordRegisterEnabled` + 端口改 `'127.0.0.1:3000:3000'` + nginx 改正则匹配；
+  5 个账号与 6 个令牌先禁用观察。**实际消耗 0**（3 次模型调用被"用户额度不足"挡下）。
+- **注册开关分工（别改错）**：
+
+  | 键 | 作用 | 本项目取值 |
+  |----|------|-----------|
+  | `RegisterEnabled` | 是否允许创建新账号（密码注册**和** OIDC 自动建号都看它） | **true**（关掉新员工无法首登） |
+  | `PasswordRegisterEnabled` | 是否允许账号密码注册 | **false** |
+
+- `options` 表直写后需**重启容器**才生效（OptionMap 常驻内存）。
+- **排查提示**: 本版本鉴权失败返回 `HTTP 200 + success:false`，看 `/api/option/` 之类的
+  访问日志不能只看状态码。
+- **验收**: `ss -lntp | grep 3000` 必须只有 `127.0.0.1:3000`。
+- 详细复盘: `../docs/solutions/integration-issues/new-api-open-registration-exposure.md`
+
+### 问题 10：OIDC 桥 `redirect_uri` 未校验 + `SESSION_SECRET` 是弱口令（2026-10-29）
+
+- **桥接器**：`/authorize` 原本接受任意 `redirect_uri`，`/token` 不校验客户端。攻击者可把授权码
+  引到自己站点，再用该 code 换 new-api 会话，接管点开链接的员工账号。已加白名单
+  （`ALLOWED_REDIRECT_URIS`，精确匹配；默认两个真实客户端），详见
+  `../new-api-dingtalk-oidc/docs/log.md` v0.5.0。
+- **SESSION_SECRET**：生产 compose 里原本是 `new-api-session-secret-shanghai` 这种可猜的字面量。
+  gin cookie session 用它做 HMAC，secret 一旦被猜到即可伪造任意会话。已轮换为 32 字节随机值。
+  **轮换只让浏览器登录态失效，不改变任何 API 令牌（`tokens.key` 是库里的随机串）**。
+- **未做（已知项）**：
+  - `auto-bind-subscription.py` 只按 `user_oauth_bindings` 判断，不区分 provider ——
+    再加第三方登录渠道时要补过滤，否则任一新 provider 的首登用户都会自动拿到订阅与默认令牌。
+  - 主机上 `mariadbd`(3306) 与 frappe socketio(9000) 监听 `0.0.0.0`，目前靠云安全组挡住
+    （外部三地探测超时）；MariaDB 用户全为 `@localhost`。属纵深不足，建议改绑回环。
+
 ---
 
 ## 三、部署后初始化配置流程
@@ -230,6 +266,23 @@ POST /api/subscription/admin/users/{user_id}/subscriptions
 GET /api/subscription/admin/users/{user_id}/subscriptions
 ```
 
+### 重置用户「今日额度」：`reset-user-quota.py`
+
+后台路径是「用户管理 → 用户行『更多』→ 订阅管理 → 作废 → 选套餐 → 新增订阅」；
+命令行等价操作（**走官方管理接口，不直接改表**）：
+
+```bash
+cd /opt/new-api
+python3 reset-user-quota.py --init-token      # 首次：为 root 生成管理令牌写入 .secrets.env
+python3 reset-user-quota.py --user 高琪 --dry-run   # 只看会作废哪条、按什么套餐新建
+python3 reset-user-quota.py --user 高琪             # 作废当前订阅 + 按原套餐新建
+python3 reset-user-quota.py --user 7 --plan 3       # 换成 Daily-50 重置
+```
+
+- 令牌 `NEW_API_ADMIN_TOKEN` 就是 root 的 `users.access_token`，等同 root 权限，`.secrets.env` 必须 600。
+- 只让「作废」然后等一分钟也行：`auto-bind-subscription.py` 会自动补一个 **Daily-20**；
+  但用户原套餐是 Daily-30/50 时会被降成 20，所以脚本默认沿用原套餐。
+
 ### 重置周期有效值
 - `"never"` — 不重置
 - `"daily"` — 每天
@@ -355,6 +408,14 @@ MYSQL "UPDATE options SET value='{\"...\":...}' WHERE \`key\`='ModelRatio';"
 ```
 
 > **⚠️ 凭证安全**: 曾误将 MySQL root 密码与钉钉 APP_SECRET 硬编码进脚本并提交到公开仓库（PR 审查发现）。修复后脚本统一从 `/opt/new-api/.secrets.env` 读取（`MYSQL_ROOT_PASSWORD`、`DINGTALK_APP_KEY`、`DINGTALK_APP_SECRET`）。新脚本禁止硬编码凭证。
+>
+> **2026-10-29 起生产 compose 不再内联明文**：4 个服务统一用 `env_file: .secrets.env`，
+> 搬进去的是 `SQL_DSN`、`SESSION_SECRET`、`MYSQL_ROOT_PASSWORD`、`MYSQL_PASSWORD`、
+> `DINGTALK_CLIENT_ID/SECRET`、`SELLFOX_APP_ID/SECRET`、`ADMIN_API_KEY`、`NEW_API_ADMIN_TOKEN`。
+> 只搬位置、未轮换值（`SESSION_SECRET` 除外，见问题 10）。注意两点：
+> - `docker inspect` 仍能看到明文 —— `env_file` 防的是明文进 git 和被随手 cat，不是加密。
+> - `SQL_DSN` 含 `()` 和 `&`，在 `.secrets.env` 里**必须加单引号**，否则 `source` 会报语法错误；
+>   compose 会剥掉引号，取值不变。其它键不要加引号——cron 脚本按 `split("=")` 读，会连引号一起带走。
 
 本地 SQLite 写法参考（历史，仅本地开发）：`docker exec new-api sqlite3 /data/one-api.db "..."`，Git Bash 需 `MSYS2_ARG_CONV_EXCL="*"` 前缀。
 
@@ -376,6 +437,18 @@ MSYS2_ARG_CONV_EXCL="*" docker exec -it new-api bash
 docker cp 本地文件路径 new-api:/tmp/
 ```
 
+### 主机防火墙（2026-10-29 加）
+
+公网网卡 `eth0` 上 DROP 了 `3306`（host MariaDB）与 `9000`（frappe socketio），
+本机回环与 Tailscale 不受影响；规则已 `netfilter-persistent save` 持久化。
+
+```bash
+iptables -S INPUT | grep "dports 3306,9000"
+# 撤销：iptables -D INPUT -i eth0 -p tcp -m multiport --dports 3306,9000 -j DROP
+#       ip6tables -D INPUT -i eth0 -p tcp -m multiport --dports 3306,9000 -j DROP
+#       netfilter-persistent save
+```
+
 ---
 
 ## 八、后续待办
@@ -386,6 +459,13 @@ docker cp 本地文件路径 new-api:/tmp/
 - [x] **Docker Compose 统一管理**: 4 个服务由一个 compose 文件管理
 - [x] **DeepSeek 峰谷分时定价**: `deepseek_time_pricing.py` cron 自动切换（2026-08-28 部署）
 - [ ] **修改默认密码**: 生产环境前务必修改默认密码
+- [ ] **低峰期改 MariaDB bind-address=127.0.0.1**（2026-10-29 决定）：当前 `mariadbd` 仍监听
+      `0.0.0.0:3306`，已由 eth0 防火墙 DROP 挡住，安全等价；要彻底改绑需重启 MariaDB
+      （ERPNext 生产库，约 5-10 秒不可用），故排到低峰期。改法：
+      `/etc/mysql/mariadb.cnf` 里 `bind-address=0.0.0.0` → `127.0.0.1`，
+      `systemctl restart mariadb`，改完 `ss -lntp | grep 3306` 复核。
+- [ ] **观察期后删除用户 26-30**（已 `status=2`、令牌全禁），确认无业务影响再删
+- [ ] 阿里云安全组若仍放行 3000 端口，建议删除该规则（容器已绑回环，留着是多余暴露面）
 - [ ] **添加更多渠道**: 可按需添加 OpenAI、Claude、通义千问等
 
 ---
@@ -403,6 +483,10 @@ cron 每日 3 点 → offboarding-check: 离职兜底（支持 --dry-run / --uni
 cron 0 9/12/14/18 工作日 + 0 0 周末 + */30 → deepseek_time_pricing: 分时切价
 Stream 实时 → user_leave_org → 即刻封号
 ```
+
+> ⚠️ **端口硬约束（2026-10-29）**：`new-api` 容器必须绑 `127.0.0.1:3000`，对外只经 nginx。
+> 曾因 `'3000:3000'` 暴露公网被扫描器批量注册（见问题 9）。改 compose 后用
+> `ss -lntp | grep 3000` 复核，出现 `0.0.0.0:3000` 即为回退。
 
 > ⚠️ **离职封号双通道（2026-09-08 加固 + 当日已部署生产）**：每日检查用 `getbyunionid` 60121
 > 判定离职（不是旧逻辑的 `active` 字段）；实时事件优先查本地 `dingtalk_identity_map`(unionId↔userId)
