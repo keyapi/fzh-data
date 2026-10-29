@@ -166,8 +166,8 @@ filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
 测试结果（本地，只读）：
 
 ```text
-key_test full: 118 passed, 2 skipped
-  （dispatch 两项因本地未安装 Frappe 跳过；bench 上执行：）
+key_test full: 118 passed, 3 skipped
+  （dispatch 三项因本地未安装 Frappe 跳过；bench 上执行：）
   bench --site <site> run-tests --module key_test.tests.test_supply_facts_dispatch
 
 fzh-data supply_chain_visibility: 90 passed + 5 subtests
