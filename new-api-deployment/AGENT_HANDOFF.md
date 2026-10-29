@@ -459,6 +459,13 @@ iptables -S INPUT | grep "dports 3306,9000"
 - [x] **Docker Compose 统一管理**: 4 个服务由一个 compose 文件管理
 - [x] **DeepSeek 峰谷分时定价**: `deepseek_time_pricing.py` cron 自动切换（2026-08-28 部署）
 - [ ] **修改默认密码**: 生产环境前务必修改默认密码
+- [ ] **低峰期改 MariaDB bind-address=127.0.0.1**（2026-10-29 决定）：当前 `mariadbd` 仍监听
+      `0.0.0.0:3306`，已由 eth0 防火墙 DROP 挡住，安全等价；要彻底改绑需重启 MariaDB
+      （ERPNext 生产库，约 5-10 秒不可用），故排到低峰期。改法：
+      `/etc/mysql/mariadb.cnf` 里 `bind-address=0.0.0.0` → `127.0.0.1`，
+      `systemctl restart mariadb`，改完 `ss -lntp | grep 3306` 复核。
+- [ ] **观察期后删除用户 26-30**（已 `status=2`、令牌全禁），确认无业务影响再删
+- [ ] 阿里云安全组若仍放行 3000 端口，建议删除该规则（容器已绑回环，留着是多余暴露面）
 - [ ] **添加更多渠道**: 可按需添加 OpenAI、Claude、通义千问等
 
 ---
