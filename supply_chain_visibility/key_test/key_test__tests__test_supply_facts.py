@@ -451,6 +451,31 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(manifest["coverage"]["empty_reason"], "no_matching_lines")
         self.assertEqual(manifest["coverage"]["external_sources"]["receipt"], "not_integrated")
         self.assertIn("empty_result", " ".join(manifest["notes"]))
+        self.assertIn("source_status", result)
+        self.assertEqual(manifest["coverage"]["source_status"], result["source_status"])
+
+    def test_response_carries_source_status_and_recomputes_partial(self):
+        self.fake.so_rows = [self._row(1)]
+        self.fake.permitted_sos = ["SO-1"]
+        self.fake.total_sos = 1
+        wo_status = {"available": False, "reason": "query_error",
+                     "restricted": False, "restricted_wos": set(),
+                     "job_card_unavailable_wos": set(),
+                     "tracking_unavailable_wos": set()}
+        with mock.patch.object(self.facts, "load_wos", return_value=({}, wo_status)), \
+             mock.patch.object(self.facts, "load_stock_entries",
+                               return_value=({}, {"available": False,
+                                                  "reason": "query_error"})):
+            result = self.facts.get_supply_facts(
+                filters={"sales_order": "SO-1", "limit": 1})
+        self.assertFalse(result["source_status"]["work_order"]["available"])
+        self.assertFalse(result["source_status"]["stock_entry"]["available"])
+        self.assertEqual(result["manifest"]["coverage"]["source_status"],
+                         result["source_status"])
+        self.assertTrue(result["manifest"]["partial"])
+        reasons = " ".join(result["manifest"]["partial_reasons"]).lower()
+        self.assertIn("work order source unavailable", reasons)
+        self.assertIn("stock entry source unavailable", reasons)
 
     def test_in_production_capped_by_wo_coverage(self):
         stages = self.facts.build_stage_balances(

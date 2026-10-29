@@ -40,9 +40,20 @@ function so_chain_num(v) {
 }
 // 后端 evidence_status() 的统一口径：known / estimated / unknown
 function so_chain_is_known(status) { return status === 'known'; }
-function so_chain_qty(value, status) {
-    if (value === null || value === undefined || value === '') return '—';
-    return so_chain_num(value) + (status === 'estimated' ? '（估算）' : '');
+// 按状态选数量：known→proven；estimated→estimated（估算）；unknown→—
+function so_chain_qty_by_status(proven, estimated, status) {
+    if (status === 'known') {
+        return (proven === null || proven === undefined) ? '—' : so_chain_num(proven);
+    }
+    if (status === 'estimated') {
+        return (estimated === null || estimated === undefined)
+            ? '—' : so_chain_num(estimated) + '（估算）';
+    }
+    if (status === null || status === undefined) {
+        if (proven !== null && proven !== undefined) return so_chain_num(proven);
+        if (estimated !== null && estimated !== undefined) return so_chain_num(estimated) + '（估算）';
+    }
+    return '—';
 }
 function so_chain_t(s) { return so_chain_esc(s == null ? '' : __(String(s))); }
 function so_chain_link(doctype, name, label) {
@@ -226,9 +237,9 @@ function so_chain_render($box, data) {
             + '<td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + so_chain_esc(l.customer_item_code) + '">' + so_chain_esc(l.customer_item_code) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.qty) + '</td>'
             + '<td style="text-align:right;white-space:nowrap' + hi + '"' + hiTitle + '>'
-                + (diff ? '<b>' : '') + so_chain_qty(l.reported, l.reported_status) + (diff ? '</b>' : '') + '</td>'
+                + (diff ? '<b>' : '') + so_chain_qty_by_status(l.reported, l.all_process_estimated, l.reported_status) + (diff ? '</b>' : '') + '</td>'
             + '<td style="text-align:right;white-space:nowrap' + hi + '"' + hiTitle + '>'
-                + (diff ? '<b>' : '') + so_chain_qty(l.instock, l.instock_status) + (diff ? '</b>' : '') + '</td>'
+                + (diff ? '<b>' : '') + so_chain_qty_by_status(l.instock, l.instock_estimated, l.instock_status) + (diff ? '</b>' : '') + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.delivered) + '</td>'
             + '<td style="white-space:nowrap;overflow:hidden">' + dd + '</td>'
             + '<td style="white-space:nowrap;overflow:hidden"><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
@@ -344,9 +355,9 @@ function so_chain_tree_html(line) {
     }
     if (line.reported_status !== undefined) {
         h += '<div style="margin-bottom:6px;font-size:12px"><b>生产证据</b>：全工序 '
-           + so_chain_qty(line.reported, line.reported_status)
+           + so_chain_qty_by_status(line.reported, line.all_process_estimated, line.reported_status)
            + '（' + so_chain_esc(line.reported_confidence || 'unknown') + '）'
-           + '　入库净额 ' + so_chain_qty(line.instock, line.instock_status)
+           + '　入库净额 ' + so_chain_qty_by_status(line.instock, line.instock_estimated, line.instock_status)
            + (line.qc_passed_status ? '　QC ' + so_chain_esc(line.qc_passed_status)
                : (line.qc_status ? '　QC ' + so_chain_esc(line.qc_status) : ''))
            + ((line.evidence_reasons || []).length
@@ -364,8 +375,8 @@ function so_chain_tree_html(line) {
             const stock = s.stock_in_posted || {};
             h += '<tr><td>' + so_chain_link('Item', s.production_item, s.production_item || '')
                + '</td><td>' + so_chain_link('Work Order', s.wo, s.wo || '')
-               + '</td><td style="text-align:right">' + so_chain_qty(ev.qty_proven, ev.qty_status)
-               + '</td><td style="text-align:right">' + so_chain_qty(stock.qty_proven, stock.qty_status)
+               + '</td><td style="text-align:right">' + so_chain_qty_by_status(ev.qty_proven, ev.qty_estimated, ev.qty_status)
+               + '</td><td style="text-align:right">' + so_chain_qty_by_status(stock.qty_proven, stock.qty_estimated, stock.qty_status)
                + '</td><td>' + so_chain_esc(ev.confidence || 'unknown') + '</td></tr>';
         });
         h += '</tbody></table></div>';

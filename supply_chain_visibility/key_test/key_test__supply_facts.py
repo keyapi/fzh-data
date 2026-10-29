@@ -1036,7 +1036,12 @@ def load_wos(lines, pps):
             status["job_card_unavailable_wos"] |= hidden
             status["restricted"] = True
             jc_rows = [j for j in jc_rows if j.name in permitted_jc]
+        time_logs, time_log_status = load_job_card_time_logs([j.name for j in jc_rows])
+        if not time_log_status["available"]:
+            status["job_card_time_log"] = time_log_status
+            status["restricted"] = True
         for j in jc_rows:
+            j["time_logs"] = time_logs.get(j.name, [])
             jcs[j.work_order].append(j)
         try:
             tn_candidates = list(frappe.get_all(
@@ -1096,6 +1101,26 @@ def load_wos(lines, pps):
                            "ppi.sales_order_item"),
         })
     return grouped, status
+
+
+def load_job_card_time_logs(jc_names):
+    """Child time logs per Job Card; complements top-level actual dates."""
+    status = {"available": True, "reason": ""}
+    names = [name for name in (jc_names or []) if name]
+    if not names:
+        return {}, status
+    try:
+        rows = frappe.get_all(
+            "Job Card Time Log",
+            filters={"parent": ["in", names]},
+            fields=["parent", "from_time", "to_time"])
+        logs = defaultdict(list)
+        for row in rows:
+            logs[row.parent].append({"from_time": row.from_time,
+                                     "to_time": row.to_time})
+        return logs, status
+    except Exception as exc:  # noqa: BLE001
+        return {}, {"available": False, "reason": "query_error", "error": str(exc)}
 
 
 def load_stock_entries(wo_names):
@@ -1304,10 +1329,13 @@ def get_supply_facts(filters=None, **kwargs):
             empty_reason = "no_matching_lines"
         pagination = _pagination(filters, 0, total_lines)
         applied = {k: v for k, v in filters.items() if k not in ("limit", "offset")}
+        empty_source_status = {
+            name: {"available": bool(ok)} for name, ok in permissions.items()}
         coverage = {
             "sales_orders": 0, "so_lines": 0, "so_lines_total": total_lines,
             "sources": permissions,
             "restricted": {"sales_order": so_restricted},
+            "source_status": empty_source_status,
             "external_sources": external, "observed_at": _iso(observed_at),
             "empty_reason": empty_reason,
         }
@@ -1326,6 +1354,7 @@ def get_supply_facts(filters=None, **kwargs):
             "implementation_version": IMPLEMENTATION_VERSION,
             "as_of": str(as_of), "lines": [], "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [], "production_evidence": [],
+            "source_status": empty_source_status,
             "manifest": manifest,
             "applied_filters": applied, "pagination": pagination,
         }
@@ -1361,7 +1390,6 @@ def get_supply_facts(filters=None, **kwargs):
             k for k, v in restricted.items() if v))
     partial_reasons.append(
         "external sources not integrated: tongtool_po, receipt, warehouse_receipt")
-    partial = bool(partial_reasons)
 
     facts = []
     dn_ok = permissions["delivery_note"] and not dn_restricted
@@ -1414,17 +1442,6 @@ def get_supply_facts(filters=None, **kwargs):
                 observed_at=_iso(observed_at)))
         evidence_by_line[line.so_line] = rollup_line_evidence(
             wo_evidence, item_code=line.item_code, order_uom=line.uom)
-    if not stock_status["available"]:
-        partial_reasons.append("stock entry source unavailable: "
-                               + stock_status.get("reason", "unknown"))
-    if not qc_status["available"]:
-        partial_reasons.append("quality inspection source unavailable: "
-                               + qc_status.get("reason", "unknown"))
-    if not wo_status.get("available", True):
-        partial_reasons.append("work order source unavailable: "
-                               + wo_status.get("reason", "unknown"))
-    elif wo_status.get("restricted"):
-        partial_reasons.append("row-level restricted: work_order/job_card/tracking_number")
     for line in lines:
         ctx_dns = [d for d in dns.get(line.so_line, []) if d.so_line == line.so_line]
         line_numbers = []
@@ -1473,11 +1490,40 @@ def get_supply_facts(filters=None, **kwargs):
         "availability_schedule": sum(len(f["availability_schedule"]) for f in facts),
         "links": sum(len(f["links"]) for f in facts),
     }
+    source_status = {
+        "sales_order": {"available": bool(permissions["sales_order"]),
+                        "restricted": bool(so_restricted)},
+        "production_plan": {"available": bool(permissions["production_plan"]),
+                            "restricted": bool(pp_restricted)},
+        "work_order": {"available": bool(wo_status.get("available", True)),
+                       "restricted": bool(wo_restricted)},
+        "job_card": {"available": bool(permissions["job_card"])
+                     and not bool(wo_status.get("job_card_unavailable_wos")),
+                     "restricted": bool(wo_status.get("job_card_unavailable_wos"))},
+        "tracking_number": {"available":
+                            not bool(wo_status.get("tracking_unavailable_wos")),
+                            "restricted":
+                            bool(wo_status.get("tracking_unavailable_wos"))},
+        "stock_entry": stock_status,
+        "quality_inspection": qc_status,
+        "delivery_note": {"available": bool(permissions["delivery_note"]),
+                          "restricted": bool(dn_restricted)},
+        "shipment": {"available": bool(permissions["shipment"]),
+                     "restricted": bool(ship_restricted)},
+    }
+    if "job_card_time_log" in wo_status:
+        source_status["job_card_time_log"] = wo_status["job_card_time_log"]
+    for name, state in source_status.items():
+        if not state.get("available", True):
+            partial_reasons.append("%s source unavailable: %s" % (
+                name.replace("_", " "), state.get("reason", "unknown")))
+    partial = bool(partial_reasons)
     coverage = {
         "sales_orders": len({l.so for l in lines}), "so_lines": len(lines),
         "so_lines_total": total_lines,
         "delivery_notes": len(dn_names), "shipments": len(shipment_by_number),
         "sources": permissions, "restricted": restricted,
+        "source_status": source_status,
         "source_timestamps": {"sales_order": _iso(observed_at)},
         "observed_at": _iso(observed_at),
         "external_sources": {
@@ -1513,6 +1559,7 @@ def get_supply_facts(filters=None, **kwargs):
                  **(f.get("production_evidence") or {}))
             for f in facts
         ],
+        "source_status": source_status,
         "manifest": manifest,
         "applied_filters": applied, "pagination": pagination,
     }

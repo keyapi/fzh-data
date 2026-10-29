@@ -1066,24 +1066,24 @@ def _roll_field(rows, field, *, order_uom=None, stock=False,
     proven_rows = [row for row in rows
                    if proven_qty(_field(row, field)) is not None]
     proven = None
+    identity_conflict = False
     if unit_reason is None and not any_unknown and not replay_conflict \
             and proven_rows:
         if len(proven_rows) == 1:
             proven = round(float(proven_qty(_field(proven_rows[0], field))), 9)
         else:
-            strict = all(_field(row, field).get("confidence") == PROVEN
-                         for row in proven_rows)
-            if not strict:
-                reasons.add("estimated_row_in_proven_set")
+            # Mixed rows contribute their proven subset (TN identities); the
+            # estimated remainder stays separate. Only identity overlap blocks.
             seen, overlap = set(), set()
             for row in proven_rows:
                 identities = _evidence_identities(row, field)
                 overlap |= (seen & identities)
                 seen |= identities
             if overlap:
+                identity_conflict = True
                 conflicts.append(_conflict("tracking_identity_overlap",
                                            {"identifiers": sorted(overlap)}))
-            if strict and not overlap:
+            else:
                 proven = round(sum(float(proven_qty(_field(row, field)))
                                    for row in proven_rows), 9)
 
@@ -1101,6 +1101,8 @@ def _roll_field(rows, field, *, order_uom=None, stock=False,
         proven_value, confidence = None, UNKNOWN
     elif unit_reason:
         proven_value, confidence = None, UNKNOWN
+    elif identity_conflict:
+        proven_value, confidence = None, UNKNOWN
     elif proven is not None and estimated not in (None, 0, 0.0):
         proven_value, confidence = proven, MIXED
     elif proven is not None:
@@ -1111,8 +1113,16 @@ def _roll_field(rows, field, *, order_uom=None, stock=False,
         proven_value, confidence = None, UNKNOWN
 
     if stock:
-        posted_at, time_status = _roll_stock_time(rows)
+        if proven_value is None:
+            posted_at, time_status = None, "not_applicable"
+        else:
+            posted_at, time_status = _roll_stock_time(rows)
         started = completed = None
+    elif proven_value is None:
+        # No proven line quantity (unknown/estimated/overlap) -> no line time.
+        started = completed = None
+        posted_at = None
+        time_status = "not_applicable"
     else:
         started, completed, time_status = _roll_time(rows, field)
         posted_at = None

@@ -78,4 +78,5 @@ vm.runInContext(code, sandbox, { filename: jsPath });
 const input = JSON.parse(fs.readFileSync(0, 'utf8'));
 const data = { sales_order: input.sales_order || 'SO-1', lines: input.lines || [] };
 sandbox.so_chain_render(sandbox.$('#box'), data);
-process.stdout.write(JSON.stringify({ html: html.value }));
+const tree = data.lines.length ? sandbox.so_chain_tree_html(data.lines[0]) : '';
+process.stdout.write(JSON.stringify({ html: html.value, tree: tree }));

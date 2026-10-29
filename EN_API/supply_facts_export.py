@@ -221,6 +221,14 @@ def _merge(target, batch, scope_key=None):
             target["coverage"][key] = target["coverage"].get(key, 0) + value
         elif key == "empty_reason" and value:
             target["coverage"]["empty_reason"] = value
+        elif key == "source_status":
+            merged = target["coverage"].setdefault("source_status", {})
+            for name, state in (value or {}).items():
+                current = merged.get(name)
+                if current is None:
+                    merged[name] = dict(state)
+                elif current.get("available", True) and not state.get("available", True):
+                    merged[name] = dict(state)
     for note in manifest.get("notes") or []:
         if note not in target["notes"]:
             target["notes"].append(note)

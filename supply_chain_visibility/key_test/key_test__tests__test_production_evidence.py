@@ -915,6 +915,49 @@ class RollupTests(unittest.TestCase):
         self.assertEqual(forward["qc_passed"]["status"], "Accepted")
         self.assertEqual(reverse["qc_passed"]["status"], "Accepted")
 
+    def test_rollup_mixed_rows_keep_their_proven_subset(self):
+        def mixed_row(wo, proven, estimated, confidence, tn, end):
+            evidence = {"qty_proven": proven, "qty_estimated": estimated,
+                        "confidence": confidence, "reasons": [], "conflicts": [],
+                        "source_records": [], "started_at": "2026-10-20 08:00:00",
+                        "completed_at": end, "time_status": "complete",
+                        "components": {"proven_tracking_numbers": [tn]}}
+            empty = {"qty_proven": None, "qty_estimated": None,
+                     "confidence": "unknown", "reasons": [], "conflicts": [],
+                     "source_records": [], "components": {}, "started_at": None,
+                     "completed_at": None, "time_status": "not_applicable"}
+            return {"wo": wo, "production_item": "FG", "qty": 7.0, "uom": "个",
+                    "docstatus": 1, "wo_cancelled": False,
+                    "first_process_done": dict(evidence),
+                    "all_process_done": dict(evidence),
+                    "qc_performed": dict(empty),
+                    "qc_passed": dict(empty),
+                    "stock_in_posted": dict(empty),
+                    "conflicts": [], "reasons": []}
+
+        first = mixed_row("WO-1", 5, 2, "mixed", "T1", "2026-10-20 17:00:00")
+        second = mixed_row("WO-2", 5, None, "proven", "T2", "2026-10-20 18:00:00")
+        rolled = rollup_line_evidence([first, second], item_code="FG", order_uom="个")
+        result = rolled["all_process_done"]
+        self.assertEqual(result["qty_proven"], 10)
+        self.assertEqual(result["qty_estimated"], 2)
+        self.assertEqual(result["confidence"], "mixed")
+        self.assertEqual(result["completed_at"], "2026-10-20 18:00:00")
+        self.assertEqual(result["time_status"], "complete")
+
+    def test_time_logs_fill_missing_top_level_times(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        logs = [{"from_time": "2026-10-20 08:00:00",
+                 "to_time": "2026-10-20 17:00:00"}]
+        row = build_for("WO-A", ops,
+                        [jc("OP-CUT", "T1", 5, start=None, end=None,
+                            time_logs=logs)],
+                        [tn("T1", 5)], qty=5)
+        evidence = row["all_process_done"]
+        self.assertEqual(evidence["completed_at"], "2026-10-20 17:00:00")
+        self.assertEqual(evidence["started_at"], "2026-10-20 08:00:00")
+        self.assertEqual(evidence["time_status"], "complete")
+
     def test_proven_qty_requires_eligible_confidence(self):
         self.assertIsNone(proven_qty({"qty_proven": 1, "confidence": "unknown"}))
         self.assertEqual(proven_qty({"qty_proven": 1, "confidence": "proven"}), 1)

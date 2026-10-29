@@ -26,7 +26,11 @@ from key_test.production_evidence import (
     proven_qty,
     rollup_line_evidence,
 )
-from key_test.supply_facts import load_quality_inspections, load_stock_entries
+from key_test.supply_facts import (
+    load_job_card_time_logs,
+    load_quality_inspections,
+    load_stock_entries,
+)
 from key_test.supply_query import dn_logistic_numbers
 
 
@@ -35,6 +39,16 @@ def _num(v):
         return float(v or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _merge_source_status(current, incoming):
+    """Conservative aggregation: unavailable/restricted is never overwritten."""
+    incoming = dict(incoming or {})
+    if current is None:
+        return incoming
+    if current.get("available", True) and not incoming.get("available", True):
+        return incoming
+    return current
 
 
 def completion_state(evidence, qty, finished):
@@ -70,12 +84,34 @@ def get_so_chain(sales_order):
         open_qty = qty - delivered
 
         # 生产计划（按订单行连接键）—— 用于顶部的「本行计划/待产」数字
-        plans = frappe.db.sql(
-            """select pp.name as pp, ppi.name as ppi, ppi.planned_qty, ppi.pending_qty
-               from `tabProduction Plan Item` ppi
-               join `tabProduction Plan` pp on pp.name = ppi.parent
-               where pp.docstatus = 1 and ppi.sales_order_item = %s""",
-            it.name, as_dict=True)
+        plans = []
+        pp_available = frappe.has_permission("Production Plan", "read")
+        if pp_available:
+            try:
+                plan_rows = frappe.db.sql(
+                    """select pp.name as pp, ppi.name as ppi, ppi.planned_qty, ppi.pending_qty
+                       from `tabProduction Plan Item` ppi
+                       join `tabProduction Plan` pp on pp.name = ppi.parent
+                       where pp.docstatus = 1 and ppi.sales_order_item = %s""",
+                    it.name, as_dict=True)
+                plan_names = [p.pp for p in plan_rows if p.pp]
+                permitted_pp = {row.name for row in frappe.get_list(
+                    "Production Plan",
+                    filters=[["name", "in", plan_names], ["docstatus", "=", 1]],
+                    fields=["name"], limit_page_length=0)} if plan_names else set()
+                if permitted_pp != set(plan_names):
+                    pp_available = False
+                    source_status.setdefault("production_plan", {
+                        "available": False, "reason": "permission"})
+                    plan_rows = [p for p in plan_rows if p.pp in permitted_pp]
+                plans = plan_rows
+            except Exception as exc:  # noqa: BLE001
+                pp_available = False
+                source_status["production_plan"] = {
+                    "available": False, "reason": "query_error", "error": str(exc)}
+        else:
+            source_status.setdefault("production_plan", {
+                "available": False, "reason": "permission"})
 
         # 工单 —— **成品**用 sales_order_item；**皮壳/内胆**用 fg_sales_order_item（不是 sales_order_item！）。
         # 一条成品(KS)行的标准结构 = 1 成品 + 1 皮壳(PK#) + 1 内胆(ND#)。兜底 production_plan_item。
@@ -129,7 +165,7 @@ def get_so_chain(sales_order):
         # 皮壳/内胆的计划行通常不带 SO 行（实测 WO.production_plan_item 100% 指向 Production Plan Item）。
         pp_by_ppi = {p.ppi: p.pp for p in plans}
         _ppi = [w.production_plan_item for w in wos if w.production_plan_item]
-        if _ppi:
+        if pp_available and _ppi:
             for r in frappe.get_all("Production Plan Item", filters={"name": ["in", _ppi]},
                                     fields=["name", "parent"]):
                 pp_by_ppi[r.name] = r.parent
@@ -193,7 +229,12 @@ def get_so_chain(sales_order):
                     source_status.setdefault("job_card", {"available": False,
                                                           "reason": "permission"})
                     jc_rows = [j for j in jc_rows if j.name in permitted]
+            jc_time_logs, jc_time_status = load_job_card_time_logs(
+                [j.name for j in jc_rows])
+            if not jc_time_status["available"]:
+                source_status["job_card_time_log"] = jc_time_status
             for j in jc_rows:
+                j["time_logs"] = jc_time_logs.get(j.name, [])
                 q = _num(j.total_completed_qty) or _num(j.for_quantity)
                 rec = {"name": j.name, "status": j.status, "qty": q, "docstatus": j.docstatus,
                        "end": str(j.actual_end_date or "")[:19], "tn": j.tracking_number or ""}
@@ -263,8 +304,10 @@ def get_so_chain(sales_order):
             "stock_entries": stock_status["available"],
             "quality_inspections": qc_status["available"],
         }
-        source_status["stock_entry"] = stock_status
-        source_status["quality_inspection"] = qc_status
+        source_status["stock_entry"] = _merge_source_status(
+            source_status.get("stock_entry"), stock_status)
+        source_status["quality_inspection"] = _merge_source_status(
+            source_status.get("quality_inspection"), qc_status)
         wo_evidence_map = {}
         for w in wos:
             wo_evidence_map[w.name] = build_wo_evidence(
@@ -419,28 +462,49 @@ def get_so_chain(sales_order):
 
         # 销售出库（可能一对多：一条订单行拆多张 DN / 含退货）—— 按**出库单**归组：
         # 一张 DN 可含多行(同物料也会拆多行)，所以「N单」必须数 DN 张数，不能数明细行数。
-        dn_rows = frappe.db.sql(
-            """select dn.name as dn, dn.posting_date as date, dn.status as status,
-                      dn.docstatus as docstatus, ifnull(dn.is_return, 0) as is_return,
-                      dni.item_code as item_code, dni.qty as qty, dni.so_detail as so_detail
-               from `tabDelivery Note Item` dni
-               join `tabDelivery Note` dn on dn.name = dni.parent
-               where dni.against_sales_order = %(so)s
-                 and (dni.so_detail = %(line)s
-                      or (ifnull(dni.so_detail, '') = '' and dni.item_code = %(item)s))
-                 and dn.docstatus in (0, 1)
-               order by dn.posting_date, dn.name, dni.idx""",
-            {"so": doc.name, "line": it.name, "item": it.item_code}, as_dict=True)
-        _dn_map = {}
-        for d in dn_rows:
-            e = _dn_map.setdefault(d.dn, {"dn": d.dn, "date": str(d.date or "")[:10],
-                                          "status": d.status, "docstatus": d.docstatus,
-                                          "is_return": d.is_return, "qty": 0.0, "lines": []})
-            e["qty"] += _num(d.qty)
-            e["lines"].append({"qty": _num(d.qty), "item_code": d.item_code})
-        dns = list(_dn_map.values())
-        shipped = sum(_num(d["qty"]) for d in dns if d["docstatus"] == 1)
-
+        dns, shipped = [], 0.0
+        dn_available = frappe.has_permission("Delivery Note", "read")
+        if dn_available:
+            try:
+                dn_rows = frappe.db.sql(
+                    """select dn.name as dn, dn.posting_date as date, dn.status as status,
+                              dn.docstatus as docstatus, ifnull(dn.is_return, 0) as is_return,
+                              dni.item_code as item_code, dni.qty as qty, dni.so_detail as so_detail
+                       from `tabDelivery Note Item` dni
+                       join `tabDelivery Note` dn on dn.name = dni.parent
+                       where dni.against_sales_order = %(so)s
+                         and (dni.so_detail = %(line)s
+                              or (ifnull(dni.so_detail, '') = '' and dni.item_code = %(item)s))
+                         and dn.docstatus in (0, 1)
+                       order by dn.posting_date, dn.name, dni.idx""",
+                    {"so": doc.name, "line": it.name, "item": it.item_code}, as_dict=True)
+                dn_names = sorted({d.dn for d in dn_rows if d.dn})
+                permitted_dn = {row.name for row in frappe.get_list(
+                    "Delivery Note",
+                    filters=[["name", "in", dn_names], ["docstatus", "in", (0, 1)]],
+                    fields=["name"], limit_page_length=0)} if dn_names else set()
+                if permitted_dn != set(dn_names):
+                    dn_available = False
+                    source_status.setdefault("delivery_note", {
+                        "available": False, "reason": "permission"})
+                    dn_rows = [d for d in dn_rows if d.dn in permitted_dn]
+            except Exception as exc:  # noqa: BLE001
+                dn_rows = []
+                dn_available = False
+                source_status["delivery_note"] = {
+                    "available": False, "reason": "query_error", "error": str(exc)}
+            _dn_map = {}
+            for d in dn_rows:
+                e = _dn_map.setdefault(d.dn, {"dn": d.dn, "date": str(d.date or "")[:10],
+                                              "status": d.status, "docstatus": d.docstatus,
+                                              "is_return": d.is_return, "qty": 0.0, "lines": []})
+                e["qty"] += _num(d.qty)
+                e["lines"].append({"qty": _num(d.qty), "item_code": d.item_code})
+            dns = list(_dn_map.values())
+            shipped = sum(_num(d["qty"]) for d in dns if d["docstatus"] == 1)
+        else:
+            source_status.setdefault("delivery_note", {
+                "available": False, "reason": "permission"})
         # 阶段 0–3
         active_wos = [w for w in wos if _num(w.docstatus) != 2]
         if doc.docstatus == 2 and doc.amended_from:
@@ -475,6 +539,9 @@ def get_so_chain(sales_order):
             "reported_confidence": all_ev.get("confidence"),
             "instock_status": instock_status,
             "instock_confidence": stock_ev.get("confidence"),
+            "instock_estimated": (stock_ev.get("qty_estimated")
+                                  if stock_ev.get("confidence") in ("estimated", "mixed")
+                                  else None),
             "qc_status": qc_status, "qc_confidence": qc_ev.get("confidence"),
             "qc_passed_status": qc_passed_ev.get("status"),
             "subassemblies": line_evidence.get("subassemblies") or [],
@@ -505,6 +572,10 @@ def get_so_chain(sales_order):
             "work_orders": wo_detail,
         })
 
+    for name in ("sales_order", "production_plan", "delivery_note", "work_order",
+                 "job_card", "tracking_number", "stock_entry",
+                 "quality_inspection"):
+        source_status.setdefault(name, {"available": True})
     partial_reasons = [
         "%s source unavailable: %s" % (name.replace("_", " "),
                                        status.get("reason", "unknown"))

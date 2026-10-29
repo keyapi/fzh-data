@@ -72,6 +72,17 @@ class MergeSemanticsTest(unittest.TestCase):
         self.exporter._merge(target, _batch(empty_reason="no_matching_lines"))
         self.assertEqual(target["coverage"]["empty_reason"], "no_matching_lines")
 
+    def test_source_status_is_conservative_across_pages(self):
+        target = _empty_target()
+        self.exporter._merge(target, _batch(
+            source_status={"stock_entry": {"available": False,
+                                           "reason": "permission"}}))
+        self.exporter._merge(target, _batch(
+            source_status={"stock_entry": {"available": True}}))
+        status = target["coverage"]["source_status"]["stock_entry"]
+        self.assertFalse(status["available"])
+        self.assertEqual(status["reason"], "permission")
+
     def test_implementation_version_is_carried(self):
         target = _empty_target()
         batch = _batch()

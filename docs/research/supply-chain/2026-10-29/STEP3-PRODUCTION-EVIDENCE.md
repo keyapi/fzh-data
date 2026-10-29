@@ -527,3 +527,37 @@ SQL
 - **第二步权限待验项仍为待验**（不得表述为通过）。
 - 第四至第六步不启动；`so_chain_overview` 保持 legacy 口径，不宣称已统一。
 - 本地提交后停止，交 Codex 审核。
+
+## 14. 第二批复审第二轮补修（2026-10-29）
+
+针对复审提出的四类缺陷，一次性修复；仍为本地提交、未 push、未部署。
+
+### 14.1 修复项
+
+- **Mixed 跨 WO 汇总**：`rollup_line_evidence()` 对 `confidence ∈ {proven, mixed}` 的行取其
+  `qty_proven` 子集求和，不再要求整行纯 proven；`mixed` 的 estimated 余量单独保留。
+  仅当 `proven_tracking_numbers` 跨 WO 重叠时才拒绝 proven 求和。行级时间只在行级 proven
+  成立时输出，避免“数量仅估算但时间对应已证”的矛盾。
+- **Job Card Time Log**：`load_job_card_time_logs()` 在 `supply_facts` 与 `so_chain` 两个适配器中
+  加载 `Job Card Time Log`（`parent/from_time/to_time`），挂到 JC 的 `time_logs`；顶层
+  `actual_start_date/actual_end_date` 为空时由日志补足，不再误标 `time_incomplete`。
+- **权限与来源状态闭环**
+  - Production Plan / Delivery Note 与 WO/JC/TN 一致：先 `has_permission`，再 `get_list`
+    行级过滤；受限单据名称不进入响应（PP-SECRET / DN-SECRET 不再泄露）。
+  - 多 SO 行的 Stock Entry / QI 状态改为**保守聚合**：任一行 unavailable/restricted 不会被
+    后续成功行覆盖。
+  - `get_supply_facts()` 在全部来源检查完成后重新计算 `partial`；响应与
+    `manifest.coverage.source_status` 均携带逐来源 `{available, reason}`；导出器按页保守合并
+    `source_status`。
+- **页面对 estimated 的真实展示**：`so_chain_qty_by_status(proven, estimated, status)` 按后端
+  `reported_status/instock_status` 选择数量：known→proven、estimated→estimated（标注“估算”）、
+  unknown→—；主表、生产明细、子装配件统一使用。渲染测试直接以真实 `get_so_chain()` 响应驱动
+  Node 渲染（含 estimated-only 场景）。
+
+### 14.2 验收（本地）
+
+- key_test 全量 **236 passed / 3 skipped / 4 subtests**。
+- 导出器 **26 passed**；`supply_chain_visibility` 全量 **103 passed / 5 subtests**。
+- 镜像 `cmp` 逐字一致（含 tests、JS、harness）。
+- 仍未部署测试站/生产；测试站真实受限用户 HTTP、真实时间日志样本与浏览器视觉验收待 Codex
+  通过后安排；第二步权限待验项仍不得写成通过。

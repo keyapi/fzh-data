@@ -6,6 +6,8 @@ These tests exercise the whitelisted entry point, not helper functions.
 import importlib.util
 import datetime
 import json
+import shutil
+import subprocess
 import sys
 import types
 import unittest
@@ -46,6 +48,7 @@ class FakeFrappe(types.ModuleType):
         self.item_rows = []
         self.op_rows = []
         self.jc_rows = []
+        self.jc_time_log_rows = []
         self.tn_rows = []
         self.se_rows = []
         self.se_detail_rows = []
@@ -99,6 +102,7 @@ class FakeFrappe(types.ModuleType):
             "Operation": self.op_rows,
             "Work Order Operation": self.op_rows,
             "Job Card": self.jc_rows,
+            "Job Card Time Log": self.jc_time_log_rows,
             "Tracking Number": self.tn_rows,
             "Stock Entry": self.se_rows,
             "Stock Entry Detail": self.se_detail_rows,
@@ -151,14 +155,14 @@ def op(wo_name, operation, seq, name=None):
 
 
 def jc(wo_name, routing_name, operation, tn="", qty=10.0, docstatus=1,
-       status="Completed", end=None):
+       status="Completed", start="2026-10-20 08:00:00", end="2026-10-20 17:00:00"):
     return {
         "name": "JC-%s-%s-%s" % (wo_name, operation, tn or "batch"),
         "work_order": wo_name, "operation_id": routing_name,
         "operation": operation, "status": status, "docstatus": docstatus,
         "total_completed_qty": qty, "for_quantity": qty,
-        "actual_start_date": "2026-10-20 08:00:00",
-        "actual_end_date": end or "2026-10-20 17:00:00",
+        "actual_start_date": start,
+        "actual_end_date": end,
         "tracking_number": tn,
     }
 
@@ -241,9 +245,10 @@ class SoChainEndToEndTest(unittest.TestCase):
     # -- helpers ------------------------------------------------------------
     def full_chain(self, wo_name="WO-1", item="KS0001", qty=10.0, uom="个",
                    tn_name="T1", end="2026-10-20 17:00:00", with_qc=True,
-                   docstatus=1, with_stock=True, so_line="SOI-1", fg_line=None):
+                   docstatus=1, with_stock=True, so_line="SOI-1", fg_line=None,
+                   ppi=None, time_logs=False):
         self.fake.wo_rows.append(wo(wo_name, item, qty, uom, docstatus=docstatus,
-                                    so_line=so_line, fg_line=fg_line))
+                                    ppi=ppi, so_line=so_line, fg_line=fg_line))
         ops = [("裁剪", 1), ("缝制", 2)] + ([("质检", 3)] if with_qc else [])
         names = []
         for operation, seq in ops:
@@ -251,9 +256,15 @@ class SoChainEndToEndTest(unittest.TestCase):
             self.fake.op_rows.append(row)
             names.append(row)
         self.fake.tn_rows.append(tn(tn_name, wo_name, qty))
+        jc_start = None if time_logs else "2026-10-20 08:00:00"
+        jc_end = None if time_logs else end
         for row in names:
             self.fake.jc_rows.append(jc(wo_name, row["name"], row["operation"],
-                                        tn_name, qty, end=end))
+                                        tn_name, qty, start=jc_start, end=jc_end))
+            if time_logs:
+                self.fake.jc_time_log_rows.append({
+                    "parent": "JC-%s-%s-%s" % (wo_name, row["operation"], tn_name),
+                    "from_time": "2026-10-20 08:00:00", "to_time": end})
         if with_stock:
             se_name = "SE-" + wo_name
             self.fake.se_rows.append(se(se_name, wo_name, item, qty, uom))
@@ -384,6 +395,79 @@ class SoChainEndToEndTest(unittest.TestCase):
         self.assertIn("wo_cancelled_with_valid_stock_in", codes)
         self.assertNotEqual(line["stage"], 3)
         self.assertEqual(line["work_orders"][0]["completed"], False)
+
+
+    # -- P1-1 / P1-3 follow-ups --------------------------------------------
+    def test_time_logs_are_used_when_top_level_dates_missing(self):
+        self.full_chain(time_logs=True)
+        line = self.line(self.chain.get_so_chain("SO-1"))
+        evidence = line["production_evidence"]["all_process_done"]
+        self.assertEqual(evidence["started_at"], "2026-10-20 08:00:00")
+        self.assertEqual(evidence["completed_at"], "2026-10-20 17:00:00")
+        self.assertEqual(evidence["time_status"], "complete")
+
+    def test_without_plan_permission_does_not_leak_plan_names(self):
+        self.full_chain(ppi="PPI-1")
+        self.fake.pp_rows = [{"pp": "PP-SECRET", "ppi": "PPI-1",
+                              "planned_qty": 10.0, "pending_qty": 0.0}]
+        self.fake.readable["Production Plan"] = False
+        result = self.chain.get_so_chain("SO-1")
+        self.assertNotIn("PP-SECRET", json.dumps(result, default=str))
+        self.assertFalse(result["source_status"]["production_plan"]["available"])
+
+    def test_without_dn_permission_does_not_leak_dn_names(self):
+        self.full_chain()
+        self.fake.dn_rows = [{
+            "dn": "DN-SECRET", "date": "2026-10-21", "status": "To Bill",
+            "docstatus": 1, "is_return": 0, "item_code": "KS0001",
+            "qty": 10.0, "so_detail": "SOI-1"}]
+        self.fake.readable["Delivery Note"] = False
+        result = self.chain.get_so_chain("SO-1")
+        self.assertNotIn("DN-SECRET", json.dumps(result, default=str))
+        self.assertFalse(result["source_status"]["delivery_note"]["available"])
+
+    def test_stock_status_is_conservative_across_lines(self):
+        self.fake.so.items.append(types.SimpleNamespace(
+            name="SOI-2", item_code="KS0002", item_name="成品2",
+            customer_item_code="C-2", qty=5.0, delivered_qty=0.0, uom="个",
+            delivery_date="2026-10-30"))
+        self.full_chain("WO-1", "KS0001", 10.0, tn_name="T1", so_line="SOI-1")
+        self.full_chain("WO-2", "KS0002", 5.0, tn_name="T2", so_line="SOI-2")
+        self.fake.permitted["Stock Entry"] = ["SE-WO-2"]
+        result = self.chain.get_so_chain("SO-1")
+        self.assertFalse(result["source_status"]["stock_entry"]["available"])
+        self.assertTrue(result["partial"])
+
+    def test_real_estimated_response_renders_estimated_quantity(self):
+        self.fake.wo_rows.append(wo("WO-1"))
+        row = op("WO-1", "裁剪", 1)
+        self.fake.op_rows.append(row)
+        self.fake.jc_rows.append(jc("WO-1", row["name"], "裁剪", "", 10.0))
+        result = self.chain.get_so_chain("SO-1")
+        line = self.line(result)
+        self.assertIsNone(line["reported"])
+        self.assertEqual(line["all_process_estimated"], 10.0)
+        self.assertEqual(line["reported_status"], "estimated")
+        html = self._render(result["lines"])
+        self.assertIn("10（估算）", html)
+        self.assertNotIn("background:#fff9e6", html)
+
+    def _render(self, lines):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node not available")
+        harness = Path(__file__).resolve().parent / "js" / "render_harness.js"
+        root = Path(__file__).resolve().parents[1]
+        js_path = root / "public" / "js" / "sales_order.js"
+        if not js_path.exists():
+            js_path = root / "key_test__sales_order_chain_append.js"
+        payload = json.dumps({"sales_order": "SO-1", "lines": lines},
+                             ensure_ascii=False)
+        proc = subprocess.run(
+            [node, str(harness), str(js_path)], input=payload,
+            capture_output=True, text=True, encoding="utf-8", timeout=60)
+        self.assertEqual(proc.returncode, 0, proc.stderr[-800:])
+        return json.loads(proc.stdout)["html"]
 
 
 if __name__ == "__main__":
