@@ -73,21 +73,55 @@ def _prune_states() -> None:
             del _states[state]
 
 
-def _page(title: str, body: str, *, csrf: str | None = None) -> HTMLResponse:
-    token_input = (
-        f'<input type="hidden" name="csrf" value="{csrf}">' if csrf else ""
-    )
+def _page(title: str, body: str, *, center: bool = False) -> HTMLResponse:
+    wrapper = "login-wrap" if center else "container"
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{title}</title>
 <style>
-body{{font-family:system-ui,-apple-system,sans-serif;max-width:720px;margin:40px auto;padding:0 16px;line-height:1.6;color:#222}}
-code{{background:#f3f3f3;padding:2px 6px;border-radius:4px;word-break:break-all}}
-button{{padding:8px 16px;margin:4px 8px 4px 0;border:1px solid #444;background:#fff;border-radius:6px;cursor:pointer}}
-.danger{{border-color:#a33;color:#a33}}
-.notice{{background:#fff7e6;border:1px solid #f0c36d;padding:10px;border-radius:6px}}
-</style></head><body>{body}</body></html>"""
+*{{margin:0;padding:0;box-sizing:border-box}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#333;line-height:1.5}}
+.container{{max-width:960px;margin:40px auto;padding:0 20px}}
+.login-wrap{{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}}
+.card{{background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.1);padding:24px}}
+.login{{width:400px;max-width:100%;padding:40px;box-shadow:0 4px 20px rgba(0,0,0,.08)}}
+.login h1{{font-size:20px;margin-bottom:8px}}
+.login p{{color:#777;font-size:13px;margin-bottom:20px}}
+.header{{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}}
+.header h1{{font-size:20px}}
+.user{{font-size:13px;color:#666;display:flex;align-items:center;gap:8px;margin-bottom:20px}}
+.dot{{width:8px;height:8px;border-radius:50%;background:#34a853;display:inline-block}}
+.btn{{display:inline-block;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-size:14px;text-decoration:none;color:#333;background:#eee}}
+.btn:hover{{filter:brightness(.96)}}
+.btn-primary{{background:#1a73e8;color:#fff}}
+.btn-primary:hover{{background:#1557b0}}
+.btn-danger{{background:#dc3545;color:#fff}}
+.btn-danger:hover{{background:#b02a37}}
+.btn-dingtalk{{display:block;text-align:center;background:#0089FF;color:#fff;padding:11px;border-radius:8px;font-size:15px}}
+.btn-dingtalk:hover{{background:#0074d9}}
+.btn-sm{{padding:4px 10px;font-size:12px}}
+.btn[disabled]{{opacity:.5;cursor:not-allowed}}
+.badge{{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px}}
+.badge-active{{background:#e6f4ea;color:#1e8e3e}}
+.badge-inactive{{background:#fce8e6;color:#d93025}}
+code{{background:#f1f3f4;padding:2px 6px;border-radius:4px;font-size:12px;word-break:break-all}}
+.key-card{{margin-top:16px}}
+.key-row{{display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap;padding:14px 0;border-top:1px solid #eee}}
+.key-meta{{display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:#666}}
+.key-meta b{{color:#333;font-weight:600}}
+.actions{{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}}
+.key-box{{background:#f1f8e9;border:1px solid #c8e6c9;border-radius:8px;padding:16px;margin-top:16px}}
+.key-box strong{{font-size:13px;color:#2e7d32}}
+.key-box code{{display:block;margin:10px 0;padding:10px;background:#fff;font-size:14px}}
+.usage{{background:#263238;color:#aed581;border-radius:8px;padding:16px;margin-top:12px;font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap;overflow-x:auto}}
+.notice{{background:#fff7e6;border:1px solid #f0c36d;border-radius:8px;padding:12px;margin-top:16px;font-size:13px}}
+.error{{background:#fce8e6;color:#d93025;border-radius:8px;padding:12px;margin-top:16px;font-size:13px}}
+.empty{{text-align:center;padding:40px 16px;color:#999}}
+.empty h2{{font-size:16px;color:#555;margin-bottom:6px}}
+.hint{{color:#999;font-size:12px;margin-top:14px}}
+@media(max-width:600px){{.container{{margin:20px auto}}.header{{align-items:flex-start;flex-direction:column}}.key-row{{align-items:flex-start;flex-direction:column}}}}
+</style></head><body><div class="{wrapper}">{body}</div></body></html>"""
     return HTMLResponse(html)
 
 
@@ -145,35 +179,70 @@ def build_portal_router(config: AppConfig, db: Database, session_secret: str) ->
         if session is None:
             return _page(
                 "Wayfair API 门户",
-                '<h1>Wayfair API 门户</h1>'
-                "<p>同事可使用公司钉钉登录，自助领取只读库存 key。</p>"
-                '<p><a href="/portal/oidc-login">使用钉钉登录</a></p>',
+                '<div class="card login">'
+                "<h1>Wayfair API 门户</h1>"
+                "<p>使用公司钉钉登录，自助领取只读库存 Key。</p>"
+                '<a class="btn btn-dingtalk" href="/portal/oidc-login">钉钉登录</a>'
+                '<p class="hint">任何公司员工均可登录；自助 Key 仅能读取 CG 库存快照。</p>'
+                "</div>",
+                center=True,
             )
+
         key = await db.get_portal_key(session["identity"])
-        if key:
-            status = (
-                f"<p>当前 key：<code>{html.escape(key['key_prefix'])}…</code> "
-                f"（创建于 {key['created_at']:.0f}，请求 {key['request_count']} 次）</p>"
-            )
-        else:
-            status = "<p>当前没有 key。</p>"
         csrf, is_new = csrf_for(request)
         csrf_input = f'<input type="hidden" name="csrf" value="{html.escape(csrf)}">'
-        body = (
-            f"<h1>Wayfair API 门户</h1>"
-            f"<p>登录身份：<code>{html.escape(session['display_name'])}</code></p>"
-            f"{status}"
-            "<p>自助 key 只能读取 <code>inventory:snapshot:read</code>，"
-            f"账号固定为 <code>{html.escape(config.portal_account)}</code>。"
-            "重建后旧 key 立即失效，明文只显示一次。</p>"
-            f'<form method="post" action="/portal/key/issue">{csrf_input}'
-            '<button type="submit">领取 / 重建 key</button></form>'
-            f'<form method="post" action="/portal/key/deactivate">{csrf_input}'
-            '<button type="submit" class="danger">停用我的 key</button></form>'
+        logout = (
             f'<form method="post" action="/portal/logout">{csrf_input}'
-            '<button type="submit">退出登录</button></form>'
+            '<button class="btn btn-sm" type="submit">退出登录</button></form>'
         )
-        response = _page("Wayfair API 门户", body)
+        header = (
+            '<div class="header"><h1>Wayfair API 门户</h1>'
+            f"{logout}</div>"
+            f'<div class="user"><span class="dot"></span>'
+            f'{html.escape(session["display_name"])}（钉钉）</div>'
+        )
+
+        if key:
+            operations = ", ".join(key["operations"])
+            card = f"""
+<div class="card key-card">
+  <div class="key-row">
+    <div><b>当前 Key</b> <code>{html.escape(key["key_prefix"])}…</code>
+      <span class="badge badge-active">启用</span></div>
+    <div class="key-meta">
+      <span>账号 <b>{html.escape(config.portal_account)}</b></span>
+      <span>权限 <b>{html.escape(operations)}</b></span>
+      <span>请求 <b>{key["request_count"]}</b></span>
+    </div>
+  </div>
+  <div class="actions">
+    <form method="post" action="/portal/key/issue">{csrf_input}
+      <button class="btn btn-primary" type="submit">重建 Key</button></form>
+    <form method="post" action="/portal/key/deactivate"
+          onsubmit="return confirm('停用后当前 Key 立即失效，确认？')">{csrf_input}
+      <button class="btn btn-danger" type="submit">停用 Key</button></form>
+  </div>
+  <div class="notice">重建会立即停用旧 Key；明文只显示一次，请及时保存。</div>
+</div>
+<div class="card key-card">
+  <b>使用示例</b>
+  <div class="usage">curl -X POST https://wayfair-api.vilavi.cn/v1/accounts/{html.escape(config.portal_account)}/inventory/query \\
+  -H "Authorization: Bearer &lt;your-key&gt;" \\
+  -H "Content-Type: application/json" \\
+  -d '{{"skus":["SKU-1"],"mode":"snapshot"}}'</div>
+</div>
+"""
+        else:
+            card = f"""
+<div class="card empty">
+  <h2>还没有 API Key</h2>
+  <p>自助 Key 只能读取 <code>inventory:snapshot:read</code>，账号固定为
+     <code>{html.escape(config.portal_account)}</code>。</p>
+  <form method="post" action="/portal/key/issue" style="margin-top:16px">{csrf_input}
+    <button class="btn btn-primary" type="submit">领取 Key</button></form>
+</div>
+"""
+        response = _page("Wayfair API 门户", header + card)
         if is_new:
             response.set_cookie(
                 CSRF_COOKIE,
@@ -295,19 +364,48 @@ def build_portal_router(config: AppConfig, db: Database, session_secret: str) ->
         except PortalQuotaExceeded as exc:
             return _page(
                 "Wayfair API 门户",
-                f'<p class="notice">暂时不能重建：{exc}</p>'
-                '<p><a href="/portal/">返回</a></p>',
+                '<div class="card">'
+                "<h1>暂时不能重建</h1>"
+                f'<div class="notice">{html.escape(str(exc))}</div>'
+                '<div class="actions"><a class="btn" href="/portal/">返回门户</a></div>'
+                "</div>",
             )
         request.state.key_id = created.id
         request.state.result_count = 1
-        body = (
-            "<h1>Key 已生成</h1>"
-            '<p class="notice">明文只显示一次，请立即保存；刷新后无法再次查看。</p>'
-            f"<p><code>{html.escape(created.raw_key)}</code></p>"
-            f"<p>账号：<code>{config.portal_account}</code>；"
-            "权限：<code>inventory:snapshot:read</code></p>"
-            '<p><a href="/portal/">返回门户</a></p>'
-        )
+        body = f"""
+<div class="header"><h1>Key 已生成</h1></div>
+<div class="card">
+  <div class="key-box">
+    <strong>明文只显示一次，请立即保存；刷新后无法再次查看。</strong>
+    <code id="raw-key">{html.escape(created.raw_key)}</code>
+    <button class="btn btn-primary btn-sm" type="button" onclick="copyKey()">复制 Key</button>
+  </div>
+  <div class="key-meta" style="margin-top:16px">
+    <span>账号 <b>{html.escape(config.portal_account)}</b></span>
+    <span>权限 <b>{html.escape(INVENTORY_SNAPSHOT_READ)}</b></span>
+  </div>
+  <div class="usage">curl -X POST https://wayfair-api.vilavi.cn/v1/accounts/{html.escape(config.portal_account)}/inventory/query \\
+  -H "Authorization: Bearer &lt;your-key&gt;" \\
+  -H "Content-Type: application/json" \\
+  -d '{{"skus":["SKU-1"],"mode":"snapshot"}}'</div>
+  <div class="actions"><a class="btn" href="/portal/">返回门户</a></div>
+</div>
+<script>
+function copyKey() {{
+  const text = document.getElementById("raw-key").textContent;
+  const done = () => {{ document.querySelector(".key-box .btn").textContent = "已复制"; }};
+  if (navigator.clipboard && navigator.clipboard.writeText) {{
+    navigator.clipboard.writeText(text).then(done).catch(fallback);
+  }} else {{ fallback(); }}
+  function fallback() {{
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.left = "-9999px";
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy");
+    document.body.removeChild(ta); done();
+  }}
+}}
+</script>
+"""
         response = _page("Key 已生成", body)
         response.headers["Cache-Control"] = "no-store"
         return response
@@ -324,7 +422,10 @@ def build_portal_router(config: AppConfig, db: Database, session_secret: str) ->
         request.state.result_count = count
         return _page(
             "Wayfair API 门户",
-            f"<p>已停用 {count} 个 key。</p><p><a href=\"/portal/\">返回</a></p>",
+            '<div class="card">'
+            f"<h1>Key 已停用</h1><p>共停用 {count} 个 Key。</p>"
+            '<div class="actions"><a class="btn btn-primary" href="/portal/">返回门户</a></div>'
+            "</div>",
         )
 
     @router.get("/api/key")
