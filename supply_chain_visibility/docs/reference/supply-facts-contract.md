@@ -73,6 +73,23 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 覆盖 SO→Item、SO 行→PP、SO 行→WO、WO→菲号、SO 行→DN、DN→Shipment（多运单时 `allocation=unknown` 且 qty=null；来源单位缺失或与订单单位不一致时 qty=null）。
 `target_is_record=false` 表示 `target_name` 只是运单号/占位，不是已匹配的实体记录；覆盖数只统计 `target_is_record=true` 的 Shipment。
 
+### `production_evidence`（四类生产证据，per SO line）
+
+每行一条：`so`、`so_line`、`line_item_code`、`work_orders[]`、`subassemblies[]`、`all_process_done`、`first_process_done`、`qc_performed`、`qc_passed`、`stock_in_posted`、`conflicts`、`observed_at`。
+每个类：`qty_proven`、`qty_estimated`、`confidence`（`proven/estimated/mixed/unknown`）、`qty_status`（`known/estimated/unknown`）、`started_at`、`completed_at`、`time_status`、`components`、`source_records`、`reasons`、`conflicts`。
+
+规则：
+
+- **资格**：只有 `confidence ∈ {proven, mixed}` 时 `qty_proven` 才可用于完成/阶段 3/待出库/known 里程碑；`estimated` 可披露但不触发完成。
+- **物料**：行级数量只汇总 `production_item == SO 行 item_code` 的 WO；`PK#/ND#/DKND#` 子装配件进入 `subassemblies`，**不并入成品数量**。
+- **单位**：UOM 缺失或与订单单位不一致 → 不求和，`qty_*=null` + `unit_missing/unit_mismatch`。
+- **物理身份**：多 WO 行级 proven 需每张 WO 为 `proven` 且 `proven_tracking_numbers` 两两不相交；否则 `null` + `tracking_identity_overlap`，保留 per-WO 明细。WO 重放同载荷幂等，异载荷 `duplicate_wo_evidence_payload` → unknown。
+- **取消工单**：不参与计划/工序进度；其已提交 Manufacture 入库净额作为独立事实保留，并输出 `wo_cancelled_with_valid_stock_in`。
+- **时间**：仅当所有贡献记录 `time_status=complete` 时输出 `started_at=min` / `completed_at=max`，否则 null + `time_incomplete`。
+- **QC**：`qc_passed.status` 按状态集合判定（全 Accepted / 全 Rejected；混合为冲突）；`qty` 保持 null/unknown，覆盖量不当作通过数量。
+- **权限**：WO/JC/Tracking Number 先取 `get_list` 可读集合，受限单据不进入响应；JC 受限不影响 Stock Entry 入库事实；查询失败写 `source_status` + `partial_reasons`。
+
+
 ### `manifest`
 
 `schema_version=supply-facts/v1`、`rule_version`（数量规则版本）、`implementation_version`（实现/构建版本，服务端返回与本地导出产物都携带）、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`external_sources`）、`counts`、`partial`、`truncated`、`termination_reason`（`exhausted`/`page_limit`）、`pagination`、`partial_reasons`、`notes`、`files`（相对路径 + sha256）、`performance`。
@@ -101,7 +118,7 @@ filters = JSON object
 
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
 - Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
-- 当前 `implementation_version=key_test.supply_facts@2026-10-29.1`；接口/分页行为变更必须 bump，混合版本继续拒绝。
+- 当前 `implementation_version=key_test.supply_facts@2026-10-29.3`；接口/分页行为变更必须 bump，混合版本继续拒绝。
 - 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
 - `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。
 - `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。
@@ -123,7 +140,7 @@ filters={"bogus":1}                 # Unknown filter(s)
 ?sales_order=SO-26-00103            # Unknown parameter(s)
 ```
 
-输出：`EN_API/out/supply_facts/runs/run-<ts>-<id>/` 下 5 个 JSON + `supply_facts.xlsx` + `manifest.json`；
+输出：`EN_API/out/supply_facts/runs/run-<ts>-<id>/` 下 6 个 JSON（含 `production_evidence.json`）+ `supply_facts.xlsx` + `manifest.json`；
 `latest.json` 原子指针指向最后一次成功版本。写失败不切换指针，旧版本保持可读；`partial` 显式标记缺源。多批次合并前校验 `schema_version` / `rule_version` / `implementation_version` / `as_of`，任一不一致即拒绝该批次并终止导出，不写新版本，`latest.json` 仍指向上次成功版本。
 
 ## 3. 人工视图
@@ -132,6 +149,14 @@ SO Chain Overview 的链条弹窗新增「数量阶段 / 节点 / 分批可售�
 `key_test.supply_facts.get_supply_facts`（按 SO + 订单行）。弹窗按具体订单行请求时携带
 `include_delivered=1`，已发完订单行仍展示历史事实，与机器导出范围一致。
 工单数/菲号数仍只作导航，数量以阶段余额为准。
+
+SO 表单链条面板（`sales_order.js`）另展示生产证据：全工序（proven/estimated/unknown）、入库净额、
+QC 状态、confidence、主要原因/冲突，以及子装配件（PK#/ND#）独立证据；仅两侧 `known` 才做差异标黄。
+
+> **范围声明（2026-10-29）**：`SO Chain Overview` **原生报表**仍是 legacy 数量口径
+> （`supply_query.get_report_data`，首工序/出库），**不在第三步统一证据范围**；其数量列不得用于
+> 证明生产完成。统一生产证据仅见 SO 表单链条面板与批量导出。
+
 
 ## 4. 产品要求 → 已复用 → 缺口 → 本周交付
 
@@ -148,6 +173,7 @@ SO Chain Overview 的链条弹窗新增「数量阶段 / 节点 / 分批可售�
 ## 5. 验收（测试站）
 
 - 契约单测：49 项（8 类案例 + 草稿 + estimated + 单位校验/继承 + 退货原明细归属/容量账本/顺序不变性/超退/引用冲突/无法归属/同仓聚合 + 退货逐明细读取贯穿 + 工单覆盖/开工证据 + 生产计划覆盖/单位校验 + 超产现存与累计 + 取消实物 + 片段仓库/ID + 运单状态齐全性 + 出库节点拆分 + 已发完行 include_delivered + 弹窗参数 + 行级权限 + 全部受限 + 版本字段 + 历史 as_of 拒绝 + 空结果完整性），另有 7 项批次合并/版本一致性测试；本地全绿。
+- **2026-10-29 第二批复审整改（本地）**：key_test 全量 227 passed / 3 skipped / 4 subtests；导出器 25 passed；`supply_chain_visibility` 102 passed / 5 subtests；Node 渲染 6 项。覆盖：真实 `get_so_chain` 不报错、KS/PK#/ND# 不串量、跨 UOM 不求和、重叠/重复 WO 不重复、unknown/estimated 不触发 complete/阶段 3/known、行级权限不泄露且 SE 独立降级、取消 WO 入库事实可达、导出 JSON/Excel/manifest 行数与 SHA-256 一致且失败不切换 `latest.json`。版本 `RULE=2026-10-29.4` / `IMPL=key_test.supply_facts@2026-10-29.3`；测试站与生产均未部署。
 - 单 SO `SO-26-00026`：3 行 / 8 阶段余额 / 16 里程碑 / 6 可售片段 / 17 关联；查询约 0.8s。
   三行阶段余额守恒 10 / 5 / 8（草稿不计数量；KS 无工序卡时用 produced_qty 标 estimated）。
 - 全范围（含取消订单）：292 行 / 308 阶段余额 / 656 里程碑 / 287 片段 / 404 关联；查询 0.30s，总计 0.85s。

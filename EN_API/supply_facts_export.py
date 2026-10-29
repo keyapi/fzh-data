@@ -28,7 +28,10 @@ sys.stdout.reconfigure(encoding="utf-8")
 import item_shipment_status as iss  # noqa: E402
 
 METHOD = "/api/method/key_test.supply_facts.get_supply_facts"
-DATASETS = ("lines", "stage_balances", "milestones", "availability_schedule", "links")
+DATASETS = ("lines", "stage_balances", "milestones", "availability_schedule",
+            "links", "production_evidence")
+EVIDENCE_CLASSES = ("first_process_done", "all_process_done", "qc_performed",
+                    "qc_passed", "stock_in_posted")
 DEFAULT_OUT = EN_API / "out" / "supply_facts"
 SCHEMA_VERSION = "supply-facts/v1"
 
@@ -252,6 +255,62 @@ def _resolve_sos(codes, base_url, key, secret):
     return sorted(set(names))
 
 
+def _qty_status(evidence):
+    status = evidence.get("qty_status")
+    if status:
+        return status
+    confidence = evidence.get("confidence")
+    if evidence.get("qty_proven") is not None and confidence in ("proven", "mixed"):
+        return "known"
+    if evidence.get("qty_estimated") is not None and confidence in ("estimated", "mixed"):
+        return "estimated"
+    return "unknown"
+
+
+def _flatten_production_evidence(rows):
+    """One stable row per SO line × WO × evidence class."""
+    flat = []
+    for line in rows or []:
+        line_item = line.get("line_item_code")
+        for wo in line.get("work_orders") or []:
+            item = wo.get("production_item")
+            role = ("subassembly" if line_item and item and item != line_item
+                    else "primary")
+            for evidence_class in EVIDENCE_CLASSES:
+                evidence = wo.get(evidence_class) or {}
+                components = evidence.get("components") or {}
+                flat.append({
+                    "so": line.get("so"),
+                    "so_line_id": line.get("so_line"),
+                    "line_item_code": line_item,
+                    "production_item": item,
+                    "wo": wo.get("wo"),
+                    "wo_qty": wo.get("qty"),
+                    "wo_docstatus": wo.get("docstatus"),
+                    "wo_cancelled": bool(wo.get("wo_cancelled")),
+                    "line_role": role,
+                    "evidence_class": evidence_class,
+                    "qty_proven": evidence.get("qty_proven"),
+                    "qty_estimated": evidence.get("qty_estimated"),
+                    "confidence": evidence.get("confidence"),
+                    "qty_status": _qty_status(evidence),
+                    "started_at": evidence.get("started_at"),
+                    "completed_at": evidence.get("completed_at"),
+                    "time_status": evidence.get("time_status"),
+                    "observed_at": evidence.get("observed_at") or line.get("observed_at"),
+                    "gross_qty": components.get("gross_qty"),
+                    "return_qty": components.get("return_qty"),
+                    "net_qty": components.get("net_qty"),
+                    "source_records": json.dumps(evidence.get("source_records") or [],
+                                                 ensure_ascii=False, default=str),
+                    "reasons": json.dumps(evidence.get("reasons") or [],
+                                          ensure_ascii=False, default=str),
+                    "conflicts": json.dumps(evidence.get("conflicts") or [],
+                                            ensure_ascii=False, default=str),
+                })
+    return flat
+
+
 def _write_xlsx(path, result):
     from openpyxl import Workbook
     wb = Workbook()
@@ -276,12 +335,21 @@ def _write_xlsx(path, result):
         "links": ["so", "so_line_id", "source_doctype", "source_name", "source_line_id",
                   "relation", "target_doctype", "target_name", "target_is_record",
                   "qty", "uom", "proof", "allocation"],
+        "production_evidence": ["so", "so_line_id", "line_item_code", "production_item",
+                                "wo", "wo_qty", "wo_docstatus", "wo_cancelled",
+                                "line_role", "evidence_class", "qty_proven",
+                                "qty_estimated", "confidence", "qty_status",
+                                "started_at", "completed_at", "time_status",
+                                "observed_at", "gross_qty", "return_qty", "net_qty",
+                                "source_records", "reasons", "conflicts"],
     }
     for name in DATASETS:
         ws = wb.create_sheet(name)
         headers = columns[name]
+        rows = (_flatten_production_evidence(result[name])
+                if name == "production_evidence" else result[name])
         ws.append(headers)
-        for row in result[name]:
+        for row in rows:
             ws.append([row.get(key) for key in headers])
         ws.freeze_panes = "A2"
     covered = wb.create_sheet("Coverage")
@@ -341,7 +409,8 @@ def main(argv=None):
     started = time.perf_counter()
 
     result = {"lines": [], "stage_balances": [], "milestones": [],
-              "availability_schedule": [], "links": [], "partial": False,
+              "availability_schedule": [], "links": [], "production_evidence": [],
+              "partial": False,
               "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
               "restricted": {}, "external_sources": {},
               "notes": [], "schema_version": "", "rule_version": "",
@@ -442,6 +511,12 @@ def main(argv=None):
             _write_xlsx(xlsx, result)
             files["supply_facts.xlsx"] = {"path": "supply_facts.xlsx",
                                           "sha256": _sha256(xlsx), "rows": None}
+        manifest["datasets"] = {
+            "production_evidence": {
+                "lines": len(result["production_evidence"]),
+                "rows": len(_flatten_production_evidence(result["production_evidence"])),
+            }
+        }
         manifest["files"] = files
         _write_json(tmp_dir / "manifest.json", manifest)
         tmp_dir.rename(run_dir)

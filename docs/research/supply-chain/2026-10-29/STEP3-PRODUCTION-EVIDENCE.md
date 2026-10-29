@@ -470,3 +470,60 @@ SQL
   `EN_API/out/supply_facts/_acceptance/step3_batch2_diff.md`。
 - 未部署生产、未写业务数据、未扩权、未合并 main；第二步权限待验项独立保留。
 - 待 Codex 审核后再安排测试站验证；第四至第六步不启动。
+
+## 13. 第二批复审整改（2026-10-29）
+
+本轮针对 Codex 复审的 P0/P1/P2 一次性整改；仍为**本地提交、未 push、未部署测试站/生产**。
+
+### 13.1 修复项
+
+- **P0-1 真实运行错误**
+  - `so_chain.py` WO SQL 增补 `w.stock_uom`（原先证据必然落入 `unit_missing/unknown`）。
+  - `load_stock_entries()` 返回 dict，`so_chain.py` 改为 `entry.get("name")`（原 `entry.name` 在存在入库记录时 `AttributeError`）。
+  - 新增 `key_test/tests/test_so_chain_end_to_end.py`：真实 `get_so_chain()` 贯穿（WO/路由/JC/TN/已提交 SE/QI）。
+- **P0-2 按物料、单位、物理身份汇总**
+  - `rollup_line_evidence(evidence_list, item_code, order_uom)`：只有 `production_item == SO 行 item_code` 的 WO 进入行级数量；`PK#/ND#/DKND#` 子装配件放入 `subassemblies`，不并入成品。
+  - UOM 缺失/不一致 → 不求和、`qty_* = null` + `unit_missing/unit_mismatch`。
+  - 多 WO 行级 proven 需：每张 WO `confidence == proven` 且各自 `proven_tracking_numbers` 两两不相交；否则 `null` + `tracking_identity_overlap`，保留 per-WO 明细。
+  - WO 重放：同载荷幂等去重；异载荷 `duplicate_wo_evidence_payload` → unknown。
+- **P0-3 统一资格**
+  - 新增 `proven_qty()` / `evidence_status()`；所有完成/阶段 3/待出库/里程碑判断只认 `proven_qty()`。
+  - `completion_state()` 不再仅凭 `qty_proven` 判完成；`qty_proven=1, confidence=unknown` 不再返回 complete。
+  - `build_milestones()` 数量与 `actual_at` 只取 proven + `time_status=complete`；estimated 仅写入 note，`qty_status` 不标 known。
+- **P1-1 行级权限与来源独立**
+  - WO/JC/Tracking Number 先经 `frappe.get_list` 取可读集合；受限行剔除，不返回名称/数量/时间。
+  - JC 受限时工序证据 unknown，但有效 Stock Entry 入库事实保留；工序/入库/QI 独立降级。
+  - 查询失败 → `source_status` 明示 `query_error` 并计入 `partial_reasons`，不再伪装为空集合。
+  - 新增 `tracking_numbers` 可用性门槛；`build_wo_evidence` 顶层 `required_operations` 同步清零。
+- **P1-2 时间/来源/冲突**
+  - 行级保留 `started_at/completed_at/time_status/observed_at/components/source_records`；时间仅在贡献记录完整且定义一致时输出（`min` 开始 / `max` 完成），否则 null + `time_incomplete`。
+  - `qc_passed.status` 改为状态集合判定，不再取 `rows[0]`，输入顺序无关。
+  - Stock Entry `gross/return/net/unallocated` 分量随行级汇总保留。
+- **P1-3 取消工单**
+  - `so_chain` 与 `supply_facts.load_wos` 均纳入 `docstatus=2`；计划/工序覆盖排除取消工单，其已提交 Manufacture 入库净额作为独立事实保留，并输出 `wo_cancelled_with_valid_stock_in`。
+- **P1-4 机器导出**
+  - `EN_API/supply_facts_export.py` `DATASETS` 增加 `production_evidence`；JSON 保留服务端嵌套（每 SO 行一条），Excel 扁平行 = SO line × WO × evidence_class（含 `line_role=primary/subassembly`、`qty_status`、时间、`source_records/reasons/conflicts`、gross/return/net）。
+  - `manifest.datasets.production_evidence = {lines, rows}`；文件条目带 SHA-256/rows；写失败仍不切换 `latest.json`。
+- **P2 人工视图**
+  - `sales_order.js`：仅两侧 `known` 才计算差异/标黄；unknown 显示 `—`；estimated 显式 `（估算）`；生产摘要/明细展示 QC、confidence、原因/冲突与子装配件独立证据。
+  - `so_chain_overview` **明确不在本批统一证据范围**：仅改模块 docstring 标注 legacy 口径，数量列不得用于证明生产完成。
+
+### 13.2 版本
+
+- `RULE_VERSION=2026-10-29.4`，`IMPLEMENTATION_VERSION=key_test.supply_facts@2026-10-29.3`。
+- 导出器新增数据集；混合实现版本继续拒绝。
+
+### 13.3 验收（本地）
+
+- key_test 全量 **227 passed / 3 skipped / 4 subtests**（新增贯穿测试：适配器 → 证据层 → 阶段/里程碑 → whitelist 入口）。
+- 导出器测试 **25 passed**（新增 production_evidence JSON/Excel/SHA-256/行数/失败保护）。
+- `supply_chain_visibility` 全量 **102 passed / 5 subtests**。
+- 镜像 `cmp` 逐字一致：`production_evidence/so_chain/supply_facts`、对应 tests、`sales_order_chain_append.js`、`so_chain_overview.py`。
+- Node 渲染测试：unknown/estimated/差异/QC/冲突 6 项通过（最小 DOM 桩，无 jsdom 依赖）。
+
+### 13.4 未完成 / 边界
+
+- **未部署测试站或生产**；测试站真实普通受限用户 HTTP 与浏览器视觉验收待 Codex 通过后安排。
+- **第二步权限待验项仍为待验**（不得表述为通过）。
+- 第四至第六步不启动；`so_chain_overview` 保持 legacy 口径，不宣称已统一。
+- 本地提交后停止，交 Codex 审核。

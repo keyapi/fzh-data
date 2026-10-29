@@ -32,7 +32,18 @@ const SO_CHAIN_PROD = '#0d7a3f';   // 生产 主色
 const SO_CHAIN_DN = '#0a6ed1';     // 出库 主色
 const SO_CHAIN_HEAD = '#6f42c1';   // 头程物流 主色
 function so_chain_esc(s) { return frappe.utils.escape_html(s == null ? '' : String(s)); }
-function so_chain_num(v) { const f = Number(v || 0); return (Math.round(f * 1000) / 1000).toString(); }
+function so_chain_num(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    const f = Number(v);
+    if (!isFinite(f)) return '—';
+    return (Math.round(f * 1000) / 1000).toString();
+}
+// 后端 evidence_status() 的统一口径：known / estimated / unknown
+function so_chain_is_known(status) { return status === 'known'; }
+function so_chain_qty(value, status) {
+    if (value === null || value === undefined || value === '') return '—';
+    return so_chain_num(value) + (status === 'estimated' ? '（估算）' : '');
+}
 function so_chain_t(s) { return so_chain_esc(s == null ? '' : __(String(s))); }
 function so_chain_link(doctype, name, label) {
     if (!name) return so_chain_esc(label || '');
@@ -49,8 +60,8 @@ const SO_CHAIN_DEF_COLS = [
     { k: 'item', label: '订单行物料', w: 0 },      // 0 = 弹性列：吸收剩余宽度（多看物料名）
     { k: 'code', label: '客户物料号', w: 115 },
     { k: 'qty', label: '订单量', w: 54 },
-    { k: 'reported', label: '报工', w: 60 },       // 末道必经工序报工（成品行=子装配件齐套）
-    { k: 'instock', label: '入库', w: 60 },        // 入库单量(produced_qty)
+    { k: 'reported', label: '全工序', w: 60 },     // 全工序已证量（production evidence）
+    { k: 'instock', label: '入库净额', w: 60 },    // Stock Entry 已提交净额
     { k: 'shipped', label: '已发', w: 54 },
     { k: 'deliv', label: '交期', w: 96 },
     { k: 'stage', label: '阶段', w: 106 },
@@ -59,8 +70,8 @@ const SO_CHAIN_DEF_COLS = [
 ];
 const SO_CHAIN_COLS = SO_CHAIN_DEF_COLS.length;
 const SO_CHAIN_COL_TITLE = {
-    reported: '报工：末道必经工序已报工量（成品行取皮壳/内胆齐套，取较慢者）',
-    instock: '入库：本物料工单入库量（入库单 produced_qty）',
+    reported: '全工序：全工序已证完成量（proven）；估算/未知不当作已证',
+    instock: '入库净额：已提交 Manufacture 入库单成品行净额（毛额 − 规范化退货）',
     shipped: '已发：销售出库净额（含退货抵扣）'
 };
 function so_chain_widths() {
@@ -172,14 +183,19 @@ function so_chain_render($box, data) {
     let tOpenQty = 0;
     const rows = (data.lines || []).map(function (l, idx) {
         tOpenQty += Number(l.open_qty || 0);
-        // 报工 / 入库 两列；不一致标黄（报工=末道报工；成品行=子装配件齐套）
-        const hasRep = (l.reported !== null && l.reported !== undefined);
-        const diff = hasRep && Math.abs(Number(l.reported) - Number(l.instock || 0)) > 1e-6;
+        // 全工序 / 入库净额 两列；只有两侧都是 known(proven) 才比较差异
+        const bothKnown = so_chain_is_known(l.reported_status) && so_chain_is_known(l.instock_status);
+        const diff = bothKnown && Math.abs(Number(l.reported) - Number(l.instock)) > 1e-6;
         const hi = diff ? ' background:#fff9e6' : '';
-        const hiTitle = diff ? ' title="报工与入库不一致 —— 报工 ' + so_chain_num(l.reported) + ' / 入库 '
+        const hiTitle = diff ? ' title="全工序与入库不一致 —— 全工序 ' + so_chain_num(l.reported) + ' / 入库净额 '
             + so_chain_num(l.instock) + (l.report_note ? '（' + so_chain_esc(l.report_note) + '）' : '') + '"' : '';
-        // 生产链条摘要（文本 = 展开框标题）
-        const prodSummary = so_chain_summary_text(l, 'prod');
+        // 生产链条摘要（文本 = 展开框标题）+ 证据状态/QC/冲突
+        const evTxt = '·证据' + (l.reported_status || 'unknown')
+            + (l.qc_passed_status ? '·QC ' + so_chain_esc(l.qc_passed_status)
+                : (l.qc_status ? '·QC ' + so_chain_esc(l.qc_status) : ''))
+            + ((l.evidence_conflicts || []).length
+                ? '·冲突:' + so_chain_esc(l.evidence_conflicts.join(',')) : '');
+        const prodSummary = so_chain_summary_text(l, 'prod') + evTxt;
         const forgot = (l.forgot_complete || []);
         const forgotBadge = forgot.length
             ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆工单已全部完成：' + so_chain_esc(forgot.join(', ')) + '">忘点完工?</span>'
@@ -210,9 +226,9 @@ function so_chain_render($box, data) {
             + '<td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + so_chain_esc(l.customer_item_code) + '">' + so_chain_esc(l.customer_item_code) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.qty) + '</td>'
             + '<td style="text-align:right;white-space:nowrap' + hi + '"' + hiTitle + '>'
-                + (diff ? '<b>' : '') + (hasRep ? so_chain_num(l.reported) : '—') + (diff ? '</b>' : '') + '</td>'
+                + (diff ? '<b>' : '') + so_chain_qty(l.reported, l.reported_status) + (diff ? '</b>' : '') + '</td>'
             + '<td style="text-align:right;white-space:nowrap' + hi + '"' + hiTitle + '>'
-                + (diff ? '<b>' : '') + so_chain_num(l.instock) + (diff ? '</b>' : '') + '</td>'
+                + (diff ? '<b>' : '') + so_chain_qty(l.instock, l.instock_status) + (diff ? '</b>' : '') + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.delivered) + '</td>'
             + '<td style="white-space:nowrap;overflow:hidden">' + dd + '</td>'
             + '<td style="white-space:nowrap;overflow:hidden"><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
@@ -326,6 +342,34 @@ function so_chain_tree_html(line) {
                  + (p.pending_qty ? '（待产 ' + so_chain_num(p.pending_qty) + '）' : '');
           }).join('、') + '</div>';
     }
+    if (line.reported_status !== undefined) {
+        h += '<div style="margin-bottom:6px;font-size:12px"><b>生产证据</b>：全工序 '
+           + so_chain_qty(line.reported, line.reported_status)
+           + '（' + so_chain_esc(line.reported_confidence || 'unknown') + '）'
+           + '　入库净额 ' + so_chain_qty(line.instock, line.instock_status)
+           + (line.qc_passed_status ? '　QC ' + so_chain_esc(line.qc_passed_status)
+               : (line.qc_status ? '　QC ' + so_chain_esc(line.qc_status) : ''))
+           + ((line.evidence_reasons || []).length
+               ? '　原因: ' + so_chain_esc(line.evidence_reasons.join(',')) : '')
+           + ((line.evidence_conflicts || []).length
+               ? '　冲突: ' + so_chain_esc(line.evidence_conflicts.join(',')) : '')
+           + '</div>';
+    }
+    if (line.subassemblies && line.subassemblies.length) {
+        h += '<div style="margin-bottom:6px;font-size:12px"><b>子装配件（独立证据，不计入成品）</b>'
+           + '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
+           + '<thead><tr><th>物料</th><th>工单</th><th>全工序</th><th>入库净额</th><th>置信度</th></tr></thead><tbody>';
+        line.subassemblies.forEach(function (s) {
+            const ev = s.all_process_done || {};
+            const stock = s.stock_in_posted || {};
+            h += '<tr><td>' + so_chain_link('Item', s.production_item, s.production_item || '')
+               + '</td><td>' + so_chain_link('Work Order', s.wo, s.wo || '')
+               + '</td><td style="text-align:right">' + so_chain_qty(ev.qty_proven, ev.qty_status)
+               + '</td><td style="text-align:right">' + so_chain_qty(stock.qty_proven, stock.qty_status)
+               + '</td><td>' + so_chain_esc(ev.confidence || 'unknown') + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+    }
     if (!line.work_orders || !line.work_orders.length) {
         return h + '<div class="text-muted">无工单</div>';
     }
@@ -341,9 +385,12 @@ function so_chain_tree_html(line) {
               + (w.item_name ? ' <span class="text-muted" style="font-size:11px">: ' + so_chain_esc(w.item_name) + '</span>' : '')
               + so_chain_item_type(w.item_code) : '')
            + (w.docstatus === 0 ? ' <span class="indicator-pill gray">草稿</span>' : '')
+           + (w.cancelled ? ' <span class="indicator-pill red">已取消（入库事实保留）</span>' : '')
            + (w.pp ? '　计划 ' + so_chain_link('Production Plan', w.pp, w.pp) : '')
            + (isForgot ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆已全部完成 —— 疑似忘了点完工">忘点完工?</span>' : '')
            + '　工单量 ' + so_chain_num(w.qty) + '　完成 ' + so_chain_num(w.done)
+           + (w.all_process_status ? '（' + so_chain_esc(w.all_process_status) + '）' : '')
+           + '　入库 ' + so_chain_num(w.stock_in_posted)
            + '　头部状态 ' + so_chain_t(w.status)
            + (w.produced_head ? '（已产 ' + so_chain_num(w.produced_head) + '）' : '')
            + (w.ops_total ? '　工序 ' + w.ops_done + '/' + w.ops_total : '')
@@ -422,10 +469,10 @@ function so_chain_dn_html(line) {
 
 // ── 数量阶段 / 里程碑 / 分批可售（与批量导出同一份 supply facts）────────────
 const SO_CHAIN_STAGE_LABEL = {
-    not_planned: '未排产', in_production: '在产', produced_pending_dn: '完工待出库',
+    not_planned: '未排产', in_production: '在产', produced_pending_dn: '全工序完成待出库',
     shipped_in_transit: '运输中', arrived_not_sellable: '到货未可售',
     delivered_sellable: '已可售交付', cancelled: '已取消', returned: '退货',
-    draft_dn: '草稿出库', unknown: '未知'
+    draft_dn: '草稿出库', over_produced: '超产现存', unknown: '未知'
 };
 const SO_CHAIN_NODE_LABEL = {
     order_placed: '下单', promised_delivery: '订单交期', production_start: '开工',

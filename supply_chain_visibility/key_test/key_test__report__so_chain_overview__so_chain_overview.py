@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
-"""SO Chain Overview report; query joins live in the permission-aware service."""
+"""SO Chain Overview report.
+
+LEGACY QUANTITY SCOPE: this report reads the pre-evidence query
+(``supply_query.get_report_data``) and its quantity columns are navigation
+aids only. It is NOT wired to the unified production evidence
+(``key_test.production_evidence``); do not use its numbers to prove
+production completion. The unified evidence view is the SO form chain panel
+and the batch export (``key_test.supply_facts.get_supply_facts``).
+"""
 import frappe
 from frappe import _
 from frappe.utils import getdate, today

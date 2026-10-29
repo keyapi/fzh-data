@@ -970,7 +970,7 @@ class SupplyFactsContractTest(unittest.TestCase):
 
     def test_implementation_version_bumped_for_interface_change(self):
         self.assertEqual(self.facts.IMPLEMENTATION_VERSION,
-                         "key_test.supply_facts@2026-10-29.2")
+                         "key_test.supply_facts@2026-10-29.3")
 
     def test_manifest_carries_rule_and_implementation_versions(self):
         self.fake.so_rows = []
@@ -1074,6 +1074,105 @@ class SupplyFactsContractTest(unittest.TestCase):
         unknown = self.facts.build_stage_balances(_line(), _ctx(dn_permission=False))
         self.assertEqual(unknown[0]["stage"], self.facts.STAGE_UNKNOWN)
         self.assertEqual(unknown[0]["qty"], 100.0)
+
+
+def _evidence_dict(**overrides):
+    base = {
+        "qty_proven": None, "qty_estimated": None, "confidence": "unknown",
+        "reasons": [], "conflicts": [], "source_records": [],
+        "started_at": None, "completed_at": None, "time_status": "not_applicable",
+        "components": {},
+    }
+    base.update(overrides)
+    return base
+
+
+def _line_evidence(**classes):
+    evidence = {
+        "work_orders": [], "wo_count": 0,
+        "first_process_done": _evidence_dict(),
+        "all_process_done": _evidence_dict(),
+        "qc_performed": _evidence_dict(),
+        "qc_passed": _evidence_dict(),
+        "stock_in_posted": _evidence_dict(),
+        "conflicts": [], "source_records": [], "subassemblies": [],
+    }
+    evidence.update(classes)
+    return evidence
+
+
+class ThirdBatchRegressionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        SupplyFactsContractTest.setUpClass.__func__(cls)
+
+    @classmethod
+    def tearDownClass(cls):
+        SupplyFactsContractTest.tearDownClass.__func__(cls)
+
+    def test_estimated_milestone_is_not_known_and_has_no_actual(self):
+        evidence = _line_evidence(
+            first_process_done=_evidence_dict(
+                qty_estimated=60.0, confidence="estimated",
+                started_at="2026-10-03 08:00:00", completed_at="2026-10-03 09:00:00",
+                time_status="complete"),
+            all_process_done=_evidence_dict(
+                qty_estimated=60.0, confidence="estimated",
+                started_at="2026-10-03 08:00:00", completed_at="2026-10-14 17:00:00",
+                time_status="complete"),
+        )
+        rows = self.facts.build_milestones(
+            _line(), _ctx(wos=[_wo()], evidence=evidence))
+        end = next(r for r in rows if r["node"] == "production_end")
+        start = next(r for r in rows if r["node"] == "production_start")
+        for row in (start, end):
+            self.assertIsNone(row["qty"])
+            self.assertNotEqual(row["qty_status"], "known")
+            self.assertIsNone(row["actual_at"])
+            self.assertIn("估算", row["note"])
+
+    def test_unknown_confidence_hides_proven_quantity(self):
+        evidence = _line_evidence(
+            all_process_done=_evidence_dict(
+                qty_proven=100.0, confidence="unknown", reasons=["conflict"]),
+        )
+        stages = self.facts.build_stage_balances(
+            _line(), _ctx(wos=[_wo(qty=100.0)], evidence=evidence))
+        self.assertNotIn(self.facts.STAGE_PRODUCED_PENDING,
+                         {r["stage"] for r in stages})
+        unknown = next(r for r in stages if r["stage"] == self.facts.STAGE_UNKNOWN)
+        self.assertEqual(unknown["qty"], 100.0)
+
+    def test_cancelled_wo_does_not_count_in_coverage(self):
+        wos = [_wo(name="WO-1", qty=40.0, produced=0.0),
+               _wo(name="WO-X", qty=60.0, produced=0.0, docstatus=2)]
+        evidence = _line_evidence(
+            all_process_done=_evidence_dict(qty_proven=0.0, confidence="proven"),
+            first_process_done=_evidence_dict(qty_proven=0.0, confidence="proven"),
+            stock_in_posted=_evidence_dict(qty_proven=0.0, confidence="proven"),
+        )
+        stages = self.facts.build_stage_balances(
+            _line(), _ctx(wos=wos, evidence=evidence))
+        by_stage = {r["stage"]: r["qty"] for r in stages if r["qty"] is not None}
+        self.assertEqual(by_stage[self.facts.STAGE_IN_PRODUCTION], 40.0)
+        self.assertEqual(by_stage[self.facts.STAGE_NOT_PLANNED], 60.0)
+        self.assertNotIn(self.facts.STAGE_UNKNOWN, by_stage)
+
+    def test_cancelled_wo_stock_fact_reaches_stage_balances(self):
+        evidence = _line_evidence(
+            all_process_done=_evidence_dict(qty_proven=0.0, confidence="proven"),
+            first_process_done=_evidence_dict(qty_proven=0.0, confidence="proven"),
+            stock_in_posted=_evidence_dict(
+                qty_proven=12.0, confidence="proven",
+                components={"gross_qty": 12.0, "return_qty": 0.0,
+                            "net_qty": 12.0, "unallocated_return_qty": 0.0}),
+        )
+        stages = self.facts.build_stage_balances(
+            _line(qty=10.0), _ctx(wos=[_wo(qty=10.0, docstatus=2)],
+                                 evidence=evidence))
+        over = next(r for r in stages
+                    if r["stage"] == self.facts.STAGE_OVER_PRODUCED)
+        self.assertEqual(over["qty"], 2.0)
 
 
 if __name__ == "__main__":

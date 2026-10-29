@@ -51,6 +51,29 @@ ESTIMATED = "estimated"
 UNKNOWN = "unknown"
 MIXED = "mixed"
 
+# Only these confidences may support a "complete/proven" claim. A non-null
+# qty_proven under any other confidence is disclosure only, never proof.
+ELIGIBLE_CONFIDENCE = (PROVEN, MIXED)
+
+
+def proven_qty(evidence):
+    """Quantity that may be treated as proven, or None when not eligible."""
+    evidence = evidence or {}
+    if evidence.get("confidence") not in ELIGIBLE_CONFIDENCE:
+        return None
+    return evidence.get("qty_proven")
+
+
+def evidence_status(evidence):
+    """Shared known/estimated/unknown label for reports and the human view."""
+    evidence = evidence or {}
+    if proven_qty(evidence) is not None:
+        return "known"
+    if (evidence.get("confidence") in (ESTIMATED, MIXED)
+            and evidence.get("qty_estimated") is not None):
+        return "estimated"
+    return "unknown"
+
 
 def _parse_number(value):
     """Return (finite number, None) or (None, 'missing'|'invalid')."""
@@ -639,6 +662,7 @@ def build_wo_evidence(wo, operations, job_cards, tracking_numbers=None,
 
     tn_first, tn_all = 0.0, 0.0
     first_records, all_records = [], []
+    first_identities, all_identities = [], []
     valid_tn_count = 0
     for tn in tn_names:
         tn_qty = tn_values.get(tn)
@@ -650,11 +674,13 @@ def build_wo_evidence(wo, operations, job_cards, tracking_numbers=None,
             if ok:
                 tn_first += tn_qty
                 first_records.extend(records)
+                first_identities.append(tn)
         if required:
             ok, records = _tn_complete(tn, required, cards, tn_qty, process_conflicts)
             if ok:
                 tn_all += tn_qty
                 all_records.extend(records)
+                all_identities.append(tn)
 
     tn_first_value = round(tn_first, 9) if valid_tn_count else None
     tn_all_value = round(tn_all, 9) if valid_tn_count else None
@@ -693,11 +719,14 @@ def build_wo_evidence(wo, operations, job_cards, tracking_numbers=None,
     # Blocked sources / unit mismatch / cancelled WO: process evidence is unknown,
     # but a valid submitted Stock Entry remains a stock fact.
     permission_blocked = (availability.get("work_order") is False
-                          or availability.get("job_cards") is False)
+                          or availability.get("job_cards") is False
+                          or availability.get("tracking_numbers") is False)
     blocked_reasons = []
     if availability.get("work_order") is False:
         blocked_reasons.append("permission")
     if availability.get("job_cards") is False:
+        blocked_reasons.append("permission")
+    if availability.get("tracking_numbers") is False:
         blocked_reasons.append("permission")
     if _int(wo.get("docstatus")) == CANCELLED:
         blocked_reasons.append("wo_cancelled")
@@ -739,7 +768,8 @@ def build_wo_evidence(wo, operations, job_cards, tracking_numbers=None,
             "first_process_done", proven=first_proven, estimated=batch_first_est,
             confidence=first_conf, reasons=first_reasons,
             conflicts=process_conflicts,
-            components={"tn_qty": tn_first_value, "batch_qty": batch_first_est})
+            components={"tn_qty": tn_first_value, "batch_qty": batch_first_est,
+                        "proven_tracking_numbers": sorted(first_identities)})
 
         # all_process_done: only TN is proven. A complete batch pool without
         # identity makes the total unknown (overlap cannot be proven).
@@ -768,7 +798,8 @@ def build_wo_evidence(wo, operations, job_cards, tracking_numbers=None,
         all_ev = _evidence(
             "all_process_done", proven=all_proven, estimated=all_est,
             confidence=all_conf, reasons=all_reasons, conflicts=process_conflicts,
-            components={"tn_qty": tn_all_value, "batch_qty": batch_all_est})
+            components={"tn_qty": tn_all_value, "batch_qty": batch_all_est,
+                        "proven_tracking_numbers": sorted(all_identities)})
 
         # qc_performed: inspection executed (not a pass); TN proven, batch estimated.
         qc_ops = [op for op in required if op.get("operation") == QC_OPERATION]
@@ -859,6 +890,7 @@ def build_wo_evidence(wo, operations, job_cards, tracking_numbers=None,
                            wo_stock_entries, availability)
     for ev in (first, all_ev, qc_perf, qc_passed, stock):
         ev["observed_at"] = observed_at
+        ev["qty_status"] = evidence_status(ev)
     global_conflicts.extend(stock_conflicts)
     global_conflicts.extend(qc_passed.get("conflicts", []))
     if (_int(wo.get("docstatus")) == CANCELLED
@@ -869,7 +901,11 @@ def build_wo_evidence(wo, operations, job_cards, tracking_numbers=None,
 
     return {
         "wo": wo.get("name"),
+        "production_item": wo.get("production_item"),
+        "qty": _num(wo.get("qty")),
         "uom": wo.get("stock_uom"),
+        "docstatus": _int(wo.get("docstatus")),
+        "wo_cancelled": _int(wo.get("docstatus")) == CANCELLED,
         "required_operations": [] if permission_blocked else required,
         "first_process_done": first,
         "all_process_done": all_ev,
@@ -894,31 +930,241 @@ def aggregate_wo_evidence(evidence_list):
     }
 
 
-def _roll_confidence(rows, field, proven, estimated):
-    if any(row[field].get("confidence") == UNKNOWN for row in rows):
-        return UNKNOWN
-    if proven is not None and estimated not in (None, 0, 0.0):
-        return MIXED
-    if proven is not None:
-        return PROVEN
-    if estimated is not None:
-        return ESTIMATED
-    return UNKNOWN
+def _canonical(value):
+    return json.dumps(value, sort_keys=True, default=str)
 
 
-def _roll_qty(rows, field, qty_field):
-    if any(row[field].get("confidence") == UNKNOWN for row in rows):
-        return None
-    values = [row[field].get(qty_field) for row in rows]
-    present = [value for value in values if value is not None]
-    return round(sum(present), 9) if present else None
+def _dedupe_wo_rows(rows):
+    """Replay-safe: identical payloads collapse, different payloads conflict."""
+    by_name = defaultdict(list)
+    passthrough = []
+    for row in rows:
+        name = row.get("wo")
+        (by_name[name] if name else passthrough).append(row)
+    unique = list(passthrough)
+    conflicts = []
+    replay_conflict = False
+    for name, group in by_name.items():
+        if len({_canonical(row) for row in group}) > 1:
+            conflicts.append(_conflict("duplicate_wo_evidence_payload", {"wo": name}))
+            replay_conflict = True
+        unique.append(group[0])
+    unique.sort(key=lambda row: (str(row.get("wo") or ""), _canonical(row)))
+    return unique, conflicts, replay_conflict
+
+
+def _field(row, name):
+    return row.get(name) or {}
+
+
+def _evidence_identities(row, field):
+    if field == "stock_in_posted":
+        return {source.get("name")
+                for source in _field(row, field).get("source_records") or []
+                if source.get("doctype") == "Stock Entry"}
+    components = _field(row, field).get("components") or {}
+    return set(components.get("proven_tracking_numbers") or [])
+
+
+def _merge_components(rows, field):
+    merged, identifiers = {}, set()
+    for row in rows:
+        for key, value in (_field(row, field).get("components") or {}).items():
+            if key == "proven_tracking_numbers":
+                identifiers.update(value or [])
+            elif isinstance(value, (int, float)) and not isinstance(value, bool):
+                merged[key] = round(float(merged.get(key) or 0) + float(value), 9)
+            elif key not in merged:
+                merged[key] = value
+    if identifiers:
+        merged["proven_tracking_numbers"] = sorted(identifiers)
+    return merged
+
+
+def _union_sources(rows, field):
+    seen = {}
+    for row in rows:
+        for source in _field(row, field).get("source_records") or []:
+            key = (source.get("doctype", ""), source.get("name", ""))
+            seen.setdefault(key, dict(source))
+    return [seen[key] for key in sorted(seen)]
+
+
+def _union_conflicts(rows, field):
+    seen, out = set(), []
+    for row in rows:
+        for conflict in _field(row, field).get("conflicts") or []:
+            key = _canonical(conflict)
+            if key not in seen:
+                seen.add(key)
+                out.append(conflict)
+    return out
+
+
+def _roll_time(rows, field):
+    contributors = [row for row in rows
+                    if proven_qty(_field(row, field)) is not None]
+    if not contributors:
+        return None, None, "not_applicable"
+    if any(_field(row, field).get("time_status") != "complete"
+           for row in contributors):
+        return None, None, "partial_missing"
+    starts = [_field(row, field).get("started_at") for row in contributors]
+    ends = [_field(row, field).get("completed_at") for row in contributors]
+    if any(value is None for value in starts + ends):
+        return None, None, "partial_missing"
+    return min(starts), max(ends), "complete"
+
+
+def _roll_stock_time(rows):
+    contributors = [row for row in rows
+                    if proven_qty(_field(row, "stock_in_posted")) is not None]
+    if not contributors:
+        return None, "not_applicable"
+    if any(_field(row, "stock_in_posted").get("time_status") != "complete"
+           for row in contributors):
+        return None, "partial_missing"
+    stamps = [_field(row, "stock_in_posted").get("posted_at") for row in contributors]
+    if any(stamp is None for stamp in stamps):
+        return None, "partial_missing"
+    return max(stamps), "complete"
+
+
+def _roll_field(rows, field, *, order_uom=None, stock=False,
+                replay_conflict=False, empty_reason=None):
+    rows = [row for row in rows if _field(row, field)]
+    reasons = set()
+    conflicts = _union_conflicts(rows, field)
+    if replay_conflict:
+        reasons.add("duplicate_wo_evidence_payload")
+        conflicts.append(_conflict("duplicate_wo_evidence_payload"))
+
+    if not rows:
+        if empty_reason:
+            return _evidence(field, confidence=UNKNOWN, reasons=[empty_reason])
+        empty = _evidence(field, proven=0.0, confidence=PROVEN)
+        empty.update({"reasons": sorted(reasons), "conflicts": conflicts,
+                      "components": {}, "source_records": [],
+                      "started_at": None, "completed_at": None,
+                      "time_status": "not_applicable", "posted_at": None})
+        return empty
+
+    uoms = {row.get("uom") or "" for row in rows}
+    if "" in uoms:
+        unit_reason = "unit_missing"
+    elif order_uom and uoms != {order_uom}:
+        unit_reason = "unit_mismatch"
+    elif len(uoms) > 1:
+        unit_reason = "unit_mismatch"
+    else:
+        unit_reason = None
+    if unit_reason:
+        reasons.add(unit_reason)
+
+    any_unknown = any(_field(row, field).get("confidence") == UNKNOWN
+                      for row in rows)
+    proven_rows = [row for row in rows
+                   if proven_qty(_field(row, field)) is not None]
+    proven = None
+    if unit_reason is None and not any_unknown and not replay_conflict \
+            and proven_rows:
+        if len(proven_rows) == 1:
+            proven = round(float(proven_qty(_field(proven_rows[0], field))), 9)
+        else:
+            strict = all(_field(row, field).get("confidence") == PROVEN
+                         for row in proven_rows)
+            if not strict:
+                reasons.add("estimated_row_in_proven_set")
+            seen, overlap = set(), set()
+            for row in proven_rows:
+                identities = _evidence_identities(row, field)
+                overlap |= (seen & identities)
+                seen |= identities
+            if overlap:
+                conflicts.append(_conflict("tracking_identity_overlap",
+                                           {"identifiers": sorted(overlap)}))
+            if strict and not overlap:
+                proven = round(sum(float(proven_qty(_field(row, field)))
+                                   for row in proven_rows), 9)
+
+    estimated = None
+    if unit_reason is None and not any_unknown:
+        present = [float(value) for value in
+                   (_field(row, field).get("qty_estimated") for row in rows)
+                   if value is not None]
+        if present:
+            estimated = round(sum(present), 9)
+
+    if any_unknown or replay_conflict:
+        reasons.add("source_unknown" if any_unknown
+                    else "duplicate_wo_evidence_payload")
+        proven_value, confidence = None, UNKNOWN
+    elif unit_reason:
+        proven_value, confidence = None, UNKNOWN
+    elif proven is not None and estimated not in (None, 0, 0.0):
+        proven_value, confidence = proven, MIXED
+    elif proven is not None:
+        proven_value, confidence = proven, PROVEN
+    elif estimated is not None:
+        proven_value, confidence = None, ESTIMATED
+    else:
+        proven_value, confidence = None, UNKNOWN
+
+    if stock:
+        posted_at, time_status = _roll_stock_time(rows)
+        started = completed = None
+    else:
+        started, completed, time_status = _roll_time(rows, field)
+        posted_at = None
+        if time_status == "partial_missing":
+            reasons.add("time_incomplete")
+
+    evidence = _evidence(
+        field, proven=proven_value, estimated=estimated, confidence=confidence,
+        reasons=sorted(reasons), conflicts=conflicts,
+        components=_merge_components(rows, field),
+        source_records=_union_sources(rows, field),
+        observed_at=max([row.get("observed_at") for row in rows
+                         if row.get("observed_at")] or [None]))
+    evidence["started_at"] = started
+    evidence["completed_at"] = completed
+    evidence["time_status"] = time_status
+    evidence["posted_at"] = posted_at
+    evidence["qty_status"] = evidence_status(evidence)
+    return evidence
+
+
+def _roll_qc_passed(rows):
+    statuses = {_field(row, "qc_passed").get("status") for row in rows}
+    statuses.discard(None)
+    statuses.discard("")
+    conflicts = _union_conflicts(rows, "qc_passed")
+    if statuses == {"Accepted"}:
+        status = "Accepted"
+    elif statuses == {"Rejected"}:
+        status = "Rejected"
+    elif statuses:
+        status = None
+        conflicts.append(_conflict("qc_status_conflict",
+                                   {"statuses": sorted(statuses)}))
+    else:
+        status = None
+    return _evidence(
+        "qc_passed", confidence=UNKNOWN, status=status, qty=None,
+        reasons=sorted({reason for row in rows
+                        for reason in _field(row, "qc_passed").get("reasons") or []}),
+        conflicts=conflicts,
+        source_records=_union_sources(rows, "qc_passed"),
+        observed_at=max([row.get("observed_at") for row in rows
+                         if row.get("observed_at")] or [None]))
 
 
 def unknown_line_evidence(reason="permission"):
     """Line-level unknown when process sources cannot be read/queried."""
     empty = _evidence("all_process_done", confidence=UNKNOWN, reasons=[reason])
     return {
-        "work_orders": [], "wo_count": 0,
+        "work_orders": [], "wo_count": 0, "subassemblies": [],
+        "line_item_code": None,
         "first_process_done": dict(empty, **{"class": "first_process_done"}),
         "all_process_done": empty,
         "qc_performed": dict(empty, **{"class": "qc_performed"}),
@@ -929,13 +1175,19 @@ def unknown_line_evidence(reason="permission"):
     }
 
 
-def rollup_line_evidence(evidence_list):
-    """Aggregate per-WO evidence for one SO line without merging identities."""
+def rollup_line_evidence(evidence_list, item_code=None, order_uom=None):
+    """Aggregate per-WO evidence for one SO line without merging identities.
+
+    Only WOs producing the SO line item contribute to line quantities; PK#/ND#
+    subassemblies are returned separately. Quantities are never summed across
+    units or across overlapping physical identities.
+    """
     rows = list(evidence_list or [])
     if not rows:
         empty = _evidence("all_process_done", proven=0.0, confidence=PROVEN)
         return {
-            "work_orders": [], "wo_count": 0,
+            "work_orders": [], "wo_count": 0, "subassemblies": [],
+            "line_item_code": item_code,
             "first_process_done": dict(empty, **{"class": "first_process_done"}),
             "all_process_done": empty,
             "qc_performed": dict(empty, **{"class": "qc_performed",
@@ -947,47 +1199,48 @@ def rollup_line_evidence(evidence_list):
             "conflicts": [], "source_records": [],
         }
 
-    def rolled(field):
-        proven = _roll_qty(rows, field, "qty_proven")
-        estimated = _roll_qty(rows, field, "qty_estimated")
-        return {
-            "class": field,
-            "qty_proven": proven,
-            "qty_estimated": estimated,
-            "confidence": _roll_confidence(rows, field, proven, estimated),
-            "reasons": sorted({reason for row in rows
-                               for reason in row[field].get("reasons", [])}),
-            "conflicts": [conflict for row in rows
-                          for conflict in row[field].get("conflicts", [])],
-            "source_records": sorted(
-                [source for row in rows for source in row[field].get("source_records", [])],
-                key=lambda source: (source.get("doctype", ""), source.get("name", ""))),
-        }
+    unique, replay_conflicts, replay_conflict = _dedupe_wo_rows(rows)
+    active = [row for row in unique if not row.get("wo_cancelled")]
+    if item_code is None:
+        primary = active
+        primary_stock = unique
+        subassemblies = []
+    else:
+        primary = [row for row in active if row.get("production_item") == item_code]
+        primary_stock = [row for row in unique
+                         if row.get("production_item") == item_code]
+        subassemblies = [row for row in unique
+                         if row.get("production_item") != item_code]
 
-    first = rolled("first_process_done")
-    all_process = rolled("all_process_done")
-    qc_performed = rolled("qc_performed")
-    stock = rolled("stock_in_posted")
-    qc_passed = _evidence(
-        "qc_passed", confidence=UNKNOWN,
-        reasons=sorted({reason for row in rows
-                        for reason in row["qc_passed"].get("reasons", [])}),
-        conflicts=[conflict for row in rows
-                   for conflict in row["qc_passed"].get("conflicts", [])],
-        source_records=sorted(
-            [source for row in rows for source in row["qc_passed"].get("source_records", [])],
-            key=lambda source: (source.get("doctype", ""), source.get("name", ""))),
-        status=(rows[0]["qc_passed"].get("status") if rows else None))
+    first = _roll_field(primary, "first_process_done", order_uom=order_uom,
+                        replay_conflict=replay_conflict,
+                        empty_reason=("no_primary_work_order" if unique else None))
+    all_process = _roll_field(primary, "all_process_done", order_uom=order_uom,
+                              replay_conflict=replay_conflict,
+                              empty_reason=("no_primary_work_order" if unique else None))
+    qc_performed = _roll_field(primary, "qc_performed", order_uom=order_uom,
+                               replay_conflict=replay_conflict,
+                               empty_reason=("no_primary_work_order" if unique else None))
+    stock = _roll_field(primary_stock, "stock_in_posted", order_uom=order_uom,
+                        stock=True, replay_conflict=replay_conflict)
+    qc_passed = _roll_qc_passed(primary)
+
+    row_conflicts = [conflict for row in unique
+                     for conflict in row.get("conflicts") or []]
     return {
-        "work_orders": rows,
-        "wo_count": len(rows),
+        "work_orders": unique,
+        "wo_count": len(unique),
+        "subassemblies": subassemblies,
+        "line_item_code": item_code,
         "first_process_done": first,
         "all_process_done": all_process,
         "qc_performed": qc_performed,
         "qc_passed": qc_passed,
         "stock_in_posted": stock,
-        "conflicts": [conflict for row in rows for conflict in row.get("conflicts", [])],
+        "conflicts": replay_conflicts + row_conflicts,
         "source_records": sorted(
-            [source for row in rows for source in row.get("source_records", [])],
+            [source for row in unique for source in row.get("source_records", [])],
             key=lambda source: (source.get("doctype", ""), source.get("name", ""))),
+        "observed_at": max([row.get("observed_at") for row in unique
+                            if row.get("observed_at")] or [None]),
     }

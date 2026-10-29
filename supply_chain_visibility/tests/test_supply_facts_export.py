@@ -1,6 +1,7 @@
 """Conservative merge tests for the supply facts batch exporter."""
 import importlib.util
 import json
+import hashlib
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -17,7 +18,8 @@ def _load_exporter():
 
 def _empty_target():
     return {"lines": [], "stage_balances": [], "milestones": [],
-            "availability_schedule": [], "links": [], "partial": False,
+            "availability_schedule": [], "links": [], "production_evidence": [],
+            "partial": False,
             "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
             "restricted": {}, "external_sources": {},
             "notes": [], "schema_version": "", "rule_version": "",
@@ -26,7 +28,7 @@ def _empty_target():
 
 def _batch(**coverage):
     return {"lines": [], "stage_balances": [], "milestones": [],
-            "availability_schedule": [], "links": [],
+            "availability_schedule": [], "links": [], "production_evidence": [],
             "manifest": {"schema_version": "supply-facts/v1",
                          "implementation_version": "impl-v1",
                          "partial": True, "coverage": coverage,
@@ -359,6 +361,155 @@ class ExportPaginationTest(unittest.TestCase):
         self.assertEqual(target["coverage"]["sales_orders"], 1)
         self.assertEqual(target["coverage"]["so_lines"], 1)
         self.assertEqual(target["coverage"]["so_lines_total"], 1)
+
+
+class ProductionEvidenceExportTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.exporter = _load_exporter()
+
+    def _evidence(self, qty=10):
+        return {"qty_proven": qty, "qty_estimated": None, "confidence": "proven",
+                "started_at": "2026-10-20 08:00:00",
+                "completed_at": "2026-10-20 17:00:00",
+                "time_status": "complete", "reasons": [], "conflicts": [],
+                "components": {}, "source_records": []}
+
+    def _pe_line(self, so_line):
+        stock = self._evidence()
+        stock["components"] = {"gross_qty": 10.0, "return_qty": 0.0,
+                               "net_qty": 10.0, "unallocated_return_qty": 0.0}
+        return {
+            "so": "SO-1", "so_line": so_line, "line_item_code": "KS0001",
+            "work_orders": [{
+                "wo": "WO-1", "production_item": "KS0001", "qty": 10.0,
+                "uom": "个", "docstatus": 1, "wo_cancelled": False,
+                "first_process_done": self._evidence(),
+                "all_process_done": self._evidence(),
+                "qc_performed": self._evidence(),
+                "qc_passed": {"class": "qc_passed", "status": "Accepted",
+                              "confidence": "unknown", "qty_proven": None,
+                              "qty_estimated": None, "started_at": None,
+                              "completed_at": None, "time_status": "not_applicable",
+                              "reasons": [], "conflicts": [],
+                              "components": {}, "source_records": []},
+                "stock_in_posted": stock,
+                "conflicts": [], "reasons": [],
+            }],
+        }
+
+    def _page(self, total, offset, limit):
+        end = min(offset + limit, total)
+        lines = [{"so": "SO-1", "so_line": "SOI-%05d" % i} for i in range(offset, end)]
+        return {
+            "lines": lines, "stage_balances": [], "milestones": [],
+            "availability_schedule": [], "links": [],
+            "production_evidence": [self._pe_line("SOI-%05d" % i)
+                                    for i in range(offset, end)],
+            "manifest": {
+                "schema_version": "supply-facts/v1", "rule_version": "v1",
+                "implementation_version": "impl-v1", "as_of": "2026-10-29",
+                "partial": True, "counts": {"input": len(lines)},
+                "coverage": {}, "notes": [],
+            },
+            "pagination": {
+                "limit": limit, "offset": offset, "returned": len(lines),
+                "total": total,
+                "next_offset": None if end >= total else end,
+                "next_cursor": lines[-1]["so_line"] if lines else None,
+                "exhausted": end >= total, "partial": end < total,
+                "termination_reason": "exhausted" if end >= total else "page_limit",
+            },
+        }
+
+    def _run(self, total=2, excel=False):
+        def fake_call(base, key, secret, filters):
+            return self._page(total, int(filters.get("offset") or 0),
+                              int(filters["limit"]))
+
+        argv = ["--so", "SO-1", "--test", "--page-size", "1"]
+        if not excel:
+            argv.append("--no-excel")
+        with mock.patch.object(self.exporter.iss, "load_credentials",
+                               return_value=("k", "s")), \
+             mock.patch.object(self.exporter.iss, "resolve_env_files",
+                               return_value=None), \
+             mock.patch.object(self.exporter.iss, "ENV_URLS",
+                               {"test": "http://test"}), \
+             mock.patch.object(self.exporter, "_call", side_effect=fake_call):
+            with tempfile.TemporaryDirectory() as td:
+                rc = self.exporter.main(argv + ["--out", td])
+                self.assertEqual(rc, 0)
+                run = list((Path(td) / "runs").glob("run-*"))[0]
+                payload = json.loads((run / "production_evidence.json")
+                                     .read_text(encoding="utf-8"))
+                manifest = json.loads((run / "manifest.json")
+                                      .read_text(encoding="utf-8"))
+                digest = hashlib.sha256(
+                    (run / "production_evidence.json").read_bytes()).hexdigest()
+                xlsx_rows = None
+                if excel:
+                    from openpyxl import load_workbook
+                    wb = load_workbook(run / "supply_facts.xlsx", read_only=True)
+                    xlsx_rows = list(wb["production_evidence"].iter_rows(
+                        values_only=True))
+                    wb.close()
+                return payload, manifest, digest, xlsx_rows
+
+    def test_production_evidence_is_exported_with_checksum_and_rows(self):
+        payload, manifest, digest, _ = self._run(total=2)
+        self.assertEqual(len(payload), 2)
+        entry = manifest["files"]["production_evidence.json"]
+        self.assertEqual(entry["rows"], 2)
+        self.assertEqual(entry["sha256"], digest)
+        flat = self.exporter._flatten_production_evidence(payload)
+        self.assertEqual(manifest["datasets"]["production_evidence"]["rows"],
+                         len(flat))
+        self.assertEqual(manifest["datasets"]["production_evidence"]["lines"], 2)
+
+    def test_flatten_is_one_row_per_wo_and_evidence_class(self):
+        flat = self.exporter._flatten_production_evidence([self._pe_line("SOI-1")])
+        self.assertEqual(len(flat), 5)
+        classes = {row["evidence_class"] for row in flat}
+        self.assertEqual(classes, {"first_process_done", "all_process_done",
+                                   "qc_performed", "qc_passed", "stock_in_posted"})
+        stock = next(row for row in flat if row["evidence_class"] == "stock_in_posted")
+        self.assertEqual(stock["gross_qty"], 10.0)
+        self.assertEqual(stock["net_qty"], 10.0)
+        self.assertEqual(stock["line_role"], "primary")
+
+    def test_excel_sheet_matches_json_row_count(self):
+        payload, manifest, _, xlsx_rows = self._run(total=2, excel=True)
+        self.assertEqual(len(xlsx_rows) - 1,
+                         manifest["datasets"]["production_evidence"]["rows"])
+        self.assertEqual(len(xlsx_rows) - 1,
+                         len(self.exporter._flatten_production_evidence(payload)))
+
+    def test_write_failure_does_not_switch_latest_pointer(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            old = {"run_id": "previous-success"}
+            (out / "latest.json").write_text(json.dumps(old), encoding="utf-8")
+
+            def fake_call(base, key, secret, filters):
+                return self._page(2, int(filters.get("offset") or 0),
+                                  int(filters["limit"]))
+
+            with mock.patch.object(self.exporter.iss, "load_credentials",
+                                   return_value=("k", "s")), \
+                 mock.patch.object(self.exporter.iss, "resolve_env_files",
+                                   return_value=None), \
+                 mock.patch.object(self.exporter.iss, "ENV_URLS",
+                                   {"test": "http://test"}), \
+                 mock.patch.object(self.exporter, "_call", side_effect=fake_call), \
+                 mock.patch.object(self.exporter, "_write_xlsx",
+                                   side_effect=RuntimeError("boom")):
+                rc = self.exporter.main(
+                    ["--so", "SO-1", "--test", "--page-size", "1", "--out", td])
+            self.assertEqual(rc, 1)
+            self.assertEqual(json.loads((out / "latest.json").read_text(encoding="utf-8")),
+                             old)
+            self.assertEqual(list((out / "runs").glob("run-*")), [])
 
 
 if __name__ == "__main__":

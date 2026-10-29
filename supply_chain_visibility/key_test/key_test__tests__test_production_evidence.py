@@ -3,7 +3,8 @@ import math
 import unittest
 
 from key_test.production_evidence import (
-    aggregate_wo_evidence, build_wo_evidence, rollup_line_evidence,
+    aggregate_wo_evidence, build_wo_evidence, evidence_status, proven_qty,
+    rollup_line_evidence,
 )
 
 
@@ -68,6 +69,17 @@ def build(ops, jcs, tns=None, ses=None, qis=None, qty=10, stock_uom="个",
           order_uom=None, availability=None, docstatus=1, observed_at=None):
     wo = {"name": "WO-1", "qty": qty, "stock_uom": stock_uom,
           "production_item": "FG", "docstatus": docstatus}
+    return build_wo_evidence(
+        wo, ops, jcs, tracking_numbers=tns or [], stock_entries=ses or [],
+        quality_inspections=qis or [], order_uom=order_uom,
+        availability=availability, observed_at=observed_at)
+
+
+def build_for(wo_name, ops, jcs, tns=None, ses=None, qis=None, qty=10,
+              item="FG", uom="个", order_uom=None, availability=None,
+              docstatus=1, observed_at=None):
+    wo = {"name": wo_name, "qty": qty, "stock_uom": uom,
+          "production_item": item, "docstatus": docstatus}
     return build_wo_evidence(
         wo, ops, jcs, tracking_numbers=tns or [], stock_entries=ses or [],
         quality_inspections=qis or [], order_uom=order_uom,
@@ -780,21 +792,142 @@ class FinalInputBoundaryTests(unittest.TestCase):
 class RollupTests(unittest.TestCase):
     def test_rollup_sums_proven_and_estimated_components(self):
         ops = [op("OP-CUT", "裁剪", 1)]
-        proven = build(ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5)
-        estimated = build(ops, [jc("OP-CUT", "", 5)], [], qty=5)
-        rolled = rollup_line_evidence([proven, estimated])
+        proven = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5)
+        estimated = build_for("WO-B", ops, [jc("OP-CUT", "", 5)], [], qty=5)
+        rolled = rollup_line_evidence([proven, estimated], item_code="FG", order_uom="个")
         self.assertEqual(rolled["all_process_done"]["qty_proven"], 5)
         self.assertEqual(rolled["all_process_done"]["qty_estimated"], 5)
         self.assertEqual(rolled["all_process_done"]["confidence"], "mixed")
 
     def test_rollup_unknown_does_not_become_zero(self):
         ops = [op("OP-CUT", "裁剪", 1)]
-        known = build(ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5)
-        unknown = build(ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5,
-                        availability={"job_cards": False})
-        rolled = rollup_line_evidence([known, unknown])
+        known = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5)
+        unknown = build_for("WO-B", ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5,
+                            availability={"job_cards": False})
+        rolled = rollup_line_evidence([known, unknown], item_code="FG", order_uom="个")
         self.assertIsNone(rolled["all_process_done"]["qty_proven"])
         self.assertEqual(rolled["all_process_done"]["confidence"], "unknown")
+
+    def test_rollup_ignores_subassemblies_for_line_quantity(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        fg = build_for("WO-FG", ops, [jc("OP-CUT", "T1", 10)], [tn("T1", 10)], qty=10)
+        pk = build_for("WO-PK", ops, [jc("OP-CUT", "T2", 10)], [tn("T2", 10)],
+                       qty=10, item="PK#FG")
+        nd = build_for("WO-ND", ops, [jc("OP-CUT", "T3", 10)], [tn("T3", 10)],
+                       qty=10, item="ND#FG")
+        rolled = rollup_line_evidence([fg, pk, nd], item_code="FG", order_uom="个")
+        self.assertEqual(rolled["all_process_done"]["qty_proven"], 10)
+        self.assertEqual({s["production_item"] for s in rolled["subassemblies"]},
+                         {"PK#FG", "ND#FG"})
+
+    def test_rollup_does_not_sum_across_units(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        a = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)],
+                      qty=5, uom="个")
+        b = build_for("WO-B", ops, [jc("OP-CUT", "T2", 5)], [tn("T2", 5)],
+                      qty=5, uom="箱")
+        rolled = rollup_line_evidence([a, b], item_code="FG", order_uom="个")
+        self.assertIsNone(rolled["all_process_done"]["qty_proven"])
+        self.assertIn("unit_mismatch", rolled["all_process_done"]["reasons"])
+
+    def test_rollup_sums_disjoint_tracking_identities(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        a = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5)
+        b = build_for("WO-B", ops, [jc("OP-CUT", "T2", 6)], [tn("T2", 6)], qty=6)
+        rolled = rollup_line_evidence([a, b], item_code="FG", order_uom="个")
+        self.assertEqual(rolled["all_process_done"]["qty_proven"], 11)
+        self.assertEqual(rolled["all_process_done"]["confidence"], "proven")
+
+    def test_rollup_overlapping_tracking_identities_are_unknown(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        a = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5)
+        b = build_for("WO-B", ops, [jc("OP-CUT", "T1", 6)], [tn("T1", 6)], qty=6)
+        rolled = rollup_line_evidence([a, b], item_code="FG", order_uom="个")
+        self.assertIsNone(rolled["all_process_done"]["qty_proven"])
+        codes = {c["code"] for c in rolled["all_process_done"]["conflicts"]}
+        self.assertIn("tracking_identity_overlap", codes)
+
+    def test_rollup_duplicate_wo_replay_is_not_double_counted(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        row = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5)
+        rolled = rollup_line_evidence([row, dict(row)], item_code="FG", order_uom="个")
+        self.assertEqual(rolled["all_process_done"]["qty_proven"], 5)
+
+    def test_rollup_duplicate_wo_different_payload_is_unknown(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        a = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5)
+        b = build_for("WO-A", ops, [jc("OP-CUT", "T1", 6)], [tn("T1", 6)], qty=6)
+        rolled = rollup_line_evidence([a, b], item_code="FG", order_uom="个")
+        self.assertIsNone(rolled["all_process_done"]["qty_proven"])
+        codes = {c["code"] for c in rolled["all_process_done"]["conflicts"]}
+        self.assertIn("duplicate_wo_evidence_payload", codes)
+
+    def test_rollup_cancelled_wo_keeps_stock_fact_but_not_progress(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        active = build_for("WO-A", ops, [jc("OP-CUT", "T1", 10)], [tn("T1", 10)],
+                           qty=10,
+                           ses=[se("SE-A", [finished(10)], work_order="WO-A")])
+        cancelled = build_for("WO-X", ops, [], [], qty=4, docstatus=2,
+                              ses=[se("SE-X", [finished(4)], work_order="WO-X")])
+        rolled = rollup_line_evidence([active, cancelled],
+                                      item_code="FG", order_uom="个")
+        self.assertEqual(rolled["all_process_done"]["qty_proven"], 10)
+        self.assertEqual(rolled["stock_in_posted"]["qty_proven"], 14)
+
+    def test_rollup_time_uses_latest_completion(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        a = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5,
+                                       start="2026-10-20 08:00:00",
+                                       end="2026-10-20 17:00:00")],
+                      [tn("T1", 5)], qty=5)
+        b = build_for("WO-B", ops, [jc("OP-CUT", "T2", 5,
+                                       start="2026-10-20 08:30:00",
+                                       end="2026-10-20 18:00:00")],
+                      [tn("T2", 5)], qty=5)
+        rolled = rollup_line_evidence([a, b], item_code="FG", order_uom="个")
+        self.assertEqual(rolled["all_process_done"]["completed_at"],
+                         "2026-10-20 18:00:00")
+        self.assertEqual(rolled["all_process_done"]["started_at"],
+                         "2026-10-20 08:00:00")
+        self.assertEqual(rolled["all_process_done"]["time_status"], "complete")
+
+    def test_rollup_incomplete_time_is_null_with_reason(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        a = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5,
+                                       start="2026-10-20 08:00:00",
+                                       end="2026-10-20 17:00:00")],
+                      [tn("T1", 5)], qty=5)
+        b = build_for("WO-B", ops, [jc("OP-CUT", "T2", 5,
+                                       start="2026-10-20 08:30:00", end="")],
+                      [tn("T2", 5)], qty=5)
+        rolled = rollup_line_evidence([a, b], item_code="FG", order_uom="个")
+        self.assertIsNone(rolled["all_process_done"]["completed_at"])
+        self.assertIn("time_incomplete", rolled["all_process_done"]["reasons"])
+
+    def test_rollup_qc_passed_status_is_order_independent(self):
+        ops = [op("OP-CUT", "裁剪", 1)]
+        a = build_for("WO-A", ops, [jc("OP-CUT", "T1", 5)], [tn("T1", 5)], qty=5,
+                      qis=[qi("QI-A", ref_name="JC-OP-CUT-T1-5")])
+        b = build_for("WO-B", ops, [jc("OP-CUT", "T2", 5)], [tn("T2", 5)], qty=5,
+                      qis=[qi("QI-B", ref_name="JC-OP-CUT-T2-5")])
+        forward = rollup_line_evidence([a, b], item_code="FG", order_uom="个")
+        reverse = rollup_line_evidence([b, a], item_code="FG", order_uom="个")
+        self.assertEqual(forward["qc_passed"]["status"], "Accepted")
+        self.assertEqual(reverse["qc_passed"]["status"], "Accepted")
+
+    def test_proven_qty_requires_eligible_confidence(self):
+        self.assertIsNone(proven_qty({"qty_proven": 1, "confidence": "unknown"}))
+        self.assertEqual(proven_qty({"qty_proven": 1, "confidence": "proven"}), 1)
+        self.assertEqual(proven_qty({"qty_proven": 1, "confidence": "mixed"}), 1)
+        self.assertIsNone(proven_qty({"qty_proven": 1, "confidence": "estimated"}))
+
+    def test_evidence_status_labels(self):
+        self.assertEqual(evidence_status({"qty_proven": 1, "confidence": "proven"}), "known")
+        self.assertEqual(evidence_status({"qty_estimated": 2, "confidence": "estimated"}),
+                         "estimated")
+        self.assertEqual(evidence_status({"qty_proven": 1, "confidence": "unknown"}),
+                         "unknown")
+
 
 
 if __name__ == "__main__":
