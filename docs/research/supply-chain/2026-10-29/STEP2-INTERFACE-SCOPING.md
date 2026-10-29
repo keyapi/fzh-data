@@ -4,7 +4,7 @@ type: Reference
 title: 第二步：supply-facts 接口限域、filters 白名单与分页契约
 date: 2026-10-29
 owner: claude-worker
-status: implemented-locally-tests-green; test-station deploy pending
+status: functional-acceptance-passed; permission-acceptance-pending
 scope: read-only; no production deploy; no business data writes
 ---
 
@@ -187,8 +187,79 @@ fzh-data supply_chain_visibility: 98 passed + 5 subtests
 
 ## 7. 未解决 / 下一阶段
 
-1. 测试站部署与普通角色端到端验证尚未做（需用户授权部署/重启）；生产未部署。
+1. 测试站部署已完成（2026-10-29 12:32 重启，app `dccd6e8`），功能验收见第 8 节；**权限验收待完成**（受限角色真实 HTTP 会话未验证，缺凭证、未获豁免，不作为通过项）；生产未部署。
 2. `warehouse` 仍定义为 SO 行目标仓；若业务要求按 `stage_balances.warehouse` 过滤，需新增 `stage_warehouse` 并单独评审。
 3. 通途 PO/入库/目的仓来源仍未接入；`manifest.partial=true` 保持。
 4. 导出器仍有 200 页上限；分页字段已可供未来改为 `next_offset`/`next_cursor`。
 5. 第三步（生产证据分层）与第四/五/六步尚未开始，待本阶段审核通过。
+
+## 8. 测试站验收记录（2026-10-29）
+
+**第二步状态：功能验收通过，权限验收待完成。** 第 1/2/4/5 项通过；第 3 项 Guest 拒绝通过，受限角色真实 HTTP 会话尚未验证，**未获得豁免，不作为通过项**。在权限验收完成前，第二步不作为生产发布验收依据。
+
+### 8.1 环境与提交
+
+| 项 | 值 |
+|---|---|
+| key_test 本地 | `feature/supply-facts-delivery-mvp` @ `dccd6e8`，工作区干净 |
+| 测试站 key_test | `apps/key_test` @ `dccd6e8`；回滚 tag `step2-pre-sync-20261029` 保留 |
+| fzh-data | `feature/supply-facts-delivery-mvp` @ `588a92c9` |
+| 镜像一致性 | `key_test__supply_facts.py` / `key_test__tests__test_supply_facts.py` / `dispatch_support.py` 与 key_test 源文件逐字节一致 |
+| 测试站重启 | 2026-10-29 12:32:22（+0800），web worker 已加载新代码 |
+| HTTP 实现版本 | `key_test.supply_facts@2026-10-29.1`（12/12 次采样一致） |
+
+### 8.2 命令与通过/失败/跳过数量
+
+| 范围 | 命令 | 结果 |
+|---|---|---|
+| key_test 全量 | `uv run python -m pytest key_test/tests -q` | **121 passed, 3 skipped** |
+| supply_chain_visibility 全量 | `uv run python -m pytest supply_chain_visibility -q` | **98 passed, 5 subtests passed** |
+| 导出器（fzh-data） | `uv run python -m pytest supply_chain_visibility/tests/test_supply_facts_export.py -q` | **21 passed** |
+| Frappe 真实分发 | `sudo -n -u frappe /usr/local/bin/bench --site erpnext.vilavi.cn run-tests --module key_test.tests.test_supply_facts_dispatch` | **Ran 3 tests, OK（0 skipped）** |
+
+### 8.3 HTTP 参数与分页（只读）
+
+| 检查 | 结果 |
+|---|---|
+| 合法 GET / POST（`SO-26-00030`, `limit=2`） | 200；`total=11`，返回 2 行 |
+| 未知 filter `{"bogus":1}` | 417 `ValidationError` |
+| 非法 stage `{"stage":"foo"}` | 417 `ValidationError` |
+| 顶层误传 `?sales_order=...` | 417 `ValidationError` |
+| `limit=0` / `offset=-1` | 417 `ValidationError` |
+| 分页遍历（`limit=2`） | 6 页：2/2/2/2/2/1；唯一 `so_line` **11/11**，无重复；`next_offset` 2→4→6→8→10→null；末页 `exhausted=true`、`partial=false`；每页 `total=11` |
+| 越界页 `offset=21` | 200；`total=11`、`returned=0`、`exhausted=true`、`empty_reason=offset_out_of_range` |
+| 排序/唯一键 | `sort=["so","so_line"]`、`unique_key="so_line"` |
+| Guest（无认证） | 403 `PermissionError` |
+
+### 8.4 完整导出与覆盖数
+
+- **SO-26-00030**（`run-20261029_133217-f5d80c4ba0e1`）：
+  - 行数：`lines=11`、`stage_balances=11`、`milestones=22`、`availability_schedule=11`、`links=11`；
+  - 覆盖：`sales_orders=1`、`so_lines=11`、`so_lines_total=11`、`delivery_notes=0`、`shipments=0`；
+  - `manifest.truncated=false`、`termination_reason=exhausted`；
+  - JSON 行数、Excel 行数/表头、manifest `counts`、文件 SHA-256 全部一致。
+- **SO-26-00026**（覆盖数实证，`run-20261029_133317-c27857b4a0f1`）：
+  - `lines=3`、`delivery_notes=3`、`shipments=1`（`target_is_record=true`），运单占位 0；
+  - links：`order_line=3`、`planned_by=3`、`produced_by=5`、`tracking_number=2`、`shipped_by=3`、`waybill=1`；
+  - JSON/Excel/manifest/hash 校验全部通过。
+- 运单占位不计入 Shipment：本地单测 `test_merge_coverage_waybill_only_is_not_a_shipment`、`test_merge_coverage_matches_only_real_shipments_and_dedupes` 通过；本次真实数据中未出现未匹配运单占位。
+
+### 8.5 失败保护（本地模拟，不改测试站业务数据）
+
+| 场景 | 结果 |
+|---|---|
+| HTTP 500 请求失败 | `rc=1`，旧 `latest.json` 不变，无新 run 目录 |
+| 分页 `next_offset` 断裂 | 同上 |
+| 批次 `implementation_version` 混合 | 同上（`BatchVersionError`） |
+
+### 8.6 §4.3 受限角色 HTTP
+
+- **Guest 拒绝：通过**（403 `PermissionError`）。
+- **受限角色真实会话：尚未验证**。缺少受限用户凭证；未获得豁免，**不作为通过项**。管理员（System Manager）与 Guest 的结果不能替代普通角色验证。
+- **剩余验收条件**：使用已有受限用户的合法会话验证权限 —— 确认无权数据及关联信息不泄露、`manifest.partial` 与权限提示正确；**不要为测试扩大其权限**。
+- 在权限验收完成前，第二步**不作为生产发布验收依据**。
+
+### 8.7 产物与边界
+
+- 证据（`EN_API/out/` 已 gitignore，不提交）：`EN_API/out/supply_facts/_acceptance/http_admin.json`、`export_and_failure_verify.json`、`verify_exports_failures.py`；导出 run 目录见 8.4。
+- 未修改测试站业务数据；未部署生产；未合并 main；未推进第三至第六步。
