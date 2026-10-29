@@ -19,7 +19,7 @@ scope: read-only; no production deploy; no business data writes
 |---|---|
 | 双线进度裁决 | **终态粘性 + 否则取更晚时间**：已签收/已完结为终态，不被后续非终态人工更新覆盖；非终态按 `latest_progress_at` 更晚者胜 |
 | 时间相同、状态不同 | `conflict_flag=true`，`latest_progress_status=unknown/null`，交人工复核；不静默选 |
-| 时间缺失 | 只有一条有时间：用该条但标 `conflict_flag=true`；两条都缺：`unknown` |
+| 时间缺失 | 按 §0.2 唯一决策表：单缺时间选有时间者并标 `conflict_flag=true`；双缺时间 `unknown`；终态缺时间仍按终态粘性优先 |
 | 异常状态 | 不参与排序，`unknown` + `conflict_flag=true`，保留两条原值 |
 | “10 个代表 SKU” | 沿用 2026-10-23 冻结名单：**9 个不同 SKU + 1 个缺额**（“有 PO·ETA 可验证”无合格样本），不补第 10 个、不替换样本 |
 
@@ -59,6 +59,24 @@ B: 今天 在途    (source=manual)
 → conflict_flag = true
 → 保留 B 的今天/在途原值
 ```
+
+### 0.2 缺时间唯一决策表（第四步直接按此实现）
+
+> 本表是缺时间场景的唯一口径；摘要、契约、代码注释不得再用“缺时间→unknown”这一泛化说法。
+
+| 场景 | latest_progress_status | latest_progress_at | is_final | conflict_flag |
+|---|---|---|---|---|
+| 两条都非终态；仅 A 有时间 | A | A 的时间 | false | true（证据不完整） |
+| 两条都非终态；两条都无时间 | `unknown` | null | false | true |
+| A 终态、B 非终态；A 有时间、B 无时间 | A | A 的时间 | true | true |
+| A 终态、B 非终态；A 无时间、B 有时间 | A（终态粘性） | null | true | true |
+| 两条都终态；仅一条有时间 | 有时间的终态 | 该时间 | true | true（另一条缺时间） |
+| 两条都终态；都无时间且状态相同 | 该终态 | null | true | false |
+| 两条都终态；都无时间且状态不同 | `unknown` | null | false | true |
+| 任一条是异常状态 | `unknown` | null | false | true |
+
+补充：两条都有时间但相同、状态不同 → `unknown` + `conflict_flag=true`（见 §0.1 第 2 条）；
+两条都有时间、状态相同 → 取该状态，时间取该时间，`conflict_flag=false`。
 
 ## 1. 10 个代表 SKU 与原有 9 SKU 的关系
 
