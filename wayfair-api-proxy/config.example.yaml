@@ -18,7 +18,6 @@ oidc:
   redirect_uri: https://wayfair-api.example.com/admin/oidc-callback
   admin_identities: []
   # 自助门户：OIDC 应用需同时允许下面的回调地址。
-  portal_identities: []
   portal_redirect_uri: https://wayfair-api.example.com/portal/oidc-callback
   cookie_secure: true
 

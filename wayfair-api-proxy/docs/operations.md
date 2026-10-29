@@ -139,6 +139,23 @@ WAYFAIR_DATABASE=/srv/wayfair-api-proxy/data/wayfair.db \
 
 管理员动作同样写入 `audit_events`（operation 为 `admin:keys:*`）。
 
+### 离职自动撤销
+
+`offboarding-check.py`（new-api 服务器，cron 每日 03:00）在停用 new-api 与卖狐
+proxy 的同时，会调用：
+
+```http
+POST https://wayfair-api.vilavi.cn/v1/offboarding/owners/{owner}/deactivate
+Authorization: Bearer <offboarding key>
+```
+
+- 服务 key 只含 `offboarding:deactivate`，存在 VPS
+  `/etc/wayfair-api-proxy/offboarding.key`（`600 root`）；
+- new-api 服务器从 `/opt/new-api/.secrets.env` 读取
+  `WAYFAIR_OFFBOARDING_URL` / `WAYFAIR_OFFBOARDING_KEY`；
+- 该接口停用 owner 名下**所有** key（manual + portal）；失败时 offboarding 脚本
+  记 `proxy_pending` 并次日重试，new-api 封号不受影响。
+
 ### 同事自助门户
 
 `/portal` 使用独立钉钉 OIDC 会话与白名单，允许同事自助领取
@@ -146,11 +163,10 @@ WAYFAIR_DATABASE=/srv/wayfair-api-proxy/data/wayfair.db \
 
 - `config.yaml` 的 `oidc.portal_redirect_uri` 指向
   `https://wayfair-api.vilavi.cn/portal/oidc-callback`；
-- `/etc/wayfair-api-proxy/env` 设置 `WAYFAIR_PORTAL_SESSION_SECRET`；
-- `oidc.portal_identities` 填入允许的钉钉 `sub`。
+- `/etc/wayfair-api-proxy/env` 设置 `WAYFAIR_PORTAL_SESSION_SECRET`。
 
-白名单为空时，本人登录会收到 403，错误里带自己的 `sub`；加入配置并重启即可。
-公网 `/admin` 继续 404，live/transactions 仍由管理员按需发 key。
+任何能通过公司钉钉 OIDC 的员工都可登录，不维护逐人白名单。公网 `/admin` 继续 404，
+live/transactions 仍由管理员按需发 key。
 
 ## 快照 worker
 

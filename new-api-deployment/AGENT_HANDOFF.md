@@ -382,7 +382,7 @@ docker cp 本地文件路径 new-api:/tmp/
 
 - [x] **钉钉 SSO 登录**: 已通过 OIDC Bridge 实现，见 `new-api-dingtalk-oidc/`
 - [x] **新用户自动配置**: 登录后自动绑 Daily-20RMB + 创建 Default 令牌（套餐现含 Daily-20/30/50RMB）
-- [x] **离职自动封号**: Stream 模式实时 + 每日兜底检查（2026-09-08 加固：60121 判离职、本地 identity_map、审计表，详见 `docs/solutions/integration-issues/dingtalk-offboarding-hardening.md`）
+- [x] **离职自动封号**: Stream 模式实时 + 每日兜底检查（2026-09-08 加固：60121 判离职、本地 identity_map、审计表，详见 `docs/solutions/integration-issues/dingtalk-offboarding-hardening.md`；2026-10-29 起同时撤销 Wayfair proxy key，见 `.secrets.env` 的 `WAYFAIR_OFFBOARDING_*`）
 - [x] **Docker Compose 统一管理**: 4 个服务由一个 compose 文件管理
 - [x] **DeepSeek 峰谷分时定价**: `deepseek_time_pricing.py` cron 自动切换（2026-08-28 部署）
 - [ ] **修改默认密码**: 生产环境前务必修改默认密码

@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: new-api/sellfox-proxy 离职自动封号不可靠 —— 双通道检测加固
 date: 2026-09-08
-last_updated: 2026-09-08
+last_updated: 2026-10-29
 category: integration-issues
 module: new-api-deployment
 problem_type: integration_issue
@@ -173,6 +173,19 @@ CREATE TABLE IF NOT EXISTS offboarding_audit (
   审计心跳行——文档自述的 `[x]` 不算数。
 - 单测固定行为（见 `tests/new_api_offboarding/`）：60121→封、瞬时错→不封、本地映射命中仍
   封、proxy 不可达时 new-api 先封+重投。
+
+## 2026-10-29 扩展：Wayfair API 代理
+
+`offboarding-check.py` 的 `disable_proxy_keys` 现在同时处理：
+
+- 卖狐 proxy（本地 SQLite，按 `dingtalk_union_id` 停用）；
+- Wayfair proxy（HTTP `POST /v1/offboarding/owners/{owner}/deactivate`，
+  key 只含 `offboarding:deactivate`，owner 为 `unionId`）。
+
+配置在 new-api 服务器 `/opt/new-api/.secrets.env`：
+`WAYFAIR_OFFBOARDING_URL` + `WAYFAIR_OFFBOARDING_KEY`。Wayfair 调用失败会进入
+`proxy_pending`，new-api 已封不受影响，次日重试；实测测试 owner 撤销后 active=0。
+Wayfair 侧停用 owner 名下全部 key（manual + portal）。
 
 ## Related Issues
 

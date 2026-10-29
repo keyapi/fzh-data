@@ -21,6 +21,7 @@ tags: [wayfair, api, errors, freshness]
 | `POST /v1/accounts/{account}/inventory/query` | `inventory:snapshot:read` 或 `inventory:live:read` | 按 `mode` 二选一 |
 | `GET /v1/accounts/{account}/inventory/snapshot` | `inventory:snapshot:read` | 一次返回整份当前快照（供 EN 每日备份/转 parquet） |
 | `POST /v1/accounts/{account}/inventory/transactions/query` | `inventory:transactions:read` | 库存变动流水（实时上游，按 SKU/日期过滤） |
+| `POST /v1/offboarding/owners/{owner}/deactivate` | `offboarding:deactivate` | 停用该 owner 的全部 key（离职自动撤销） |
 | `POST /v1/accounts/{account}/inbound/query` | `inbound:read` | 未验证时 501 |
 | `POST /admin/api/accounts/{account}/snapshot-runs` | `snapshot:run` | 未验证时 501 |
 

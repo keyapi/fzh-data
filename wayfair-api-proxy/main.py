@@ -23,6 +23,7 @@ from operations import (
     INVENTORY_LIVE_READ,
     INVENTORY_SNAPSHOT_READ,
     INVENTORY_TRANSACTIONS_READ,
+    OFFBOARDING_DEACTIVATE,
     SNAPSHOT_RUN,
 )
 from rate_limit import RateLimiter
@@ -143,8 +144,6 @@ def create_app(
         and config.portal_account in config.accounts
     ):
         app.include_router(build_portal_router(config, db, portal_session_secret))
-        if not config.oidc.portal_identities:
-            logger.warning("Wayfair portal is enabled but portal_identities is empty")
     elif config.oidc is not None and portal_session_secret:
         logger.warning("Wayfair portal is not enabled (missing redirect URI or account)")
 
@@ -339,6 +338,23 @@ def create_app(
 
         request.state.result_count = len(result.items)
         return result
+
+    @app.post("/v1/offboarding/owners/{owner}/deactivate")
+    async def offboard_owner(owner: str, request: Request):
+        key = await _verify_api_key(request)
+        await _authorize_route(request, key, config.portal_account, OFFBOARDING_DEACTIVATE)
+
+        allowed, retry_after = await request.app.state.limiter.check(
+            f"key:{key.id}", key.rate_limit_rps
+        )
+        if not allowed:
+            error = _error(request, 429, "rate_limited", "API key rate limit exceeded")
+            error.headers = {"Retry-After": str(max(int(retry_after + 0.999), 1))}
+            raise error
+
+        count = await request.app.state.db.deactivate_keys_by_owner(owner)
+        request.state.result_count = count
+        return {"owner": owner, "deactivated": count}
 
     @app.post("/v1/accounts/{account}/inbound/query")
     async def query_inbound(account: str, query: InboundQuery, request: Request):

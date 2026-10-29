@@ -34,7 +34,6 @@ class OIDCConfig(BaseModel):
     client_secret: str
     redirect_uri: str
     admin_identities: list[str] = Field(default_factory=list)
-    portal_identities: list[str] = Field(default_factory=list)
     portal_redirect_uri: str | None = None
     cookie_secure: bool = True
 

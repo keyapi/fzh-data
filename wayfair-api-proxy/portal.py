@@ -107,14 +107,8 @@ def build_portal_router(config: AppConfig, db: Database, session_secret: str) ->
 
     def require_user(request: Request) -> dict:
         session = parse_session(session_secret, request.cookies.get(SESSION_COOKIE, ""))
-        if session is None:
+        if session is None or not session.get("identity"):
             raise _error(401, "unauthorized", "请先使用钉钉登录")
-        if session["identity"] not in oidc.portal_identities:
-            raise _error(
-                403,
-                "forbidden_portal",
-                f"当前账号未开通 Wayfair API 门户（身份 {session['identity']}）",
-            )
         return session
 
     def require_same_origin(request: Request) -> None:
@@ -155,13 +149,6 @@ def build_portal_router(config: AppConfig, db: Database, session_secret: str) ->
                 "<p>同事可使用公司钉钉登录，自助领取只读库存 key。</p>"
                 '<p><a href="/portal/oidc-login">使用钉钉登录</a></p>',
             )
-        if session["identity"] not in oidc.portal_identities:
-            raise _error(
-                403,
-                "forbidden_portal",
-                f"当前账号未开通 Wayfair API 门户（身份 {session['identity']}）",
-            )
-
         key = await db.get_portal_key(session["identity"])
         if key:
             status = (
@@ -272,12 +259,8 @@ def build_portal_router(config: AppConfig, db: Database, session_secret: str) ->
             raise _error(502, "upstream_auth_failed", "OIDC provider returned invalid JSON")
 
         identity = str(user.get("sub", ""))
-        if identity not in oidc.portal_identities:
-            raise _error(
-                403,
-                "forbidden_portal",
-                f"当前账号未开通 Wayfair API 门户（身份 {identity}）",
-            )
+        if not identity:
+            raise _error(403, "invalid_identity", "OIDC 未返回用户身份")
 
         response = RedirectResponse("/portal/", status_code=303)
         response.set_cookie(

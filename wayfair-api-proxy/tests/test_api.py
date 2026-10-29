@@ -265,6 +265,57 @@ def test_transactions_require_permission(tmp_path):
     assert response.json()["detail"]["code"] == "forbidden_operation"
 
 
+def test_offboarding_deactivates_all_keys_for_owner(tmp_path):
+    app = create_app(_config(), db_path=tmp_path / "wayfair.db")
+    with TestClient(app) as client:
+        async def create_keys():
+            await app.state.db.create_api_key(
+                name="leaver-1",
+                owner="leaver",
+                accounts=["centrade"],
+                operations=["inventory:snapshot:read"],
+            )
+            await app.state.db.create_api_key(
+                name="leaver-2",
+                owner="leaver",
+                accounts=["centrade"],
+                operations=["inventory:snapshot:read"],
+            )
+            return await app.state.db.create_api_key(
+                name="offboarding",
+                accounts=["centrade"],
+                operations=["offboarding:deactivate"],
+            )
+
+        service = client.portal.call(create_keys)
+        response = client.post(
+            "/v1/offboarding/owners/leaver/deactivate",
+            headers={"Authorization": f"Bearer {service.raw_key}"},
+        )
+
+        listed = client.portal.call(
+            lambda: app.state.db.list_api_keys()
+        )
+        leaver_active = [row["is_active"] for row in listed if row["owner"] == "leaver"]
+
+    assert response.status_code == 200
+    assert response.json() == {"owner": "leaver", "deactivated": 2}
+    assert leaver_active == [False, False]
+
+
+def test_offboarding_requires_operation(tmp_path):
+    app = create_app(_config(), db_path=tmp_path / "wayfair.db")
+    with TestClient(app) as client:
+        created = _create_key(client, app)
+        response = client.post(
+            "/v1/offboarding/owners/leaver/deactivate",
+            headers={"Authorization": f"Bearer {created.raw_key}"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "forbidden_operation"
+
+
 def test_audit_does_not_store_authorization_header(tmp_path):
     db_path = tmp_path / "wayfair.db"
     app = create_app(_config(), db_path=db_path)

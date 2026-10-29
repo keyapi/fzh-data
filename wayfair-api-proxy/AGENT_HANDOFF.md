@@ -87,8 +87,15 @@ WAYFAIR_SMOKE_KEY=... WAYFAIR_SMOKE_SKU=... \
 
 ## 同事自助门户
 
-- `/portal`：钉钉 OIDC 白名单登录；自助只能领 `inventory:snapshot:read`；
+- `/portal`：公司钉钉 OIDC 登录即准入；自助只能领 `inventory:snapshot:read`；
   一人一枚，重建停旧，60 秒冷却/每日 3 次；明细见 `docs/portal.md`
-- 启用需 `oidc.portal_redirect_uri` + `WAYFAIR_PORTAL_SESSION_SECRET` +
-  `portal_identities`；未配置时路由不存在
+- 启用需 `oidc.portal_redirect_uri` + `WAYFAIR_PORTAL_SESSION_SECRET`；
+  不维护 per-user 白名单
 - live / transactions 仍由管理员发 key；EN 的 manual key 不受门户影响
+
+## 离职自动撤销
+
+- `POST /v1/offboarding/owners/{owner}/deactivate`，operation `offboarding:deactivate`
+- 服务 key `offboarding.key`（VPS 600 root）；new-api 的 offboarding 脚本通过
+  `WAYFAIR_OFFBOARDING_URL` / `WAYFAIR_OFFBOARDING_KEY` 调用
+- 停用 owner 名下全部 key；失败由 offboarding 脚本记 proxy_pending 次日重试

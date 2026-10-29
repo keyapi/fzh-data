@@ -22,8 +22,10 @@ import sqlite3
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import quote
 
 # 凭证不硬编码：从环境变量或 /opt/new-api/.secrets.env 读取
 SECRETS_FILE = Path("/opt/new-api/.secrets.env")
@@ -55,6 +57,47 @@ def _mysql_pwd() -> str:
 
 def _proxy_db_path() -> str:
     return _secret("PROXY_DB_PATH") or "/data/sellfox-proxy/sellfox-proxy.db"
+
+
+def _wayfair_url() -> str:
+    return _secret("WAYFAIR_OFFBOARDING_URL") or "https://wayfair-api.vilavi.cn"
+
+
+def disable_wayfair_keys(union_id: str) -> int:
+    """Disable all Wayfair proxy keys for a departed user.
+
+    Uses a dedicated key with only `offboarding:deactivate`; URL/key come from
+    /opt/new-api/.secrets.env. Returns 0 when not configured.
+    """
+    key = _secret("WAYFAIR_OFFBOARDING_KEY")
+    if not key:
+        return 0
+    url = (
+        _wayfair_url().rstrip("/")
+        + "/v1/offboarding/owners/"
+        + quote(union_id, safe="")
+        + "/deactivate"
+    )
+    request = urllib.request.Request(
+        url,
+        data=b"{}",
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f"wayfair offboarding HTTP {error.code}") from error
+    except Exception as error:  # noqa: BLE001 - caller writes proxy_pending
+        raise RuntimeError(
+            f"wayfair offboarding error: {type(error).__name__}"
+        ) from error
+    count = payload.get("deactivated")
+    return int(count) if isinstance(count, int) else 0
 
 
 def run_mysql(query: str) -> str:
@@ -214,24 +257,41 @@ def classify_employment(union_id: str, app_token: str) -> tuple[str, str | None,
 # ── Proxy key 禁用 ────────────────────────────────────────────────────
 
 def disable_proxy_keys(union_id: str) -> int:
-    """Disable all active proxy API keys for a departed DingTalk user.
-    Returns the number of keys disabled. Raises if proxy DB unreachable.
+    """Disable all active keys for a departed user in both proxies.
+
+    Covers sellfox-api-proxy (local SQLite) and wayfair-api-proxy (HTTP,
+    offboarding:deactivate key). Attempts both; raises if either fails so the
+    daily job records proxy_pending and retries tomorrow. Returns total count.
     """
+    total = 0
+    errors: list[str] = []
+
     db_path = _proxy_db_path()
     if not os.path.exists(db_path):
-        raise RuntimeError(f"proxy DB not found: {db_path}")
-    db = sqlite3.connect(db_path)
+        errors.append(f"proxy DB not found: {db_path}")
+    else:
+        db = sqlite3.connect(db_path)
+        try:
+            cur = db.execute(
+                "UPDATE api_keys SET is_active = 0 "
+                "WHERE dingtalk_union_id = ? AND is_active = 1",
+                (union_id,),
+            )
+            total += cur.rowcount
+            db.commit()
+        except Exception as error:  # noqa: BLE001 - still try Wayfair
+            errors.append(f"sellfox proxy: {type(error).__name__}: {error}")
+        finally:
+            db.close()
+
     try:
-        cur = db.execute(
-            "UPDATE api_keys SET is_active = 0 "
-            "WHERE dingtalk_union_id = ? AND is_active = 1",
-            (union_id,),
-        )
-        count = cur.rowcount
-        db.commit()
-        return count
-    finally:
-        db.close()
+        total += disable_wayfair_keys(union_id)
+    except Exception as error:  # noqa: BLE001 - retry via proxy_pending
+        errors.append(str(error))
+
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    return total
 
 
 # ── 主流程 ────────────────────────────────────────────────────────────

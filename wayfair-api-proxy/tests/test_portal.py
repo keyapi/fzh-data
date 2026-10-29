@@ -11,7 +11,7 @@ from config import AccountConfig, AppConfig, Credentials, OIDCConfig
 from main import create_app
 
 
-def _config(identities=None) -> AppConfig:
+def _config() -> AppConfig:
     return AppConfig(
         accounts={
             "centrade": AccountConfig(
@@ -26,7 +26,6 @@ def _config(identities=None) -> AppConfig:
             client_secret="oidc-secret",
             redirect_uri="http://testserver/admin/oidc-callback",
             admin_identities=[],
-            portal_identities=identities or ["ding-user"],
             portal_redirect_uri="http://testserver/portal/oidc-callback",
             cookie_secure=False,
         ),
@@ -68,14 +67,12 @@ def test_portal_is_absent_without_secret(tmp_path, monkeypatch):
         assert client.get("/portal/").status_code == 404
 
 
-def test_portal_rejects_non_allowlisted_identity(tmp_path, monkeypatch):
+def test_portal_accepts_any_company_identity(tmp_path, monkeypatch):
     monkeypatch.setenv("WAYFAIR_PORTAL_SESSION_SECRET", "portal-secret")
     app = create_app(_config(), db_path=tmp_path / "wayfair.db")
     with TestClient(app) as client:
-        response = _login(client, monkeypatch, sub="someone-else")
-
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "forbidden_portal"
+        assert _login(client, monkeypatch, sub="any-company-member").status_code == 200
+        assert client.get("/portal/").status_code == 200
 
 
 def test_portal_issue_rotate_and_deactivate(tmp_path, monkeypatch):
