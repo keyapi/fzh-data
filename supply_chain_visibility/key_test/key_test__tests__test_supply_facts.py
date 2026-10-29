@@ -720,9 +720,29 @@ class SupplyFactsContractTest(unittest.TestCase):
             self.facts._normalize_filters(None, {"sales_order": "SO-1"})
         with self.assertRaises(ValueError):
             self.facts._normalize_filters({"stage": "no_such_stage"})
+        allowed = self.facts._normalize_filters(
+            {"sales_order": "SO-1"},
+            {"cmd": "key_test.supply_facts.get_supply_facts",
+             "csrf_token": "x", "_": "123"})
+        self.assertEqual(allowed["sales_order"], "SO-1")
         normalized = self.facts._normalize_filters({"stage": "in_production"})
         self.assertEqual(normalized["stage"], "in_production")
         self.assertEqual(normalized["limit"], self.facts.DEFAULT_LIMIT)
+
+    def test_frappe_injected_cmd_and_offset_beyond_last_page(self):
+        self.fake.so_rows = [self._row(1)]
+        self.fake.permitted_sos = ["SO-1"]
+        self.fake.total_sos = 1
+        result = self.facts.get_supply_facts(
+            filters={"sales_order": "SO-1", "limit": 1, "offset": 10},
+            cmd="key_test.supply_facts.get_supply_facts", csrf_token="x")
+        self.assertEqual(result["pagination"]["total"], 1)
+        self.assertEqual(result["pagination"]["returned"], 0)
+        self.assertTrue(result["pagination"]["exhausted"])
+        self.assertEqual(result["manifest"]["coverage"]["empty_reason"],
+                         "offset_out_of_range")
+        self.assertEqual(result["applied_filters"], {"sales_order": "SO-1"})
+        self.assertEqual(result["manifest"]["scope"]["offset"], 10)
 
     def test_single_sales_order_and_so_line_scope(self):
         self.fake.so_rows = [self._row(1, "SO-1"), self._row(2, "SO-2")]
@@ -740,6 +760,7 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.fake.permitted_sos = ["SO-1"]
         self.fake.total_sos = 1
         first, _, total = self.facts.load_lines({"limit": 2, "offset": 0})
+        self.assertIn("order by so.name, soi.name", self.fake.last_query)
         second, _, _ = self.facts.load_lines({"limit": 2, "offset": 2})
         third, _, _ = self.facts.load_lines({"limit": 2, "offset": 4})
         self.assertEqual([r.so_line for r in first], ["SOI-1", "SOI-2"])
@@ -798,6 +819,10 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(by_stage[self.facts.STAGE_IN_PRODUCTION], 40.0)
         self.assertEqual(by_stage[self.facts.STAGE_UNKNOWN], 60.0)
         self.assertNotIn(self.facts.STAGE_NOT_PLANNED, by_stage)
+
+    def test_implementation_version_bumped_for_interface_change(self):
+        self.assertEqual(self.facts.IMPLEMENTATION_VERSION,
+                         "key_test.supply_facts@2026-10-29.1")
 
     def test_manifest_carries_rule_and_implementation_versions(self):
         self.fake.so_rows = []

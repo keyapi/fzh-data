@@ -99,6 +99,9 @@ filters = JSON object
 允许的 filters：`sales_order`、`so_line`、`customer`、`item_code`、`customer_item_code`、`warehouse`、`stage`、`from_date`、`to_date`、`as_of`、`include_delivered`、`limit`、`offset`。
 
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
+- Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
+- 当前 `implementation_version=key_test.supply_facts@2026-10-29.1`；接口/分页行为变更必须 bump，混合版本继续拒绝。
+- 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
 - `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。
 - `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。
 - `limit` 默认 500、最大 2000；`offset` ≥ 0。

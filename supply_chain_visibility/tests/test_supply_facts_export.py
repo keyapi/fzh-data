@@ -1,6 +1,9 @@
 """Conservative merge tests for the supply facts batch exporter."""
 import importlib.util
+import json
+import tempfile
 from pathlib import Path
+from unittest import mock
 import unittest
 
 
@@ -85,6 +88,14 @@ class MergeSemanticsTest(unittest.TestCase):
         self.assertEqual(target["implementation_version"], "impl-v1")
         self.assertEqual(target["lines"], [])
 
+    def test_old_and_new_implementation_versions_are_rejected(self):
+        target = _empty_target()
+        target["implementation_version"] = "key_test.supply_facts@2026-10-27.7"
+        batch = _batch()
+        batch["manifest"]["implementation_version"] = "key_test.supply_facts@2026-10-29.1"
+        with self.assertRaises(self.exporter.BatchVersionError):
+            self.exporter._merge(target, batch)
+
     def test_mixed_rule_schema_or_as_of_is_rejected(self):
         target = _empty_target()
         self.exporter._merge(target, _batch())
@@ -102,6 +113,111 @@ class MergeSemanticsTest(unittest.TestCase):
             del bad["manifest"][key]
             with self.assertRaises(self.exporter.BatchVersionError):
                 self.exporter._merge(target, bad)
+
+
+class ExportPaginationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.exporter = _load_exporter()
+
+    def _batch_page(self, total, offset, limit):
+        end = min(offset + limit, total)
+        lines = [{"so": "SO-1", "so_line": "SOI-%05d" % i} for i in range(offset, end)]
+        return {
+            "lines": lines, "stage_balances": [], "milestones": [],
+            "availability_schedule": [], "links": [],
+            "manifest": {
+                "schema_version": "supply-facts/v1",
+                "rule_version": "v1",
+                "implementation_version": "impl-v1",
+                "as_of": "2026-10-29",
+                "partial": True,
+                "counts": {"input": len(lines)},
+                "coverage": {},
+                "notes": [],
+            },
+            "pagination": {
+                "limit": limit, "offset": offset, "returned": len(lines), "total": total,
+                "next_offset": None if end >= total else end,
+                "next_cursor": lines[-1]["so_line"] if lines else None,
+                "exhausted": end >= total,
+                "partial": end < total,
+                "termination_reason": "exhausted" if end >= total else "page_limit",
+            },
+        }
+
+    def _run_export(self, argv, total=501):
+        calls = []
+
+        def fake_call(base, key, secret, filters):
+            calls.append(dict(filters))
+            return self._batch_page(total, int(filters.get("offset") or 0),
+                                    int(filters["limit"]))
+
+        with mock.patch.object(self.exporter.iss, "load_credentials",
+                               return_value=("k", "s")), \
+             mock.patch.object(self.exporter.iss, "resolve_env_files",
+                               return_value=None), \
+             mock.patch.object(self.exporter.iss, "ENV_URLS",
+                               {"test": "http://test"}), \
+             mock.patch.object(self.exporter, "_call", side_effect=fake_call), \
+             mock.patch.object(self.exporter, "_resolve_sos",
+                               return_value=["SO-1"]):
+            with tempfile.TemporaryDirectory() as td:
+                rc = self.exporter.main(argv + ["--out", td])
+                self.assertEqual(rc, 0)
+                runs = list((Path(td) / "runs").glob("run-*"))
+                self.assertEqual(len(runs), 1)
+                lines = json.loads((runs[0] / "lines.json").read_text(encoding="utf-8"))
+                manifest = json.loads((runs[0] / "manifest.json").read_text(encoding="utf-8"))
+        return calls, lines, manifest
+
+    def test_single_so_501_rows_paginates_to_exhaustion(self):
+        calls, lines, manifest = self._run_export(
+            ["--so", "SO-1", "--test", "--page-size", "500", "--no-excel"])
+        self.assertEqual(len(lines), 501)
+        self.assertEqual([c["offset"] for c in calls], [0, 500])
+        self.assertFalse(manifest["truncated"])
+        self.assertEqual(manifest["termination_reason"], "exhausted")
+
+    def test_customer_code_501_rows_paginates_to_exhaustion(self):
+        calls, lines, manifest = self._run_export(
+            ["--codes", "TT0031038K0062927", "--test", "--page-size", "500", "--no-excel"])
+        self.assertEqual(len(lines), 501)
+        self.assertEqual([c["offset"] for c in calls], [0, 500])
+        self.assertFalse(manifest["truncated"])
+        self.assertEqual(manifest["termination_reason"], "exhausted")
+
+    def test_paginate_rejects_stalled_offset(self):
+        def fake_call(base, key, secret, filters):
+            batch = self._batch_page(10, 0, 500)
+            batch["pagination"].update({"exhausted": False, "next_offset": 0})
+            return batch
+
+        with mock.patch.object(self.exporter, "_call", side_effect=fake_call):
+            with self.assertRaises(self.exporter.iss.QueryError):
+                self.exporter._paginate("base", "k", "s", {}, 500, max_pages=2)
+
+    def test_paginate_rejects_duplicate_unique_key(self):
+        first = self._batch_page(501, 0, 500)
+        second = self._batch_page(501, 500, 500)
+        second["lines"][0]["so_line"] = first["lines"][0]["so_line"]
+
+        with mock.patch.object(self.exporter, "_call", side_effect=[first, second]):
+            with self.assertRaises(self.exporter.iss.QueryError):
+                self.exporter._paginate("base", "k", "s", {}, 500, max_pages=2)
+
+    def test_paginate_reports_page_limit(self):
+        def fake_call(base, key, secret, filters):
+            offset = int(filters.get("offset") or 0)
+            batch = self._batch_page(10**9, offset, 500)
+            batch["pagination"].update({"exhausted": False, "next_offset": offset + 500})
+            return batch
+
+        with mock.patch.object(self.exporter, "_call", side_effect=fake_call):
+            batches, term = self.exporter._paginate("base", "k", "s", {}, 500, max_pages=2)
+        self.assertEqual(len(batches), 2)
+        self.assertEqual(term, "page_limit")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v1"
 RULE_VERSION = "2026-10-27.7"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-27.7"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-29.1"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -43,6 +43,9 @@ STAGE_VALUES = {
 DEFAULT_LIMIT = 500
 MAX_LIMIT = 2000
 SORT_KEYS = ["so", "so_line"]
+# Frappe's execute_cmd forwards the whole form_dict; these are framework
+# controls, not business filters. Everything else at top level is rejected.
+FRAMEWORK_ARGS = {"cmd", "csrf_token", "_"}
 
 ARRIVED_STATUSES = {
     "已到港", "清关中", "已清关", "已转运", "派送中", "已签收", "已上传POD",
@@ -699,9 +702,11 @@ def _normalize_filters(filters=None, extra=None):
     being silently ignored (which previously widened the query to all SOs).
     """
     if extra:
-        frappe.throw(
-            "Unknown parameter(s): %s; wrap supported filters in `filters`"
-            % ", ".join(sorted(extra)), frappe.ValidationError)
+        unexpected = sorted(set(extra) - FRAMEWORK_ARGS)
+        if unexpected:
+            frappe.throw(
+                "Unknown parameter(s): %s; wrap supported filters in `filters`"
+                % ", ".join(unexpected), frappe.ValidationError)
     if filters is None:
         filters = {}
     elif isinstance(filters, str):
@@ -839,7 +844,7 @@ def load_lines(filters):
     total_lines = int((count_rows[0] or {}).get("total") or 0)
     fba_expr = ("ifnull(soi.custom_fba_sku, '')"
                 if frappe.db.has_column("Sales Order Item", "custom_fba_sku") else "''")
-    order = "order by so.name, soi.idx"
+    order = "order by so.name, soi.name"
     if filters.get("limit"):
         order += " limit %(limit)s offset %(offset)s"
         values["limit"] = int(filters["limit"])
@@ -1075,11 +1080,17 @@ def get_supply_facts(filters=None, **kwargs):
             "receipt": "not_integrated",
             "warehouse_receipt": "not_integrated",
         }
-        empty_reason = "all_restricted" if so_restricted else "no_matching_lines"
-        pagination = _pagination(filters, 0, 0)
+        if total_lines:
+            empty_reason = "offset_out_of_range"
+        elif so_restricted:
+            empty_reason = "all_restricted"
+        else:
+            empty_reason = "no_matching_lines"
+        pagination = _pagination(filters, 0, total_lines)
         applied = {k: v for k, v in filters.items() if k not in ("limit", "offset")}
         coverage = {
-            "sales_orders": 0, "so_lines": 0, "so_lines_total": 0, "sources": permissions,
+            "sales_orders": 0, "so_lines": 0, "so_lines_total": total_lines,
+            "sources": permissions,
             "restricted": {"sales_order": so_restricted},
             "external_sources": external, "observed_at": _iso(observed_at),
             "empty_reason": empty_reason,

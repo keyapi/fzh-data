@@ -61,6 +61,8 @@ filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
 
 - **未知 filter**：`Unknown filter(s): ...; allowed: ...`，直接报错。
 - **顶层误传**（如 `sales_order=...` 不放进 `filters`）：`Unknown parameter(s): ...; wrap supported filters in filters`，直接报错，不再静默扩大为全量。
+- Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；其它顶层参数仍拒绝。
+- 当前 `implementation_version = key_test.supply_facts@2026-10-29.1`；接口/分页行为变更必须 bump，混合版本继续拒绝。
 - `stage` 只接受契约中的阶段值（`not_planned` / `in_production` / `produced_pending_dn` / `shipped_in_transit` / `arrived_not_sellable` / `delivered_sellable` / `cancelled` / `returned` / `draft_dn` / `unknown` / `over_produced`）。
 - 日期时间仍按契约：`as_of` 只允许当前快照；历史 `as_of` 由服务端拒绝。
 
@@ -104,6 +106,13 @@ filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
 - `next_cursor` 是本页最后一行的 `so_line`；服务端当前仍以 `offset` 为准（keyset 游标可作为后续优化，不改变本页语义）。
 - `manifest.truncated` / `manifest.termination_reason` 与分页一致；导出程序仍用自身的 `page_limit` 标记作为最终文件级标记。
 
+### 2.1 导出器：所有模式统一消费分页
+
+- `--all` / `--so` / `--codes` **都走同一个 `_paginate`**，直到 `pagination.exhausted=true`；不再对单 SO/客户码只请求一次。
+- 每页检查 `next_offset` 必须前进、`so_line` 唯一键不得跨页重复；空页未 exhausted 视为错误。
+- 旧服务端无 `pagination` 时回退到 `rows < page_size`，但仍保留 200 页上限与 `page_limit` 标记。
+- `--page-size` 限制 1..2000；单 SO/客户码 501 行会请求 500+1 两页，最终 `truncated=false`、`termination_reason=exhausted`。
+
 ## 3. 单 SO / 订单行语义
 
 - `filters.sales_order="SO-…"` 在 SQL 层限制 SO；`so_line` 在 SQL 层限制行。
@@ -118,6 +127,7 @@ filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
 |---|---|
 | `filters={"bogus":1}` | `Unknown filter(s): bogus; allowed: ...`（ValidationError） |
 | `?sales_order=SO-...`（顶层） | `Unknown parameter(s): sales_order; wrap supported filters in filters` |
+| `cmd` / `csrf_token` / `_`（Frappe 注入） | 忽略，不报错 |
 | `filters={"limit":0}` / `limit>2000` | `limit must be between 1 and 2000` |
 | `filters={"offset":-1}` | `offset must be >= 0` |
 | `filters={"stage":"foo"}` | `Unknown stage: foo` |
@@ -139,8 +149,16 @@ filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
   - `load_lines`：`so_line` 进入 SQL、返回 `total_lines`；`limit/offset` 明确；
   - 响应新增 `applied_filters`、`pagination`；`manifest` 新增 `pagination`/`truncated`/`termination_reason`/`partial_reasons`；
   - `stage` 事实层过滤。
+- `EN_API/supply_facts_export.py`
+  - 新增 `_paginate`：所有模式统一按 `pagination.exhausted/next_offset` 翻页；
+  - 校验页前进、`so_line` 唯一键、空页/无前进；保留 200 页上限与 `page_limit`；
+  - `--page-size` 限 1..2000。
 - `key_test/key_test/tests/test_supply_facts.py`
-  - 新增未知 filter/顶层参数、单 SO/单行、两页不重不漏、分页元数据、endpoint 回显等测试。
+  - 新增未知 filter/顶层参数、单 SO/单行、两页不重不漏、分页元数据、endpoint 回显、越界页、Frappe `cmd` 注入等测试。
+- `key_test/key_test/tests/test_supply_facts_dispatch.py`
+  - 真实 `frappe.call` / `get_newargs` 分发测试（本地无 Frappe 时 skip；在 bench 上运行）。
+- `supply_chain_visibility/tests/test_supply_facts_export.py`
+  - 501 行单 SO / 客户码导出、页前进/唯一键/page_limit、旧/新 implementation_version 混合拒绝。
 - fzh-data 镜像同步：
   - `supply_chain_visibility/key_test/key_test__supply_facts.py`
   - `supply_chain_visibility/key_test/key_test__tests__test_supply_facts.py`
@@ -148,8 +166,12 @@ filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
 测试结果（本地，只读）：
 
 ```text
-key_test:  116 passed
-supply_chain_visibility/key_test + export tests: 61 passed
+key_test full: 118 passed, 2 skipped
+  （dispatch 两项因本地未安装 Frappe 跳过；bench 上执行：）
+  bench --site <site> run-tests --module key_test.tests.test_supply_facts_dispatch
+
+fzh-data supply_chain_visibility: 90 passed + 5 subtests
+  （含 501 行单 SO/客户码导出、分页越界、排序、版本混合拒绝）
 ```
 
 ## 7. 未解决 / 下一阶段

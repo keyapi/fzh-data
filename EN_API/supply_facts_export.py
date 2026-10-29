@@ -46,6 +46,51 @@ def _call(base_url, key, secret, filters):
     return message
 
 
+MAX_PAGES = 200
+
+
+def _paginate(base_url, key, secret, base_filters, page_size, max_pages=MAX_PAGES):
+    """Fetch all pages for one scope; validate advancement, uniqueness and exhaustion."""
+    offset = int(base_filters.get("offset") or 0)
+    page = 0
+    batches = []
+    seen = set()
+    while page < max_pages:
+        filters = dict(base_filters, limit=page_size, offset=offset)
+        batch = _call(base_url, key, secret, filters)
+        lines = batch.get("lines") or []
+        for line in lines:
+            line_key = line.get("so_line") or line.get("so_line_id")
+            if not line_key:
+                raise iss.QueryError("line without so_line at offset %s" % offset)
+            if line_key in seen:
+                raise iss.QueryError("duplicate so_line across pages: %s" % line_key)
+            seen.add(line_key)
+        batches.append(batch)
+        pagination = batch.get("pagination") or {}
+        exhausted = pagination.get("exhausted")
+        if exhausted is True:
+            return batches, "exhausted"
+        if exhausted is False:
+            next_offset = pagination.get("next_offset")
+            if next_offset is None or int(next_offset) <= offset:
+                raise iss.QueryError(
+                    "pagination did not advance (offset=%s next=%s)" % (offset, next_offset))
+            if not lines:
+                raise iss.QueryError("empty page before exhausted at offset %s" % offset)
+            offset = int(next_offset)
+            page += 1
+            continue
+        # Backward compatibility with a server that predates pagination metadata.
+        if len(lines) < page_size:
+            return batches, "exhausted"
+        if not lines:
+            raise iss.QueryError("empty page before exhausted at offset %s" % offset)
+        offset += len(lines)
+        page += 1
+    return batches, "page_limit"
+
+
 class BatchVersionError(Exception):
     """Batch manifest is missing or conflicts with already merged data."""
 
@@ -201,6 +246,8 @@ def main(argv=None):
 
     if not (args.codes or args.so or args.all):
         parser.error("至少给一个输入: --codes / --so / --all")
+    if not (1 <= args.page_size <= 2000):
+        parser.error("--page-size 必须在 1..2000")
     env = "test" if args.test else "prod"
     key, secret = iss.load_credentials(env, iss.resolve_env_files(args.env_file))
     if not key or not secret or "your_" in key:
@@ -223,6 +270,16 @@ def main(argv=None):
     base_filters = {"as_of": today_str}
     terminated_by = "exhausted"
     try:
+        def _export_scope(label, scope_filters):
+            batches, term = _paginate(
+                base_url, key, secret, scope_filters, args.page_size)
+            for batch in batches:
+                _merge(result, batch)
+            rows = sum(len(batch.get("lines") or []) for batch in batches)
+            print("  %s: %d 行（%s）" % (label, rows, term))
+            return term
+
+        terms = []
         if args.codes:
             codes = [c.strip() for c in args.codes.replace(";", ",").split(",") if c.strip()]
             t0 = time.perf_counter()
@@ -232,30 +289,20 @@ def main(argv=None):
                 raise iss.QueryError("没有命中的销售订单")
             for so in sos:
                 filters = dict(base_filters, sales_order=so, include_delivered=1)
-                _merge(result, _call(base_url, key, secret, filters))
+                terms.append(_export_scope(so, filters))
         elif args.so:
             for so in [s.strip() for s in args.so.split(",") if s.strip()]:
-                _merge(result, _call(base_url, key, secret,
-                                     dict(base_filters, sales_order=so, include_delivered=1)))
+                filters = dict(base_filters, sales_order=so, include_delivered=1)
+                terms.append(_export_scope(so, filters))
         else:
-            offset, page = 0, 0
-            while page < 200:
-                filters = dict(base_filters, limit=args.page_size, offset=offset)
-                if args.include_delivered:
-                    filters["include_delivered"] = 1
-                batch = _call(base_url, key, secret, filters)
-                rows = len(batch.get("lines") or [])
-                _merge(result, batch)
-                print("  第 %d 页: %d 行（累计 %d）" % (page + 1, rows, len(result["lines"])))
-                if rows < args.page_size:
-                    terminated_by = "exhausted"
-                    break
-                offset += rows
-                page += 1
-            if page >= 200:
-                terminated_by = "page_limit"
-                print("  ! 达到 200 页上限，结果可能截断（manifest.truncated=true）",
-                      file=sys.stderr)
+            filters = dict(base_filters)
+            if args.include_delivered:
+                filters["include_delivered"] = 1
+            terms.append(_export_scope("all", filters))
+        terminated_by = "page_limit" if "page_limit" in terms else "exhausted"
+        if terminated_by == "page_limit":
+            print("  ! 达到 200 页上限，结果可能截断（manifest.truncated=true）",
+                  file=sys.stderr)
     except (iss.QueryError, BatchVersionError) as exc:
         print("✗ 导出失败，未写入新版本: %s" % exc, file=sys.stderr)
         return 1
