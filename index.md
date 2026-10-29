@@ -454,7 +454,7 @@ generated: 2026-10-29 15:08
 | Solution | 赛狐 Phase2 ingest — IvyeaOps 五杠杆优化器数据接线 | [docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md](docs/solutions/architecture-patterns/sellfox-ivyeaops-five-lever-ingest.md) | 2026-10-26 |
 | Solution | 重定向用 307 会让浏览器重放 POST —— 退出登录报 405 | [docs/solutions/integration-issues/redirect-307-replays-post-405.md](docs/solutions/integration-issues/redirect-307-replays-post-405.md) | 2026-10-26 |
 | Spec | 第一步：需求—实现—缺口—验收母集与双线裁决规则 | [docs/research/supply-chain/2026-10-29/STEP1-CONTRACT-AND-SAMPLES.md](docs/research/supply-chain/2026-10-29/STEP1-CONTRACT-AND-SAMPLES.md) | 2026-10-29 |
-| Spec | 第三步：四类生产证据的权威来源、数量推导与验收矩阵（只读设计 v2；第二批复审三轮整改 P0/P1/P2 已记录） | [docs/research/supply-chain/2026-10-29/STEP3-PRODUCTION-EVIDENCE.md](docs/research/supply-chain/2026-10-29/STEP3-PRODUCTION-EVIDENCE.md) | 2026-10-29 |
+| Spec | 第三步：四类生产证据的权威来源、数量推导与验收矩阵（含第二批复审三轮整改与测试站真实验收；权限待验） | [docs/research/supply-chain/2026-10-29/STEP3-PRODUCTION-EVIDENCE.md](docs/research/supply-chain/2026-10-29/STEP3-PRODUCTION-EVIDENCE.md) | 2026-10-29 |
 | Spec | 统一 AI 接入 C′ — 双 PoC 实施计划 | [docs/research/2026-07-24-unified-ai-access-poc-plan.md](docs/research/2026-07-24-unified-ai-access-poc-plan.md) | 2026-10-26 |
 | Template | 补货测算依据确认单（模板） | [docs/research/supply-chain/2026-10-20/claude/control/templates/replenishment-basis-confirmation.md](docs/research/supply-chain/2026-10-20/claude/control/templates/replenishment-basis-confirmation.md) | 2026-10-26 |
 | feat | Multi-Carrier Parcel Track - Plan | [docs/plans/2026-09-07-001-feat-multi-carrier-track-plan.md](docs/plans/2026-09-07-001-feat-multi-carrier-track-plan.md) | 2026-10-26 |

@@ -4,7 +4,7 @@ type: Reference
 title: 供应事实与数量—日期契约 v1 实现（批量入口 + 人工视图）
 date: 2026-10-27
 owner: claude-worker
-status: 测试站已部署并验收；生产未部署
+status: 测试站已部署并完成功能验收；权限待验；生产未部署
 tags: [supply-chain, replenishment, facts, manifest, so-chain]
 ---
 
@@ -179,7 +179,8 @@ QC 状态、confidence、主要原因/冲突，以及子装配件（PK#/ND#）�
 ## 5. 验收（测试站）
 
 - 契约单测：49 项（8 类案例 + 草稿 + estimated + 单位校验/继承 + 退货原明细归属/容量账本/顺序不变性/超退/引用冲突/无法归属/同仓聚合 + 退货逐明细读取贯穿 + 工单覆盖/开工证据 + 生产计划覆盖/单位校验 + 超产现存与累计 + 取消实物 + 片段仓库/ID + 运单状态齐全性 + 出库节点拆分 + 已发完行 include_delivered + 弹窗参数 + 行级权限 + 全部受限 + 版本字段 + 历史 as_of 拒绝 + 空结果完整性），另有 7 项批次合并/版本一致性测试；本地全绿。
-- **2026-10-29 第二批复审整改（本地）**：key_test 全量 237 passed / 3 skipped / 4 subtests；导出器 27 passed；`supply_chain_visibility` 104 passed / 5 subtests；Node 渲染 7 项。覆盖：真实 `get_so_chain` 不报错、KS/PK#/ND# 不串量、跨 UOM 不求和、重叠/重复 WO 不重复、mixed 行保留已证子集、unknown/estimated 不触发 complete/阶段 3/known、Job Card Time Log 补足时间且失败只降级时间、PP/DN/JC/TN 行级权限不泄露、多行来源状态保守聚合且保留 reason、取消 WO 入库事实可达、导出 JSON/Excel/manifest 行数与 SHA-256 一致且失败不切换 `latest.json`。版本 `RULE=2026-10-29.5` / `IMPL=key_test.supply_facts@2026-10-29.4`；测试站与生产均未部署。
+- **2026-10-29 第二批复审整改（本地）**：key_test 全量 238 passed / 3 skipped / 4 subtests；导出器 27 passed；`supply_chain_visibility` 104 passed / 5 subtests；Node 渲染 8 项。覆盖：真实 `get_so_chain` 不报错、KS/PK#/ND# 不串量、跨 UOM 不求和、重叠/重复 WO 不重复、mixed 行保留已证子集、unknown/estimated 不触发 complete/阶段 3/known、Job Card Time Log 补足时间且失败只降级时间、PP/DN/JC/TN 行级权限不泄露、多行来源状态保守聚合且保留 reason、取消 WO 入库事实可达、导出 JSON/Excel/manifest 行数与 SHA-256 一致且失败不切换 `latest.json`。版本 `RULE=2026-10-29.5` / `IMPL=key_test.supply_facts@2026-10-29.4`。
+- **2026-10-29 测试站部署与真实验收**：测试站 key_test `dd66b08` → `36b016f`（表尾文案修复），`bench restart` + `clear-cache`；bench app 测试 **241 OK / 9 skipped**。真实 HTTP：合法 GET/POST 200；未知 filter/顶层参数/非法 stage/limit/offset 均 417 ValidationError；分页 3 页无重无漏、越界页 `offset_out_of_range`。`get_so_chain`：SO-26-00026（proven/unknown/入库净额/QC 已检/子装配件）、SO-24-00011（estimated 显示估算）、SO-26-00021（双 known 差异标黄）；浏览器无持久控制台错误；真实 Time Log 记录级回退通过、注入查询失败不影响已证数量；全量导出 293 行 / 6 JSON + Excel + manifest，production_evidence 290 行一致、SHA-256 全对、版本正确、exhausted，失败保护通过。**普通受限用户 HTTP 权限验收仍 pending：缺少合法受限用户凭证（现行 TEST key 为 System Manager），未获豁免、不作为通过项。** 生产未部署。
 - 单 SO `SO-26-00026`：3 行 / 8 阶段余额 / 16 里程碑 / 6 可售片段 / 17 关联；查询约 0.8s。
   三行阶段余额守恒 10 / 5 / 8（草稿不计数量；KS 无工序卡时用 produced_qty 标 estimated）。
 - 全范围（含取消订单）：292 行 / 308 阶段余额 / 656 里程碑 / 287 片段 / 404 关联；查询 0.30s，总计 0.85s。

@@ -578,3 +578,65 @@ SQL
 验收（本地）：key_test **237 passed / 3 skipped / 4 subtests**；导出器 **27 passed**；
 `supply_chain_visibility` **104 passed / 5 subtests**；镜像 `cmp` 一致。仍未部署；测试站权限、
 真实 Time Log、浏览器视觉与 latest.json 失败保护复验待 Codex 通过后安排；第二步权限项继续 pending。
+
+## 16. 测试站部署与真实验收（2026-10-29）
+
+### 16.1 部署
+
+- key_test 开发分支推送 `dd66b08`；测试站 fast-forward 到 `dd66b08`，`bench restart` + `clear-cache`。
+- 验收中发现表尾说明仍为旧“末道报工”口径，已补 RED 渲染断言并修复（`36b016f`），再次推送、
+  测试站 fast-forward 到 `36b016f`、`clear-cache` + `restart`。
+- 未部署生产；未合并 main；未写业务数据；未改权限/主数据/调度。
+
+### 16.2 测试
+
+- 测试站 `bench --site erpnext.vilavi.cn run-tests --app key_test`：**241 OK / 9 skipped**。
+- 本地：key_test **238 passed / 3 skipped / 4 subtests**；导出器 **27 passed**；
+  `supply_chain_visibility` **104 passed / 5 subtests**，Node 渲染 8 项。
+
+### 16.3 真实 HTTP
+
+- `get_supply_facts`：GET/POST 合法请求 200；未知 filter、顶层参数、非法 stage、limit 0/2001/非数字、
+  offset -1 均 **417 ValidationError**。
+- 分页：SO-26-00026（3 行）`limit=1` 三页无重无漏，`next_offset` 0→1→2，末页 `exhausted=true`；
+  越界页 200 空行 + `empty_reason=offset_out_of_range`，`source_status` 与 `coverage.source_status` 一致。
+- `get_so_chain`：
+  - SO-26-00026：proven 5 / 0、unknown（—）与入库净额 4、QC 已检 proven 5、子装配件独立展示；
+  - SO-24-00011：estimated 12/6，页面/接口均为 `reported=null, qty_estimated>0`；
+  - SO-26-00021：全工序 1 / 入库 7 双 known 差异，页面标黄 2 格。
+
+### 16.4 受限用户权限（pending）
+
+- 现有 `TEST_ERP_API_KEY` 属 System Manager，不能替代普通受限用户；
+  **未创建用户、未扩大权限、未用管理员结果代替**。该项保持 pending，不写入通过项。
+
+### 16.5 真实 Time Log
+
+- 真实样本 `PO-JOB00688-1`（WO-25-00281）：顶层 `actual_end_date` 为空，`Job Card Time Log.to_time` 存在；
+  记录级 `_time_summary` 输出 `started/completed` 且 `time_status=complete`。
+- 该 WO 整体仍 `partial_missing`，原因是同工单其他贡献 JC（含 Open 质检卡）时间不完整——按“所有贡献记录完整”
+  规则属正确结果，非缺陷。
+- 故障注入（Time Log 查询抛错）：`restricted=false`、`available=true`、`job_card_time_log.reason=query_error`，
+  `all_process_done.qty_proven` 与 confidence 与正常路径一致（5 / proven）。
+
+### 16.6 浏览器视觉
+
+- 真实 SO 页面（管理员会话，仅用于渲染）：known 显示已证量；estimated 显示「12（估算）」；
+  unknown 显示「—」；仅双 known 差异标黄；QC/confidence/原因/冲突/子装配件均展示；
+  表尾已改为全工序口径。
+- 重启瞬间有 2 条 socket.io 502，刷新后无持久控制台错误。
+
+### 16.7 完整导出与失败保护
+
+- `--all --test --page-size 100`：293 行，`termination_reason=exhausted`；6 个 JSON + Excel + manifest；
+  `production_evidence` 293 行、扁平 290 行，Excel 与 manifest 行数一致；全部 SHA-256 校验通过；
+  `RULE=2026-10-29.5`、`IMPL=key_test.supply_facts@2026-10-29.4`。
+- 失败保护：真实未知物料码 HTTP 失败 rc=1，`latest.json` 与新 run 数不变；分页断裂、版本混合、
+  写文件失败由定向测试覆盖并通过。
+
+### 16.8 仍为业务 unknown
+
+- 测试站无 `Quality Inspection` Accepted/Rejected 样本 → `qc_passed.status` 未获真实样本验证。
+- 测试站无「取消工单 + 已提交 Manufacture 入库」样本 → 该场景仅由单测/贯穿测试覆盖。
+- 无「SO 链路内 JC 顶层时间空 + Time Log 存在」样本 → 仅记录级真实样本验证。
+- PO/通途入库/FBA/目的仓等外部事实保持 unknown；`so_chain_overview` 保持 legacy 边界。
