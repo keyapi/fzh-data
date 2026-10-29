@@ -66,7 +66,7 @@ systemd timer ── docker run --rm ── snapshot.py ── 同一 SQLite 卷
 因此下游永远读到“最后一次成功”，失败不会把好数据清空。
 
 `age_seconds` 基于 run 的 `finished_at` 计算；超过 `snapshot_stale_after_seconds`
-（默认 3600）标记 `stale=true`，数据仍返回以便预测系统自行决策。
+（每日快照默认 90000 秒 = 25 小时）标记 `stale=true`，数据仍返回以便预测系统自行决策。
 
 ## capability 闸门
 

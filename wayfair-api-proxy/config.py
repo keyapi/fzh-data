@@ -40,7 +40,7 @@ class OIDCConfig(BaseModel):
 
 class AppConfig(BaseModel):
     accounts: dict[str, AccountConfig]
-    snapshot_stale_after_seconds: int = 3600
+    snapshot_stale_after_seconds: int = 90000
     snapshot_retention_days: int = 7
     portal_account: str = "centrade"
     portal_key_rps: float = 1.0

@@ -66,7 +66,7 @@ Content-Type: application/json
 
 - `source=snapshot`：读最后一次成功 run；没有成功 run 时 `404 snapshot_missing`。
 - `source=live`：直接访问上游；失败明确报错，不降级伪装成实时。
-- `stale=true` 表示快照年龄超过配置阈值（默认 3600 秒），数据仍返回。
+- `stale=true` 表示快照年龄超过配置阈值（每日快照默认 90000 秒 = 25 小时），数据仍返回。
 
 ### 整份快照导出
 

@@ -29,7 +29,7 @@ class InventoryService:
         snapshot_store: SnapshotStore | None = None,
         live_client=None,
         now: Callable[[], datetime] | None = None,
-        stale_after_seconds: int = 3600,
+        stale_after_seconds: int = 90000,
     ):
         self._accounts = accounts
         self._snapshot_store = snapshot_store

@@ -1,5 +1,5 @@
-# Snapshot responses older than this are marked stale=true.
-snapshot_stale_after_seconds: 3600
+# Daily snapshots: stale after 25h (one missed run still visible, but flagged).
+snapshot_stale_after_seconds: 90000
 # Keep this many days of runs on the VPS; long-term history belongs in EN/parquet.
 snapshot_retention_days: 7
 
