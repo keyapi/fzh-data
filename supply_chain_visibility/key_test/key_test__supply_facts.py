@@ -326,8 +326,6 @@ def build_stage_balances(line, ctx):
         produced_total, produced_status = 0.0, "unknown"
     all_unknown = produced_status == "unknown"
     stock_total = stock_ev.get("qty_proven")
-    if stock_total is None and not all_unknown:
-        stock_total = produced_total
     produced_capped = 0.0 if all_unknown else min(produced_total, _num(qty))
     produced_basis = all_ev.get("qty_basis") or (
         "wo_produced_qty" if produced_status == "estimated" else "all_process_done")
