@@ -141,7 +141,7 @@ WAYFAIR_DATABASE=/srv/wayfair-api-proxy/data/wayfair.db \
 
 ### 离职自动撤销
 
-`offboarding-check.py`（new-api 服务器，cron 每日 03:00）在停用 new-api 与卖狐
+`offboarding-check.py`（new-api 服务器，cron 每日 03:00）在停用 new-api 与赛狐
 proxy 的同时，会调用：
 
 ```http

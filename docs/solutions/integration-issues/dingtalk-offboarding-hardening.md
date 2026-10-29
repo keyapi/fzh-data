@@ -178,7 +178,7 @@ CREATE TABLE IF NOT EXISTS offboarding_audit (
 
 `offboarding-check.py` 的 `disable_proxy_keys` 现在同时处理：
 
-- 卖狐 proxy（本地 SQLite，按 `dingtalk_union_id` 停用）；
+- 赛狐 proxy（本地 SQLite，按 `dingtalk_union_id` 停用）；
 - Wayfair proxy（HTTP `POST /v1/offboarding/owners/{owner}/deactivate`，
   key 只含 `offboarding:deactivate`，owner 为 `unionId`）。
 
