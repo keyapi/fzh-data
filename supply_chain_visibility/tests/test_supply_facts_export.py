@@ -266,6 +266,7 @@ class ExportPaginationTest(unittest.TestCase):
             item["links"] = [{
                 "source_doctype": "Delivery Note", "source_name": "DN-1",
                 "target_doctype": "Shipment", "target_name": "SHIP-1",
+                "target_is_record": True,
             }]
             item["pagination"] = {"total": 2}
             item["manifest"]["coverage"] = {
@@ -307,6 +308,57 @@ class ExportPaginationTest(unittest.TestCase):
             self.assertEqual(json.loads((out / "latest.json").read_text(encoding="utf-8")),
                              old_pointer)
             self.assertFalse((out / "runs").exists())
+
+
+    def test_merge_coverage_waybill_only_is_not_a_shipment(self):
+        target = _empty_target()
+        batch = _batch()
+        batch["lines"] = [{"so": "SO-1", "so_line": "L1"}]
+        batch["links"] = [{
+            "source_doctype": "Delivery Note", "source_name": "DN-1",
+            "target_doctype": "Shipment", "target_name": "WAYBILL-1",
+            "target_is_record": False,
+        }]
+        batch["pagination"] = {"total": 1}
+        batch["manifest"]["coverage"] = {
+            "sales_orders": 1, "so_lines": 1, "so_lines_total": 1,
+            "delivery_notes": 1, "shipments": 0,
+        }
+        self.exporter._merge(target, batch, scope_key="SO-1")
+        self.exporter._finalize_coverage(target)
+        self.assertEqual(target["coverage"]["shipments"], 0)
+        self.assertEqual(target["coverage"]["delivery_notes"], 1)
+
+    def test_merge_coverage_matches_only_real_shipments_and_dedupes(self):
+        target = _empty_target()
+        batch = _batch()
+        batch["lines"] = [{"so": "SO-1", "so_line": "L1"}]
+
+        def link(dn, ship, is_record):
+            return {
+                "source_doctype": "Delivery Note", "source_name": dn,
+                "target_doctype": "Shipment", "target_name": ship,
+                "target_is_record": is_record,
+            }
+
+        batch["links"] = [
+            link("DN-1", "SHIP-1", False),  # waybill placeholder, not a record
+            link("DN-1", "SHIP-1", True),   # real record
+            link("DN-2", "SHIP-1", True),   # duplicate real record
+            link("DN-2", "SHIP-2", True),
+        ]
+        batch["pagination"] = {"total": 1}
+        batch["manifest"]["coverage"] = {
+            "sales_orders": 1, "so_lines": 1, "so_lines_total": 1,
+            "delivery_notes": 2, "shipments": 0,
+        }
+        self.exporter._merge(target, batch, scope_key="SO-1")
+        self.exporter._finalize_coverage(target)
+        self.assertEqual(target["coverage"]["shipments"], 2)
+        self.assertEqual(target["coverage"]["delivery_notes"], 2)
+        self.assertEqual(target["coverage"]["sales_orders"], 1)
+        self.assertEqual(target["coverage"]["so_lines"], 1)
+        self.assertEqual(target["coverage"]["so_lines_total"], 1)
 
 
 if __name__ == "__main__":

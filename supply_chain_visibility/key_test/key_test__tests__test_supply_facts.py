@@ -202,6 +202,21 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(len(waybills), 2)
         self.assertTrue(all(l["qty"] is None for l in waybills))
 
+    def test_waybill_link_explicitly_marks_matched_shipment(self):
+        numbers = {"DN-1": [{"number": "WB-1"}]}
+        ctx = _ctx(dns=[_dn(qty=10.0)], numbers_by_dn=numbers, shipment_by_number={})
+        waybill = next(l for l in self.facts.build_links(_line(), ctx)
+                       if l["relation"] == "waybill")
+        self.assertEqual(waybill["target_name"], "WB-1")
+        self.assertFalse(waybill["target_is_record"])
+
+        ctx = _ctx(dns=[_dn(qty=10.0)], numbers_by_dn=numbers,
+                   shipment_by_number={"WB-1": {"shipment": "SHIP-1"}})
+        waybill = next(l for l in self.facts.build_links(_line(), ctx)
+                       if l["relation"] == "waybill")
+        self.assertEqual(waybill["target_name"], "SHIP-1")
+        self.assertTrue(waybill["target_is_record"])
+
     def test_case3_mixed_arrival_counts_once(self):
         numbers = {"DN-1": [{"number": "A"}, {"number": "B"}]}
         ships = {"A": _ship("A", "已上传POD", eta="2026-10-01", ata="2026-10-01"),
@@ -792,6 +807,38 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(result["manifest"]["pagination"], result["pagination"])
         self.assertTrue(result["manifest"]["partial"])
         self.assertEqual(result["manifest"]["termination_reason"], "exhausted")
+
+    def _dispatch_support(self):
+        path = Path(__file__).with_name("dispatch_support.py")
+        spec = importlib.util.spec_from_file_location("zmt_dispatch_support", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_dispatch_guard_skips_only_missing_frappe(self):
+        module = self._dispatch_support()
+
+        def missing_frappe(name, *args, **kwargs):
+            if name == "frappe":
+                raise ModuleNotFoundError("No module named 'frappe'", name="frappe")
+            raise AssertionError("business import must not run when frappe is missing")
+
+        self.assertEqual(module._load_dispatch_deps(missing_frappe), (None, None))
+
+    def test_dispatch_guard_does_not_hide_business_import_error(self):
+        module = self._dispatch_support()
+
+        def broken_business(name, *args, **kwargs):
+            if name == "frappe":
+                return types.SimpleNamespace()
+            if name == "key_test.supply_facts":
+                raise ModuleNotFoundError(
+                    "No module named 'key_test.supply_facts'",
+                    name="key_test.supply_facts")
+            return __import__(name, *args, **kwargs)
+
+        with self.assertRaises(ModuleNotFoundError):
+            module._load_dispatch_deps(broken_business)
 
     def test_popup_request_includes_delivered_lines(self):
         here = Path(__file__).resolve()

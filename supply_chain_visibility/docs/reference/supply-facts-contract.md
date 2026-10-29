@@ -69,8 +69,9 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 
 ### `links`（来源与分配证据）
 
-`so / so_line_id / source_doctype / source_name / source_line_id / relation / target_doctype / target_name / qty / uom / proof / allocation`。
+`so / so_line_id / source_doctype / source_name / source_line_id / relation / target_doctype / target_name / target_is_record / qty / uom / proof / allocation`。
 覆盖 SO→Item、SO 行→PP、SO 行→WO、WO→菲号、SO 行→DN、DN→Shipment（多运单时 `allocation=unknown` 且 qty=null；来源单位缺失或与订单单位不一致时 qty=null）。
+`target_is_record=false` 表示 `target_name` 只是运单号/占位，不是已匹配的实体记录；覆盖数只统计 `target_is_record=true` 的 Shipment。
 
 ### `manifest`
 

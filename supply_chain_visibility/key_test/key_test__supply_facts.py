@@ -605,12 +605,14 @@ def build_links(line, ctx):
     rows = []
 
     def edge(source_doctype, source_name, source_line, relation, target_doctype,
-             target_name, qty=None, uom=None, proof="", allocation=None):
+             target_name, qty=None, uom=None, proof="", allocation=None,
+             target_is_record=True):
         rows.append({
             "so": line.get("so"), "so_line_id": line.get("so_line"),
             "source_doctype": source_doctype, "source_name": source_name,
             "source_line_id": source_line, "relation": relation,
             "target_doctype": target_doctype, "target_name": target_name,
+            "target_is_record": bool(target_is_record),
             "qty": None if qty is None else round(_num(qty), 6),
             "uom": uom, "proof": proof, "allocation": allocation or "unknown",
         })
@@ -652,7 +654,8 @@ def build_links(line, ctx):
                  "Shipment", shipment.get("shipment") or number["number"],
                  qty=None if len(dn_numbers) > 1 or not dn_ok else dn.get("qty"),
                  uom=dn_uom or None,
-                 proof="dn_logistics_number", allocation=allocation)
+                 proof="dn_logistics_number", allocation=allocation,
+                 target_is_record=bool(shipment.get("shipment")))
     return rows
 
 

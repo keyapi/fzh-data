@@ -175,7 +175,7 @@ def _merge(target, batch, scope_key=None):
                 continue
             if doctype == "Delivery Note":
                 state["dn_ids"].add(name)
-            elif doctype == "Shipment":
+            elif doctype == "Shipment" and link.get("target_is_record") is True:
                 state["shipment_ids"].add(name)
     pagination = batch.get("pagination") or {}
     total = pagination.get("total")
@@ -235,10 +235,8 @@ def _finalize_coverage(target):
         sum(state["scope_totals"].values())
         if state["scope_totals"] else len(state["so_line_ids"])
     )
-    if state["dn_ids"]:
-        coverage["delivery_notes"] = len(state["dn_ids"])
-    if state["shipment_ids"]:
-        coverage["shipments"] = len(state["shipment_ids"])
+    coverage["delivery_notes"] = len(state["dn_ids"])
+    coverage["shipments"] = len(state["shipment_ids"])
 
 
 def _resolve_sos(codes, base_url, key, secret):
@@ -276,8 +274,8 @@ def _write_xlsx(path, result):
                                   "exclusion_reason", "batch_key", "source_record",
                                   "demand_status", "rule_version"],
         "links": ["so", "so_line_id", "source_doctype", "source_name", "source_line_id",
-                  "relation", "target_doctype", "target_name", "qty", "uom", "proof",
-                  "allocation"],
+                  "relation", "target_doctype", "target_name", "target_is_record",
+                  "qty", "uom", "proof", "allocation"],
     }
     for name in DATASETS:
         ws = wb.create_sheet(name)

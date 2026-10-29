@@ -112,7 +112,7 @@ filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
 - 每页检查 `next_offset` 必须前进、`so_line` 唯一键不得跨页重复；空页未 exhausted 视为错误。
 - 旧服务端无 `pagination` 时回退到 `rows < page_size`，但仍保留 200 页上限与 `page_limit` 标记。
 - `--page-size` 限制 1..2000；单 SO/客户码 501 行会请求 500+1 两页，最终 `truncated=false`、`termination_reason=exhausted`。
-- **覆盖数按身份去重**：`manifest.coverage.sales_orders` / `so_lines` 用唯一 SO / SO 行集合；`so_lines_total` 用各 scope 的范围总数（不按页累加）；DN/Shipment 从 links 的 source/target 身份去重。
+- **覆盖数按身份去重**：`manifest.coverage.sales_orders` / `so_lines` 用唯一 SO / SO 行集合；`so_lines_total` 用各 scope 的范围总数（不按页累加）；DN 从 links 的 source/target 身份去重；Shipment 只统计 `target_is_record=true` 的已匹配记录，`target_is_record=false` 的运单号占位不计。
 - **分页连续性校验**：每页校验 `limit/offset/returned/total` 与实际一致，`next_offset == offset + rows`，跨页 `total` 不变，`exhausted` 时唯一行数必须等于 `total`；不一致直接失败，不写新版本、不切换 `latest`。
 
 ## 3. 单 SO / 订单行语义
@@ -159,8 +159,12 @@ filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
   - 新增未知 filter/顶层参数、单 SO/单行、两页不重不漏、分页元数据、endpoint 回显、越界页、Frappe `cmd` 注入等测试。
 - `key_test/key_test/tests/test_supply_facts_dispatch.py`
   - 真实 `frappe.call` / `get_newargs` 分发测试（本地无 Frappe 时 skip；在 bench 上运行）。
+- `key_test/key_test/tests/dispatch_support.py`
+  - 导入守卫：只有 `ModuleNotFoundError.name == "frappe"` 才返回 skip；业务模块导入错误继续抛出。
 - `supply_chain_visibility/tests/test_supply_facts_export.py`
-  - 501 行单 SO / 客户码导出、页前进/唯一键/page_limit、旧/新 implementation_version 混合拒绝。
+  - 501 行单 SO / 客户码导出、覆盖数去重、分页连续性/总数对账、
+    异常分页保留 old latest 指针、排序、版本混合拒绝；
+  - `target_is_record` 仅运单号/匹配 Shipment/混合重复链接的覆盖数测试。
 - fzh-data 镜像同步：
   - `supply_chain_visibility/key_test/key_test__supply_facts.py`
   - `supply_chain_visibility/key_test/key_test__tests__test_supply_facts.py`
@@ -168,13 +172,13 @@ filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
 测试结果（本地，只读）：
 
 ```text
-key_test full: 118 passed, 3 skipped
+key_test full: 121 passed, 3 skipped
   （dispatch 三项因本地未安装 Frappe 跳过；bench 上执行：）
   bench --site <site> run-tests --module key_test.tests.test_supply_facts_dispatch
 
-fzh-data supply_chain_visibility: 96 passed + 5 subtests
+fzh-data supply_chain_visibility: 98 passed + 5 subtests
   （含 501 行单 SO/客户码导出、覆盖数去重、分页连续性/总数对账、
-   异常分页保留 old latest 指针、排序、版本混合拒绝）
+   异常分页保留 old latest 指针、排序、版本混合拒绝、Shipment 占位排除）
 ```
 
 真实 Frappe 分发探针（测试站，只读、未部署）：用测试站 `frappe.call/get_newargs` 调新代码的 `_normalize_filters`：
