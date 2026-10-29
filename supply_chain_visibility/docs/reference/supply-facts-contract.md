@@ -74,7 +74,7 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 
 ### `manifest`
 
-`schema_version=supply-facts/v1`、`rule_version`（数量规则版本）、`implementation_version`（实现/构建版本，服务端返回与本地导出产物都携带）、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`external_sources`）、`counts`、`partial`、`truncated`、`termination_reason`（`exhausted`/`page_limit`）、`notes`、`files`（相对路径 + sha256）、`performance`。
+`schema_version=supply-facts/v1`、`rule_version`（数量规则版本）、`implementation_version`（实现/构建版本，服务端返回与本地导出产物都携带）、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`external_sources`）、`counts`、`partial`、`truncated`、`termination_reason`（`exhausted`/`page_limit`）、`pagination`、`partial_reasons`、`notes`、`files`（相对路径 + sha256）、`performance`。
 
 ## 2. 批量入口
 
@@ -87,6 +87,36 @@ uv run python EN_API/supply_facts_export.py --codes "TT0031038K0062927,CENCord99
 
 # 全范围（分页）
 uv run python EN_API/supply_facts_export.py --all --test --page-size 500
+```
+
+### 2.1 filters 白名单与分页契约（2026-10-29）
+
+```text
+GET/POST /api/method/key_test.supply_facts.get_supply_facts
+filters = JSON object
+```
+
+允许的 filters：`sales_order`、`so_line`、`customer`、`item_code`、`customer_item_code`、`warehouse`、`stage`、`from_date`、`to_date`、`as_of`、`include_delivered`、`limit`、`offset`。
+
+- **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
+- `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。
+- `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。
+- `limit` 默认 500、最大 2000；`offset` ≥ 0。
+- 响应新增 `applied_filters` 与 `pagination`：`limit/offset/returned/total/next_offset/next_cursor/exhausted/partial/termination_reason/sort/unique_key`。
+- `pagination.partial` 只表示本页被 limit 截断；`manifest.partial` 表示业务来源不完整（权限受限/通途 PO/入库/目的仓未接入）。**`exhausted=true` 时 `manifest.partial` 仍可为 true。**
+- 排序固定 `so, so_line`，唯一键 `so_line`；两页不重不漏。
+- 单 SO 请求只返回该 SO；`so_line` 已在 SQL 层限制。
+
+```bash
+# 单 SO，第二页
+filters={"sales_order":"SO-26-00103","limit":50,"offset":50}
+
+# 仓库 + 阶段
+filters={"sales_order":"SO-26-00103","warehouse":"美中-FZH-DANEEY","stage":"in_production"}
+
+# 错误示例：unknown / 顶层参数
+filters={"bogus":1}                 # Unknown filter(s)
+?sales_order=SO-26-00103            # Unknown parameter(s)
 ```
 
 输出：`EN_API/out/supply_facts/runs/run-<ts>-<id>/` 下 5 个 JSON + `supply_facts.xlsx` + `manifest.json`；

@@ -15,6 +15,7 @@ class FakeFrappe(types.ModuleType):
     def __init__(self):
         super().__init__("frappe")
         self.PermissionError = PermissionError
+        self.ValidationError = ValueError
         self.whitelist = lambda *args, **kwargs: (lambda fn: fn)
         self._dict = lambda value=None: _AttrDict(value or {})
         self.so_rows = []
@@ -27,13 +28,39 @@ class FakeFrappe(types.ModuleType):
             sql=self.sql, count=self.count, has_column=lambda *a, **k: True,
             table_exists=lambda *a, **k: True)
 
+    def _filter_so_rows(self, query, values):
+        values = values or {}
+        allowed = set(values.get("permitted") or [])
+        rows = [row for row in self.so_rows if row.so in allowed]
+        for key, attr in (("sales_order", "so"), ("so_line", "so_line"),
+                          ("item_code", "item_code"),
+                          ("customer_item_code", "customer_item_code"),
+                          ("warehouse", "warehouse")):
+            if values.get(key):
+                rows = [row for row in rows if getattr(row, attr, None) == values[key]]
+        if "soi.qty - soi.delivered_qty" in query:
+            rows = [
+                row for row in rows
+                if not hasattr(row, "qty")
+                or float(getattr(row, "qty", 0) or 0) - float(getattr(row, "delivered_qty", 0) or 0) > 0
+            ]
+        return sorted(rows, key=lambda row: (str(getattr(row, "so", "")),
+                                             str(getattr(row, "so_line", ""))))
+
     def sql(self, query, values=None, as_dict=False):
+        values = values or {}
+        if "select count(*) as total" in query:
+            return [{"total": len(self._filter_so_rows(query, values))}]
         if "select so.name as so" in query:
             self.last_query = query
-            allowed = set((values or {}).get("permitted") or [])
-            return [row for row in self.so_rows if row.so in allowed]
+            rows = self._filter_so_rows(query, values)
+            limit = values.get("limit")
+            if limit:
+                offset = int(values.get("offset") or 0)
+                rows = rows[offset:offset + int(limit)]
+            return rows
         if "from `tabDelivery Note Item`" in query:
-            allowed = set((values or {}).get("lines") or [])
+            allowed = set(values.get("lines") or [])
             return [row for row in self.dn_rows if row.so_line in allowed]
         return []
 
@@ -303,7 +330,7 @@ class SupplyFactsContractTest(unittest.TestCase):
             types.SimpleNamespace(so="SO-2", so_line="B")]
         self.fake.permitted_sos = ["SO-1"]
         self.fake.total_sos = 2
-        lines, restricted = self.facts.load_lines({})
+        lines, restricted, _total = self.facts.load_lines({})
         self.assertEqual([row.so for row in lines], ["SO-1"])
         self.assertTrue(restricted)
 
@@ -439,7 +466,7 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.fake.so_rows = []
         self.fake.permitted_sos = []
         self.fake.total_sos = 3
-        lines, restricted = self.facts.load_lines({})
+        lines, restricted, _total = self.facts.load_lines({})
         self.assertEqual(lines, [])
         self.assertTrue(restricted)
         result = self.facts.get_supply_facts({})
@@ -670,12 +697,80 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.fake.so_rows = [types.SimpleNamespace(so="SO-1", so_line="A")]
         self.fake.permitted_sos = ["SO-1"]
         self.fake.total_sos = 1
-        lines, _ = self.facts.load_lines({})
+        lines, _, _total = self.facts.load_lines({})
         self.assertIn("soi.qty - soi.delivered_qty", self.fake.last_query)
         self.assertEqual([row.so_line for row in lines], ["A"])
-        lines, _ = self.facts.load_lines({"include_delivered": 1})
+        lines, _, _total = self.facts.load_lines({"include_delivered": 1})
         self.assertNotIn("soi.qty - soi.delivered_qty", self.fake.last_query)
         self.assertEqual([row.so_line for row in lines], ["A"])
+
+    def _row(self, index=1, so="SO-1"):
+        return types.SimpleNamespace(
+            so=so, so_line="SOI-%d" % index, item_code="SKU-1", item_name="Item",
+            customer_item_code="", qty=10.0, delivered_qty=0.0, uom="个",
+            warehouse="WH-1", delivery_date="2026-10-20",
+            so_status="To Deliver and Bill", so_docstatus=1,
+            transaction_date="2026-10-01", fba_sku="",
+            customer="C1", customer_name="Cust")
+
+    def test_unknown_filter_and_top_level_param_are_rejected(self):
+        with self.assertRaises(ValueError):
+            self.facts._normalize_filters({"sales_ordr": "SO-1"})
+        with self.assertRaises(ValueError):
+            self.facts._normalize_filters(None, {"sales_order": "SO-1"})
+        with self.assertRaises(ValueError):
+            self.facts._normalize_filters({"stage": "no_such_stage"})
+        normalized = self.facts._normalize_filters({"stage": "in_production"})
+        self.assertEqual(normalized["stage"], "in_production")
+        self.assertEqual(normalized["limit"], self.facts.DEFAULT_LIMIT)
+
+    def test_single_sales_order_and_so_line_scope(self):
+        self.fake.so_rows = [self._row(1, "SO-1"), self._row(2, "SO-2")]
+        self.fake.permitted_sos = ["SO-1", "SO-2"]
+        self.fake.total_sos = 2
+        lines, _, total = self.facts.load_lines({"sales_order": "SO-1", "limit": 10})
+        self.assertEqual([row.so_line for row in lines], ["SOI-1"])
+        self.assertEqual(total, 1)
+        lines, _, total = self.facts.load_lines({"so_line": "SOI-2", "limit": 10})
+        self.assertEqual([row.so for row in lines], ["SO-2"])
+        self.assertEqual(total, 1)
+
+    def test_two_pages_do_not_duplicate_or_miss(self):
+        self.fake.so_rows = [self._row(i) for i in range(1, 6)]
+        self.fake.permitted_sos = ["SO-1"]
+        self.fake.total_sos = 1
+        first, _, total = self.facts.load_lines({"limit": 2, "offset": 0})
+        second, _, _ = self.facts.load_lines({"limit": 2, "offset": 2})
+        third, _, _ = self.facts.load_lines({"limit": 2, "offset": 4})
+        self.assertEqual([r.so_line for r in first], ["SOI-1", "SOI-2"])
+        self.assertEqual([r.so_line for r in second], ["SOI-3", "SOI-4"])
+        self.assertEqual([r.so_line for r in third], ["SOI-5"])
+        self.assertEqual(total, 5)
+        self.assertEqual(len({r.so_line for r in first + second + third}), 5)
+
+    def test_pagination_metadata_distinguishes_page_from_business_partial(self):
+        page = self.facts._pagination({"limit": 2, "offset": 0}, 2, 5, "SOI-2")
+        self.assertFalse(page["exhausted"])
+        self.assertTrue(page["partial"])
+        self.assertEqual(page["next_offset"], 2)
+        self.assertEqual(page["termination_reason"], "page_limit")
+        last = self.facts._pagination({"limit": 2, "offset": 4}, 1, 5, "SOI-5")
+        self.assertTrue(last["exhausted"])
+        self.assertFalse(last["partial"])
+        self.assertIsNone(last["next_offset"])
+
+    def test_endpoint_echoes_scope_and_pagination(self):
+        self.fake.so_rows = [self._row(1)]
+        self.fake.permitted_sos = ["SO-1"]
+        self.fake.total_sos = 1
+        result = self.facts.get_supply_facts(filters={"sales_order": "SO-1", "limit": 1})
+        self.assertEqual(result["applied_filters"], {"sales_order": "SO-1"})
+        self.assertEqual(result["pagination"]["total"], 1)
+        self.assertTrue(result["pagination"]["exhausted"])
+        self.assertEqual(result["manifest"]["scope"]["sales_order"], "SO-1")
+        self.assertEqual(result["manifest"]["pagination"], result["pagination"])
+        self.assertTrue(result["manifest"]["partial"])
+        self.assertEqual(result["manifest"]["termination_reason"], "exhausted")
 
     def test_popup_request_includes_delivered_lines(self):
         here = Path(__file__).resolve()

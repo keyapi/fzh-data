@@ -30,6 +30,20 @@ STAGE_DRAFT = "draft_dn"
 STAGE_UNKNOWN = "unknown"
 STAGE_OVER_PRODUCED = "over_produced"
 
+FILTER_KEYS = {
+    "sales_order", "so_line", "customer", "item_code", "customer_item_code",
+    "warehouse", "stage", "from_date", "to_date", "as_of",
+    "include_delivered", "limit", "offset",
+}
+STAGE_VALUES = {
+    STAGE_NOT_PLANNED, STAGE_IN_PRODUCTION, STAGE_PRODUCED_PENDING,
+    STAGE_IN_TRANSIT, STAGE_ARRIVED, STAGE_DELIVERED, STAGE_CANCELLED,
+    STAGE_RETURNED, STAGE_DRAFT, STAGE_UNKNOWN, STAGE_OVER_PRODUCED,
+}
+DEFAULT_LIMIT = 500
+MAX_LIMIT = 2000
+SORT_KEYS = ["so", "so_line"]
+
 ARRIVED_STATUSES = {
     "已到港", "清关中", "已清关", "已转运", "派送中", "已签收", "已上传POD",
 }
@@ -678,6 +692,108 @@ def build_manifest(*, as_of, scope, lines, facts, coverage, counts, partial, not
 
 # ── EN loading (batched; doctype permissions checked before child reads) ────
 
+def _normalize_filters(filters=None, extra=None):
+    """Validate and normalize the public filter contract.
+
+    Unknown top-level kwargs and unknown filter keys are rejected instead of
+    being silently ignored (which previously widened the query to all SOs).
+    """
+    if extra:
+        frappe.throw(
+            "Unknown parameter(s): %s; wrap supported filters in `filters`"
+            % ", ".join(sorted(extra)), frappe.ValidationError)
+    if filters is None:
+        filters = {}
+    elif isinstance(filters, str):
+        try:
+            filters = json.loads(filters or "{}")
+        except Exception:
+            frappe.throw("filters must be a JSON object", frappe.ValidationError)
+    if not isinstance(filters, dict):
+        frappe.throw("filters must be a JSON object", frappe.ValidationError)
+
+    unknown = sorted(set(filters) - FILTER_KEYS)
+    if unknown:
+        frappe.throw(
+            "Unknown filter(s): %s; allowed: %s"
+            % (", ".join(unknown), ", ".join(sorted(FILTER_KEYS))),
+            frappe.ValidationError)
+
+    out = {}
+    for key in ("sales_order", "so_line", "customer", "item_code",
+                "customer_item_code", "warehouse", "stage", "from_date",
+                "to_date", "as_of"):
+        value = filters.get(key)
+        if value is None or value == "":
+            continue
+        if not isinstance(value, str):
+            frappe.throw("filter %s must be a string" % key, frappe.ValidationError)
+        value = value.strip()
+        if value:
+            out[key] = value
+    if out.get("stage") and out["stage"] not in STAGE_VALUES:
+        frappe.throw("Unknown stage: %s" % out["stage"], frappe.ValidationError)
+
+    if "include_delivered" in filters:
+        value = filters["include_delivered"]
+        if isinstance(value, bool):
+            out["include_delivered"] = value
+        elif isinstance(value, (int, float)):
+            out["include_delivered"] = bool(value)
+        elif isinstance(value, str):
+            low = value.strip().lower()
+            if low in ("1", "true", "yes", "on"):
+                out["include_delivered"] = True
+            elif low in ("0", "false", "no", "off", ""):
+                out["include_delivered"] = False
+            else:
+                frappe.throw("include_delivered must be boolean", frappe.ValidationError)
+        else:
+            frappe.throw("include_delivered must be boolean", frappe.ValidationError)
+
+    limit = filters.get("limit", DEFAULT_LIMIT)
+    if limit in (None, ""):
+        limit = DEFAULT_LIMIT
+    try:
+        limit = int(limit)
+    except Exception:
+        frappe.throw("limit must be an integer", frappe.ValidationError)
+    if limit < 1 or limit > MAX_LIMIT:
+        frappe.throw("limit must be between 1 and %d" % MAX_LIMIT, frappe.ValidationError)
+
+    offset = filters.get("offset", 0) or 0
+    try:
+        offset = int(offset)
+    except Exception:
+        frappe.throw("offset must be an integer", frappe.ValidationError)
+    if offset < 0:
+        frappe.throw("offset must be >= 0", frappe.ValidationError)
+
+    out["limit"] = limit
+    out["offset"] = offset
+    return out
+
+
+def _pagination(filters, returned, total, cursor=None):
+    offset = filters["offset"]
+    limit = filters["limit"]
+    exhausted = offset + returned >= total
+    next_offset = None if exhausted else offset + returned
+    return {
+        "limit": limit,
+        "offset": offset,
+        "returned": returned,
+        "total": total,
+        "next_offset": next_offset,
+        "next_cursor": cursor if next_offset is not None else None,
+        "exhausted": exhausted,
+        "partial": not exhausted,
+        "termination_reason": "exhausted" if exhausted else "page_limit",
+        "sort": list(SORT_KEYS),
+        "unique_key": "so_line",
+    }
+
+
 def load_lines(filters):
     conditions = ["so.docstatus <= 2"]
     values = {}
@@ -695,13 +811,16 @@ def load_lines(filters):
             conditions.append("%s = %%(%s)s" % (column, field))
             values[field] = filters[field]
     if filters.get("from_date"):
-        so_filters.append(["transaction_date", ">=", filters.from_date])
+        so_filters.append(["transaction_date", ">=", filters["from_date"]])
         conditions.append("so.transaction_date >= %(from_date)s")
-        values["from_date"] = filters.from_date
+        values["from_date"] = filters["from_date"]
     if filters.get("to_date"):
-        so_filters.append(["transaction_date", "<=", filters.to_date])
+        so_filters.append(["transaction_date", "<=", filters["to_date"]])
         conditions.append("so.transaction_date <= %(to_date)s")
-        values["to_date"] = filters.to_date
+        values["to_date"] = filters["to_date"]
+    if filters.get("so_line"):
+        conditions.append("soi.name = %(so_line)s")
+        values["so_line"] = filters["so_line"]
     if not filters.get("include_delivered"):
         conditions.append("(soi.qty - soi.delivered_qty) > 0")
     permitted = [row.name for row in frappe.get_list(
@@ -709,15 +828,21 @@ def load_lines(filters):
     total = frappe.db.count("Sales Order", filters=so_filters)
     restricted = total > len(permitted)
     if not permitted:
-        return [], restricted
+        return [], restricted, 0
     conditions.append("so.name in %(permitted)s")
     values["permitted"] = tuple(permitted)
+    count_sql = (
+        "select count(*) as total from `tabSales Order` so "
+        "join `tabSales Order Item` soi on soi.parent = so.name "
+        "where " + " and ".join(conditions))
+    count_rows = frappe.db.sql(count_sql, values, as_dict=True) or []
+    total_lines = int((count_rows[0] or {}).get("total") or 0)
     fba_expr = ("ifnull(soi.custom_fba_sku, '')"
                 if frappe.db.has_column("Sales Order Item", "custom_fba_sku") else "''")
     order = "order by so.name, soi.idx"
     if filters.get("limit"):
         order += " limit %(limit)s offset %(offset)s"
-        values["limit"] = int(filters.limit)
+        values["limit"] = int(filters["limit"])
         values["offset"] = int(filters.get("offset") or 0)
     rows = frappe.db.sql(
         f"""select so.name as so, so.status as so_status, so.docstatus as so_docstatus,
@@ -731,7 +856,7 @@ def load_lines(filters):
             join `tabSales Order Item` soi on soi.parent = so.name
             where {' and '.join(conditions)}
             {order}""", values, as_dict=True)
-    return rows, restricted
+    return rows, restricted, total_lines
 
 
 def load_pps(lines):
@@ -928,11 +1053,9 @@ def _permission_flags():
 
 
 @frappe.whitelist()
-def get_supply_facts(filters=None):
+def get_supply_facts(filters=None, **kwargs):
     """Batch machine entry: SO lines → stage balances, milestones, tranches, links."""
-    if isinstance(filters, str):
-        filters = json.loads(filters or "{}")
-    filters = frappe._dict(filters or {})
+    filters = _normalize_filters(filters, kwargs)
     if not frappe.has_permission("Sales Order", "read"):
         frappe.throw("No permission for Sales Order", frappe.PermissionError)
     try:
@@ -945,9 +1068,7 @@ def get_supply_facts(filters=None):
     as_of = requested_day
     observed_at = now_datetime()
     permissions = _permission_flags()
-    lines, so_restricted = load_lines(filters)
-    if filters.get("so_line"):
-        lines = [l for l in lines if l.so_line == filters.so_line]
+    lines, so_restricted, total_lines = load_lines(filters)
     if not lines:
         external = {
             "tongtool_po": "not_integrated",
@@ -955,24 +1076,30 @@ def get_supply_facts(filters=None):
             "warehouse_receipt": "not_integrated",
         }
         empty_reason = "all_restricted" if so_restricted else "no_matching_lines"
+        pagination = _pagination(filters, 0, 0)
+        applied = {k: v for k, v in filters.items() if k not in ("limit", "offset")}
         coverage = {
-            "sales_orders": 0, "so_lines": 0, "sources": permissions,
+            "sales_orders": 0, "so_lines": 0, "so_lines_total": 0, "sources": permissions,
             "restricted": {"sales_order": so_restricted},
             "external_sources": external, "observed_at": _iso(observed_at),
             "empty_reason": empty_reason,
         }
         notes = ["empty_result: " + empty_reason,
                  "external sources not integrated: tongtool_po, receipt, warehouse_receipt"]
-        manifest = build_manifest(as_of=as_of, scope={k: v for k, v in filters.items()},
+        manifest = build_manifest(as_of=as_of, scope=dict(filters),
                                   lines=[], facts=[], coverage=coverage,
                                   counts={"input": 0, "output": 0},
                                   partial=True, notes=notes)
         manifest["observed_at"] = _iso(observed_at)
+        manifest["pagination"] = pagination
+        manifest["truncated"] = pagination["partial"]
+        manifest["termination_reason"] = pagination["termination_reason"]
         return {
             "schema_version": SCHEMA_VERSION, "rule_version": RULE_VERSION,
             "implementation_version": IMPLEMENTATION_VERSION,
             "as_of": str(as_of), "lines": [], "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [], "manifest": manifest,
+            "applied_filters": applied, "pagination": pagination,
         }
 
     pps, pp_restricted = (load_pps(lines) if permissions["production_plan"] else ({}, False))
@@ -1034,6 +1161,15 @@ def get_supply_facts(filters=None):
             "observed_at": observed_at,
         }))
 
+    stage_filter = filters.get("stage")
+    if stage_filter:
+        for fact in facts:
+            fact["stage_balances"] = [
+                row for row in fact["stage_balances"] if row["stage"] == stage_filter]
+            fact["availability_schedule"] = [
+                row for row in fact["availability_schedule"]
+                if row.get("stage") == stage_filter]
+
     counts = {
         "input": len(lines), "output": len(facts),
         "stage_balances": sum(len(f["stage_balances"]) for f in facts),
@@ -1043,6 +1179,7 @@ def get_supply_facts(filters=None):
     }
     coverage = {
         "sales_orders": len({l.so for l in lines}), "so_lines": len(lines),
+        "so_lines_total": total_lines,
         "delivery_notes": len(dn_names), "shipments": len(shipment_by_number),
         "sources": permissions, "restricted": restricted,
         "source_timestamps": {"sales_order": _iso(observed_at)},
@@ -1053,12 +1190,19 @@ def get_supply_facts(filters=None):
             "warehouse_receipt": "not_integrated",
         },
     }
+    pagination = _pagination(filters, len(lines), total_lines,
+                             cursor=lines[-1].so_line if lines else None)
+    applied = {k: v for k, v in filters.items() if k not in ("limit", "offset")}
     manifest = build_manifest(
-        as_of=as_of, scope={k: v for k, v in filters.items()},
+        as_of=as_of, scope=dict(filters),
         lines=[f["line"] for f in facts], facts=facts,
         coverage=coverage, counts=counts, partial=partial,
         notes=partial_reasons)
     manifest["observed_at"] = _iso(observed_at)
+    manifest["pagination"] = pagination
+    manifest["truncated"] = pagination["partial"]
+    manifest["termination_reason"] = pagination["termination_reason"]
+    manifest["partial_reasons"] = list(partial_reasons)
     return {
         "schema_version": SCHEMA_VERSION, "rule_version": RULE_VERSION,
         "implementation_version": IMPLEMENTATION_VERSION,
@@ -1069,6 +1213,7 @@ def get_supply_facts(filters=None):
         "availability_schedule": [r for f in facts for r in f["availability_schedule"]],
         "links": [r for f in facts for r in f["links"]],
         "manifest": manifest,
+        "applied_filters": applied, "pagination": pagination,
     }
 
 
