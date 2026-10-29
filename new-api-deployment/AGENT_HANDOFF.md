@@ -117,6 +117,21 @@
 - **验收**: `ss -lntp | grep 3000` 必须只有 `127.0.0.1:3000`。
 - 详细复盘: `../docs/solutions/integration-issues/new-api-open-registration-exposure.md`
 
+### 问题 10：OIDC 桥 `redirect_uri` 未校验 + `SESSION_SECRET` 是弱口令（2026-10-29）
+
+- **桥接器**：`/authorize` 原本接受任意 `redirect_uri`，`/token` 不校验客户端。攻击者可把授权码
+  引到自己站点，再用该 code 换 new-api 会话，接管点开链接的员工账号。已加白名单
+  （`ALLOWED_REDIRECT_URIS`，精确匹配；默认两个真实客户端），详见
+  `../new-api-dingtalk-oidc/docs/log.md` v0.5.0。
+- **SESSION_SECRET**：生产 compose 里原本是 `new-api-session-secret-shanghai` 这种可猜的字面量。
+  gin cookie session 用它做 HMAC，secret 一旦被猜到即可伪造任意会话。已轮换为 32 字节随机值。
+  **轮换只让浏览器登录态失效，不改变任何 API 令牌（`tokens.key` 是库里的随机串）**。
+- **未做（已知项）**：
+  - `auto-bind-subscription.py` 只按 `user_oauth_bindings` 判断，不区分 provider ——
+    再加第三方登录渠道时要补过滤，否则任一新 provider 的首登用户都会自动拿到订阅与默认令牌。
+  - 主机上 `mariadbd`(3306) 与 frappe socketio(9000) 监听 `0.0.0.0`，目前靠云安全组挡住
+    （外部三地探测超时）；MariaDB 用户全为 `@localhost`。属纵深不足，建议改绑回环。
+
 ---
 
 ## 三、部署后初始化配置流程

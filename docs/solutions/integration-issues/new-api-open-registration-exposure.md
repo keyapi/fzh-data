@@ -83,6 +83,43 @@ token 无效 / 权限不足 / 用户被封时会返回 **HTTP 200 + `success:fal
 
 4. **清理**：用户 26-30 `status=2`，其令牌 `status=2`，先观察再删除。
 
+## 第二轮：交叉审核补的两处（同日）
+
+首轮修复后与 Codex 做了独立交叉审核，逐条验证后只采纳成立的部分：
+
+### 1) OIDC 桥 `redirect_uri` 未校验（真实漏洞，已修）
+
+- `/authorize` 接受任意 `redirect_uri`，`/token` 不校验客户端。
+- 攻击链：攻击者先在自己浏览器取合法 `state` → 发链接
+  `/oidc/authorize?client_id=123456&redirect_uri=https://evil&state=<攻击者的>` → 员工完成钉钉授权
+  → 授权码送到攻击者站点 → 攻击者用该 code 换 new-api 会话，**以员工身份登录**。
+- 为什么 new-api 的 state 校验挡不住：`state` 存在**攻击者自己**的会话里（`GenerateOAuthCode`），
+  所以攻击者用同一个浏览器兑换即可通过校验。
+- 修法：`redirect_uri` 精确白名单（`redirect_policy.py` + `ALLOWED_REDIRECT_URIS`），
+  默认值取自 nginx 日志里两个真实客户端：`/oauth/dingtalk` 与 `/pb/oidc-callback`。
+  实测合法地址 307、`https://evil.example/cb` 与 `dingtalk.evil.example` 均 400。
+
+### 2) `SESSION_SECRET` 是弱口令（已轮换）
+
+生产 compose 里原值是 `new-api-session-secret-shanghai` 这类可猜字面量。gin 用它给 cookie 会话做 HMAC，
+猜到即可伪造 `role=100` 的会话。已换成 32 字节随机值。
+**轮换只失效浏览器登录态，API 令牌（`tokens.key` 存库的随机串）不受影响** —— 这也是为什么可以放心轮换。
+
+### 3) 审核中判断为"不成立/暂不处理"的项
+
+| 说法 | 核实结论 |
+|------|---------|
+| OIDC 仍能自动建号 = 漏洞 | 设计如此。桥用 `getbyunionid` 60121 挡非公司成员；new-api 按 `sub=unionId` 匹配、不按 email 合并 |
+| `REQUIRE_COMPANY_MEMBER=0` 可绕过 | 理论成立；实测 env 未设 → 默认开启 |
+| `auto-bind-subscription` 未按 provider 过滤 | 属实；当前只有一个 provider，暂无利用面，新渠道上线前需补 |
+| `/api/user/reset*` 可被滥用 | 该版本没有密码重置路由 |
+| 旧会话未撤销 | 已通过轮换 `SESSION_SECRET` 一并解决；令牌在更早已全部禁用 |
+
+### 4) 顺带发现（未处理）
+
+主机上 `mariadbd`(3306)、frappe socketio(9000) 监听 `0.0.0.0`；外部三地探测均超时（云安全组挡住），
+MariaDB 用户全为 `@localhost`。属纵深不足，建议改绑回环。
+
 ## 验收命令
 
 ```bash

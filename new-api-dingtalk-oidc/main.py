@@ -30,6 +30,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from contextlib import asynccontextmanager
+
+from redirect_policy import is_redirect_uri_allowed, parse_allowed_redirect_uris
 from jwcrypto import jwk, jwt
 
 logger = logging.getLogger("new-api-dingtalk-oidc")
@@ -60,6 +62,11 @@ DB_PATH = os.getenv("DB_PATH", "/data/new-api-dingtalk-oidc.db")
 KEY_PATH = os.getenv("KEY_PATH", "/data/oidc-key.pem")
 
 REDIRECT_URI = f"{ISSUER}/callback"
+
+# 回调地址白名单。不校验 redirect_uri 时，攻击者可把授权码送到自己的站点：
+# 先用自己的浏览器取一个合法 state，再把 /authorize?redirect_uri=https://evil&state=<自己的>
+# 发给员工，员工完成钉钉授权后 code 落到攻击者手里，攻击者即可用该 code 换 new-api 会话。
+ALLOWED_REDIRECT_URIS = parse_allowed_redirect_uris(os.getenv("ALLOWED_REDIRECT_URIS"))
 
 # ── RSA Key (persisted) ─────────────────────────────────────────────
 
@@ -187,6 +194,13 @@ async def authorize(
 ):
     if response_type != "code":
         raise HTTPException(400, "only response_type=code is supported")
+
+    # 只允许白名单内的回调地址，否则授权码会被送去任意站点
+    if not is_redirect_uri_allowed(redirect_uri, ALLOWED_REDIRECT_URIS):
+        logger.warning(
+            "拒绝登录：redirect_uri 不在白名单 redirect_uri=%s client_id=%s", redirect_uri, client_id
+        )
+        return _deny_html("登录回调地址不合法，请从公司系统重新进入。", 400)
 
     # Persist OIDC state so we can resume after DingTalk callback
     state_key = secrets.token_urlsafe(32)

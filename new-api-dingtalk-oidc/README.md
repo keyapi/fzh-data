@@ -57,6 +57,7 @@ curl http://localhost:8086/.well-known/openid-configuration
 | `DINGTALK_CLIENT_SECRET` | 是 | 钉钉应用 AppSecret |
 | `ALLOWED_CORP_ID` | 推荐 | 钉钉企业 corpId。收到 `corpId` 时比对，不一致就拒绝 |
 | `REQUIRE_COMPANY_MEMBER` | 否 | **默认开启**。按组织成员判定，只放本公司钉钉通讯录里的人；出问题可临时设 `0` 关掉（只做校验日志） |
+| `ALLOWED_REDIRECT_URIS` | 推荐 | 逗号分隔的回调地址白名单。**不设也安全**：默认只放本部署的两个真实客户端。不要为了省事填 `*` 或做前缀匹配 |
 | `BIND_HOST` | 否 | 监听地址，默认 `0.0.0.0` |
 | `BIND_PORT` | 否 | 监听端口，默认 `8086` |
 | `DB_PATH` | 否 | SQLite 数据库路径，默认 `/data/new-api-dingtalk-oidc.db` |
