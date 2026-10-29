@@ -194,6 +194,40 @@ async def test_adjustments_map_and_paginate():
 
 
 @pytest.mark.anyio
+async def test_adjustment_window_drops_microseconds():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/oauth/token"):
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600})
+        calls.append(json.loads(request.content)["variables"])
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "inventoryAdjustmentList": {
+                        "pageInfo": {"pageNumber": 0, "pageSize": 100, "totalPages": 1},
+                        "nodes": [],
+                    }
+                }
+            },
+        )
+
+    from datetime import datetime, timezone
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        await WayfairClient(_config().accounts, http).query_adjustments(
+            "centrade",
+            from_date=datetime(2026, 2, 1, 10, 0, 0, 123456, tzinfo=timezone.utc),
+            to_date=datetime(2026, 2, 28, 23, 59, 59, 999999, tzinfo=timezone.utc),
+        )
+
+    interval = calls[0]["filter"]["transactionDateInterval"]
+    assert interval["from"] == "2026-02-01T10:00:00+00:00"
+    assert interval["to"] == "2026-02-28T23:59:59+00:00"
+
+
+@pytest.mark.anyio
 async def test_missing_cursor_is_an_error_not_partial_success():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/oauth/token"):

@@ -90,7 +90,7 @@ Authorization: Bearer wf-...
  "sku": "CEN-No/B-967-Linen-Beige-194"}
 ```
 
-`sku` 可省略；日期可省略。返回：
+`sku` 可省略；日期可省略。日期窗按秒下发（上游对带微秒的窗口返回 GraphQL `Unexpected failure` / ErrorCode 104）。返回：
 
 ```json
 {"items": [{

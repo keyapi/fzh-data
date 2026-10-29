@@ -116,9 +116,10 @@ def _breakdown(on_hand: dict | None) -> dict:
 
 
 def _iso(value: datetime) -> str:
+    # Wayfair rejects transaction windows with microseconds (GraphQL error 104).
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
-    return value.isoformat()
+    return value.isoformat(timespec="seconds")
 
 
 def _map_adjustment(node: dict) -> dict:
