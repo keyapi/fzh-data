@@ -20,7 +20,7 @@ scope: read-only; no production deploy; no business data writes
 | 双线进度裁决 | **终态粘性 + 否则取更晚时间**：已签收/已完结为终态，不被后续非终态人工更新覆盖；非终态按 `latest_progress_at` 更晚者胜 |
 | 时间相同、状态不同 | `conflict_flag=true`，`latest_progress_status=unknown/null`，交人工复核；不静默选 |
 | 时间缺失 | 按 §0.2 唯一决策表：单缺时间选有时间者并标 `conflict_flag=true`；双缺时间 `unknown`；终态缺时间仍按终态粘性优先 |
-| 异常状态 | 不参与排序，`unknown` + `conflict_flag=true`，保留两条原值 |
+| 异常状态 | 两条都非终态时 `unknown` + `conflict_flag=true`；若另一条是终态，终态粘性优先（§0.2） |
 | “10 个代表 SKU” | 沿用 2026-10-23 冻结名单：**9 个不同 SKU + 1 个缺额**（“有 PO·ETA 可验证”无合格样本），不补第 10 个、不替换样本 |
 
 ### 0.1 双线裁决的可执行定义
@@ -44,7 +44,7 @@ line = {
    - 只有一条有时间：选该条，但 `conflict_flag=true`；
    - 两条都没有时间：`unknown` + `conflict_flag=true`；
    - 时间相同但状态不同：`unknown` + `conflict_flag=true`；
-   - 任一条是异常状态：`unknown` + `conflict_flag=true`。
+   - 两条都非终态且任一条是异常状态：`unknown` + `conflict_flag=true`；若另一条是终态，终态粘性优先（见 §0.2）。
 3. 输出必须同时保留两条原始线（状态、事件时间、来源、来源更新时间），便于追溯。
 
 示例（用户给的歧义案例）：
@@ -73,7 +73,8 @@ B: 今天 在途    (source=manual)
 | 两条都终态；仅一条有时间 | 有时间的终态 | 该时间 | true | true（另一条缺时间） |
 | 两条都终态；都无时间且状态相同 | 该终态 | null | true | false |
 | 两条都终态；都无时间且状态不同 | `unknown` | null | false | true |
-| 任一条是异常状态 | `unknown` | null | false | true |
+| 两条都非终态；任一条异常 | `unknown` | null | false | true |
+| 一条终态 + 一条异常 | 终态 | 终态时间（无则 null） | true | true（异常不推翻终态） |
 
 补充：两条都有时间但相同、状态不同 → `unknown` + `conflict_flag=true`（见 §0.1 第 2 条）；
 两条都有时间、状态相同 → 取该状态，时间取该时间，`conflict_flag=false`。
