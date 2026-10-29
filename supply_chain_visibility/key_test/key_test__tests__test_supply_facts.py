@@ -5,6 +5,7 @@ import sys
 import types
 from pathlib import Path
 import unittest
+from unittest import mock
 
 
 class _AttrDict(dict):
@@ -94,11 +95,76 @@ def _line(**overrides):
     return line
 
 
+def _evidence_for_wos(wos, permission=True):
+    if not permission:
+        unknown = {"qty_proven": None, "qty_estimated": None,
+                   "confidence": "unknown", "reasons": ["permission"],
+                   "conflicts": [], "source_records": [],
+                   "started_at": None, "completed_at": None}
+        return {
+            "work_orders": [], "wo_count": 0,
+            "first_process_done": dict(unknown, **{"class": "first_process_done"}),
+            "all_process_done": dict(unknown, **{"class": "all_process_done"}),
+            "qc_performed": dict(unknown, **{"class": "qc_performed"}),
+            "qc_passed": dict(unknown, **{"class": "qc_passed"}),
+            "stock_in_posted": dict(unknown, **{"class": "stock_in_posted"}),
+            "conflicts": [], "source_records": [],
+        }
+    proven = est = stock = 0.0
+    unknown = False
+    reasons = []
+    starts, ends = [], []
+    for wo in wos:
+        produced = float(wo.get("produced") or 0)
+        if (wo.get("stock_uom") or "个") != "个":
+            unknown = True
+            reasons.append("unit_mismatch")
+        elif wo.get("produced_basis") == "wo_produced_qty":
+            est += produced
+        else:
+            proven += produced
+        stock += produced
+        if wo.get("jc_start"):
+            starts.append(wo["jc_start"])
+        if wo.get("jc_end"):
+            ends.append(wo["jc_end"])
+    if unknown:
+        proven = est = stock = None
+    proven_value = None if unknown or (est and not proven) else proven
+    base = {
+        "qty_proven": proven_value,
+        "qty_estimated": None if unknown else (est or None),
+        "confidence": "unknown" if unknown else
+                      ("mixed" if proven and est else ("estimated" if est else "proven")),
+        "reasons": reasons, "conflicts": [], "source_records": [],
+        "started_at": min(starts) if starts else None,
+        "completed_at": max(ends) if ends else None,
+    }
+    all_ev = dict(base, **{"class": "all_process_done",
+                           "qty_basis": "wo_produced_qty" if est and not proven
+                           else "all_process_done"})
+    return {
+        "work_orders": [], "wo_count": len(wos),
+        "first_process_done": dict(base, **{"class": "first_process_done"}),
+        "all_process_done": all_ev,
+        "qc_performed": dict(base, **{"class": "qc_performed", "qty_proven": 0.0}),
+        "qc_passed": dict(base, **{"class": "qc_passed",
+                                   "qty_proven": None, "qty_estimated": None,
+                                   "confidence": "unknown"}),
+        "stock_in_posted": dict(base, **{"class": "stock_in_posted",
+                                         "qty_proven": None if unknown else stock}),
+        "conflicts": [], "source_records": [],
+    }
+
+
 def _ctx(**overrides):
     ctx = {"pps": [], "wos": [], "dns": [], "numbers_by_dn": {}, "shipment_by_number": {},
            "dn_permission": True, "shipment_permission": True, "work_order_permission": True,
            "observed_at": "2026-10-27T10:00:00"}
     ctx.update(overrides)
+    if "evidence" not in ctx:
+        ctx["evidence"] = _evidence_for_wos(
+            ctx.get("wos") or [], ctx.get("work_order_permission", True))
     return ctx
 
 
@@ -138,7 +204,9 @@ class SupplyFactsContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.saved = {name: sys.modules.get(name)
-                     for name in ("frappe", "frappe.utils", "key_test", "key_test.supply_query")}
+                     for name in ("frappe", "frappe.utils", "key_test",
+                                  "key_test.supply_query",
+                                  "key_test.production_evidence")}
         fake = FakeFrappe()
         cls.fake = fake
         sys.modules["frappe"] = fake
@@ -159,6 +227,11 @@ class SupplyFactsContractTest(unittest.TestCase):
         cls.service = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.service)
         sys.modules["key_test.supply_query"] = cls.service
+        spec = importlib.util.spec_from_file_location(
+            "key_test.production_evidence", root / "production_evidence.py")
+        cls.evidence = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.evidence)
+        sys.modules["key_test.production_evidence"] = cls.evidence
         spec = importlib.util.spec_from_file_location("key_test_accept_supply_facts", facts)
         cls.facts = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.facts)
@@ -323,7 +396,7 @@ class SupplyFactsContractTest(unittest.TestCase):
             _line(), _ctx(wos=[_wo()], work_order_permission=False))
         unknown = [r for r in stages if r["stage"] == self.facts.STAGE_UNKNOWN]
         self.assertTrue(unknown)
-        self.assertEqual(unknown[0]["qty"], 40.0)
+        self.assertEqual(unknown[0]["qty"], 100.0)
         self.assertIn("受限", unknown[0]["exclusion_reason"])
         self.assertFalse([r for r in stages if r["stage"] == self.facts.STAGE_NOT_PLANNED])
 
@@ -867,9 +940,37 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(by_stage[self.facts.STAGE_UNKNOWN], 60.0)
         self.assertNotIn(self.facts.STAGE_NOT_PLANNED, by_stage)
 
+    def test_line_facts_carries_production_evidence(self):
+        fact = self.facts.build_line_facts(_line(), _ctx(wos=[_wo()], dns=[_dn()]))
+        self.assertEqual(fact["production_evidence"]["all_process_done"]["qty_proven"], 60.0)
+        self.assertEqual(fact["production_evidence"]["stock_in_posted"]["qty_proven"], 60.0)
+
+    def test_stock_entry_query_failure_is_not_empty_success(self):
+        with mock.patch.object(self.facts.frappe.db, "sql",
+                               side_effect=RuntimeError("boom")):
+            grouped, status = self.facts.load_stock_entries(["WO-1"])
+        self.assertEqual(grouped, {})
+        self.assertFalse(status["available"])
+        self.assertEqual(status["reason"], "query_error")
+
+    def test_stock_entry_permission_is_unavailable(self):
+        with mock.patch.object(self.facts.frappe, "has_permission", return_value=False):
+            grouped, status = self.facts.load_stock_entries(["WO-1"])
+        self.assertEqual(grouped, {})
+        self.assertFalse(status["available"])
+        self.assertEqual(status["reason"], "permission")
+
+    def test_quality_inspection_query_failure_is_not_empty_success(self):
+        with mock.patch.object(self.facts.frappe.db, "sql",
+                               side_effect=RuntimeError("boom")):
+            grouped, status = self.facts.load_quality_inspections({"JC-1": "WO-1"}, {})
+        self.assertEqual(grouped, {})
+        self.assertFalse(status["available"])
+        self.assertEqual(status["reason"], "query_error")
+
     def test_implementation_version_bumped_for_interface_change(self):
         self.assertEqual(self.facts.IMPLEMENTATION_VERSION,
-                         "key_test.supply_facts@2026-10-29.1")
+                         "key_test.supply_facts@2026-10-29.2")
 
     def test_manifest_carries_rule_and_implementation_versions(self):
         self.fake.so_rows = []

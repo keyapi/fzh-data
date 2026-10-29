@@ -12,11 +12,16 @@ from collections import defaultdict
 import frappe
 from frappe.utils import getdate, now_datetime, today
 
+from key_test.production_evidence import (
+    build_wo_evidence,
+    rollup_line_evidence,
+    unknown_line_evidence,
+)
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v1"
-RULE_VERSION = "2026-10-27.7"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-29.1"
+RULE_VERSION = "2026-10-29.3"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-29.2"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -307,42 +312,75 @@ def build_stage_balances(line, ctx):
                    if pp_units_ok else 0.0)
     pp_ok = ctx.get("production_plan_permission", True)
     wo_units_ok = all((w.get("stock_uom") or "") == uom for w in own_wos)
-    produced_estimated = any(w.get("produced_basis") == "wo_produced_qty" for w in own_wos)
-    produced_total = (sum(_num(w.get("produced")) for w in own_wos)
-                      if wo_units_ok else 0.0)
-    produced_capped = min(produced_total, _num(qty))
+    evidence = ctx.get("evidence") or {}
+    all_ev = evidence.get("all_process_done") or {}
+    first_ev = evidence.get("first_process_done") or {}
+    stock_ev = evidence.get("stock_in_posted") or {}
+    all_proven = all_ev.get("qty_proven")
+    all_est = all_ev.get("qty_estimated")
+    if all_proven is not None:
+        produced_total, produced_status = _num(all_proven), "known"
+    elif all_est is not None:
+        produced_total, produced_status = _num(all_est), "estimated"
+    else:
+        produced_total, produced_status = 0.0, "unknown"
+    all_unknown = produced_status == "unknown"
+    stock_total = stock_ev.get("qty_proven")
+    if stock_total is None and not all_unknown:
+        stock_total = produced_total
+    produced_capped = 0.0 if all_unknown else min(produced_total, _num(qty))
+    produced_basis = all_ev.get("qty_basis") or (
+        "wo_produced_qty" if produced_status == "estimated" else "all_process_done")
+    first_total = first_ev.get("qty_proven")
+    if first_total is None:
+        first_total = first_ev.get("qty_estimated") or 0.0
     wo_coverage = (min(sum(_num(w.get("qty")) for w in own_wos), _num(qty))
                    if wo_units_ok else 0.0)
-    started_wos = [w for w in own_wos
-                   if w.get("jc_start") or _num(w.get("produced")) > 1e-9]
+    started_wos = [w for w in own_wos if w.get("jc_start")]
     started_names = {w.get("wo") for w in started_wos}
     started_coverage = (min(sum(_num(w.get("qty")) for w in started_wos), _num(qty))
                         if wo_units_ok else 0.0)
+    if not started_wos and first_total > 1e-9 and wo_units_ok:
+        started_coverage = min(wo_coverage, _num(first_total))
     open_net = _num(qty) - shipped_net
-    produced_pending = max(0.0, min(produced_capped - shipped_physical, open_net))
+    produced_pending = (0.0 if all_unknown else
+                        max(0.0, min(produced_capped - shipped_physical, open_net)))
     remaining = max(0.0, open_net - produced_pending)
     if produced_pending > 1e-9:
         rows.append(_balance(line, STAGE_PRODUCED_PENDING, produced_pending, uom,
-                             detail="合格完工待出库", reason="缺出库单",
-                             qty_status="estimated" if produced_estimated else "known",
-                             qty_basis="wo_produced_qty" if produced_estimated
-                             else "job_card_first_op",
+                             detail="全工序完成待出库", reason="缺出库单",
+                             qty_status=produced_status,
+                             qty_basis=produced_basis,
                              demand_status=demand_status))
-    cumulative_excess = max(0.0, produced_total - produced_capped)
-    excess_physical = max(0.0, produced_total - max(shipped_physical, produced_capped))
+    if stock_total is not None:
+        cumulative_excess = max(0.0, stock_total - _num(qty))
+        excess_physical = max(
+            0.0, stock_total - max(shipped_physical, min(stock_total, _num(qty))))
+    else:
+        cumulative_excess = excess_physical = 0.0
     if cumulative_excess > 1e-9:
         rows.append(_balance(
             line, STAGE_OVER_PRODUCED, excess_physical, uom,
-            detail="超订单完工现存（来源完工 %g / 订单 %g / 累计超产 %g）" % (
-                produced_total, _num(qty), cumulative_excess),
+            detail="超订单完工现存（来源入库 %g / 订单 %g / 累计超产 %g）" % (
+                stock_total, _num(qty), cumulative_excess),
             source=",".join(w.get("wo") for w in own_wos),
             reason=("超订单实物现存，不计入本订单阶段余额与可售供给"
                     if excess_physical > 1e-9
                     else "累计超产异常；当前无超产实物余额，证据保留在累计字段"),
-            qty_status="estimated" if produced_estimated else "known",
-            qty_basis="wo_produced_qty" if produced_estimated else "job_card_first_op",
+            qty_status="known",
+            qty_basis="stock_in_posted",
             cumulative_excess_qty=cumulative_excess,
             demand_status="excess"))
+    if all_unknown and not cancelled and remaining > 1e-9:
+        if not ctx.get("work_order_permission"):
+            reason = "无工单读取权限（含行级受限），阶段未知"
+        elif not wo_units_ok or "unit_mismatch" in (all_ev.get("reasons") or []):
+            reason = "单位不一致或缺失，全工序证据未知"
+        else:
+            reason = "全工序证据未知，不推断为待出库/在产"
+        rows.append(_balance(line, STAGE_UNKNOWN, remaining, uom, reason=reason,
+                             demand_status=demand_status))
+        remaining = 0.0
     if not cancelled and remaining > 1e-9:
         return_gap = min(returned_total, remaining)
         if return_gap > 1e-9:
@@ -475,28 +513,37 @@ def build_milestones(line, ctx):
 
     wos = ctx.get("wos") or []
     own_wos = [w for w in wos if w.get("item_code") == line.get("item_code")]
+    evidence = ctx.get("evidence") or {}
+    first_ev = evidence.get("first_process_done") or {}
+    all_ev = evidence.get("all_process_done") or {}
+    start_total = first_ev.get("qty_proven")
+    if start_total is None:
+        start_total = first_ev.get("qty_estimated")
+    end_total = all_ev.get("qty_proven")
+    if end_total is None:
+        end_total = all_ev.get("qty_estimated")
     if own_wos:
         starts = [w["planned_start_date"] for w in own_wos if w.get("planned_start_date")]
         ends = [w["planned_end_date"] for w in own_wos if w.get("planned_end_date")]
-        jc_starts = [w["jc_start"] for w in own_wos if w.get("jc_start")]
-        jc_ends = [w["jc_end"] for w in own_wos if w.get("jc_end")]
         wo_units = {w.get("stock_uom") or "" for w in own_wos}
         wo_units_ok = wo_units == {order_uom}
-        start_total = sum(_num(w.get("qty")) for w in own_wos)
-        end_total = sum(_num(w.get("produced")) for w in own_wos)
+        start_qty = _num(start_total) if start_total is not None else None
+        end_qty = _num(end_total) if end_total is not None else None
         add("production_start", baseline=min(starts, default=None),
-            latest=min(starts, default=None), actual=min(jc_starts, default=None),
-            qty=start_total if wo_units_ok else None,
-            source="Work Order/JC",
-            note=join_notes("有计划无报工时不填实际",
-                            over_note(start_total) if wo_units_ok else "",
+            latest=min(starts, default=None),
+            actual=first_ev.get("started_at"),
+            qty=start_qty if wo_units_ok else None,
+            source="Production evidence",
+            note=join_notes("启动以首工序实际事件为准",
+                            over_note(start_qty) if start_qty is not None and wo_units_ok else "",
                             "" if wo_units_ok else unit_note(wo_units)))
         add("production_end", baseline=max(ends, default=None),
-            latest=max(ends, default=None), actual=max(jc_ends, default=None),
-            qty=end_total if wo_units_ok else None,
-            source="Work Order/JC",
-            note=join_notes("实际完工取工序卡；计划仅供延期分析",
-                            over_note(end_total) if wo_units_ok else "",
+            latest=max(ends, default=None),
+            actual=all_ev.get("completed_at"),
+            qty=end_qty if wo_units_ok else None,
+            source="Production evidence",
+            note=join_notes("完成以全工序已证事件为准",
+                            over_note(end_qty) if end_qty is not None and wo_units_ok else "",
                             "" if wo_units_ok else unit_note(wo_units)))
 
     submitted = [d for d in (ctx.get("dns") or []) if int(d.get("docstatus") or 0) == 1]
@@ -670,6 +717,7 @@ def build_line_facts(line, ctx):
         "milestones": build_milestones(line, ctx),
         "availability_schedule": build_availability(line, ctx, stage_rows),
         "links": build_links(line, ctx),
+        "production_evidence": ctx.get("evidence") or {},
     }
 
 
@@ -932,23 +980,26 @@ def load_wos(lines, pps):
     wos = [w for w in wos if w.wo in permitted]
     wo_names = [w.wo for w in wos]
     ops, jcs, tns = defaultdict(list), defaultdict(list), defaultdict(list)
+    tn_rows = defaultdict(list)
     if wo_names:
         for op in frappe.get_all("Work Order Operation",
                                  filters={"parent": ["in", wo_names]},
-                                 fields=["parent", "operation", "sequence_id", "status",
-                                         "completed_qty"]):
+                                 fields=["name", "parent", "operation", "sequence_id",
+                                         "status", "completed_qty"]):
             ops[op.parent].append(op)
         for j in frappe.get_all(
                 "Job Card",
                 filters={"work_order": ["in", wo_names], "docstatus": ["<", 2]},
-                fields=["name", "work_order", "operation", "status", "total_completed_qty",
-                        "for_quantity", "actual_start_date", "actual_end_date",
-                        "tracking_number", "docstatus"]):
+                fields=["name", "work_order", "operation_id", "operation", "status",
+                        "total_completed_qty", "for_quantity", "actual_start_date",
+                        "actual_end_date", "tracking_number", "docstatus",
+                        "quality_inspection"]):
             jcs[j.work_order].append(j)
         for t in frappe.get_all("Tracking Number",
                                 filters={"work_order": ["in", wo_names]},
-                                fields=["name", "work_order"]):
+                                fields=["name", "work_order", "qty"]):
             tns[t.work_order].append(t.name)
+            tn_rows[t.work_order].append(t)
     corrective = {r.name for r in frappe.get_all(
         "Operation", filters={"is_corrective_operation": 1}, fields=["name"])}
     grouped = defaultdict(list)
@@ -972,11 +1023,111 @@ def load_wos(lines, pps):
             "jc_start": min(starts) if starts else None,
             "jc_end": max(ends) if ends else None,
             "tracking_numbers": tns.get(wo.wo, []),
+            "tracking_number_rows": list(tn_rows.get(wo.wo, [])),
+            "operations": [
+                {"name": op.name, "operation": op.operation,
+                 "sequence_id": op.sequence_id,
+                 "is_corrective_operation": op.operation in corrective,
+                 "work_order": wo.wo}
+                for op in ops.get(wo.wo, [])
+            ],
+            "job_cards": list(jcs.get(wo.wo, [])),
             "link_proof": ("wo.sales_order_item" if wo.sales_order_item else
                            "wo.fg_sales_order_item" if wo.fg_sales_order_item else
                            "ppi.sales_order_item"),
         })
     return grouped, restricted
+
+
+def load_stock_entries(wo_names):
+    """Load Manufacture Stock Entries + finished rows with permission completeness."""
+    status = {"available": True, "reason": ""}
+    if not wo_names:
+        return {}, status
+    if not frappe.has_permission("Stock Entry", "read"):
+        return {}, {"available": False, "reason": "permission"}
+    try:
+        candidates = frappe.db.sql(
+            """select name, work_order, docstatus, ifnull(is_return, 0) as is_return,
+                      posting_date, posting_time, outgoing_stock_entry
+               from `tabStock Entry`
+               where work_order in %(wos)s and purpose = 'Manufacture'
+                 and docstatus in (0, 1, 2)""",
+            {"wos": tuple(wo_names)}, as_dict=True)
+        names = [row.name for row in candidates]
+        permitted = {row.name for row in frappe.get_list(
+            "Stock Entry", filters=[["name", "in", names],
+                                    ["docstatus", "in", (0, 1, 2)]],
+            fields=["name"], limit_page_length=0)} if names else set()
+        if set(names) != permitted:
+            return {}, {"available": False, "reason": "permission"}
+        details = frappe.get_all(
+            "Stock Entry Detail", filters={"parent": ["in", names]},
+            fields=["name", "parent", "is_finished_item", "item_code", "qty",
+                    "uom", "stock_uom", "t_warehouse", "batch_no",
+                    "stock_tracking_number", "against_stock_entry"]) if names else []
+        items_by_parent = defaultdict(list)
+        for detail in details:
+            items_by_parent[detail.parent].append({
+                "name": detail.name, "is_finished_item": detail.is_finished_item,
+                "item_code": detail.item_code, "qty": detail.qty,
+                "uom": detail.uom, "stock_uom": detail.stock_uom,
+                "t_warehouse": detail.t_warehouse, "batch_no": detail.batch_no,
+                "stock_tracking_number": detail.stock_tracking_number,
+                "against_stock_entry": detail.against_stock_entry,
+            })
+        grouped = defaultdict(list)
+        for row in candidates:
+            grouped[row.work_order].append({
+                "name": row.name, "work_order": row.work_order,
+                "purpose": "Manufacture", "stock_entry_type": "Manufacture",
+                "docstatus": row.docstatus, "is_return": row.is_return,
+                "posting_date": row.posting_date, "posting_time": row.posting_time,
+                "outgoing_stock_entry": row.outgoing_stock_entry,
+                "items": items_by_parent.get(row.name, []),
+            })
+        return grouped, status
+    except Exception as exc:  # noqa: BLE001
+        return {}, {"available": False, "reason": "query_error", "error": str(exc)}
+
+
+def load_quality_inspections(jc_to_wo, se_to_wo):
+    """Load QIs by Job Card / Stock Entry reference with permission completeness."""
+    status = {"available": True, "reason": ""}
+    names = sorted(set(jc_to_wo) | set(se_to_wo))
+    if not names:
+        return {}, status
+    if not frappe.has_permission("Quality Inspection", "read"):
+        return {}, {"available": False, "reason": "permission"}
+    try:
+        candidates = frappe.db.sql(
+            """select name, docstatus, status, reference_type, reference_name,
+                      item_code, sample_size, stock_tracking_number, report_date
+               from `tabQuality Inspection`
+               where reference_name in %(names)s and docstatus = 1""",
+            {"names": tuple(names)}, as_dict=True)
+        permitted = {row.name for row in frappe.get_list(
+            "Quality Inspection", filters=[["name", "in", [r.name for r in candidates]]],
+            fields=["name"], limit_page_length=0)} if candidates else set()
+        if {row.name for row in candidates} != permitted:
+            return {}, {"available": False, "reason": "permission"}
+        grouped = defaultdict(list)
+        for row in candidates:
+            work_order = (jc_to_wo.get(row.reference_name)
+                          or se_to_wo.get(row.reference_name))
+            if work_order:
+                grouped[work_order].append({
+                    "name": row.name, "docstatus": row.docstatus,
+                    "status": row.status, "reference_type": row.reference_type,
+                    "reference_name": row.reference_name,
+                    "item_code": row.item_code, "sample_size": row.sample_size,
+                    "stock_tracking_number": row.stock_tracking_number,
+                    "report_date": row.report_date,
+                    "coverage_qty": None,
+                })
+        return grouped, status
+    except Exception as exc:  # noqa: BLE001
+        return {}, {"available": False, "reason": "query_error", "error": str(exc)}
 
 
 def load_dns(lines):
@@ -1057,6 +1208,9 @@ def _permission_flags():
         "work_order": frappe.has_permission("Work Order", "read"),
         "production_plan": frappe.has_permission("Production Plan", "read"),
         "shipment": frappe.has_permission("Shipment", "read"),
+        "job_card": frappe.has_permission("Job Card", "read"),
+        "stock_entry": frappe.has_permission("Stock Entry", "read"),
+        "quality_inspection": frappe.has_permission("Quality Inspection", "read"),
     }
 
 
@@ -1112,7 +1266,8 @@ def get_supply_facts(filters=None, **kwargs):
             "schema_version": SCHEMA_VERSION, "rule_version": RULE_VERSION,
             "implementation_version": IMPLEMENTATION_VERSION,
             "as_of": str(as_of), "lines": [], "stage_balances": [], "milestones": [],
-            "availability_schedule": [], "links": [], "manifest": manifest,
+            "availability_schedule": [], "links": [], "production_evidence": [],
+            "manifest": manifest,
             "applied_filters": applied, "pagination": pagination,
         }
 
@@ -1146,6 +1301,52 @@ def get_supply_facts(filters=None, **kwargs):
     dn_ok = permissions["delivery_note"] and not dn_restricted
     wo_ok = permissions["work_order"] and not wo_restricted
     ship_ok = permissions["shipment"] and not ship_restricted
+    wo_names_all = sorted({wo["wo"] for values in wos.values() for wo in values})
+    jc_to_wo = {jc.get("name"): wo["wo"] for values in wos.values()
+                for wo in values for jc in wo.get("job_cards", [])}
+    stock_by_wo, stock_status = (
+        load_stock_entries(wo_names_all) if permissions["stock_entry"]
+        else ({}, {"available": False, "reason": "permission"}))
+    se_to_wo = {entry.get("name"): wo_name
+                for wo_name, entries in stock_by_wo.items()
+                for entry in entries}
+    qc_by_wo, qc_status = (
+        load_quality_inspections(jc_to_wo, se_to_wo)
+        if permissions["quality_inspection"]
+        else ({}, {"available": False, "reason": "permission"}))
+    process_available = wo_ok and permissions["job_card"]
+    evidence_by_line = {}
+    if not process_available:
+        for line in lines:
+            evidence_by_line[line.so_line] = unknown_line_evidence("permission")
+    else:
+        for line in lines:
+            wo_evidence = []
+            for wo in wos.get(line.so_line, []):
+                wo_evidence.append(build_wo_evidence(
+                    {"name": wo["wo"], "qty": wo["qty"],
+                     "stock_uom": wo["stock_uom"],
+                     "production_item": wo["item_code"],
+                     "docstatus": wo["docstatus"]},
+                    wo.get("operations", []), wo.get("job_cards", []),
+                    wo.get("tracking_number_rows", []),
+                    stock_by_wo.get(wo["wo"], []),
+                    qc_by_wo.get(wo["wo"], []),
+                    order_uom=line.uom,
+                    availability={
+                        "job_cards": process_available,
+                        "work_order": process_available,
+                        "stock_entries": stock_status["available"],
+                        "quality_inspections": qc_status["available"],
+                    },
+                    observed_at=_iso(observed_at)))
+            evidence_by_line[line.so_line] = rollup_line_evidence(wo_evidence)
+    if not stock_status["available"]:
+        partial_reasons.append("stock entry source unavailable: "
+                               + stock_status.get("reason", "unknown"))
+    if not qc_status["available"]:
+        partial_reasons.append("quality inspection source unavailable: "
+                               + qc_status.get("reason", "unknown"))
     for line in lines:
         ctx_dns = [d for d in dns.get(line.so_line, []) if d.so_line == line.so_line]
         line_numbers = []
@@ -1172,6 +1373,9 @@ def get_supply_facts(filters=None, **kwargs):
             "shipment_permission": ship_ok,
             "work_order_permission": wo_ok,
             "production_plan_permission": permissions["production_plan"] and not pp_restricted,
+            "evidence": evidence_by_line.get(line.so_line),
+            "evidence_source_status": {"stock_entry": stock_status,
+                                       "quality_inspection": qc_status},
             "observed_at": observed_at,
         }))
 
@@ -1226,6 +1430,11 @@ def get_supply_facts(filters=None, **kwargs):
         "milestones": [r for f in facts for r in f["milestones"]],
         "availability_schedule": [r for f in facts for r in f["availability_schedule"]],
         "links": [r for f in facts for r in f["links"]],
+        "production_evidence": [
+            dict({"so": f["line"]["so"], "so_line": f["line"]["so_line"]},
+                 **(f.get("production_evidence") or {}))
+            for f in facts
+        ],
         "manifest": manifest,
         "applied_filters": applied, "pagination": pagination,
     }

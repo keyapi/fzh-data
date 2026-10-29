@@ -72,11 +72,15 @@ class LogisticsDialogContractTest(unittest.TestCase):
     def setUpClass(cls):
         cls.saved_modules = {
             name: sys.modules.get(name)
-            for name in ("frappe", "frappe.utils", "key_test", "key_test.supply_query", "key_test.so_chain")
+            for name in ("frappe", "frappe.utils", "key_test", "key_test.supply_query",
+                         "key_test.production_evidence", "key_test.supply_facts",
+                         "key_test.so_chain")
         }
         cls.fake_frappe = FakeFrappe()
         sys.modules["frappe"] = cls.fake_frappe
-        sys.modules["frappe.utils"] = types.SimpleNamespace(getdate=lambda x: x, today=lambda: "2026-10-27")
+        sys.modules["frappe.utils"] = types.SimpleNamespace(
+            getdate=lambda x: x, today=lambda: "2026-10-27",
+            now_datetime=lambda: "2026-10-27 10:00:00")
         root = Path(__file__).parents[1]
         service_path = root / "supply_query.py"
         chain_path = root / "so_chain.py"
@@ -90,6 +94,15 @@ class LogisticsDialogContractTest(unittest.TestCase):
         cls.service = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.service)
         sys.modules["key_test.supply_query"] = cls.service
+        spec = importlib.util.spec_from_file_location(
+            "key_test.production_evidence", root / "production_evidence.py")
+        cls.evidence = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.evidence)
+        sys.modules["key_test.production_evidence"] = cls.evidence
+        spec = importlib.util.spec_from_file_location("key_test.supply_facts", root / "supply_facts.py")
+        cls.facts = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.facts)
+        sys.modules["key_test.supply_facts"] = cls.facts
         chain_spec = importlib.util.spec_from_file_location("key_test_u2_test_so_chain", chain_path)
         cls.chain = importlib.util.module_from_spec(chain_spec)
         chain_spec.loader.exec_module(cls.chain)
@@ -170,6 +183,24 @@ class LogisticsDialogContractTest(unittest.TestCase):
         result = self.chain.get_so_line_logistics("SO-1", "SOI-1")
         self.assertEqual(result["dns"], [])
         self.assertTrue(result["permissions"]["delivery_note"])
+
+    def test_completion_state_unknown_is_not_completed(self):
+        evidence = {"all_process_done": {"qty_proven": None, "confidence": "unknown"},
+                    "stock_in_posted": {"qty_proven": None, "confidence": "unknown"}}
+        self.assertEqual(self.chain.completion_state(evidence, 10, False),
+                         (False, "unknown"))
+        self.assertEqual(self.chain.completion_state(evidence, 10, True),
+                         (False, "unknown"))
+
+    def test_completion_state_uses_all_process_or_stock(self):
+        evidence = {"all_process_done": {"qty_proven": 10, "confidence": "proven"},
+                    "stock_in_posted": {"qty_proven": 10, "confidence": "proven"}}
+        self.assertEqual(self.chain.completion_state(evidence, 10, False),
+                         (True, "complete"))
+        self.assertEqual(self.chain.completion_state(evidence, 10, True),
+                         (True, "complete"))
+        self.assertEqual(self.chain.completion_state(evidence, 11, False),
+                         (False, "partial"))
 
 
 if __name__ == "__main__":

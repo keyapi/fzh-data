@@ -5,7 +5,7 @@ title: 第三步：四类生产证据的权威来源、数量推导与验收矩�
 date: 2026-10-29
 updated: 2026-10-29
 owner: claude-worker
-status: batch-1-evidence-layer-implemented-locally; consumers not switched; no production deploy; step-2 permission acceptance still pending
+status: batch-2-consumers-integrated-locally; no production deploy; step-2 permission acceptance still pending
 scope: read-only; test-station evidence only; no business data writes; no permission expansion
 tags: [supply-chain, production-evidence, job-card, stock-entry, quality-inspection, work-order, acceptance]
 ---
@@ -449,3 +449,24 @@ SQL
 - 未部署生产、未写业务数据、未扩权；第二步权限待验项独立保留。
 - 下一批（待 Codex 审核）：接入阶段余额/旧查询/人工视图，bump 规则与实现版本，
   回归第二步接口、分页与导出保护；保持 `qc_passed.qty=unknown`。
+
+## 12. 实现状态（第二批消费者接入，2026-10-29）
+
+- key_test 提交 `60b121a`：`supply_facts` / `so_chain` / `sales_order.js` 共用
+  `production_evidence`；不再各自计算完工量。
+- 加载：保留 WO/路由/JC/菲号/SE/QI 原始身份与关联；Stock Entry、Quality Inspection
+  按权限读取，查询失败或行级受限返回 `available=false`，由证据层转 `unknown`，不伪装为空记录。
+- 消费者：
+  - `supply_facts` 输出每行 `production_evidence`；`produced_pending_dn` 只取全工序 proven；
+    estimated/unknown 不抬高已证；QC/入库净额独立。
+  - `so_chain` 主表改为“全工序 / 入库净额”；阶段 3 仅在全工序 proven ≥ 订单量时出现；
+    `completed` 不再由 `WO.status/produced_qty` 直接推导，unknown 不会变成 true。
+  - 人工视图列名/提示/阶段文案同步；`produced_pending_dn` 显示“全工序完成待出库”。
+- 版本：`RULE_VERSION=2026-10-29.3`，`IMPLEMENTATION_VERSION=key_test.supply_facts@2026-10-29.2`。
+- 回归：
+  - key_test 全量 **195 passed / 3 skipped / 4 subtests**；
+  - 导出器测试 **21 passed**；`supply_chain_visibility` 全量 **98 passed + 5 subtests**。
+- 差异报告（本地 gitignore，不提交）：
+  `EN_API/out/supply_facts/_acceptance/step3_batch2_diff.md`。
+- 未部署生产、未写业务数据、未扩权、未合并 main；第二步权限待验项独立保留。
+- 待 Codex 审核后再安排测试站验证；第四至第六步不启动。
