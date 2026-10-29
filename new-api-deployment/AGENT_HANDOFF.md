@@ -266,6 +266,23 @@ POST /api/subscription/admin/users/{user_id}/subscriptions
 GET /api/subscription/admin/users/{user_id}/subscriptions
 ```
 
+### 重置用户「今日额度」：`reset-user-quota.py`
+
+后台路径是「用户管理 → 用户行『更多』→ 订阅管理 → 作废 → 选套餐 → 新增订阅」；
+命令行等价操作（**走官方管理接口，不直接改表**）：
+
+```bash
+cd /opt/new-api
+python3 reset-user-quota.py --init-token      # 首次：为 root 生成管理令牌写入 .secrets.env
+python3 reset-user-quota.py --user 高琪 --dry-run   # 只看会作废哪条、按什么套餐新建
+python3 reset-user-quota.py --user 高琪             # 作废当前订阅 + 按原套餐新建
+python3 reset-user-quota.py --user 7 --plan 3       # 换成 Daily-50 重置
+```
+
+- 令牌 `NEW_API_ADMIN_TOKEN` 就是 root 的 `users.access_token`，等同 root 权限，`.secrets.env` 必须 600。
+- 只让「作废」然后等一分钟也行：`auto-bind-subscription.py` 会自动补一个 **Daily-20**；
+  但用户原套餐是 Daily-30/50 时会被降成 20，所以脚本默认沿用原套餐。
+
 ### 重置周期有效值
 - `"never"` — 不重置
 - `"daily"` — 每天
@@ -391,6 +408,14 @@ MYSQL "UPDATE options SET value='{\"...\":...}' WHERE \`key\`='ModelRatio';"
 ```
 
 > **⚠️ 凭证安全**: 曾误将 MySQL root 密码与钉钉 APP_SECRET 硬编码进脚本并提交到公开仓库（PR 审查发现）。修复后脚本统一从 `/opt/new-api/.secrets.env` 读取（`MYSQL_ROOT_PASSWORD`、`DINGTALK_APP_KEY`、`DINGTALK_APP_SECRET`）。新脚本禁止硬编码凭证。
+>
+> **2026-10-29 起生产 compose 不再内联明文**：4 个服务统一用 `env_file: .secrets.env`，
+> 搬进去的是 `SQL_DSN`、`SESSION_SECRET`、`MYSQL_ROOT_PASSWORD`、`MYSQL_PASSWORD`、
+> `DINGTALK_CLIENT_ID/SECRET`、`SELLFOX_APP_ID/SECRET`、`ADMIN_API_KEY`、`NEW_API_ADMIN_TOKEN`。
+> 只搬位置、未轮换值（`SESSION_SECRET` 除外，见问题 10）。注意两点：
+> - `docker inspect` 仍能看到明文 —— `env_file` 防的是明文进 git 和被随手 cat，不是加密。
+> - `SQL_DSN` 含 `()` 和 `&`，在 `.secrets.env` 里**必须加单引号**，否则 `source` 会报语法错误；
+>   compose 会剥掉引号，取值不变。其它键不要加引号——cron 脚本按 `split("=")` 读，会连引号一起带走。
 
 本地 SQLite 写法参考（历史，仅本地开发）：`docker exec new-api sqlite3 /data/one-api.db "..."`，Git Bash 需 `MSYS2_ARG_CONV_EXCL="*"` 前缀。
 
@@ -410,6 +435,18 @@ MSYS2_ARG_CONV_EXCL="*" docker exec -it new-api bash
 
 # 复制文件到容器
 docker cp 本地文件路径 new-api:/tmp/
+```
+
+### 主机防火墙（2026-10-29 加）
+
+公网网卡 `eth0` 上 DROP 了 `3306`（host MariaDB）与 `9000`（frappe socketio），
+本机回环与 Tailscale 不受影响；规则已 `netfilter-persistent save` 持久化。
+
+```bash
+iptables -S INPUT | grep "dports 3306,9000"
+# 撤销：iptables -D INPUT -i eth0 -p tcp -m multiport --dports 3306,9000 -j DROP
+#       ip6tables -D INPUT -i eth0 -p tcp -m multiport --dports 3306,9000 -j DROP
+#       netfilter-persistent save
 ```
 
 ---
