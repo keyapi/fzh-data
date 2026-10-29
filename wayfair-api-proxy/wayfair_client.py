@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
@@ -23,6 +23,10 @@ MAX_PAGES = 100
 # inventoryAdjustmentList uses a 0-based page number.
 ADJUSTMENT_PAGE_SIZE = 100
 MAX_ADJUSTMENT_PAGES = 100
+# inventoryTransferList uses a 1-based page number.
+TRANSFER_PAGE_SIZE = 200
+MAX_TRANSFER_PAGES = 50
+WAREHOUSE_LOOKBACK_DAYS = 1095
 
 INVENTORY_QUERY = """
 query($supplierId: Int!, $filter: InventoryFilterInput, $page: InventoryPageInput) {
@@ -80,6 +84,18 @@ query($supplierId: Int!, $filter: InventoryAdjustmentFilterInput, $page: Invento
       quantity
       warehouse { warehouseId name }
       description
+    }
+  }
+}
+"""
+
+TRANSFER_QUERY = """
+query($supplierId: Int!, $filter: InventoryTransferFilterInput, $page: InventoryTransferPageInput) {
+  inventoryTransferList(supplierId: $supplierId, filter: $filter, page: $page) {
+    pageInfo { pageNumber pageSize }
+    nodes {
+      originWarehouse { warehouseId name }
+      destinationWarehouse { warehouseId name }
     }
   }
 }
@@ -392,6 +408,57 @@ class WayfairClient:
             raise UpstreamUnavailable("Wayfair pagination exceeded the safety limit")
 
         return rows, datetime.now(timezone.utc)
+
+    async def query_warehouse_names(
+        self,
+        account: str,
+        *,
+        lookback_days: int = WAREHOUSE_LOOKBACK_DAYS,
+    ) -> tuple[list[dict], datetime]:
+        """Harvest warehouse id→name pairs; no dedicated warehouse-list query exists."""
+        account_config = self._require(account)
+        if account_config.supplier_id is None:
+            raise CapabilityUnavailable("supplier_id is not configured")
+
+        now = datetime.now(timezone.utc)
+        variables: dict = {
+            "supplierId": account_config.supplier_id,
+            "filter": {
+                "transferStartDateInterval": {
+                    "from": _iso(now - timedelta(days=lookback_days)),
+                    "to": _iso(now),
+                }
+            },
+        }
+        names: dict[str, str] = {}
+        page_number = 1
+        while page_number <= MAX_TRANSFER_PAGES:
+            result = await self._query_page(
+                account,
+                account_config,
+                TRANSFER_QUERY,
+                {**variables, "page": {"page": page_number, "pageSize": TRANSFER_PAGE_SIZE}},
+                "inventoryTransferList",
+            )
+            nodes = result.get("nodes") or []
+            for node in nodes:
+                for key in ("originWarehouse", "destinationWarehouse"):
+                    warehouse = node.get(key) or {}
+                    warehouse_id = warehouse.get("warehouseId")
+                    name = warehouse.get("name")
+                    if warehouse_id is not None and name:
+                        names[str(warehouse_id)] = name
+            if len(nodes) < TRANSFER_PAGE_SIZE:
+                break
+            page_number += 1
+        else:
+            raise UpstreamUnavailable("Wayfair pagination exceeded the safety limit")
+
+        rows = [
+            {"warehouse_id": int(warehouse_id), "warehouse_name": name}
+            for warehouse_id, name in sorted(names.items())
+        ]
+        return rows, now
 
     async def query_inbound(self, account: str, skus: list[str] | None = None):
         raise CapabilityUnavailable(

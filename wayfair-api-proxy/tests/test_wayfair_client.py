@@ -228,6 +228,51 @@ async def test_adjustment_window_drops_microseconds():
 
 
 @pytest.mark.anyio
+async def test_warehouse_names_harvested_from_transfers():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/oauth/token"):
+            return httpx.Response(200, json={"access_token": "tok", "expires_in": 3600})
+        body = json.loads(request.content)
+        calls.append(body["variables"])
+        page = body["variables"]["page"]["page"]
+        nodes = (
+            [
+                {
+                    "originWarehouse": {"warehouseId": 323004, "name": "Cranbury"},
+                    "destinationWarehouse": {"warehouseId": 323005, "name": "McDonough"},
+                }
+            ]
+            if page == 1
+            else []
+        )
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "inventoryTransferList": {
+                        "pageInfo": {"pageNumber": page, "pageSize": 200},
+                        "nodes": nodes,
+                    }
+                }
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http:
+        rows, _ = await WayfairClient(_config().accounts, http).query_warehouse_names(
+            "centrade"
+        )
+
+    assert rows == [
+        {"warehouse_id": 323004, "warehouse_name": "Cranbury"},
+        {"warehouse_id": 323005, "warehouse_name": "McDonough"},
+    ]
+    # inventoryTransferList is 1-indexed.
+    assert calls[0]["page"]["page"] == 1
+
+
+@pytest.mark.anyio
 async def test_missing_cursor_is_an_error_not_partial_success():
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/oauth/token"):

@@ -21,6 +21,7 @@ tags: [wayfair, api, errors, freshness]
 | `POST /v1/accounts/{account}/inventory/query` | `inventory:snapshot:read` 或 `inventory:live:read` | 按 `mode` 二选一 |
 | `GET /v1/accounts/{account}/inventory/snapshot` | `inventory:snapshot:read` | 一次返回整份当前快照（供 EN 每日备份/转 parquet） |
 | `POST /v1/accounts/{account}/inventory/transactions/query` | `inventory:transactions:read` | 库存变动流水（实时上游，按 SKU/日期过滤） |
+| `GET /v1/accounts/{account}/inventory/warehouses` | `inventory:transactions:read` | 仓库 id→name（上游无独立清单，从调拨记录汇总，缓存 6h） |
 | `POST /v1/offboarding/owners/{owner}/deactivate` | `offboarding:deactivate` | 停用该 owner 的全部 key（离职自动撤销） |
 | `POST /v1/accounts/{account}/inbound/query` | `inbound:read` | 未验证时 501 |
 | `POST /admin/api/accounts/{account}/snapshot-runs` | `snapshot:run` | 未验证时 501 |
@@ -106,6 +107,23 @@ Authorization: Bearer wf-...
 
 `quantity` 带符号（入库为正、出库/调整损失为负）。适合 EN 模仿通途库存操作记录做
 每日变动备份；不提供当前库存。
+
+## 仓库名称
+
+```http
+GET /v1/accounts/centrade/inventory/warehouses
+Authorization: Bearer wf-...
+```
+
+```json
+{"items": [{"warehouse_id": 323004, "warehouse_name": "Cranbury"}],
+ "meta": {"source": "live", "fetched_at": "...", "...": "..."}}
+```
+
+上游没有独立的“仓库清单”查询（`legacySuppliersOrWarehousesByFilters` 本身返回
+null 报错），仓名只出现在调拨/变动的 `warehouse` 字段里。本接口回看 3 年的
+`inventoryTransferList` 汇总 id→name，缓存 6 小时；新仓在首次调拨/盘点事件后出现。
+权限复用 `inventory:transactions:read`。
 
 ## 在途查询
 

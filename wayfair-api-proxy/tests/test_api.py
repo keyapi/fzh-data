@@ -265,6 +265,32 @@ def test_transactions_require_permission(tmp_path):
     assert response.json()["detail"]["code"] == "forbidden_operation"
 
 
+def test_warehouses_are_capability_gated(tmp_path):
+    app = create_app(_config(), db_path=tmp_path / "wayfair.db")
+    with TestClient(app) as client:
+        created = _create_key(client, app, operations=["inventory:transactions:read"])
+        response = client.get(
+            "/v1/accounts/centrade/inventory/warehouses",
+            headers={"Authorization": f"Bearer {created.raw_key}"},
+        )
+
+    assert response.status_code == 501
+    assert response.json()["detail"]["code"] == "capability_unavailable"
+
+
+def test_warehouses_require_transaction_permission(tmp_path):
+    app = create_app(_config(), db_path=tmp_path / "wayfair.db")
+    with TestClient(app) as client:
+        created = _create_key(client, app, operations=["inventory:snapshot:read"])
+        response = client.get(
+            "/v1/accounts/centrade/inventory/warehouses",
+            headers={"Authorization": f"Bearer {created.raw_key}"},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "forbidden_operation"
+
+
 def test_offboarding_deactivates_all_keys_for_owner(tmp_path):
     app = create_app(_config(), db_path=tmp_path / "wayfair.db")
     with TestClient(app) as client:

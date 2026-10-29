@@ -339,6 +339,42 @@ def create_app(
         request.state.result_count = len(result.items)
         return result
 
+    @app.get("/v1/accounts/{account}/inventory/warehouses")
+    async def list_warehouses(account: str, request: Request):
+        key = await _verify_api_key(request)
+        await _authorize_route(request, key, account, INVENTORY_TRANSACTIONS_READ)
+
+        account_config = config.accounts.get(account)
+        if account_config is None:
+            raise _error(request, 404, "unknown_account", f"Unknown account '{account}'")
+        await _enforce_rate_limits(
+            request,
+            key,
+            account,
+            "warehouses",
+            account_config.live_rate_limit_rps,
+        )
+
+        try:
+            result = await request.app.state.inventory.list_warehouse_names(account)
+        except CapabilityUnavailable as exc:
+            raise _error(
+                request,
+                501,
+                exc.code,
+                f"Capability is unavailable for {account}",
+            ) from exc
+        except UpstreamError as exc:
+            raise _error(
+                request,
+                exc.status,
+                exc.code,
+                f"Upstream request failed for {account}",
+            ) from exc
+
+        request.state.result_count = len(result.items)
+        return result
+
     @app.post("/v1/offboarding/owners/{owner}/deactivate")
     async def offboard_owner(owner: str, request: Request):
         key = await _verify_api_key(request)

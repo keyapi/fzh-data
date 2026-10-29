@@ -35,6 +35,16 @@ class TransactionResponse(BaseModel):
     meta: ResponseMeta
 
 
+class InventoryWarehouse(BaseModel):
+    warehouse_id: int | None = None
+    warehouse_name: str | None = None
+
+
+class WarehouseResponse(BaseModel):
+    items: list[InventoryWarehouse]
+    meta: ResponseMeta
+
+
 class InventoryItem(BaseModel):
     sku: str
     wayfair_sku: str | None = None

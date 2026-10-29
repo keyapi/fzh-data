@@ -10,9 +10,13 @@ from models import (
     InventoryItem,
     InventoryResponse,
     InventoryTransaction,
+    InventoryWarehouse,
     ResponseMeta,
     TransactionResponse,
+    WarehouseResponse,
 )
+
+WAREHOUSE_CACHE_SECONDS = 6 * 3600
 
 
 class SnapshotStore(Protocol):
@@ -36,6 +40,7 @@ class InventoryService:
         self._live_client = live_client
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._stale_after_seconds = stale_after_seconds
+        self._warehouse_cache: dict[str, tuple[datetime, list[dict]]] = {}
 
     async def query_inventory(
         self,
@@ -137,6 +142,33 @@ class InventoryService:
                 account=account,
                 source="live",
                 fetched_at=fetched_at,
+                age_seconds=0,
+                stale=False,
+            ),
+        )
+
+    async def list_warehouse_names(self, account: str) -> WarehouseResponse:
+        account_config = self._accounts.get(account)
+        if account_config is None:
+            raise KeyError(account)
+        if not account_config.capabilities.inventory_transactions:
+            raise CapabilityUnavailable("inventory_transactions")
+        if self._live_client is None:
+            raise CapabilityUnavailable("inventory_transactions")
+
+        now = self._now()
+        cached = self._warehouse_cache.get(account)
+        if cached and (now - cached[0]).total_seconds() < WAREHOUSE_CACHE_SECONDS:
+            items = cached[1]
+        else:
+            items, _fetched_at = await self._live_client.query_warehouse_names(account)
+            self._warehouse_cache[account] = (now, items)
+        return WarehouseResponse(
+            items=[InventoryWarehouse.model_validate(item) for item in items],
+            meta=ResponseMeta(
+                account=account,
+                source="live",
+                fetched_at=now,
                 age_seconds=0,
                 stale=False,
             ),
