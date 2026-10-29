@@ -179,6 +179,9 @@ class ExportPaginationTest(unittest.TestCase):
         self.assertEqual([c["offset"] for c in calls], [0, 500])
         self.assertFalse(manifest["truncated"])
         self.assertEqual(manifest["termination_reason"], "exhausted")
+        self.assertEqual(manifest["coverage"]["sales_orders"], 1)
+        self.assertEqual(manifest["coverage"]["so_lines"], 501)
+        self.assertEqual(manifest["coverage"]["so_lines_total"], 501)
 
     def test_customer_code_501_rows_paginates_to_exhaustion(self):
         calls, lines, manifest = self._run_export(
@@ -187,6 +190,9 @@ class ExportPaginationTest(unittest.TestCase):
         self.assertEqual([c["offset"] for c in calls], [0, 500])
         self.assertFalse(manifest["truncated"])
         self.assertEqual(manifest["termination_reason"], "exhausted")
+        self.assertEqual(manifest["coverage"]["sales_orders"], 1)
+        self.assertEqual(manifest["coverage"]["so_lines"], 501)
+        self.assertEqual(manifest["coverage"]["so_lines_total"], 501)
 
     def test_paginate_rejects_stalled_offset(self):
         def fake_call(base, key, secret, filters):
@@ -218,6 +224,89 @@ class ExportPaginationTest(unittest.TestCase):
             batches, term = self.exporter._paginate("base", "k", "s", {}, 500, max_pages=2)
         self.assertEqual(len(batches), 2)
         self.assertEqual(term, "page_limit")
+
+
+    def test_paginate_rejects_gap_in_next_offset(self):
+        first = self._batch_page(501, 0, 500)
+        first["pagination"]["next_offset"] = 501  # skips line #500
+        with mock.patch.object(self.exporter, "_call", side_effect=[first]):
+            with self.assertRaises(self.exporter.iss.QueryError):
+                self.exporter._paginate("base", "k", "s", {}, 500)
+
+    def test_paginate_rejects_exhausted_with_missing_rows(self):
+        first = self._batch_page(501, 0, 500)
+        final = self._batch_page(501, 500, 500)
+        final["lines"] = []
+        final["pagination"].update({"returned": 0, "next_offset": None, "exhausted": True})
+        with mock.patch.object(self.exporter, "_call", side_effect=[first, final]):
+            with self.assertRaises(self.exporter.iss.QueryError):
+                self.exporter._paginate("base", "k", "s", {}, 500)
+
+    def test_paginate_rejects_total_change(self):
+        first = self._batch_page(501, 0, 500)
+        second = self._batch_page(501, 500, 500)
+        second["pagination"]["total"] = 502
+        with mock.patch.object(self.exporter, "_call", side_effect=[first, second]):
+            with self.assertRaises(self.exporter.iss.QueryError):
+                self.exporter._paginate("base", "k", "s", {}, 500)
+
+    def test_paginate_rejects_returned_mismatch(self):
+        first = self._batch_page(501, 0, 500)
+        first["pagination"]["returned"] = 499
+        with mock.patch.object(self.exporter, "_call", side_effect=[first]):
+            with self.assertRaises(self.exporter.iss.QueryError):
+                self.exporter._paginate("base", "k", "s", {}, 500)
+
+    def test_merge_coverage_dedupes_entities_by_identity(self):
+        target = _empty_target()
+
+        def batch(line_key):
+            item = _batch()
+            item["lines"] = [{"so": "SO-1", "so_line": line_key}]
+            item["links"] = [{
+                "source_doctype": "Delivery Note", "source_name": "DN-1",
+                "target_doctype": "Shipment", "target_name": "SHIP-1",
+            }]
+            item["pagination"] = {"total": 2}
+            item["manifest"]["coverage"] = {
+                "sales_orders": 1, "so_lines": 1, "so_lines_total": 2,
+                "delivery_notes": 1, "shipments": 1,
+            }
+            return item
+
+        self.exporter._merge(target, batch("L1"), scope_key="SO-1")
+        self.exporter._merge(target, batch("L2"), scope_key="SO-1")
+        self.exporter._finalize_coverage(target)
+        self.assertEqual(target["coverage"]["sales_orders"], 1)
+        self.assertEqual(target["coverage"]["so_lines"], 2)
+        self.assertEqual(target["coverage"]["so_lines_total"], 2)
+        self.assertEqual(target["coverage"]["delivery_notes"], 1)
+        self.assertEqual(target["coverage"]["shipments"], 1)
+        self.assertNotIn("_coverage_state", target)
+
+
+    def test_failed_pagination_preserves_latest_pointer(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            out.mkdir(parents=True, exist_ok=True)
+            old_pointer = {"run_id": "previous-success"}
+            (out / "latest.json").write_text(json.dumps(old_pointer), encoding="utf-8")
+            bad = self._batch_page(501, 0, 500)
+            bad["pagination"]["next_offset"] = 501
+            with mock.patch.object(self.exporter.iss, "load_credentials",
+                                   return_value=("k", "s")), \
+                 mock.patch.object(self.exporter.iss, "resolve_env_files",
+                                   return_value=None), \
+                 mock.patch.object(self.exporter.iss, "ENV_URLS",
+                                   {"test": "http://test"}), \
+                 mock.patch.object(self.exporter, "_call", return_value=bad):
+                rc = self.exporter.main(
+                    ["--so", "SO-1", "--test", "--page-size", "500",
+                     "--no-excel", "--out", td])
+            self.assertEqual(rc, 1)
+            self.assertEqual(json.loads((out / "latest.json").read_text(encoding="utf-8")),
+                             old_pointer)
+            self.assertFalse((out / "runs").exists())
 
 
 if __name__ == "__main__":

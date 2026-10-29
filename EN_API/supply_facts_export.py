@@ -50,11 +50,12 @@ MAX_PAGES = 200
 
 
 def _paginate(base_url, key, secret, base_filters, page_size, max_pages=MAX_PAGES):
-    """Fetch all pages for one scope; validate advancement, uniqueness and exhaustion."""
+    """Fetch all pages for one scope; validate continuity, totals and exhaustion."""
     offset = int(base_filters.get("offset") or 0)
     page = 0
     batches = []
     seen = set()
+    expected_total = None
     while page < max_pages:
         filters = dict(base_filters, limit=page_size, offset=offset)
         batch = _call(base_url, key, secret, filters)
@@ -66,16 +67,39 @@ def _paginate(base_url, key, secret, base_filters, page_size, max_pages=MAX_PAGE
             if line_key in seen:
                 raise iss.QueryError("duplicate so_line across pages: %s" % line_key)
             seen.add(line_key)
-        batches.append(batch)
         pagination = batch.get("pagination") or {}
+        if pagination:
+            if "limit" in pagination and int(pagination["limit"]) != page_size:
+                raise iss.QueryError(
+                    "pagination limit mismatch: %s != %s" % (pagination["limit"], page_size))
+            if "offset" in pagination and int(pagination["offset"]) != offset:
+                raise iss.QueryError(
+                    "pagination offset mismatch: %s != %s" % (pagination["offset"], offset))
+            if "returned" in pagination and int(pagination["returned"]) != len(lines):
+                raise iss.QueryError(
+                    "pagination returned mismatch: %s != %s"
+                    % (pagination["returned"], len(lines)))
+            if "total" in pagination:
+                total = int(pagination["total"])
+                if expected_total is None:
+                    expected_total = total
+                elif total != expected_total:
+                    raise iss.QueryError(
+                        "pagination total changed: %s != %s" % (total, expected_total))
+        batches.append(batch)
         exhausted = pagination.get("exhausted")
         if exhausted is True:
+            if expected_total is not None and len(seen) != expected_total:
+                raise iss.QueryError(
+                    "exhausted with %s unique lines, expected %s" % (len(seen), expected_total))
             return batches, "exhausted"
         if exhausted is False:
             next_offset = pagination.get("next_offset")
-            if next_offset is None or int(next_offset) <= offset:
+            expected_next = offset + len(lines)
+            if next_offset is None or int(next_offset) != expected_next:
                 raise iss.QueryError(
-                    "pagination did not advance (offset=%s next=%s)" % (offset, next_offset))
+                    "pagination gap: offset=%s rows=%s next=%s expected_next=%s"
+                    % (offset, len(lines), next_offset, expected_next))
             if not lines:
                 raise iss.QueryError("empty page before exhausted at offset %s" % offset)
             offset = int(next_offset)
@@ -83,6 +107,13 @@ def _paginate(base_url, key, secret, base_filters, page_size, max_pages=MAX_PAGE
             continue
         # Backward compatibility with a server that predates pagination metadata.
         if len(lines) < page_size:
+            if expected_total is None:
+                coverage = (batch.get("manifest") or {}).get("coverage") or {}
+                if coverage.get("so_lines_total") is not None:
+                    expected_total = int(coverage["so_lines_total"])
+            if expected_total is not None and len(seen) != expected_total:
+                raise iss.QueryError(
+                    "exhausted with %s unique lines, expected %s" % (len(seen), expected_total))
             return batches, "exhausted"
         if not lines:
             raise iss.QueryError("empty page before exhausted at offset %s" % offset)
@@ -117,15 +148,52 @@ def _check_batch_version(target, manifest):
                 "批次 %s 不一致: 收到 %s，已合并 %s" % (key, value, current))
 
 
-def _merge(target, batch):
+def _coverage_state(target):
+    state = target.get("_coverage_state")
+    if state is None:
+        state = {"so_ids": set(), "so_line_ids": set(), "dn_ids": set(),
+                 "shipment_ids": set(), "scope_totals": {}}
+        target["_coverage_state"] = state
+    return state
+
+
+def _merge(target, batch, scope_key=None):
     manifest = batch.get("manifest") or {}
     _check_batch_version(target, manifest)
+    state = _coverage_state(target)
+    for line in batch.get("lines") or []:
+        if line.get("so"):
+            state["so_ids"].add(line["so"])
+        line_key = line.get("so_line") or line.get("so_line_id")
+        if line_key:
+            state["so_line_ids"].add(line_key)
+    for link in batch.get("links") or []:
+        for side in ("source", "target"):
+            doctype = link.get(side + "_doctype")
+            name = link.get(side + "_name")
+            if not name:
+                continue
+            if doctype == "Delivery Note":
+                state["dn_ids"].add(name)
+            elif doctype == "Shipment":
+                state["shipment_ids"].add(name)
+    pagination = batch.get("pagination") or {}
+    total = pagination.get("total")
+    if total is None:
+        total = (manifest.get("coverage") or {}).get("so_lines_total")
+    if total is not None:
+        key = scope_key or (manifest.get("scope") or {}).get("sales_order") or "__all__"
+        state["scope_totals"][key] = int(total)
     for key in DATASETS:
         target[key].extend(batch.get(key) or [])
     target["partial"] = target["partial"] or bool(manifest.get("partial"))
     for key, value in (manifest.get("counts") or {}).items():
         target["counts"][key] = target["counts"].get(key, 0) + int(value or 0)
     for key, value in (manifest.get("coverage") or {}).items():
+        if key in ("sales_orders", "so_lines", "so_lines_total", "delivery_notes", "shipments"):
+            # These are recomputed by identity in _finalize_coverage; never
+            # sum per-page counts (a 501-line SO would become 1002).
+            continue
         if key == "sources":
             for name, ok in (value or {}).items():
                 target["sources"][name] = bool(target["sources"].get(name, True)) and bool(ok)
@@ -153,6 +221,24 @@ def _merge(target, batch):
     for note in manifest.get("notes") or []:
         if note not in target["notes"]:
             target["notes"].append(note)
+
+
+def _finalize_coverage(target):
+    """Replace per-page sums with identity-deduped/range totals."""
+    state = target.pop("_coverage_state", None)
+    if not state:
+        return
+    coverage = target.setdefault("coverage", {})
+    coverage["sales_orders"] = len(state["so_ids"])
+    coverage["so_lines"] = len(state["so_line_ids"])
+    coverage["so_lines_total"] = (
+        sum(state["scope_totals"].values())
+        if state["scope_totals"] else len(state["so_line_ids"])
+    )
+    if state["dn_ids"]:
+        coverage["delivery_notes"] = len(state["dn_ids"])
+    if state["shipment_ids"]:
+        coverage["shipments"] = len(state["shipment_ids"])
 
 
 def _resolve_sos(codes, base_url, key, secret):
@@ -274,7 +360,7 @@ def main(argv=None):
             batches, term = _paginate(
                 base_url, key, secret, scope_filters, args.page_size)
             for batch in batches:
-                _merge(result, batch)
+                _merge(result, batch, scope_key=label)
             rows = sum(len(batch.get("lines") or []) for batch in batches)
             print("  %s: %d 行（%s）" % (label, rows, term))
             return term
@@ -307,6 +393,7 @@ def main(argv=None):
         print("✗ 导出失败，未写入新版本: %s" % exc, file=sys.stderr)
         return 1
 
+    _finalize_coverage(result)
     query_seconds = time.perf_counter() - started
     run_id = hashlib.sha1(("%s|%s|%s|%s|%s|%s" % (
         result["as_of"], args.codes, args.so, args.all, len(result["lines"]),
