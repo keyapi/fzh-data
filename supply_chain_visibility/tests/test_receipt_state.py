@@ -157,7 +157,7 @@ class TimeClosureTests(unittest.TestCase):
         row = reconcile(
             [link(signed="2026-10-20T10:00:00+08:00")],
             [receipt(line_id="L1", qty=4, at="2026-10-25T10:00:00+08:00"),
-             receipt(line_id="L2", qty=6, at="2026-09-01T10:00:00+08:00")])[0]
+             receipt(line_id="L2", qty=6, at="2026-11-05T10:00:00+08:00")])[0]
         self.assertEqual(row["received_qty"], "4")
         self.assertEqual(row["pending_qty"], "6")
         self.assertEqual(row["receipt_completion"], "partial")
@@ -178,6 +178,76 @@ class TimeClosureTests(unittest.TestCase):
         self.assertEqual(row["coverage_status"], "complete")
         self.assertEqual(row["status"], "tongtool_received")
         self.assertEqual(row["receipt_completion"], "complete")
+
+    def test_po_full_history_cutoff_before_signed_is_incomplete(self):
+        cov = coverage()
+        cov.update({
+            "requested_windows": [],
+            "source_as_of": "2026-10-01T00:00:00+08:00",
+            "coverage_mode": "po_full_history",
+            "po_full_history_proven": True,
+            "po_full_history_source": "tongtool_receipt_history",
+            "po_full_history_as_of": "2026-10-01T00:00:00+08:00",
+        })
+        row = reconcile([link(signed="2026-10-20T10:00:00+08:00")],
+                        [receipt(qty=10, at="2026-10-25T10:00:00+08:00")],
+                        cov=cov)[0]
+        self.assertEqual(row["coverage_status"], "incomplete")
+        self.assertEqual(row["status"], "signed_pending_tongtool_receipt")
+        self.assertNotEqual(row["receipt_completion"], "complete")
+        self.assertIsNone(row["tongtool_receipt_at"])
+
+    def test_po_full_history_receipt_after_cutoff_is_not_counted(self):
+        cov = coverage()
+        cov.update({
+            "requested_windows": [],
+            "coverage_mode": "po_full_history",
+            "po_full_history_proven": True,
+            "po_full_history_source": "tongtool_receipt_history",
+            "po_full_history_as_of": "2026-10-31T00:00:00+08:00",
+        })
+        row = reconcile([link()],
+                        [receipt(qty=10, at="2026-11-05T10:00:00+08:00")],
+                        cov=cov)[0]
+        self.assertEqual(row["status"], "signed_pending_tongtool_receipt")
+        self.assertEqual(row["received_qty"], "0")
+        self.assertEqual(row["receipts_outside_coverage"], 1)
+        self.assertIsNone(row["tongtool_receipt_at"])
+
+    def test_mixed_valid_four_and_unverified_one(self):
+        row = reconcile(
+            [link()],
+            [receipt(line_id="L1", qty=4, at="2026-10-25T10:00:00+08:00"),
+             receipt(line_id="L2", qty=1, at=None)])[0]
+        self.assertEqual(row["status"], "signed_pending_tongtool_receipt")
+        self.assertEqual(row["received_qty"], "4")
+        self.assertIsNone(row["pending_qty"])
+        self.assertEqual(row["receipt_completion"], "receipt_time_unverified")
+        self.assertEqual(row["receipts_time_unverified"], 1)
+        self.assertIsNone(row["tongtool_receipt_at"])
+
+    def test_mixed_valid_ten_and_unverified_one(self):
+        row = reconcile(
+            [link()],
+            [receipt(line_id="L1", qty=10, at="2026-10-25T10:00:00+08:00"),
+             receipt(line_id="L2", qty=1, at=None)])[0]
+        self.assertEqual(row["status"], "signed_pending_tongtool_receipt")
+        self.assertEqual(row["received_qty"], "10")
+        self.assertIsNone(row["pending_qty"])
+        self.assertEqual(row["receipt_completion"], "receipt_time_unverified")
+        self.assertIsNone(row["tongtool_receipt_at"])
+
+    def test_early_receipt_outside_window_is_still_conflict(self):
+        cov = coverage()
+        cov["requested_windows"] = [{"start": "2026-10-15T00:00:00+08:00",
+                                     "end": "2026-10-31T00:00:00+08:00"}]
+        row = reconcile([link(signed="2026-10-20T10:00:00+08:00")],
+                        [receipt(qty=10, at="2026-10-10T10:00:00+08:00")],
+                        cov=cov)[0]
+        self.assertEqual(row["status"], "unknown")
+        self.assertEqual(row["exclusion_reason"], "receipt_before_signed")
+        self.assertTrue(row["receipt_conflict"])
+        self.assertEqual(row["receipts_outside_coverage"], 1)
 
 
 class SignedStatusTests(unittest.TestCase):
@@ -299,8 +369,9 @@ class StateMachineTests(unittest.TestCase):
     def test_missing_receipt_time_never_closes_or_fabricates_receipt_at(self):
         row = reconcile([link()], [receipt(qty=10, at=None)])[0]
         self.assertEqual(row["status"], "signed_pending_tongtool_receipt")
-        self.assertEqual(row["receipt_completion"], "unknown")
-        self.assertIsNone(row["received_qty"])
+        self.assertEqual(row["receipt_completion"], "receipt_time_unverified")
+        self.assertEqual(row["received_qty"], "0")
+        self.assertIsNone(row["pending_qty"])
         self.assertIsNone(row["tongtool_receipt_at"])
         self.assertEqual(row["receipt_time_status"], "missing")
         self.assertEqual(row["receipts_time_unverified"], 1)
@@ -310,6 +381,7 @@ class StateMachineTests(unittest.TestCase):
             [link(signed="2026-10-20")],
             [receipt(qty=10, at="2026-10-25")])[0]
         self.assertEqual(row["status"], "signed_pending_tongtool_receipt")
+        self.assertEqual(row["receipt_completion"], "receipt_time_unverified")
         self.assertIsNone(row["tongtool_receipt_at"])
         self.assertEqual(row["signed_time_status"], "timezone_missing")
         self.assertEqual(row["receipt_time_status"], "timezone_missing")

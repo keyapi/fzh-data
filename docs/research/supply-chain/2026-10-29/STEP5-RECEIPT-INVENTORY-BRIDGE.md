@@ -47,7 +47,15 @@ coverage = {
   `receipt_outside_coverage`，不计入关闭数量；时间缺失/无时区无法定位的记录标
   `receipt_time_unverified`，同样不计入关闭；
 - 若来源是 **PO 全历史**而非时间范围，必须显式 `coverage_mode=po_full_history`
-  并提供上述证明字段；**禁止**用无关时间窗口冒充完整覆盖；
+  并提供上述证明字段；`po_full_history_as_of` 必须等于 `source_as_of`（同一采集截止
+  边界）；其早于 `shipment_signed_at` → 不完整；`receipt.effective_at` 晚于该截止 →
+  不计 received、不参与关闭；**禁止**用无关时间窗口冒充完整覆盖；
+- **早于签收优先**：在窗口过滤前，对全部身份匹配且时间有效的 receipt 检查
+  `effective_at < signed_at`；命中即 `receipt_before_signed` conflict（即使该行在窗口外），
+  同时保留 outside_coverage 审计字段；
+- **混合有效/无时区 receipt**：一条 unverified 记录不得抹掉其他有效记录；合法窗口内
+  数量继续汇总为 `received_qty` known；unverified 行单独审计
+  （`receipts_time_unverified`），`pending_qty=null`，禁止 complete / tongtool_received；
 - **只有 link-specific coverage 完整时，“无 receipt 行”才允许 `received_qty=0` known**；
 - 覆盖缺失/截断/未采集/scope 不匹配/时间不闭环时：
   - 已观察到的合法 `received_qty` 可保留 known；

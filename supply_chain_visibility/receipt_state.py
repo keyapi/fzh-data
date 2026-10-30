@@ -91,10 +91,13 @@ class ReceiptCoverage:
         """Link-specific proof: PO scope plus complete time coverage."""
         if not self.structural_complete or not self.po_scope_proven(po_codes):
             return False
-        if self.coverage_mode == "po_full_history":
-            return True
-        if not signed_at:
+        signed = _aware_parse(signed_at)
+        if signed is None:
             return False
+        if self.coverage_mode == "po_full_history":
+            as_of = _aware_parse(self.po_full_history_as_of)
+            # The history cutoff must not precede the signing time.
+            return as_of is not None and signed <= as_of
         return self.covers_interval(signed_at, self.source_as_of)
 
     def status_for(self, po_codes, signed_at=None) -> str:
@@ -173,8 +176,15 @@ class ReceiptCoverage:
                 invalid = "po_full_history_unproven"
             elif not str(value.get("po_full_history_source") or "").strip():
                 invalid = "po_full_history_source_missing"
-            elif _aware_parse(value.get("po_full_history_as_of")) is None:
-                invalid = "po_full_history_as_of_unverified"
+            else:
+                source_as_of = _aware_parse(value.get("source_as_of"))
+                history_as_of = _aware_parse(value.get("po_full_history_as_of"))
+                if source_as_of is None:
+                    invalid = "source_as_of_unverified"
+                elif history_as_of is None:
+                    invalid = "po_full_history_as_of_unverified"
+                elif history_as_of != source_as_of:
+                    invalid = "po_full_history_as_of_mismatch"
         else:
             if not windows:
                 invalid = "requested_windows_empty"
@@ -418,13 +428,20 @@ def reconcile_signed_receipts(
                              **common))
             continue
         in_window, outside, unplaceable = [], [], []
+        all_matching = list(matching)
+        history_cutoff = (_aware_parse(envelope.po_full_history_as_of)
+                          if envelope is not None
+                          and envelope.coverage_mode == "po_full_history" else None)
         for line in matching:
+            parsed = _aware_parse(line.effective_at)
+            if parsed is None:
+                unplaceable.append(line)
+                continue
             if envelope is not None and envelope.coverage_mode == "time_range":
-                if _aware_parse(line.effective_at) is None:
-                    unplaceable.append(line)
-                    continue
                 target = (in_window if _within_windows(
                     line.effective_at, envelope.requested_windows) else outside)
+            elif history_cutoff is not None and parsed > history_cutoff:
+                target = outside
             else:
                 target = in_window
             target.append(line)
@@ -446,22 +463,13 @@ def reconcile_signed_receipts(
                 for line in outside],
             "receipts_time_unverified": len(unplaceable),
         }
-        if unplaceable:
-            # An observed receipt whose time cannot be located in the coverage
-            # interval cannot contribute to (or be excluded from) closing.
-            observed_statuses = {_time_status(line.effective_at)
-                                 for line in unplaceable}
-            unplaceable_status = ("timezone_missing"
-                                  if "timezone_missing" in observed_statuses
-                                  else ("missing" if "missing" in observed_statuses
-                                        else "invalid"))
-            rows.append(_row(
-                link, STAGE_PENDING, exclusion="receipt_time_unverified",
-                duplicates=duplicates, unmatched=unmatched,
-                receipt_time_status=unplaceable_status,
-                lag_status="receipt_time_unverified",
-                **outside_fields, **common))
-            continue
+        has_unverified_time = bool(unplaceable)
+        observed_statuses = {_time_status(line.effective_at)
+                             for line in unplaceable}
+        unplaceable_status = ("timezone_missing"
+                              if "timezone_missing" in observed_statuses
+                              else ("missing" if "missing" in observed_statuses
+                                    else "invalid"))
         matching = in_window
         if any(link_count[(line.po_code, line.sku, line.warehouse, line.uom)] > 1
                for line in matching):
@@ -491,11 +499,48 @@ def reconcile_signed_receipts(
             continue
 
         signed_at = _aware_parse(link.signed_at)
+        in_window_received = Decimal(0)
+        in_window_unknown = False
+        for line in in_window:
+            qty = _decimal(line.qty)
+            if qty is None:
+                in_window_unknown = True
+            else:
+                in_window_received += qty
+        early = []
+        if signed_at is not None:
+            for line in all_matching:
+                parsed = _aware_parse(line.effective_at)
+                if parsed is not None and parsed < signed_at:
+                    early.append(line)
+        if early:
+            early_first = min(early, key=lambda line: _aware_parse(line.effective_at))
+            early_last = max(early, key=lambda line: _aware_parse(line.effective_at))
+            rows.append(_row(
+                link, STAGE_UNKNOWN,
+                received=(None if in_window_unknown else in_window_received),
+                pending=None, completion="unknown", receipt_conflict=True,
+                exclusion="receipt_before_signed",
+                first_at=early_first.effective_at, last_at=early_last.effective_at,
+                receipt_time_status="verified",
+                lag_status="receipt_before_signed",
+                duplicates=duplicates, unmatched=unmatched,
+                **outside_fields, **common))
+            continue
         coverage_exclusion = ("coverage_scope_mismatch"
                               if coverage_state == "scope_mismatch"
                               else "coverage_incomplete")
         if not matching:
-            if not coverage_complete:
+            if has_unverified_time:
+                rows.append(_row(
+                    link, STAGE_PENDING, received=Decimal(0), pending=None,
+                    completion="receipt_time_unverified",
+                    exclusion="receipt_time_unverified",
+                    receipt_time_status=unplaceable_status,
+                    duplicates=duplicates, unmatched=unmatched,
+                    lag_status="receipt_time_unverified",
+                    **outside_fields, **common))
+            elif not coverage_complete:
                 rows.append(_row(
                     link, STAGE_PENDING, exclusion=coverage_exclusion,
                     duplicates=duplicates, unmatched=unmatched,
@@ -546,6 +591,20 @@ def reconcile_signed_receipts(
                 exclusion="over_receipt", first_at=first_at, last_at=last_at,
                 receipt_time_status=receipt_time_status,
                 lag_status="over_receipt",
+                duplicates=duplicates, unmatched=unmatched,
+                **outside_fields, **common))
+            continue
+
+        if has_unverified_time:
+            # Valid in-window quantities stay known; the unverifiable rows are
+            # audited separately and can never close the receipt.
+            rows.append(_row(
+                link, STAGE_PENDING, received=received, pending=None,
+                completion="receipt_time_unverified",
+                exclusion="receipt_time_unverified",
+                first_at=first_at, last_at=last_at,
+                receipt_time_status=unplaceable_status,
+                lag_status="receipt_time_unverified",
                 duplicates=duplicates, unmatched=unmatched,
                 **outside_fields, **common))
             continue

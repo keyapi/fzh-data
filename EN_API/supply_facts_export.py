@@ -478,6 +478,11 @@ def _validate_coverage(value):
                 "coverage.po_full_history_source must be a non-empty string")
         _require_aware_time(value.get("po_full_history_as_of"), "coverage",
                             "po_full_history_as_of")
+        history_dt = datetime.fromisoformat(
+            value["po_full_history_as_of"].strip().replace("Z", "+00:00"))
+        if history_dt != source_dt:
+            raise LocalInputError(
+                "coverage.po_full_history_as_of must equal coverage.source_as_of")
 
 
 def _validate_duplicate_identity(rows, identity_fn, payload_fn, label):

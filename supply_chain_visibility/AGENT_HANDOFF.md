@@ -61,4 +61,3 @@
 - 本地入口：`EN_API/supply_facts_export.py`（JSON + Excel + sha256 + `latest.json` 原子指针；失败不覆盖最后成功版本）。
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
 - 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
-

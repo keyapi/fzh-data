@@ -739,6 +739,18 @@ class LocalInputValidationTest(unittest.TestCase):
         self.assertEqual(self._load(payload)["coverage"]["coverage_mode"],
                          "po_full_history")
 
+    def test_po_full_history_as_of_must_match_source_as_of(self):
+        payload = _state_payload()
+        payload["coverage"].update({
+            "requested_windows": [],
+            "coverage_mode": "po_full_history",
+            "po_full_history_proven": True,
+            "po_full_history_source": "tongtool_receipt_history",
+            "po_full_history_as_of": "2026-10-30T00:00:00+08:00",
+        })
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
     def test_time_mode_rejects_full_history_proof_fields(self):
         payload = _state_payload()
         payload["coverage"]["po_full_history_proven"] = True

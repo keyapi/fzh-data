@@ -144,7 +144,12 @@ receipts_time_unverified/exclusion_reason/receipt_duplicates/unmatched_receipt_r
 `receipt.effective_at` 必须在窗口内，否则 `receipt_outside_coverage` 不计关闭量；
 时间缺失/无时区无法定位的记录标 `receipt_time_unverified`，也不计关闭量。
 来源按 PO 全历史时须显式 `coverage_mode=po_full_history` + `po_full_history_proven`
-+ 来源 + `po_full_history_as_of`，禁止用无关时间窗口冒充完整覆盖。
++ 来源 + `po_full_history_as_of`，且该截止必须等于 `source_as_of`；其早于
+`shipment_signed_at` 时覆盖不完整；晚于该截止的 receipt 不计关闭量；
+禁止用无关时间窗口冒充完整覆盖。早于签收的检查在窗口过滤前执行：全部身份匹配且
+时间有效的 receipt 只要早于 signed_at 即 `receipt_before_signed` conflict（窗口外也成立），
+同时保留 outside_coverage 审计。混合有效/无时区 receipt 时，窗口内有效数量仍汇总为
+known，无时区行单独审计，`pending_qty` unknown 且禁止 complete/tongtool_received。
 `ShipmentLink.signed_status_proven=true` 且 `signed_at=null` 时保持
 `signed_pending_tongtool_receipt`，不得回退 `in_transit`。
 **只有该覆盖完整时无 receipt 行才等于 0**；覆盖缺失/截断/scope 不匹配/时间不闭环 →
@@ -174,7 +179,8 @@ unmatched + not_collected + after_snapshot + uncertain。详见 STEP5。
 `--inventory-bridge-json` = `{schema_version:"supply-facts/inventory-bridge/v1", coverage, snapshots, receipts}`。
 coverage 必含 `query_range_complete`、`requested_windows`、`truncated`、`not_collected`、
 `source_as_of`（带时区）、`covered_po_codes`；可选 `coverage_mode`（time_range 默认 /
-po_full_history + `po_full_history_proven/source/as_of`）。布尔只接受 JSON true/false；
+po_full_history + `po_full_history_proven/source/as_of`，且 history as_of 必须严格等于
+source_as_of）。布尔只接受 JSON true/false；
 拒绝未知/缺字段、schema 不一致、重复身份异载荷、无时区时间、空 `requested_windows`
 （time_range）、`start>end`、`source_as_of<window.end`、link `po_codes` 超出覆盖 scope、
 time_range 携带 full-history 证明字段；`signed_at` 可为 null，`signed_status_proven`
@@ -209,7 +215,7 @@ filters = JSON object
 
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
 - Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
-- 当前 `implementation_version=key_test.supply_facts@2026-10-30.4`；`rule_version=2026-10-29.9`；接口/分页行为变更必须 bump，混合版本继续拒绝。
+- 当前 `implementation_version=key_test.supply_facts@2026-10-30.5`；`rule_version=2026-10-29.10`；接口/分页行为变更必须 bump，混合版本继续拒绝。
 - 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
 - `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。
 - `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。
