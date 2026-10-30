@@ -1416,9 +1416,9 @@ def _load_shipment_events(shipment_names):
     if not names:
         return events, status
     try:
-        if not frappe.has_permission("Shipment Logistics Event", "read"):
-            return events, {"available": False, "restricted": True,
-                            "reason": "permission"}
+        # Child rows inherit the parent Shipment permission; an explicit
+        # has_permission("Shipment Logistics Event") probe returns false for
+        # roles that can legitimately read the parent, so do not use it.
         rows = frappe.get_all(
             "Shipment Logistics Event",
             filters={"parent": ["in", names], "parenttype": "Shipment"},

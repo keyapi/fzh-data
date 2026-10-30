@@ -696,8 +696,8 @@ def get_so_line_logistics(sales_order, so_line):
                           for row in rows})
         if parents:
             try:
-                if not frappe.has_permission("Shipment Logistics Event", "read"):
-                    raise PermissionError("no Shipment Logistics Event permission")
+                # Child event rows inherit the parent Shipment permission; do
+                # not probe the child doctype itself (false negatives).
                 for event in frappe.get_all(
                         "Shipment Logistics Event",
                         filters={"parent": ["in", parents],

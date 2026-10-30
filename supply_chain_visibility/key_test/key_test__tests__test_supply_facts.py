@@ -1243,13 +1243,15 @@ class SupplyFactsContractTest(unittest.TestCase):
                       status4="在途", eta=None, atd="2026-10-20", ata=None,
                       dlvr=None, match_status="", modified="2026-10-29")]
         self.fake.permitted_shipments = ["SHIP-1"]
-        self.fake.event_error = RuntimeError("event query boom")
         try:
-            _, shipments, _, event_status = self.facts.load_shipments(["DN-1"])
-            self.assertFalse(event_status["available"])
-            self.assertEqual(event_status["reason"], "query_error")
-            self.assertTrue(event_status["error"])
-            self.assertIn("progress", shipments["ZMT1"])
+            for error, reason in ((RuntimeError("event query boom"), "query_error"),
+                                  (PermissionError("no event read"), "permission")):
+                self.fake.event_error = error
+                _, shipments, _, event_status = self.facts.load_shipments(["DN-1"])
+                self.assertFalse(event_status["available"])
+                self.assertEqual(event_status["reason"], reason)
+                self.assertTrue(event_status["error"])
+                self.assertIn("progress", shipments["ZMT1"])
         finally:
             self.fake.number_rows = []
             self.fake.shipment_rows = []

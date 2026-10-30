@@ -190,6 +190,14 @@ class LogisticsDialogContractTest(unittest.TestCase):
         self.assertTrue(result["partial"])
         self.assertEqual(result["dns"][0]["numbers"][0]["events"], [])
 
+    def test_event_permission_failure_is_reported(self):
+        self.fake_frappe.event_error = PermissionError("no event read")
+        result = self.chain.get_so_line_logistics("SO-1", "SOI-1")
+        status = result["source_status"]["shipment_logistics_event"]
+        self.assertFalse(status["available"])
+        self.assertEqual(status["reason"], "permission")
+        self.assertTrue(result["partial"])
+
     def test_unknown_line_is_rejected(self):
         with self.assertRaises(Exception):
             self.chain.get_so_line_logistics("SO-1", "SOI-9")
