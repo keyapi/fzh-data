@@ -24,22 +24,30 @@ def scope(codes=(TARGET, OTHER)):
 
 def delivery(lines, *, scope_obj=None, partial=False):
     return {
-        "schema_version": "supply-facts/v3", "rule_version": "2026-10-30.3",
-        "implementation_version": "key_test.delivery_facts@2026-10-30.3",
+        "schema_version": "supply-facts/v3", "rule_version": "2026-10-30.4",
+        "implementation_version": "key_test.delivery_facts@2026-10-30.4",
         "scope": scope_obj if scope_obj is not None else scope(),
         "coverage": {"scope": scope_obj if scope_obj is not None else scope()},
-        "pagination": {"exhausted": not partial, "partial": partial},
+        "pagination": {"exhausted": not partial, "partial": partial,
+                       "total": len(lines)},
         "delivery_lines": lines, "ambiguity_pools": [],
     }
 
 
+_UNSET = object()
+
+
 def line(item=TARGET, qty=10, uom="个", channel=None, destination="WH-1",
-         association="linked", line_id="L1", status=1):
+         association="linked", line_id="L1", status=1,
+         target_warehouse=_UNSET, warehouse=_UNSET):
+    target = destination if target_warehouse is _UNSET else target_warehouse
+    source = destination if warehouse is _UNSET else warehouse
     return {
         "delivery_note": "DN-1", "delivery_note_item": line_id,
         "item_code": item, "uom": uom, "docstatus": status,
         "actual_qty": qty, "association_status": association,
-        "target_warehouse": destination, "warehouse": destination,
+        "target_warehouse": target, "warehouse": source,
+        "source_warehouse": source,
         "channel": channel, "relevance_status": "in_scope",
     }
 
@@ -73,6 +81,25 @@ class GatesTests(unittest.TestCase):
         payload["pagination"]["total"] = 2
         with self.assertRaises(ValueError):
             build_restock_delivery_view(payload)
+
+    def test_total_is_required(self):
+        payload = delivery([line()])
+        del payload["pagination"]["total"]
+        with self.assertRaises(ValueError):
+            build_restock_delivery_view(payload)
+
+    def test_invalid_total_types_are_rejected(self):
+        for bad in (None, True, 1.9, "1"):
+            payload = delivery([line()])
+            payload["pagination"]["total"] = bad
+            with self.assertRaises(ValueError):
+                build_restock_delivery_view(payload)
+
+    def test_zero_total_with_empty_lines_is_ok(self):
+        result = build_restock_delivery_view(delivery([]))
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(all(row["actual_delivery_qty"] is None
+                            for row in result["rows"]))
 
     def test_unsupported_schema_is_rejected(self):
         payload = delivery([line()])
@@ -147,10 +174,28 @@ class GroupingTests(unittest.TestCase):
         self.assertFalse(row["auto_order"])
         self.assertGreaterEqual(result["summary"]["manual_review_rows"], 1)
 
-    def test_duplicate_identity_is_flagged(self):
-        result = build_restock_delivery_view(
-            delivery([line(line_id="L1"), line(line_id="L1", qty=2)]))
-        self.assertFalse(result["summary"]["duplicate_free"])
+    def test_duplicate_identity_is_rejected(self):
+        with self.assertRaises(ValueError):
+            build_restock_delivery_view(
+                delivery([line(line_id="L1"), line(line_id="L1", qty=10)]))
+
+    def test_missing_identity_is_rejected(self):
+        with self.assertRaises(ValueError):
+            build_restock_delivery_view(delivery([line(line_id=None)]))
+
+    def test_unknown_destination_does_not_fall_back_to_source(self):
+        payload = delivery([line(line_id="L1", channel="in_house",
+                                 target_warehouse=None,
+                                 warehouse="FACTORY-ORIGIN")])
+        row = next(r for r in build_restock_delivery_view(payload)["rows"]
+                   if r["item_code"] == TARGET)
+        self.assertEqual(row["destination"], "")
+        self.assertEqual(row["destination_status"], "unknown")
+        self.assertEqual(row["source_warehouse"], "FACTORY-ORIGIN")
+        self.assertEqual(row["actual_delivery_qty"], 10.0)
+        self.assertEqual(row["qty_status"], "known")
+        self.assertEqual(row["suggested_action"],
+                         "manual_review_destination_unknown")
 
 
 if __name__ == "__main__":

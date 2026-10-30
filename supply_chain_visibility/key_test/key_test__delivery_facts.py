@@ -17,8 +17,8 @@ import frappe
 from frappe.utils import now_datetime
 
 SCHEMA_VERSION = "supply-facts/v3"
-RULE_VERSION = "2026-10-30.3"
-IMPLEMENTATION_VERSION = "key_test.delivery_facts@2026-10-30.3"
+RULE_VERSION = "2026-10-30.4"
+IMPLEMENTATION_VERSION = "key_test.delivery_facts@2026-10-30.4"
 
 # Acceptance fixture only. It is NOT an approved business target list.
 ACCEPTANCE_FIXTURE_VERSION = "jack_w1_sample9_2026-10-26"
@@ -1066,24 +1066,92 @@ def _query_coverage(lines, page):
 
 
 SNAPSHOT_LINE_FIELDS = (
-    "stable_id", "raw_signed_qty", "qty_magnitude", "uom", "stock_uom",
-    "conversion_factor", "warehouse", "target_warehouse", "customer",
-    "posting_date", "posting_time", "docstatus", "is_return",
-    "return_against", "association_status", "actual_qty", "return_status",
-    "so", "so_line",
+    "stable_id", "delivery_note", "delivery_note_item", "idx",
+    "item_code", "item_name", "customer_item_code",
+    "raw_signed_qty", "qty_magnitude", "qty", "stock_qty", "uom",
+    "stock_uom", "conversion_factor", "conversion_basis", "uom_status",
+    "quantity_status", "quantity_direction",
+    "source_warehouse", "target_warehouse", "warehouse",
+    "warehouse_status", "target_warehouse_status", "destination_status",
+    "customer", "company", "posting_date", "posting_time", "timezone_status",
+    "docstatus", "is_return", "return_against", "amended_from",
+    "source_modified", "role", "return_status", "returned_qty",
+    "excess_return_qty", "gross_qty", "relevance_status", "scope_source",
+    "scope_rule_version", "scope_hash", "exclusion_reason",
+    "association_status", "association_reason", "so", "so_line",
+    "logistics_status", "tongtool_po", "po_status", "receipt_status",
+    "inventory_status", "branch_status", "is_current_execution",
+    "inactive_reason",
 )
 
 
-def delivery_snapshot_id(rows, *, schema_version, rule_version,
-                         implementation_version, scope_hash, as_of):
-    """Content fingerprint: in-place qty/UOM/identity edits change the id."""
-    ordered = sorted(rows, key=lambda row: str(
-        row.get("stable_id") or row.get("delivery_note_item") or ""))
-    fingerprint = [[row.get(field) for field in SNAPSHOT_LINE_FIELDS]
-                   for row in ordered]
-    payload = {"lines": fingerprint, "schema": schema_version,
-               "rule": rule_version, "implementation": implementation_version,
-               "scope_hash": scope_hash, "as_of": as_of}
+def _snapshot_line(line):
+    payload = {field: line.get(field) for field in SNAPSHOT_LINE_FIELDS}
+    payload["logistic_numbers"] = sorted(
+        _text(number.get("number"))
+        for number in line.get("logistic_numbers") or []
+        if isinstance(number, dict))
+    payload["candidate_so_lines"] = sorted(
+        [_text(row.get("so")), _text(row.get("so_line")),
+         _round(row.get("qty")), _text(row.get("uom"))]
+        for row in line.get("candidate_so_lines") or []
+        if isinstance(row, dict))
+    payload["conflicts"] = sorted(
+        _text(item) for item in line.get("conflicts") or [])
+    payload["unknown_reasons"] = sorted(
+        _text(item) for item in line.get("unknown_reasons") or [])
+    return payload
+
+
+def _snapshot_sort_key(row):
+    return tuple(_text(row.get(key)) for key in (
+        "supply_role", "delivery_note", "delivery_note_item", "so", "so_line",
+        "item_code", "uom", "customer", "warehouse", "channel", "stage",
+        "edge_type", "target"))
+
+
+def delivery_snapshot_id(result, *, rows, so_items_by_name=None,
+                         scope_hash=None, as_of=None):
+    """Fingerprint every business-decision input and derived fact.
+
+    Collection timestamps (observed_at) are excluded so an unchanged source
+    keeps a stable id; item/scope, UOM evidence, SO baseline and logistics
+    edits all change it.
+    """
+    so_items_by_name = so_items_by_name or {}
+    summaries = summarize_lines(rows, so_items_by_name)
+    selected = {row.get("delivery_note_item") for row in rows}
+    coverage = {(key): value
+                for key, value in (result.get("coverage") or {}).items()
+                if key not in ("observed_at", "query", "global")}
+    payload = {
+        "lines": [_snapshot_line(row) for row in sorted(
+            rows, key=lambda item: _text(item.get("stable_id")))],
+        "so_fulfillment": sorted(summaries["so_fulfillment"],
+                                 key=_snapshot_sort_key),
+        "ambiguity_pools": sorted(summaries["ambiguity_pools"],
+                                  key=_snapshot_sort_key),
+        "supply_ledger": sorted(summaries["supply_ledger"],
+                                key=_snapshot_sort_key),
+        "association_edges": sorted(
+            [dict(row) for row in result.get("association_edges") or []
+             if row.get("delivery_note_item") in selected],
+            key=_snapshot_sort_key),
+        "coverage_exceptions": sorted(
+            [dict(row) for row in result.get("coverage_exceptions") or []
+             if row.get("delivery_note_item") in selected],
+            key=_snapshot_sort_key),
+        "physical_chain": sorted(
+            [dict(row) for row in result.get("physical_chain") or []
+             if row.get("delivery_note_item") in selected],
+            key=_snapshot_sort_key),
+        "coverage": coverage,
+        "schema_version": result.get("schema_version"),
+        "rule_version": result.get("rule_version"),
+        "implementation_version": result.get("implementation_version"),
+        "scope_hash": scope_hash,
+        "as_of": as_of,
+    }
     return hashlib.sha1(json.dumps(payload, sort_keys=True,
                                    ensure_ascii=False).encode("utf-8")).hexdigest()
 
@@ -1156,13 +1224,10 @@ def get_delivery_facts(filters=None, **kwargs):
     page = rows[offset:offset + limit]
     selected = {row["delivery_note_item"] for row in page}
     exhausted = offset + len(page) >= total
-    snapshot_id = delivery_snapshot_id(
-        rows, schema_version=result["schema_version"],
-        rule_version=result["rule_version"],
-        implementation_version=result["implementation_version"],
-        scope_hash=normalized_scope.get("hash"), as_of=as_of)
-
     so_items_by_name = {row.get("name"): row for row in so_items or []}
+    snapshot_id = delivery_snapshot_id(
+        result, rows=rows, so_items_by_name=so_items_by_name,
+        scope_hash=normalized_scope.get("hash"), as_of=as_of)
     summary_rows = rows if filters.get("aggregate_all") else page
     summaries = summarize_lines(summary_rows, so_items_by_name)
     pagination = {

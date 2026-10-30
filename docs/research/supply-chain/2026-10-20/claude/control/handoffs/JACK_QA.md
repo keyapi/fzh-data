@@ -375,6 +375,20 @@ channel: docs/jack-w1-channel
 未完成（不得写成通过）：权威业务 scope、受限用户真实 HTTP、浏览器会话、
 真实通途入库/QI、测试站真实退货样本、生产部署。
 
+### [W1-DELIVERY-FACTS-R3-2026-10-30] 同事复审 F1–F4 返修
+
+| 返修 | 根因 | 修复 | 反例（旧 → 新） |
+|---|---|---|---|
+| F1 快照指纹不完整 | 白名单漏 item_code/stock_qty/资格字段，且只哈希 delivery_lines | 指纹覆盖商品身份/范围、单位资格、SO 基准与派生汇总、关联/物流/退货状态；排除 observed_at | 商品 TARGET→OTHER、stock_qty 8→9、SO qty 10→20：旧 ID 不变 → 新 ID 改变；无变更重跑稳定 |
+| F2 重复行双计 | 仅标记 `duplicate_free`，照常汇总 | 重复 `delivery_note_item`、缺主键整批拒收 | 同一 L1 输入两次：旧 actual=20、`candidate_no_action` → 新抛错 |
+| F3 total 可绕过 | `total=None` 直接跳过；`int()` 接受 1.9/True/"1" | `total` 必填非负 JSON 整数且等于行数；returned/offset 类型与取值校验 | 缺失/null/True/1.9/"1"：旧 ok → 新拒收；空表 total=0 合法 |
+| F4 来源仓冒充目的仓 | `target_warehouse or warehouse` 混用两种仓 | 目的仓只取 `target_warehouse`；为空则 `destination=""`、`destination_status=unknown`、`manual_review_destination_unknown`，保留 `source_warehouse` 与已证数量 | target=None、warehouse=FACTORY-ORIGIN：旧 destination=FACTORY-ORIGIN → 新 `""`/unknown/人工复核，actual=10、qty_status=known |
+
+版本：`RULE=2026-10-30.4` / `IMPLEMENTATION=key_test.delivery_facts@2026-10-30.4`。
+测试：key_test 314 passed / 3 skipped / 4 subtests；fzh 205 passed / 5 subtests。
+
+口径更正：scope hash 重算只证明内容完整一致，**不证明权威清单已注入**；权威业务 scope 仍为 pending。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

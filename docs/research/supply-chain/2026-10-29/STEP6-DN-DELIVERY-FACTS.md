@@ -77,16 +77,21 @@ tags: [supply-chain, delivery-note, actual-delivery, reconciliation]
   `coverage.global` 为全量、`coverage.query` 为当前筛选/页面，聚合标注 `query_page`。
 - SO 页面「本 SO 实际交付」只查该 SO；另设「全局实际交付」入口，200 行/页可翻页。
 - 导出跨页校验 schema/rule/implementation/scope/as_of/source status/snapshot_id；
-  `snapshot_id` 为全部过滤行的**内容指纹**（含 qty/UOM/仓/客户/关联/退货状态），
-  DN 行原地改数量也会触发漂移；混版本、漂移、重复稳定键、写盘失败均不创建 run、不切 latest。
+  `snapshot_id` 为全部过滤行的**内容指纹**：覆盖商品身份/范围判定、单位资格
+  （stock_qty/uom_status）、SO 基准（so_fulfillment/ambiguity_pools/supply_ledger）、
+  仓/客户/关联/物流/退货状态及派生汇总；排除 observed_at，无变更重跑保持稳定，
+  任一业务判定变化都会改变 ID。混版本、漂移、重复稳定键、写盘失败均不创建 run、不切 latest。
 
 ## E. warehouse_restock 适配（修正）
 
 - 必须先通过 snapshot gate：`schema_version=supply-facts/v3`、`pagination.exhausted=true`、
-  非 partial、版本齐全、`total` 与行数一致、scope 已提供且 hash 匹配（与 key_test 同构，
-  含非 ASCII 物料码）；否则 `scope_pending` 或拒绝。
+  非 partial、版本齐全、scope 已提供且 hash 匹配（与 key_test 同构，含非 ASCII 物料码）；
+  `pagination.total` **必填非负整数**（拒 null/bool/float/string）且等于行数；
+  重复 `delivery_note_item`、缺主键均整批拒收；否则 `scope_pending` 或拒绝。
 - 行粒度：`item×UOM×channel×destination`；同 SKU 双渠道、双 UOM、双仓分行，
-  不跨单位/渠道合计。
+  不跨单位/渠道合计。目的仓**只取已证 `target_warehouse`**，为空则 `destination=""`、
+  `destination_status=unknown`、`suggested_action=manual_review_destination_unknown`；
+  保留 `source_warehouse` 与已证数量，不用来源仓或默认仓冒充目的仓。
 - 输出 actual/linked/unlinked/unresolved/potential；unknown 不写 0；
   `association_status ∈ {conflict, ambiguous, restricted}` 的行强制
   `manual_review_association_conflict`；`eligible_for_restock=false`、`auto_order=false`。

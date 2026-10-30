@@ -191,6 +191,7 @@ time_range 携带 full-history 证明字段；`signed_at` 可为 null，`signed_
 入口：`key_test.delivery_facts.get_delivery_facts(filters, scope)`，schema `supply-facts/v3`。
 **scope 必须由 warehouse_restock 注入**（`source/version/hash/items`，API 校验 hash）；
 服务端对客户端传入的 `status=provided` 也重新计算并比对 hash，不信任客户端结论；
+hash 校验只证明内容完整一致，**不证明清单来自权威业务来源**（权威 scope 接入仍 pending）；
 冻结 9-SKU 仅验收 fixture，不是业务批准全集；无 scope → relevance 全 unknown、E pending。
 
 `delivery_lines` 稳定身份 `source_instance + delivery_note + delivery_note_item`；保留：
@@ -226,8 +227,9 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 
 导出：`--delivery-all [--delivery-include-inactive --delivery-scope-json]`；
 跨页校验 schema/rule/implementation/scope/hash/as_of/source status/snapshot_id；
-`snapshot_id` 为全部过滤行的内容指纹（含 qty/UOM/仓/客户/关联/退货状态），
-原地改数量会触发漂移；混版本、漂移、重复键、写盘失败不创建 run、不切 latest。
+`snapshot_id` 为全部过滤行的内容指纹：商品身份/范围、单位资格、SO 基准与派生汇总、
+仓/客户/关联/物流/退货状态均参与；排除 observed_at，无变更重跑稳定，任一业务判定变化
+都会改变 ID；混版本、漂移、重复键、写盘失败不创建 run、不切 latest。
 
 ### `manifest`
 

@@ -59,7 +59,9 @@ def validate_delivery_snapshot(delivery):
     """Common gates: complete pagination, single version, valid scope."""
     if not isinstance(delivery, dict):
         raise ValueError("delivery input must be an object")
-    pagination = delivery.get("pagination") or {}
+    pagination = delivery.get("pagination")
+    if not isinstance(pagination, dict):
+        raise ValueError("delivery pagination must be an object")
     if pagination.get("exhausted") is not True or pagination.get("partial") is True:
         raise ValueError("delivery snapshot is partial or not exhausted")
     for key in ("schema_version", "rule_version", "implementation_version"):
@@ -71,8 +73,22 @@ def validate_delivery_snapshot(delivery):
     lines = delivery.get("delivery_lines")
     if not isinstance(lines, list):
         raise ValueError("delivery_lines must be a list")
-    total = pagination.get("total")
-    if total is not None and int(total) != len(lines):
+    if "total" not in pagination:
+        raise ValueError("delivery pagination total is required")
+    total = pagination["total"]
+    if isinstance(total, bool) or not isinstance(total, int) or total < 0:
+        raise ValueError("delivery pagination total must be a non-negative integer")
+    for key in ("returned", "offset", "limit"):
+        if key in pagination:
+            value = pagination[key]
+            if isinstance(value, bool) or not isinstance(value, int):
+                raise ValueError("delivery pagination %s must be an integer" % key)
+    if pagination.get("returned") is not None and pagination["returned"] != len(lines):
+        raise ValueError("delivery pagination returned %s != %s rows"
+                         % (pagination["returned"], len(lines)))
+    if pagination.get("offset") not in (None, 0):
+        raise ValueError("delivery snapshot must start at offset 0")
+    if total != len(lines):
         raise ValueError("delivery snapshot total %s != %s rows"
                          % (total, len(lines)))
     coverage = delivery.get("coverage") or {}
@@ -102,9 +118,14 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
     duplicates = []
     for line in lines:
         key = line.get("delivery_note_item")
+        if not key:
+            raise ValueError("delivery line without identity")
         if key in seen:
             duplicates.append(key)
         seen.add(key)
+    if duplicates:
+        raise ValueError("duplicate delivery_note_item: %s"
+                         % ", ".join(sorted(set(duplicates))))
     grouped = defaultdict(list)
     for line in lines:
         if line.get("docstatus") != 1:
@@ -114,7 +135,7 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
                    or ("fba" if line.get("item_code") in fba_items else "unknown"))
         if channel not in ("fba", "in_house", "unknown"):
             channel = "unknown"
-        destination = line.get("target_warehouse") or line.get("warehouse") or ""
+        destination = line.get("target_warehouse") or ""
         key = (line.get("item_code"), line.get("uom") or "",
                channel, destination)
         grouped[key].append(line)
@@ -130,7 +151,9 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
         if not observed:
             rows.append({
                 "item_code": item_code, "uom": None, "channel": "unknown",
-                "destination": "", "actual_delivery_qty": None,
+                "destination": "", "destination_status": "unknown",
+                "source_warehouse": None, "source_warehouses": [],
+                "actual_delivery_qty": None,
                 "qty_status": "no_observed_delivery",
                 "linked_delivery_qty": None, "unlinked_delivery_qty": None,
                 "unresolved_demand_qty": None, "potential_overlap_qty": None,
@@ -172,7 +195,12 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
                 line.get("association_status") for line in bucket
                 if line.get("association_status") in
                 ("conflict", "ambiguous", "restricted")})
-            if channel == "unknown":
+            source_warehouses = sorted({
+                line.get("source_warehouse") for line in bucket
+                if line.get("source_warehouse")})
+            if not destination:
+                action = "manual_review_destination_unknown"
+            elif channel == "unknown":
                 action = "manual_review_channel_unknown"
             elif association_flags:
                 action = "manual_review_association_conflict"
@@ -187,6 +215,10 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
             rows.append({
                 "item_code": item_code, "uom": uom, "channel": channel,
                 "destination": destination,
+                "destination_status": "known" if destination else "unknown",
+                "source_warehouse": (source_warehouses[0]
+                                     if len(source_warehouses) == 1 else None),
+                "source_warehouses": source_warehouses,
                 "actual_delivery_qty": actual,
                 "qty_status": "unknown" if unknown else "known",
                 "linked_delivery_qty": linked,
@@ -211,8 +243,9 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
         "summary": {
             "approved_items": len(scope.get("items") or []),
             "row_count": len(rows),
-            "duplicate_line_ids": duplicates,
-            "duplicate_free": not duplicates,
+            "destination_unknown_rows": sum(
+                1 for row in rows
+                if row.get("destination_status") == "unknown"),
             "manual_review_rows": sum(
                 1 for row in rows
                 if str(row.get("suggested_action") or "").startswith("manual_review")),
