@@ -900,5 +900,102 @@ class AutoLinkTest(unittest.TestCase):
             "server_auto")
 
 
+class DeliveryExportTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.exporter = _load_exporter()
+
+    def _delivery_page(self, total, offset, limit):
+        end = min(offset + limit, total)
+        lines = [{
+            "delivery_note": "DN-%s" % i, "delivery_note_item": "DNI-%s" % i,
+            "item_code": "SKU-1", "qty": 1, "uom": "个",
+            "actual_qty": 1, "association_status": "unlinked",
+            "relevance_status": "in_scope",
+        } for i in range(offset, end)]
+        return {
+            "schema_version": "supply-facts/v3", "rule_version": "r3",
+            "implementation_version": "impl-v3",
+            "delivery_lines": lines, "association_edges": [],
+            "coverage_exceptions": [], "so_fulfillment": [],
+            "supply_ledger": [], "physical_chain": [],
+            "coverage": {"delivery_lines": {"total": total}},
+            "pagination": {
+                "limit": limit, "offset": offset, "returned": len(lines),
+                "total": total, "next_offset": None if end >= total else end,
+                "next_cursor": lines[-1]["delivery_note_item"] if lines and end < total else None,
+                "exhausted": end >= total, "partial": end < total,
+                "termination_reason": "exhausted" if end >= total else "page_limit",
+            },
+        }
+
+    def _run(self, td, total=3, page_size=2):
+        calls = []
+
+        def fake(base, key, secret, filters):
+            calls.append(dict(filters))
+            return self._delivery_page(total, int(filters["offset"]),
+                                       int(filters["limit"]))
+
+        with mock.patch.object(self.exporter.iss, "load_credentials",
+                               return_value=("k", "s")), \
+             mock.patch.object(self.exporter.iss, "resolve_env_files",
+                               return_value=None), \
+             mock.patch.object(self.exporter.iss, "ENV_URLS",
+                               {"test": "http://test"}), \
+             mock.patch.object(self.exporter, "_call_delivery", side_effect=fake):
+            rc = self.exporter.main(["--delivery-all", "--test", "--no-excel",
+                                     "--page-size", str(page_size), "--out", td])
+        return rc, calls
+
+    def test_delivery_export_paginates_and_writes_manifest(self):
+        with tempfile.TemporaryDirectory() as td:
+            rc, calls = self._run(td)
+            self.assertEqual(rc, 0)
+            self.assertEqual([call["offset"] for call in calls], [0, 2])
+            run = list((Path(td) / "runs").glob("run-*"))[0]
+            lines = json.loads((run / "delivery_lines.json").read_text(encoding="utf-8"))
+            manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(lines), 3)
+            self.assertEqual(manifest["schema_version"], "supply-facts/v3")
+            self.assertEqual(manifest["delivery_schema_version"], "supply-facts/v3")
+            self.assertEqual(manifest["datasets"]["delivery_lines"]["rows"], 3)
+            self.assertFalse(manifest["truncated"])
+            for name in ("delivery_lines.json", "association_edges.json",
+                         "coverage_exceptions.json", "so_fulfillment.json",
+                         "supply_ledger.json", "physical_chain.json"):
+                self.assertIn(name, manifest["files"])
+                digest = hashlib.sha256((run / name).read_bytes()).hexdigest()
+                self.assertEqual(manifest["files"][name]["sha256"], digest)
+
+    def test_delivery_duplicate_identity_fails_before_writing(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            old = {"run_id": "previous-success"}
+            (out / "latest.json").write_text(json.dumps(old), encoding="utf-8")
+
+            def fake(base, key, secret, filters):
+                batch = self._delivery_page(3, int(filters["offset"]),
+                                            int(filters["limit"]))
+                if int(filters["offset"]) > 0 and batch["delivery_lines"]:
+                    batch["delivery_lines"][0]["delivery_note_item"] = "DNI-0"
+                return batch
+
+            with mock.patch.object(self.exporter.iss, "load_credentials",
+                                   return_value=("k", "s")), \
+                 mock.patch.object(self.exporter.iss, "resolve_env_files",
+                                   return_value=None), \
+                 mock.patch.object(self.exporter.iss, "ENV_URLS",
+                                   {"test": "http://test"}), \
+                 mock.patch.object(self.exporter, "_call_delivery",
+                                   side_effect=fake):
+                rc = self.exporter.main(["--delivery-all", "--test", "--no-excel",
+                                         "--page-size", "2", "--out", td])
+            self.assertEqual(rc, 1)
+            self.assertEqual(json.loads((out / "latest.json").read_text(
+                encoding="utf-8")), old)
+            self.assertFalse((out / "runs").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

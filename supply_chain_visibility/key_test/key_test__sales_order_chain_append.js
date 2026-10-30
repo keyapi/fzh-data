@@ -447,7 +447,9 @@ function so_chain_render($box, data) {
         return '<th style="white-space:nowrap;position:relative;overflow:hidden"' + t + '>' + c.label
             + '<span class="so-chain-grip" data-k="' + c.k + '" title="拖动调整列宽（双击=自适应内容）"></span></th>';
     }).join('');
-    const html = '<div style="overflow:auto">'
+    const html = '<div style="margin-bottom:4px"><a href="#" class="so-chain-delivery" style="color:' + SO_CHAIN_HEAD + '"><b>实际交付 / 未关联 SO</b></a>'
+        + '<span class="text-muted" style="font-size:11px;margin-left:8px">DN 明细为锚；未关联不猜 SO</span></div>'
+        + '<div style="overflow:auto">'
         + '<table class="table table-bordered so-chain-tbl" style="margin:0;width:100%;table-layout:fixed;font-size:12px">'
         + '<colgroup>' + cols + '</colgroup>'
         + '<thead><tr>' + ths + '</tr></thead>'
@@ -467,6 +469,10 @@ function so_chain_render($box, data) {
     $box.find('.so-chain-dialog').on('click', function (e) {
         e.preventDefault();
         so_chain_show_detail(data.lines[$(this).data('i')], data.sales_order);
+    });
+    $box.find('.so-chain-delivery').on('click', function (e) {
+        e.preventDefault();
+        so_chain_show_delivery(data.sales_order);
     });
 }
 
@@ -912,4 +918,84 @@ function so_chain_show_logistics(data, so) {
         + '<div style="border:1px solid ' + SO_CHAIN_HEAD + ';border-radius:4px;padding:8px 10px">'
         + body + '</div></div>');
     d.show();
+}
+
+// ── 实际交付 / 未关联 SO（DN 明细为锚，独立只读事实层）────────────────────
+function so_chain_delivery_html(msg) {
+    msg = msg || {};
+    const lines = msg.delivery_lines || [];
+    const cov = msg.coverage || {};
+    const pg = msg.pagination || {};
+    let h = '<div style="font-size:12px;margin-bottom:6px">'
+        + '范围 ' + so_chain_esc((msg.scope || {}).version || 'unknown')
+        + '　·　DN ' + so_chain_num(cov.delivery_notes ? cov.delivery_notes.total : 0)
+        + '　·　行 ' + so_chain_num(pg.total || lines.length)
+        + '　·　' + so_chain_esc(pg.termination_reason || '')
+        + (cov.restricted ? '　<span class="text-danger">含受限来源（partial）</span>' : '')
+        + '</div>'
+        + '<div class="text-muted" style="font-size:11px;margin-bottom:4px">'
+        + '未关联/冲突/范围外行保留原值；候选 SO 仅供人工审核，不自动回写。</div>'
+        + '<table class="table table-bordered" style="margin:0;font-size:12px">'
+        + '<thead><tr><th>DN</th><th>商品</th><th>客户</th><th>日期</th><th>数量</th>'
+        + '<th>实际</th><th>关联</th><th>范围</th><th>目标仓</th><th>物流</th><th>原因</th></tr></thead><tbody>';
+    lines.forEach(function (l) {
+        const highlight = l.association_status === 'unlinked'
+            ? ' background:#fff9e6' : '';
+        h += '<tr style="' + highlight + '">'
+            + '<td>' + so_chain_link('Delivery Note', l.delivery_note, l.delivery_note)
+            + '<div class="text-muted" style="font-size:10px">' + so_chain_esc(l.delivery_note_item) + '</div></td>'
+            + '<td>' + so_chain_esc(l.item_code || '-') + '</td>'
+            + '<td>' + so_chain_esc(l.customer || '-') + '</td>'
+            + '<td>' + so_chain_esc(l.posting_date || '-') + '</td>'
+            + '<td style="text-align:right">' + so_chain_num(l.qty) + ' ' + so_chain_esc(l.uom || '') + '</td>'
+            + '<td style="text-align:right">' + so_chain_num(l.actual_qty) + '</td>'
+            + '<td>' + so_chain_esc(l.association_status || 'unknown') + '</td>'
+            + '<td>' + so_chain_esc(l.relevance_status || 'unknown') + '</td>'
+            + '<td>' + so_chain_esc(l.target_warehouse || '未知') + '</td>'
+            + '<td>' + so_chain_esc(l.logistics_status || 'unknown') + '</td>'
+            + '<td>' + so_chain_esc((l.conflicts || []).concat(l.unknown_reasons || []).join(',')) + '</td></tr>';
+    });
+    if (!lines.length) {
+        h += '<tr><td colspan="11" class="text-muted">当前筛选无记录（不代表 0）</td></tr>';
+    }
+    return h + '</tbody></table>';
+}
+
+function so_chain_show_delivery(so) {
+    const d = new frappe.ui.Dialog({
+        title: __('实际交付 / 未关联 SO：') + so,
+        size: 'extra-large',
+        fields: [
+            { fieldtype: 'Data', fieldname: 'customer', label: __('客户') },
+            { fieldtype: 'Data', fieldname: 'item_code', label: __('商品') },
+            { fieldtype: 'Date', fieldname: 'from_date', label: __('从') },
+            { fieldtype: 'Date', fieldname: 'to_date', label: __('到') },
+            { fieldtype: 'Select', fieldname: 'association_status', label: __('关联状态'),
+              options: '\nlinked\nso_header_only\nunlinked\nambiguous\nconflict\nrestricted' },
+            { fieldtype: 'Check', fieldname: 'include_unlinked', label: __('含未关联'), default: 1 },
+            { fieldtype: 'HTML', fieldname: 'html' },
+        ],
+    });
+    const refresh = function () {
+        const values = d.get_values() || {};
+        const filters = { limit: 200, offset: 0, include_unlinked: values.include_unlinked ? 1 : 0 };
+        ['customer', 'item_code', 'from_date', 'to_date', 'association_status'].forEach(function (key) {
+            if (values[key]) filters[key] = values[key];
+        });
+        frappe.call({
+            method: 'key_test.delivery_facts.get_delivery_facts',
+            args: { filters: JSON.stringify(filters) },
+            callback: function (r) {
+                d.fields_dict.html.$wrapper.html(so_chain_delivery_html(r.message || {}));
+            },
+        });
+    };
+    d.fields_dict.html.$wrapper.html('<div class="text-muted">加载中…</div>');
+    d.show();
+    refresh();
+    ['customer', 'item_code', 'from_date', 'to_date',
+     'association_status', 'include_unlinked'].forEach(function (name) {
+        const field = d.fields_dict[name];
+        if (field && field.$input) field.$input.on('change', refresh);
+    });
 }

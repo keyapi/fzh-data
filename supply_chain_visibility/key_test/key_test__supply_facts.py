@@ -29,8 +29,8 @@ from key_test.shipment_progress import (
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v2"
-RULE_VERSION = "2026-10-29.10"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.5"
+RULE_VERSION = "2026-10-30.1"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.6"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"

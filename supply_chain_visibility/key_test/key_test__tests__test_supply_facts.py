@@ -1083,7 +1083,7 @@ class SupplyFactsContractTest(unittest.TestCase):
 
     def test_implementation_version_bumped_for_interface_change(self):
         self.assertEqual(self.facts.IMPLEMENTATION_VERSION,
-                         "key_test.supply_facts@2026-10-30.5")
+                         "key_test.supply_facts@2026-10-30.6")
 
     def test_manifest_carries_rule_and_implementation_versions(self):
         self.fake.so_rows = []

@@ -40,10 +40,13 @@ def _line(**overrides):
     return line
 
 
-def _render_doc(lines):
+def _render_doc(lines, delivery=None):
     if not NODE:
         raise unittest.SkipTest("node not available")
-    payload = json.dumps({"sales_order": "SO-1", "lines": lines}, ensure_ascii=False)
+    payload = {"sales_order": "SO-1", "lines": lines}
+    if delivery is not None:
+        payload["delivery"] = delivery
+    payload = json.dumps(payload, ensure_ascii=False)
     proc = subprocess.run(
         [NODE, str(HARNESS), str(_js_path())],
         input=payload, capture_output=True, text=True, encoding="utf-8", timeout=60)
@@ -126,6 +129,27 @@ class SalesOrderRenderTest(unittest.TestCase):
         self.assertIn("身份冲突（不展示确定状态）", html)
         self.assertIn("SHIP-1, SHIP-2", html)
         self.assertNotIn("已签收·待通途入库", html)
+
+    def test_delivery_view_flags_unlinked_without_guessing_so(self):
+        delivery = {
+            "scope": {"version": "jack_w1_sample9_2026-10-26"},
+            "coverage": {"delivery_notes": {"total": 1}},
+            "pagination": {"total": 1, "termination_reason": "exhausted"},
+            "delivery_lines": [{
+                "delivery_note": "DN-1", "delivery_note_item": "DNI-1",
+                "item_code": "SKU-1", "customer": "C1",
+                "posting_date": "2026-10-20", "qty": 10, "uom": "个",
+                "actual_qty": 10, "association_status": "unlinked",
+                "relevance_status": "in_scope", "target_warehouse": None,
+                "logistics_status": "no_waybill",
+                "unknown_reasons": ["target_warehouse_unknown"],
+            }],
+        }
+        out = _render_doc([_line(work_orders=[])], delivery=delivery)
+        self.assertIn("实际交付 / 未关联 SO", out["html"])
+        self.assertIn("unlinked", out["delivery_html"])
+        self.assertIn("target_warehouse_unknown", out["delivery_html"])
+        self.assertIn("仅供人工审核", out["delivery_html"])
 
     def test_footer_describes_full_process_evidence(self):
         html = render([_line()])
