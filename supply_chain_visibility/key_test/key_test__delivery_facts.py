@@ -54,7 +54,7 @@ def _text(value) -> str:
 
 
 def _finite(value):
-    """Strict finite number: bool/None/NaN/Infinity/text → None."""
+    """Return a finite float; reject bool/None/NaN/Infinity/text."""
     if value is None or isinstance(value, bool):
         return None
     try:
@@ -1145,4 +1145,3 @@ def get_delivery_facts(filters=None, **kwargs):
         "physical_chain": len(result["physical_chain"]),
     }
     return result
-
