@@ -17,8 +17,8 @@ import frappe
 from frappe.utils import now_datetime
 
 SCHEMA_VERSION = "supply-facts/v3"
-RULE_VERSION = "2026-10-30.2"
-IMPLEMENTATION_VERSION = "key_test.delivery_facts@2026-10-30.2"
+RULE_VERSION = "2026-10-30.3"
+IMPLEMENTATION_VERSION = "key_test.delivery_facts@2026-10-30.3"
 
 # Acceptance fixture only. It is NOT an approved business target list.
 ACCEPTANCE_FIXTURE_VERSION = "jack_w1_sample9_2026-10-26"
@@ -77,14 +77,43 @@ def _iso(value):
     return str(value).replace(" ", "T")[:19] if value else None
 
 
+def _scope_codes(items_raw):
+    """Normalize scope items (list or mapping) into (codes, mapping)."""
+    if isinstance(items_raw, dict):
+        entries = [dict(meta if isinstance(meta, dict) else {}, item_code=code)
+                   for code, meta in items_raw.items()]
+    elif isinstance(items_raw, list):
+        entries = items_raw
+    else:
+        return None
+    items = {}
+    codes = []
+    for entry in entries:
+        if isinstance(entry, str):
+            code, meta = entry.strip(), {}
+        elif isinstance(entry, dict):
+            code = _text(entry.get("item_code"))
+            meta = {key: value for key, value in entry.items() if key != "item_code"}
+        else:
+            return None
+        if not code:
+            return None
+        items[code] = meta
+        codes.append(code)
+    return codes, items
+
+
+def scope_hash(source, version, codes):
+    canonical = json.dumps({"source": source, "version": version,
+                            "items": sorted(set(codes))},
+                           sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def normalize_scope(raw):
-    """Validate authoritative scope input from warehouse_restock."""
+    """Validate authoritative scope input; client-supplied scopes are re-hashed."""
     pending = {"status": "pending", "source": None, "version": None,
                "hash": None, "items": {}, "reason": "no_authoritative_scope"}
-    if isinstance(raw, dict) and raw.get("status") in ("provided", "pending",
-                                                        "invalid") \
-            and isinstance(raw.get("items"), dict):
-        return raw
     if raw in (None, "", {}):
         return pending
     if isinstance(raw, str):
@@ -96,33 +125,29 @@ def normalize_scope(raw):
             return dict(pending, status="invalid", reason="scope_not_json")
     if not isinstance(raw, dict):
         return dict(pending, status="invalid", reason="scope_not_object")
-    if not any(raw.get(key) for key in ("source", "version", "hash", "items")):
+    status = _text(raw.get("status"))
+    if status == "invalid":
+        return dict(pending, status="invalid",
+                    reason=_text(raw.get("reason")) or "scope_invalid")
+    if status == "pending":
         return pending
-    source, version, expected_hash = (_text(raw.get("source")),
-                                      _text(raw.get("version")),
-                                      _text(raw.get("hash")))
-    items_raw = raw.get("items")
-    if not source or not version or not expected_hash or not isinstance(items_raw, list):
+    if status and status != "provided":
+        return dict(pending, status="invalid", reason="scope_status_unknown")
+    source = _text(raw.get("source"))
+    version = _text(raw.get("version"))
+    expected_hash = _text(raw.get("hash"))
+    parsed = _scope_codes(raw.get("items"))
+    if parsed is None:
+        if raw.get("items") in (None, "", {}, []):
+            return dict(pending, status="invalid", reason="scope_fields_missing")
+        return dict(pending, status="invalid", reason="scope_item_invalid")
+    codes, items = parsed
+    if not source and not version and not expected_hash:
+        return pending if not codes else dict(
+            pending, status="invalid", reason="scope_fields_missing")
+    if not source or not version or not expected_hash:
         return dict(pending, status="invalid", reason="scope_fields_missing")
-    items = {}
-    codes = []
-    for entry in items_raw:
-        if isinstance(entry, str):
-            code = entry.strip()
-            meta = {}
-        elif isinstance(entry, dict):
-            code = _text(entry.get("item_code"))
-            meta = {key: value for key, value in entry.items() if key != "item_code"}
-        else:
-            return dict(pending, status="invalid", reason="scope_item_invalid")
-        if not code:
-            return dict(pending, status="invalid", reason="scope_item_blank")
-        items[code] = meta
-        codes.append(code)
-    canonical = json.dumps({"source": source, "version": version,
-                            "items": sorted(set(codes))},
-                           sort_keys=True, ensure_ascii=False)
-    actual_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    actual_hash = scope_hash(source, version, codes)
     if actual_hash != expected_hash:
         return dict(pending, status="invalid", reason="scope_hash_mismatch",
                     source=source, version=version, hash=expected_hash,
@@ -388,6 +413,7 @@ def _conservation(lines):
     groups = defaultdict(lambda: {
         "rows": 0, "submitted_rows": 0, "inactive_rows": 0,
         "gross_magnitude_qty": 0.0, "return_magnitude_qty": 0.0,
+        "matched_return_magnitude_qty": 0.0,
         "actual_qty": 0.0, "unknown_quantity_rows": 0,
     })
     for line in lines:
@@ -411,11 +437,17 @@ def _conservation(lines):
             unknown = True
         else:
             group["actual_qty"] += actual
+            if line.get("role") == "return":
+                group["matched_return_magnitude_qty"] += -actual
         if unknown:
             group["unknown_quantity_rows"] += 1
     rows = []
     for key, value in sorted(groups.items(), key=lambda item: tuple(
             "" if part is None else str(part) for part in item[0])):
+        expected = round(value["gross_magnitude_qty"]
+                         - value["matched_return_magnitude_qty"], 6)
+        actual_total = round(value["actual_qty"], 6)
+        arithmetic_ok = abs(expected - actual_total) < 1e-6
         rows.append({
             "item_code": key[0], "uom": key[1], "customer": key[2],
             "warehouse": key[3], "channel": key[4],
@@ -424,7 +456,9 @@ def _conservation(lines):
                                               "unknown_quantity_rows")
                      else round(value[name], 6))
                for name in value},
-            "ok": value["unknown_quantity_rows"] == 0,
+            "expected_actual_qty": expected,
+            "arithmetic_ok": arithmetic_ok,
+            "ok": value["unknown_quantity_rows"] == 0 and arithmetic_ok,
         })
     return {
         "groups": rows,
@@ -435,6 +469,11 @@ def _conservation(lines):
             "returns": sum(1 for line in lines if line.get("role") == "return"),
             "unknown_quantity": sum(1 for line in lines
                                     if _finite(line.get("actual_qty")) is None),
+            "unmatched_returns": sum(
+                1 for line in lines
+                if line.get("role") == "return"
+                and line.get("return_status") not in
+                ("return_matched", "return_excess", "inactive_return")),
         },
         "all_groups_ok": all(row["ok"] for row in rows),
         "note": "Global cross-item quantity is intentionally not reported as a business total.",
@@ -655,7 +694,8 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
                 ret["channel"] = original_line["channel"]
                 ret["warehouse"] = original_line["warehouse"]
         if ret["return_status"] not in ("return_matched", "return_excess"):
-            ret["actual_qty"] = 0.0
+            ret["actual_qty"] = None
+            ret["quantity_status"] = "unknown"
         if ret["return_status"] not in ("return_matched",):
             ret["conflicts"].append(ret["return_status"])
 
@@ -1025,6 +1065,29 @@ def _query_coverage(lines, page):
     }
 
 
+SNAPSHOT_LINE_FIELDS = (
+    "stable_id", "raw_signed_qty", "qty_magnitude", "uom", "stock_uom",
+    "conversion_factor", "warehouse", "target_warehouse", "customer",
+    "posting_date", "posting_time", "docstatus", "is_return",
+    "return_against", "association_status", "actual_qty", "return_status",
+    "so", "so_line",
+)
+
+
+def delivery_snapshot_id(rows, *, schema_version, rule_version,
+                         implementation_version, scope_hash, as_of):
+    """Content fingerprint: in-place qty/UOM/identity edits change the id."""
+    ordered = sorted(rows, key=lambda row: str(
+        row.get("stable_id") or row.get("delivery_note_item") or ""))
+    fingerprint = [[row.get(field) for field in SNAPSHOT_LINE_FIELDS]
+                   for row in ordered]
+    payload = {"lines": fingerprint, "schema": schema_version,
+               "rule": rule_version, "implementation": implementation_version,
+               "scope_hash": scope_hash, "as_of": as_of}
+    return hashlib.sha1(json.dumps(payload, sort_keys=True,
+                                   ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
 @frappe.whitelist()
 def get_delivery_facts(filters=None, **kwargs):
     """DN-item anchored actual delivery facts; SO links are optional edges."""
@@ -1093,14 +1156,11 @@ def get_delivery_facts(filters=None, **kwargs):
     page = rows[offset:offset + limit]
     selected = {row["delivery_note_item"] for row in page}
     exhausted = offset + len(page) >= total
-    snapshot_payload = {
-        "ids": sorted(row["stable_id"] for row in rows),
-        "schema": result["schema_version"], "rule": result["rule_version"],
-        "implementation": result["implementation_version"],
-        "scope_hash": normalized_scope.get("hash"), "as_of": as_of,
-    }
-    snapshot_id = hashlib.sha1(json.dumps(
-        snapshot_payload, sort_keys=True).encode("utf-8")).hexdigest()
+    snapshot_id = delivery_snapshot_id(
+        rows, schema_version=result["schema_version"],
+        rule_version=result["rule_version"],
+        implementation_version=result["implementation_version"],
+        scope_hash=normalized_scope.get("hash"), as_of=as_of)
 
     so_items_by_name = {row.get("name"): row for row in so_items or []}
     summary_rows = rows if filters.get("aggregate_all") else page

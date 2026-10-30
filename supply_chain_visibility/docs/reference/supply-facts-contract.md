@@ -190,6 +190,7 @@ time_range 携带 full-history 证明字段；`signed_at` 可为 null，`signed_
 
 入口：`key_test.delivery_facts.get_delivery_facts(filters, scope)`，schema `supply-facts/v3`。
 **scope 必须由 warehouse_restock 注入**（`source/version/hash/items`，API 校验 hash）；
+服务端对客户端传入的 `status=provided` 也重新计算并比对 hash，不信任客户端结论；
 冻结 9-SKU 仅验收 fixture，不是业务批准全集；无 scope → relevance 全 unknown、E pending。
 
 `delivery_lines` 稳定身份 `source_instance + delivery_note + delivery_note_item`；保留：
@@ -202,6 +203,8 @@ SO/so_line/association_status 与候选 SO；relevance/scope；物流/PO/receipt
 退货：`return_against + dn_detail` 必须匹配原 DN 明细；原单必须提交且
 item/UOM/customer/warehouse 一致；负数与正数 qty 均按 magnitude 处理；
 原行 actual 保持毛额、退货行 actual 为负，净额只扣一次；超退单独记 excess。
+未匹配/身份冲突/原单不可读的退货 `actual_qty=null`、`quantity_status=unknown`，
+计入未知行，不落成 0。
 
 `association_status`：linked 必须同时满足 so_detail parent = against_sales_order、
 SO 提交、item/UOM/customer 一致；否则 conflict；restricted 不泄露 SO 名称。
@@ -217,11 +220,14 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 `include_unlinked`（默认 true）、`include_inactive`、limit/offset。
 筛选/分页同步裁剪全部六类数据集与 counts；`coverage.global` 为全量、
 `coverage.query` 为当前筛选/页面（`aggregation_scope=query_page`）。
-数量守恒只按 item×UOM×customer×warehouse×channel 分组；全局只报行数。
+数量守恒只按 item×UOM×customer×warehouse×channel 分组；每组校验
+`gross - matched_return == actual`（`arithmetic_ok`），`ok` 需无未知行且算术一致；
+全局只报行数。
 
 导出：`--delivery-all [--delivery-include-inactive --delivery-scope-json]`；
 跨页校验 schema/rule/implementation/scope/hash/as_of/source status/snapshot_id；
-混版本、漂移、重复键、写盘失败不创建 run、不切 latest。
+`snapshot_id` 为全部过滤行的内容指纹（含 qty/UOM/仓/客户/关联/退货状态），
+原地改数量会触发漂移；混版本、漂移、重复键、写盘失败不创建 run、不切 latest。
 
 ### `manifest`
 

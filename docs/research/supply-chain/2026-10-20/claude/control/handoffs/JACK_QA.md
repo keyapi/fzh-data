@@ -355,6 +355,26 @@ channel: docs/jack-w1-channel
 - 边界：到仓/上架无 EN 证据 → `delivered_sellable` 不产出、`eligible=false`；多运单不摊量；无独立承诺字段；时区未证；PO/入库/预留/新鲜度未并入 EN 事实。
 - 生产未部署；#314 仍 open，由 #318 接管。PR 评论只发本段短指针。
 
+### [W1-DELIVERY-FACTS-R2-2026-10-30] 第二轮复审修复
+
+对照 Codex 第二轮复审中断前确认的缺口，已修复并补 RED→GREEN：
+
+| 缺口 | 修复 |
+|---|---|
+| 公共 API 可伪造 `status=provided` scope 绕过 hash | `normalize_scope` 对任何客户端 scope 重算 hash，失败→invalid |
+| `snapshot_id` 只含行 ID，原地改数量不漂移 | 改为全行内容指纹（qty/UOM/仓/客户/关联/退货状态） |
+| 未匹配/冲突退货落 0 且守恒报正常 | `actual_qty=null`、`quantity_status=unknown`，守恒 `ok=false` |
+| 守恒只数未知行，不校验算术 | 新增 `expected_actual_qty` / `arithmetic_ok` |
+| 适配器 conflict 行判 `candidate_no_action` | 强制 `manual_review_association_conflict` |
+| 适配器 scope hash 与非 ASCII 不兼容 | 与 key_test 同构（`ensure_ascii=False`、去重） |
+| 适配器不校验 schema / 截断快照 | schema 白名单 + `total` 与行数一致 |
+
+版本：`RULE=2026-10-30.3` / `IMPLEMENTATION=key_test.delivery_facts@2026-10-30.3`。
+测试：key_test 310 passed / 3 skipped / 4 subtests；fzh 200 passed / 5 subtests。
+
+未完成（不得写成通过）：权威业务 scope、受限用户真实 HTTP、浏览器会话、
+真实通途入库/QI、测试站真实退货样本、生产部署。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

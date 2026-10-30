@@ -24,8 +24,8 @@ def scope(codes=(TARGET, OTHER)):
 
 def delivery(lines, *, scope_obj=None, partial=False):
     return {
-        "schema_version": "supply-facts/v3", "rule_version": "2026-10-30.2",
-        "implementation_version": "key_test.delivery_facts@2026-10-30.2",
+        "schema_version": "supply-facts/v3", "rule_version": "2026-10-30.3",
+        "implementation_version": "key_test.delivery_facts@2026-10-30.3",
         "scope": scope_obj if scope_obj is not None else scope(),
         "coverage": {"scope": scope_obj if scope_obj is not None else scope()},
         "pagination": {"exhausted": not partial, "partial": partial},
@@ -66,6 +66,33 @@ class GatesTests(unittest.TestCase):
         del payload["implementation_version"]
         with self.assertRaises(ValueError):
             build_restock_delivery_view(payload)
+
+
+    def test_truncated_snapshot_is_rejected(self):
+        payload = delivery([line()])
+        payload["pagination"]["total"] = 2
+        with self.assertRaises(ValueError):
+            build_restock_delivery_view(payload)
+
+    def test_unsupported_schema_is_rejected(self):
+        payload = delivery([line()])
+        payload["schema_version"] = "supply-facts/v2"
+        with self.assertRaises(ValueError):
+            build_restock_delivery_view(payload)
+
+    def test_non_ascii_item_scope_hash_is_accepted(self):
+        code = "皮壳-内胆-01"
+        payload = {"status": "provided", "source": "warehouse_restock",
+                   "version": "scope-v2", "items": [code]}
+        canonical = json.dumps({"source": payload["source"],
+                                "version": payload["version"],
+                                "items": [code]},
+                               sort_keys=True, ensure_ascii=False)
+        payload["hash"] = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+        result = build_restock_delivery_view(
+            delivery([line(item=code)], scope_obj=payload))
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["rows"][0]["item_code"], code)
 
 
 class GroupingTests(unittest.TestCase):
@@ -109,6 +136,16 @@ class GroupingTests(unittest.TestCase):
         row = next(r for r in result["rows"] if r["item_code"] == OTHER)
         self.assertIsNone(row["actual_delivery_qty"])
         self.assertEqual(row["qty_status"], "no_observed_delivery")
+
+    def test_conflict_association_forces_manual_review(self):
+        result = build_restock_delivery_view(
+            delivery([line(association="conflict", channel="in_house")]))
+        row = next(r for r in result["rows"] if r["item_code"] == TARGET)
+        self.assertEqual(row["association_flags"], ["conflict"])
+        self.assertEqual(row["suggested_action"],
+                         "manual_review_association_conflict")
+        self.assertFalse(row["auto_order"])
+        self.assertGreaterEqual(result["summary"]["manual_review_rows"], 1)
 
     def test_duplicate_identity_is_flagged(self):
         result = build_restock_delivery_view(

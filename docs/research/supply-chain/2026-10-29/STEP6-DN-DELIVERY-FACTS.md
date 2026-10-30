@@ -38,8 +38,10 @@ tags: [supply-chain, delivery-note, actual-delivery, reconciliation]
 技术科 103、波兰公司 40、美国FBA仓 1。**不输出跨商品数量总和**。
 
 数量守恒只按 `item×UOM×customer×warehouse×channel` 分组：
-`conservation.groups[]` 逐组输出 gross/return/actual/unknown；全局只报行数
-（total/submitted/inactive/returns/unknown_quantity），不把 224,972.5 当作业务守恒量。
+`conservation.groups[]` 逐组输出 gross / 已匹配退货 / actual / unknown，并校验
+`gross - matched_return == actual`（`arithmetic_ok`）；`ok` 需同时满足无未知行与算术一致。
+全局只报行数（total/submitted/inactive/returns/unknown_quantity/unmatched_returns），
+不把 224,972.5 当作业务守恒量。
 
 验收 fixture 下 9 行均来自 `DN-26-00058`，合计实际交付 131（仅 fixture 回归）。
 
@@ -52,6 +54,8 @@ tags: [supply-chain, delivery-note, actual-delivery, reconciliation]
 - 原行 `actual_qty` 保持毛额，退货行 `actual_qty=-匹配量`；净额只扣一次，
   不再“原行净额 + 负向退货”双重抵扣。
 - 超退单独 `excess_return_qty`；原单无 SO 时退货保持 unlinked。
+- 未能匹配原单/身份冲突/原单不可读的退货：`actual_qty=null`、`quantity_status=unknown`，
+  计入 `coverage_exceptions` 与守恒未知行，**不再落成 0**；草稿/取消退货仍按 not_current 留痕。
 
 ## C. 三本账（修正）
 
@@ -73,22 +77,27 @@ tags: [supply-chain, delivery-note, actual-delivery, reconciliation]
   `coverage.global` 为全量、`coverage.query` 为当前筛选/页面，聚合标注 `query_page`。
 - SO 页面「本 SO 实际交付」只查该 SO；另设「全局实际交付」入口，200 行/页可翻页。
 - 导出跨页校验 schema/rule/implementation/scope/as_of/source status/snapshot_id；
-  混版本、并发漂移、重复稳定键、写盘失败均不创建 run、不切 latest。
+  `snapshot_id` 为全部过滤行的**内容指纹**（含 qty/UOM/仓/客户/关联/退货状态），
+  DN 行原地改数量也会触发漂移；混版本、漂移、重复稳定键、写盘失败均不创建 run、不切 latest。
 
 ## E. warehouse_restock 适配（修正）
 
-- 必须先通过 snapshot gate：`pagination.exhausted=true`、非 partial、版本齐全、
-  scope 已提供且 hash 匹配；否则 `scope_pending` 或拒绝。
+- 必须先通过 snapshot gate：`schema_version=supply-facts/v3`、`pagination.exhausted=true`、
+  非 partial、版本齐全、`total` 与行数一致、scope 已提供且 hash 匹配（与 key_test 同构，
+  含非 ASCII 物料码）；否则 `scope_pending` 或拒绝。
 - 行粒度：`item×UOM×channel×destination`；同 SKU 双渠道、双 UOM、双仓分行，
   不跨单位/渠道合计。
 - 输出 actual/linked/unlinked/unresolved/potential；unknown 不写 0；
-  `eligible_for_restock=false`、`auto_order=false`。
+  `association_status ∈ {conflict, ambiguous, restricted}` 的行强制
+  `manual_review_association_conflict`；`eligible_for_restock=false`、`auto_order=false`。
 
 ## 回归与 pending
 
 已覆盖：负数退货、正负等价、双重抵扣、跨 item/仓/UOM 退货、草稿/取消原单、
 缺失/NaN/Infinity、多运单、同 SKU 双渠道、多 SO 顺序不变、筛选聚合隔离、
-混版本/快照漂移/重复键/写盘失败、导出分页与 latest 保护、SO 页面范围。
+混版本/快照漂移/重复键/写盘失败、导出分页与 latest 保护、SO 页面范围、
+伪造 scope 拒收与 scope 幂等、内容指纹随数量变化、未匹配退货保持 unknown、
+守恒算术、适配器非 ASCII scope/截断快照/冲突行人工复核。
 
 仍 pending：普通受限用户真实 HTTP 权限、浏览器会话、真实通途入库/QI、
 生产部署、权威业务 scope 注入后的 A/E 分布。不得把 fixture 结果写成业务批准。

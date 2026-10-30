@@ -29,11 +29,29 @@ def _round(value):
     return None if number is None else round(number, 6)
 
 
+SUPPORTED_SCHEMAS = {"supply-facts/v3"}
+
+
+def _scope_codes(items):
+    if isinstance(items, dict):
+        items = list(items)
+    if not isinstance(items, (list, tuple, set)):
+        return []
+    codes = []
+    for entry in items:
+        code = entry.get("item_code") if isinstance(entry, dict) else entry
+        if code is None or str(code).strip() == "":
+            continue
+        codes.append(str(code).strip())
+    return sorted(set(codes))
+
+
 def _scope_hash(scope):
+    """Must match key_test.delivery_facts.scope_hash byte for byte."""
     canonical = json.dumps({"source": scope.get("source"),
                             "version": scope.get("version"),
-                            "items": sorted(scope.get("items") or [])},
-                           sort_keys=True)
+                            "items": _scope_codes(scope.get("items"))},
+                           sort_keys=True, ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -47,6 +65,16 @@ def validate_delivery_snapshot(delivery):
     for key in ("schema_version", "rule_version", "implementation_version"):
         if not delivery.get(key):
             raise ValueError("delivery snapshot missing %s" % key)
+    if delivery.get("schema_version") not in SUPPORTED_SCHEMAS:
+        raise ValueError("unsupported delivery schema %r"
+                         % delivery.get("schema_version"))
+    lines = delivery.get("delivery_lines")
+    if not isinstance(lines, list):
+        raise ValueError("delivery_lines must be a list")
+    total = pagination.get("total")
+    if total is not None and int(total) != len(lines):
+        raise ValueError("delivery snapshot total %s != %s rows"
+                         % (total, len(lines)))
     coverage = delivery.get("coverage") or {}
     scope = delivery.get("scope") or coverage.get("scope") or {}
     if scope.get("status") != "provided":
@@ -111,6 +139,7 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
                 "inventory_qty": None,
                 "receipt_source_status": "not_integrated",
                 "inventory_source_status": "not_integrated",
+                "association_flags": [],
                 "eligible_for_restock": False,
                 "suggested_action": "manual_review_no_delivery_evidence",
                 "auto_order": False,
@@ -139,8 +168,14 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
                                or potential[0] is None else potential[0])
             unresolved_value = (None if len(unresolved) != 1
                                 or unresolved[0] is None else unresolved[0])
+            association_flags = sorted({
+                line.get("association_status") for line in bucket
+                if line.get("association_status") in
+                ("conflict", "ambiguous", "restricted")})
             if channel == "unknown":
                 action = "manual_review_channel_unknown"
+            elif association_flags:
+                action = "manual_review_association_conflict"
             elif unknown:
                 action = "manual_review_delivery_unknown"
             elif unlinked is not None and abs(unlinked) > 1e-9:
@@ -163,6 +198,7 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
                 "inventory_qty": None,
                 "receipt_source_status": "not_integrated",
                 "inventory_source_status": "not_integrated",
+                "association_flags": association_flags,
                 "eligible_for_restock": False,
                 "suggested_action": action,
                 "auto_order": False,
@@ -177,6 +213,9 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
             "row_count": len(rows),
             "duplicate_line_ids": duplicates,
             "duplicate_free": not duplicates,
+            "manual_review_rows": sum(
+                1 for row in rows
+                if str(row.get("suggested_action") or "").startswith("manual_review")),
             "grouping": "item×uom×channel×destination",
             "auto_order": False,
             "note": "No cross-UOM or cross-channel sum; no purchase order generated.",
