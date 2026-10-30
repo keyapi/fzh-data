@@ -186,41 +186,48 @@ source_as_of）。布尔只接受 JSON true/false；
 time_range 携带 full-history 证明字段；`signed_at` 可为 null，`signed_status_proven`
 为可选布尔；失败不创建 run、不切换 `latest.json`。
 
-### `delivery_lines` / SO 关联边 / 三本账（v3，DN 明细为锚）
+### `delivery_lines` / SO 关联边 / 三本账（v3.1，DN 明细为锚）
 
-入口：`key_test.delivery_facts.get_delivery_facts`，schema `supply-facts/v3`；
-范围基准 `jack_w1_sample9_2026-10-26`（9 个冻结 SKU，非业务批准清单）。
+入口：`key_test.delivery_facts.get_delivery_facts(filters, scope)`，schema `supply-facts/v3`。
+**scope 必须由 warehouse_restock 注入**（`source/version/hash/items`，API 校验 hash）；
+冻结 9-SKU 仅验收 fixture，不是业务批准全集；无 scope → relevance 全 unknown、E pending。
 
-`delivery_lines` 每行以 `source_instance + delivery_note + delivery_note_item` 为稳定身份，保留：
+`delivery_lines` 稳定身份 `source_instance + delivery_note + delivery_note_item`；保留：
 原始 DN/明细、docstatus、is_return、return_against、amended_from、source_modified；
-item_code/qty/uom/stock_qty/stock_uom/换算依据；客户/公司/来源仓/目标仓及证据状态；
-过账日期/时间与时区状态、observed_at；SO/so_line/association_status 与候选 SO；
-relevance_status/scope_rule_version；数量/身份/目的仓/物流/入库/库存状态；冲突与未知原因。
-仅已提交 DN 计入实际交付；草稿/取消留痕不累加；退货按原 DN 明细逐容量抵扣；
-无 SO 的 DN 行完整保留。
+`raw_signed_qty`（ERPNext 负数 qty 原值）与 `qty_magnitude`、uom/stock_qty/换算依据；
+客户/公司/来源仓/目标仓及证据状态；过账时间/时区、observed_at；
+SO/so_line/association_status 与候选 SO；relevance/scope；物流/PO/receipt/inventory；
+数量方向、冲突与未知原因。仅提交 DN 计入实际交付；草稿/取消留痕不累加。
 
-`association_status`：`linked` / `so_header_only` / `unlinked` / `ambiguous` /
-`conflict` / `restricted`。`candidate_so_lines` 只供人工审核，不自动写回。
+退货：`return_against + dn_detail` 必须匹配原 DN 明细；原单必须提交且
+item/UOM/customer/warehouse 一致；负数与正数 qty 均按 magnitude 处理；
+原行 actual 保持毛额、退货行 actual 为负，净额只扣一次；超退单独记 excess。
 
-三本账：`so_fulfillment`（SO 量、linked 交付、SO 余额、potential_overlap、
-confirmed_additional_supply、association_gap）、`supply_ledger`（SO 行 + unlinked
-delivery，unknown 不转 0）、`physical_chain`（DN→Shipment→PO→receipt→inventory；
-多运单 qty=null，PO code_only，receipt/inventory not_integrated）。
-`association_edges` 与 `coverage_exceptions` 保留全部未关联/冲突/受限/范围外/未知行。
+`association_status`：linked 必须同时满足 so_detail parent = against_sales_order、
+SO 提交、item/UOM/customer 一致；否则 conflict；restricted 不泄露 SO 名称。
+`candidate_so_lines` 仅人工审核。
 
-API filters：`customer`、`item_code`、`from_date`、`to_date`、
-`association_status`、`relevance_status`、`include_unlinked`（默认 true，不得静默裁掉）、
-`include_inactive`、`limit`、`offset`。分页 `sort=[posting_date, delivery_note, idx,
-delivery_note_item]`，唯一键 `delivery_note_item`。
+三本账：`so_fulfillment` 只输出 so_open/unresolved_demand，**不输出 confirmed
+additional supply**；`ambiguity_pools` 按 item×UOM×customer×warehouse×channel
+做组级 min(open,pool)，不贪心分配、顺序无关；`supply_ledger` 只含 linked filled、
+unresolved demand、unlinked delivery；`physical_chain` 多运单 qty=null、PO code_only、
+receipt/inventory not_integrated。
 
-导出：`--delivery-all [--delivery-include-inactive]` 生成上述六类数据集 + Excel +
-manifest；schema `supply-facts/v3`，记录 delivery schema/rule/implementation、
-覆盖、分页、SHA-256、latest 原子指针。
+API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围状态、
+`include_unlinked`（默认 true）、`include_inactive`、limit/offset。
+筛选/分页同步裁剪全部六类数据集与 counts；`coverage.global` 为全量、
+`coverage.query` 为当前筛选/页面（`aggregation_scope=query_page`）。
+数量守恒只按 item×UOM×customer×warehouse×channel 分组；全局只报行数。
+
+导出：`--delivery-all [--delivery-include-inactive --delivery-scope-json]`；
+跨页校验 schema/rule/implementation/scope/hash/as_of/source status/snapshot_id；
+混版本、漂移、重复键、写盘失败不创建 run、不切 latest。
 
 ### `manifest`
 
-`schema_version=supply-facts/v2`、`rule_version`（数量规则版本）、`implementation_version`（实现/构建版本，服务端返回与本地导出产物都携带）、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`source_status`（逐来源 `{available, reason}`，
-含 `shipment_logistics_event`）/`external_sources`）、`counts`、`partial`、`truncated`、`termination_reason`（`exhausted`/`page_limit`）、`pagination`、`partial_reasons`、`notes`、`files`（相对路径 + sha256）、`performance`。响应顶层同样返回 `source_status`。
+`schema_version=supply-facts/v3`（并保留 `supply_facts_schema_version` 与
+`delivery_schema_version`）、`rule_version`、`implementation_version`、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`source_status`（逐来源 `{available, reason}`，
+含 `shipment_logistics_event`）/`external_sources`/`delivery_scope`/`delivery_pagination`）、`counts`、`partial`、`truncated`、`termination_reason`、`pagination`、`partial_reasons`、`notes`、`files`（相对路径 + sha256）、`performance`。
 
 ## 2. 批量入口
 
@@ -247,7 +254,7 @@ filters = JSON object
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
 - Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
 - 当前 `implementation_version=key_test.supply_facts@2026-10-30.6`；`rule_version=2026-10-30.1`；
-  delivery facts 使用 `schema=supply-facts/v3`、`implementation=key_test.delivery_facts@2026-10-30.1`；
+  delivery facts 使用 `schema=supply-facts/v3`、`implementation=key_test.delivery_facts@2026-10-30.2`；
   接口/分页行为变更必须 bump，混合版本继续拒绝。
 - 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
 - `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。

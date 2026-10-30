@@ -146,7 +146,8 @@ class SalesOrderRenderTest(unittest.TestCase):
             }],
         }
         out = _render_doc([_line(work_orders=[])], delivery=delivery)
-        self.assertIn("实际交付 / 未关联 SO", out["html"])
+        self.assertIn("本 SO 实际交付", out["html"])
+        self.assertIn("全局实际交付", out["html"])
         self.assertIn("unlinked", out["delivery_html"])
         self.assertIn("target_warehouse_unknown", out["delivery_html"])
         self.assertIn("仅供人工审核", out["delivery_html"])

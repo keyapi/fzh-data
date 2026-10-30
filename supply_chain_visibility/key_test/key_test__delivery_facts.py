@@ -1,25 +1,28 @@
 # -*- coding: utf-8 -*-
 """Delivery-Note-centric actual delivery facts (read-only, pure builders + API).
 
-The anchor is a submitted ``Delivery Note Item``.  SO association is an
-optional edge: a DN line without SO is still a real delivery and keeps its
-logistics / PO / receipt trail.  Nothing here guesses an SO from item prefix,
-BOM, or same-item proximity; candidates are for manual review only.
+The anchor is a Delivery Note Item.  SO association is an optional, strictly
+validated edge.  Target scope is injected by the authoritative
+warehouse_restock input; the frozen 9-SKU list is only an acceptance fixture.
+No number guessing, no auto-linking, no automatic ordering.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 from collections import defaultdict
 
 import frappe
 from frappe.utils import now_datetime
 
 SCHEMA_VERSION = "supply-facts/v3"
-RULE_VERSION = "2026-10-30.1"
-IMPLEMENTATION_VERSION = "key_test.delivery_facts@2026-10-30.1"
-SCOPE_VERSION = "jack_w1_sample9_2026-10-26"
+RULE_VERSION = "2026-10-30.2"
+IMPLEMENTATION_VERSION = "key_test.delivery_facts@2026-10-30.2"
 
-APPROVED_TARGET_ITEMS = {
+# Acceptance fixture only. It is NOT an approved business target list.
+ACCEPTANCE_FIXTURE_VERSION = "jack_w1_sample9_2026-10-26"
+ACCEPTANCE_FIXTURE_ITEMS = {
     "KS0156-NYBDSFH-52x52x5-BLACK": {"customer_sku": "TT0031038K0062927", "slot": "S1_urgent"},
     "PK#KS0001-XMMBS-100-HEMPNATURAL": {"customer_sku": "C/Linen-Natural-100-688-wow", "slot": "S2_overlap_1"},
     "ZTGJ5525-SOFALSHAPEDBRACKET-IRON-55x45x45": {"customer_sku": "TT0312701K0064561", "slot": "S2_overlap_2"},
@@ -32,8 +35,9 @@ APPROVED_TARGET_ITEMS = {
 }
 
 FILTER_KEYS = {
-    "customer", "item_code", "from_date", "to_date", "association_status",
-    "relevance_status", "include_unlinked", "include_inactive", "limit", "offset",
+    "sales_order", "customer", "item_code", "from_date", "to_date",
+    "association_status", "relevance_status", "include_unlinked",
+    "include_inactive", "limit", "offset",
 }
 ASSOCIATION_VALUES = {
     "linked", "so_header_only", "unlinked", "ambiguous", "conflict", "restricted",
@@ -43,25 +47,26 @@ FRAMEWORK_ARGS = {"cmd", "csrf_token", "_"}
 DEFAULT_LIMIT = 500
 MAX_LIMIT = 2000
 SORT_KEYS = ["posting_date", "delivery_note", "idx", "delivery_note_item"]
-RETURN_ISSUES = {
-    "return_reference_missing", "return_reference_conflict",
-    "return_reference_restricted", "return_excess", "return_of_return",
-}
 
 
 def _text(value) -> str:
     return "" if value is None else str(value).strip()
 
 
-def _num(value):
+def _finite(value):
+    """Strict finite number: bool/None/NaN/Infinity/text → None."""
+    if value is None or isinstance(value, bool):
+        return None
     try:
-        return float(value or 0)
+        number = float(value)
     except (TypeError, ValueError):
-        return 0.0
+        return None
+    return number if math.isfinite(number) else None
 
 
 def _round(value):
-    return None if value is None else round(_num(value), 6)
+    number = _finite(value)
+    return None if number is None else round(number, 6)
 
 
 def _day(value):
@@ -72,56 +77,113 @@ def _iso(value):
     return str(value).replace(" ", "T")[:19] if value else None
 
 
-def scope_for_item(item_code):
-    item_code = _text(item_code)
-    if not item_code:
-        return "unknown", "缺少 item_code"
-    if item_code in APPROVED_TARGET_ITEMS:
+def normalize_scope(raw):
+    """Validate authoritative scope input from warehouse_restock."""
+    pending = {"status": "pending", "source": None, "version": None,
+               "hash": None, "items": {}, "reason": "no_authoritative_scope"}
+    if raw in (None, "", {}):
+        return pending
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return dict(pending, status="invalid", reason="scope_not_json")
+    if not isinstance(raw, dict):
+        return dict(pending, status="invalid", reason="scope_not_object")
+    source, version, expected_hash = (_text(raw.get("source")),
+                                      _text(raw.get("version")),
+                                      _text(raw.get("hash")))
+    items_raw = raw.get("items")
+    if not source or not version or not expected_hash or not isinstance(items_raw, list):
+        return dict(pending, status="invalid", reason="scope_fields_missing")
+    items = {}
+    codes = []
+    for entry in items_raw:
+        if isinstance(entry, str):
+            code = entry.strip()
+            meta = {}
+        elif isinstance(entry, dict):
+            code = _text(entry.get("item_code"))
+            meta = {key: value for key, value in entry.items() if key != "item_code"}
+        else:
+            return dict(pending, status="invalid", reason="scope_item_invalid")
+        if not code:
+            return dict(pending, status="invalid", reason="scope_item_blank")
+        items[code] = meta
+        codes.append(code)
+    canonical = json.dumps({"source": source, "version": version,
+                            "items": sorted(set(codes))},
+                           sort_keys=True, ensure_ascii=False)
+    actual_hash = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    if actual_hash != expected_hash:
+        return dict(pending, status="invalid", reason="scope_hash_mismatch",
+                    source=source, version=version, hash=expected_hash,
+                    computed_hash=actual_hash, items=items)
+    return {"status": "provided", "source": source, "version": version,
+            "hash": expected_hash, "items": items, "reason": ""}
+
+
+def scope_for_item(item_code, scope):
+    code = _text(item_code)
+    if scope.get("status") != "provided":
+        return "unknown", "scope_" + _text(scope.get("status") or "pending")
+    if not code:
+        return "unknown", "missing_item_code"
+    if code in (scope.get("items") or {}):
         return "in_scope", ""
-    return "out_of_scope", "不在已批准 9-SKU 清单（%s）" % SCOPE_VERSION
+    return "out_of_scope", "not_in_authoritative_scope"
 
 
 def uom_evidence(item):
-    qty = item.get("qty")
-    stock_qty = item.get("stock_qty")
+    qty = _finite(item.get("qty"))
+    stock_qty = _finite(item.get("stock_qty"))
+    factor = _finite(item.get("conversion_factor"))
     uom = _text(item.get("uom"))
     stock_uom = _text(item.get("stock_uom"))
-    factor = _num(item.get("conversion_factor"))
     if qty is None:
-        return "unknown", "missing_quantity"
+        return "unknown", "invalid_quantity"
+    magnitude = abs(qty)
     if not uom or not stock_uom:
         return "unknown", "uom_missing"
-    if uom == stock_uom and (stock_qty is None or abs(_num(stock_qty) - _num(qty)) < 1e-6):
+    if uom == stock_uom and (stock_qty is None
+                             or abs(abs(stock_qty) - magnitude) < 1e-6):
         return "known", "same_uom"
-    if factor > 0 and stock_qty is not None \
-            and abs(_num(stock_qty) - _num(qty) * factor) < 1e-6:
+    if factor is not None and factor > 0 and stock_qty is not None \
+            and abs(abs(stock_qty) - magnitude * factor) < 1e-6:
         return "known", "conversion_factor"
     return "unknown", "conversion_unproven"
 
 
 def _association(item, dn, so_headers, so_items_by_name, so_items_by_parent,
-                 so_detail_parent, permitted_sos, candidates):
-    """Return (status, so, so_line, reason, candidate_lines)."""
+                 permitted_sos, candidates):
     so_detail = _text(item.get("so_detail"))
     so_header = _text(item.get("against_sales_order"))
     candidates_for_item = candidates.get(
         (_text(dn.get("customer")), _text(item.get("item_code"))), [])
     if so_detail:
+        if not so_header:
+            return ("conflict", None, None, "so_header_missing", candidates_for_item)
         so_item = so_items_by_name.get(so_detail)
         if so_item is None:
-            parent = _text(so_detail_parent.get(so_detail))
-            if parent and parent not in permitted_sos:
-                return ("restricted", parent, so_detail, "so_not_readable", [])
-            return ("conflict", so_header or parent or None, so_detail,
-                    "so_detail_not_found", candidates_for_item)
+            if so_header not in permitted_sos:
+                return ("restricted", None, None, "so_not_readable", [])
+            return ("conflict", None, None, "so_detail_not_found",
+                    candidates_for_item)
         parent = _text(so_item.get("parent"))
+        if parent != so_header:
+            return ("conflict", None, None, "so_detail_parent_mismatch",
+                    candidates_for_item)
         if parent not in permitted_sos:
-            return ("restricted", parent, so_detail, "so_not_readable", [])
+            return ("restricted", None, None, "so_not_readable", [])
         header = so_headers.get(parent) or {}
         if int(header.get("docstatus") or 0) != 1:
-            return ("conflict", parent, so_detail, "so_not_submitted", candidates_for_item)
+            return ("conflict", parent, so_detail, "so_not_submitted",
+                    candidates_for_item)
         if _text(so_item.get("item_code")) != _text(item.get("item_code")):
             return ("conflict", parent, so_detail, "so_item_code_mismatch",
+                    candidates_for_item)
+        if _text(so_item.get("uom")) != _text(item.get("uom")):
+            return ("conflict", parent, so_detail, "so_uom_mismatch",
                     candidates_for_item)
         if _text(header.get("customer")) != _text(dn.get("customer")):
             return ("conflict", parent, so_detail, "so_customer_mismatch",
@@ -129,10 +191,11 @@ def _association(item, dn, so_headers, so_items_by_name, so_items_by_parent,
         return ("linked", parent, so_detail, "", [])
     if so_header:
         if so_header not in permitted_sos:
-            return ("restricted", so_header, None, "so_not_readable", [])
+            return ("restricted", None, None, "so_not_readable", [])
         header = so_headers.get(so_header) or {}
         if int(header.get("docstatus") or 0) != 1:
-            return ("conflict", so_header, None, "so_not_submitted", candidates_for_item)
+            return ("conflict", so_header, None, "so_not_submitted",
+                    candidates_for_item)
         if _text(header.get("customer")) != _text(dn.get("customer")):
             return ("conflict", so_header, None, "so_customer_mismatch",
                     candidates_for_item)
@@ -154,12 +217,11 @@ def _logistics_for_dn(dn_name, logistics):
     shipments = logistics.get("shipment_by_number") or {}
     resolved = [shipments.get(entry.get("number")) for entry in numbers]
     resolved = [row for row in resolved if row]
-    identity_conflict = any(row.get("identity_conflict") for row in resolved)
     if not logistics.get("shipment_permission", True):
         return "permission", numbers, resolved
     if not numbers:
         return "no_waybill", numbers, resolved
-    if identity_conflict:
+    if any(row.get("identity_conflict") for row in resolved):
         return "identity_conflict", numbers, resolved
     if len(numbers) > 1:
         return "allocation_unknown", numbers, resolved
@@ -168,17 +230,224 @@ def _logistics_for_dn(dn_name, logistics):
     return "linked", numbers, resolved
 
 
+def group_key(line):
+    return (line.get("item_code") or "", line.get("uom") or "",
+            line.get("customer") or "", line.get("warehouse") or "",
+            line.get("channel") or "unknown")
+
+
+def _safe_sums(lines):
+    total = 0.0
+    unknown = 0
+    for line in lines:
+        value = _finite(line.get("actual_qty"))
+        if value is None:
+            unknown += 1
+        else:
+            total += value
+    return round(total, 6), unknown
+
+
+def summarize_lines(lines, so_items_by_name):
+    """Build SO fulfillment / ambiguity pools / supply ledger for a line set."""
+    linked_by_line = defaultdict(float)
+    so_line_meta = defaultdict(list)
+    for line in lines:
+        if line.get("association_status") != "linked" or not line.get("so_line"):
+            continue
+        value = _finite(line.get("actual_qty"))
+        if value is None:
+            return {
+                "so_fulfillment": [], "ambiguity_pools": [], "supply_ledger": [],
+                "reason": "linked_delivery_quantity_unknown",
+            }
+        linked_by_line[(line["so"], line["so_line"])] += value
+        so_line_meta[(line["so"], line["so_line"])].append(line)
+    so_fulfillment = []
+    for key in sorted(so_line_meta, key=lambda item: (str(item[0]), str(item[1]))):
+        line = so_line_meta[key][0]
+        so_item = so_items_by_name.get(key[1]) or {}
+        so_qty = _round(so_item.get("qty"))
+        order_uom = _text(so_item.get("uom"))
+        if so_qty is None or not order_uom or order_uom != _text(line.get("uom")):
+            open_qty = None
+            open_status = "unknown_uom_or_quantity"
+        else:
+            open_qty = max(0.0, round(so_qty - linked_by_line[key], 6))
+            open_status = "known"
+        so_fulfillment.append({
+            "so": key[0], "so_line": key[1], "item_code": line["item_code"],
+            "uom": line["uom"], "warehouse": line.get("warehouse"),
+            "customer": line.get("customer"),
+            "channel": line.get("channel") or "unknown",
+            "so_qty": so_qty,
+            "linked_delivered_qty": round(linked_by_line[key], 6),
+            "so_open_qty": open_qty,
+            "unresolved_demand_qty": open_qty,
+            "potential_overlap_qty": None,
+            "confirmed_additional_supply_qty": None,
+            "open_status": open_status,
+            "eligible": False,
+            "note": ("无独立物理证据，SO 余额只记 unresolved demand；"
+                     "潜在重叠见 ambiguity_pools"),
+        })
+    # Ambiguity pools: group sums only, never greedy allocation to SO lines.
+    so_open = defaultdict(float)
+    so_open_unknown = defaultdict(int)
+    so_lines_by_group = defaultdict(list)
+    for row in so_fulfillment:
+        key = (row["item_code"] or "", row["uom"] or "",
+               row.get("customer") or "", row.get("warehouse") or "",
+               row.get("channel") or "unknown")
+        so_lines_by_group[key].append(row)
+        if row["so_open_qty"] is None:
+            so_open_unknown[key] += 1
+        else:
+            so_open[key] += row["so_open_qty"]
+    pool = defaultdict(float)
+    pool_unknown = defaultdict(int)
+    for line in lines:
+        if line.get("association_status") != "unlinked":
+            continue
+        key = group_key(line)
+        value = _finite(line.get("actual_qty"))
+        if value is None:
+            pool_unknown[key] += 1
+        else:
+            pool[key] += value
+    keys = sorted(set(so_lines_by_group) | set(pool), key=lambda item: tuple(
+        "" if part is None else str(part) for part in item))
+    ambiguity_pools = []
+    for key in keys:
+        open_total = round(so_open.get(key, 0.0), 6)
+        pool_qty = round(pool.get(key, 0.0), 6)
+        if so_open_unknown.get(key) or pool_unknown.get(key):
+            potential = None
+            unresolved = None
+        else:
+            potential = min(open_total, pool_qty)
+            unresolved = max(0.0, round(open_total - pool_qty, 6))
+        ambiguity_pools.append({
+            "item_code": key[0], "uom": key[1], "customer": key[2],
+            "warehouse": key[3], "channel": key[4],
+            "so_open_total_qty": (None if so_open_unknown.get(key) else open_total),
+            "unlinked_delivery_qty": (None if pool_unknown.get(key) else pool_qty),
+            "potential_overlap_qty": potential,
+            "unresolved_demand_qty": unresolved,
+            "candidate_so_lines": [
+                {"so": row["so"], "so_line": row["so_line"],
+                 "so_open_qty": row["so_open_qty"]}
+                for row in sorted(so_lines_by_group.get(key, []),
+                                  key=lambda item: (str(item["so"]), str(item["so_line"])))],
+            "eligible": False,
+            "note": "pool-level overlap only; never allocated greedily to a SO line",
+        })
+    supply_ledger = []
+    for row in so_fulfillment:
+        supply_ledger.append({
+            "supply_role": "so_line", "so": row["so"], "so_line": row["so_line"],
+            "item_code": row["item_code"], "uom": row["uom"],
+            "warehouse": row["warehouse"], "channel": row["channel"],
+            "linked_fulfilled_qty": row["linked_delivered_qty"],
+            "unresolved_demand_qty": row["unresolved_demand_qty"],
+            "potential_overlap_qty": None,
+            "confirmed_additional_supply_qty": None,
+            "eligible": False,
+            "reason": "SO balance is unresolved demand, not confirmed supply",
+        })
+    for line in lines:
+        if line.get("association_status") != "unlinked":
+            continue
+        supply_ledger.append({
+            "supply_role": "unlinked_delivery", "so": None, "so_line": None,
+            "item_code": line.get("item_code"), "uom": line.get("uom"),
+            "warehouse": line.get("warehouse"),
+            "channel": line.get("channel") or "unknown",
+            "linked_fulfilled_qty": 0.0,
+            "unresolved_demand_qty": None,
+            "potential_overlap_qty": None,
+            "confirmed_additional_supply_qty": None,
+            "eligible": False,
+            "unknown_qty": _round(line.get("actual_qty")),
+            "reason": "no SO association; keep logistics/PO trail only",
+            "delivery_note": line.get("delivery_note"),
+            "delivery_note_item": line.get("delivery_note_item"),
+            "candidate_so_lines": line.get("candidate_so_lines") or [],
+        })
+    return {"so_fulfillment": so_fulfillment,
+            "ambiguity_pools": ambiguity_pools,
+            "supply_ledger": supply_ledger, "reason": ""}
+
+
+def _conservation(lines):
+    groups = defaultdict(lambda: {
+        "rows": 0, "submitted_rows": 0, "inactive_rows": 0,
+        "gross_magnitude_qty": 0.0, "return_magnitude_qty": 0.0,
+        "actual_qty": 0.0, "unknown_quantity_rows": 0,
+    })
+    for line in lines:
+        key = group_key(line)
+        group = groups[key]
+        group["rows"] += 1
+        if line.get("docstatus") != 1:
+            group["inactive_rows"] += 1
+            continue
+        group["submitted_rows"] += 1
+        unknown = False
+        magnitude = _finite(line.get("qty_magnitude"))
+        if magnitude is None:
+            unknown = True
+        elif line.get("role") == "return":
+            group["return_magnitude_qty"] += magnitude
+        else:
+            group["gross_magnitude_qty"] += magnitude
+        actual = _finite(line.get("actual_qty"))
+        if actual is None:
+            unknown = True
+        else:
+            group["actual_qty"] += actual
+        if unknown:
+            group["unknown_quantity_rows"] += 1
+    rows = []
+    for key, value in sorted(groups.items(), key=lambda item: tuple(
+            "" if part is None else str(part) for part in item[0])):
+        rows.append({
+            "item_code": key[0], "uom": key[1], "customer": key[2],
+            "warehouse": key[3], "channel": key[4],
+            **{name: (value[name] if name in ("rows", "submitted_rows",
+                                              "inactive_rows",
+                                              "unknown_quantity_rows")
+                     else round(value[name], 6))
+               for name in value},
+            "ok": value["unknown_quantity_rows"] == 0,
+        })
+    return {
+        "groups": rows,
+        "row_counts": {
+            "total": len(lines),
+            "submitted": sum(1 for line in lines if line.get("docstatus") == 1),
+            "inactive": sum(1 for line in lines if line.get("docstatus") != 1),
+            "returns": sum(1 for line in lines if line.get("role") == "return"),
+            "unknown_quantity": sum(1 for line in lines
+                                    if _finite(line.get("actual_qty")) is None),
+        },
+        "all_groups_ok": all(row["ok"] for row in rows),
+        "note": "Global cross-item quantity is intentionally not reported as a business total.",
+    }
+
+
 def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
-                         candidates, logistics, *, instance="test",
+                         candidates, logistics, *, scope=None, instance="",
                          observed_at=None, restricted=False,
-                         so_detail_parent=None):
-    """Pure builder. ``headers``/``items`` are plain dicts from read-only loads."""
+                         channel_by_item=None, as_of=None):
+    scope = normalize_scope(scope)
     header_by_name = {row.get("name"): row for row in headers or []}
     items_by_name = {row.get("name"): row for row in items or []}
     so_items_by_name = {row.get("name"): row for row in so_items or []}
     so_items_by_parent = defaultdict(list)
     for row in so_items or []:
         so_items_by_parent[row.get("parent")].append(row)
+    channel_map = dict(channel_by_item or {})
     candidates = candidates or {}
 
     base_lines = []
@@ -186,11 +455,24 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
         dn = header_by_name.get(item.get("parent"))
         if dn is None:
             continue
-        relevance, scope_reason = scope_for_item(item.get("item_code"))
+        relevance, scope_reason = scope_for_item(item.get("item_code"), scope)
         association, so, so_line, assoc_reason, candidate_lines = _association(
             item, dn, so_headers or {}, so_items_by_name, so_items_by_parent,
-            so_detail_parent or {}, permitted_sos or set(), candidates)
+            permitted_sos or set(), candidates)
         uom_status, uom_reason = uom_evidence(item)
+        raw_signed = _finite(item.get("qty"))
+        magnitude = None if raw_signed is None else abs(raw_signed)
+        is_return = bool(int(item.get("is_return") or dn.get("is_return") or 0))
+        docstatus = int(dn.get("docstatus") or 0)
+        direction = "invalid"
+        if raw_signed is not None:
+            if is_return:
+                direction = ("negative_return" if raw_signed < 0 else
+                             "positive_return" if raw_signed > 0 else "zero_return")
+            elif raw_signed >= 0:
+                direction = "outbound"
+            else:
+                direction = "outbound_negative"
         source_wh = _text(item.get("warehouse")) or _text(dn.get("set_warehouse"))
         target_wh = _text(item.get("target_warehouse")) or _text(
             dn.get("set_target_warehouse"))
@@ -202,8 +484,14 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
                             else "unknown")
         logistics_status, numbers, _shipments = _logistics_for_dn(
             dn.get("name"), logistics or {})
-        docstatus = int(dn.get("docstatus") or 0)
-        is_return = bool(int(item.get("is_return") or dn.get("is_return") or 0))
+        channel = channel_map.get(item.get("item_code")) or "unknown"
+        if channel not in ("fba", "in_house", "unknown"):
+            channel = "unknown"
+        actual = None
+        if docstatus != 1:
+            actual = 0.0
+        elif direction in ("outbound", "negative_return", "positive_return", "zero_return"):
+            actual = magnitude if not is_return else 0.0
         line = {
             "source_instance": instance,
             "delivery_note": dn.get("name"),
@@ -222,7 +510,10 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
             "company": dn.get("company"),
             "branch_status": "unknown",
             "branch_reason": "目标分公司映射未证",
-            "qty": _round(item.get("qty")),
+            "raw_signed_qty": _round(raw_signed),
+            "qty_magnitude": _round(magnitude),
+            "qty": _round(raw_signed),
+            "quantity_direction": direction,
             "uom": item.get("uom"),
             "stock_qty": _round(item.get("stock_qty")),
             "stock_uom": item.get("stock_uom"),
@@ -231,24 +522,27 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
             "uom_status": uom_status,
             "source_warehouse": source_wh or None,
             "target_warehouse": target_wh or None,
+            "warehouse": target_wh or source_wh or None,
             "warehouse_status": source_wh_status,
             "target_warehouse_status": target_wh_status,
             "destination_status": ("known" if target_wh and target_wh_status != "unknown"
                                    else "unknown"),
+            "channel": channel,
             "posting_date": _day(dn.get("posting_date")),
             "posting_time": _text(dn.get("posting_time")),
             "timezone_status": "unverified",
             "observed_at": observed_at,
-            "so": so,
-            "so_line": so_line,
+            "so": so, "so_line": so_line,
             "association_status": association,
             "association_reason": assoc_reason,
             "candidate_so_lines": candidate_lines,
             "relevance_status": relevance,
-            "scope_rule_version": SCOPE_VERSION,
-            "role": "outbound",
+            "scope_rule_version": scope.get("version"),
+            "scope_source": scope.get("source"),
+            "scope_hash": scope.get("hash"),
+            "role": "return" if is_return else "outbound",
             "exclusion_reason": scope_reason,
-            "quantity_status": "known" if item.get("qty") is not None else "unknown",
+            "quantity_status": "known" if raw_signed is not None else "unknown",
             "identity_status": ("known" if item.get("name") and dn.get("name")
                                 else "unknown"),
             "logistics_status": logistics_status,
@@ -261,13 +555,12 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
             "is_current_execution": docstatus == 1,
             "inactive_reason": ("" if docstatus == 1 else
                                 "draft" if docstatus == 0 else "cancelled"),
-            "gross_qty": _round(item.get("qty")),
+            "gross_qty": _round(magnitude) if not is_return else None,
             "returned_qty": 0.0,
-            "actual_qty": _round(item.get("qty")) if docstatus == 1 else 0.0,
+            "actual_qty": actual,
             "excess_return_qty": 0.0,
             "return_status": "",
-            "conflicts": [],
-            "unknown_reasons": [],
+            "conflicts": [], "unknown_reasons": [],
             "source_records": ["Delivery Note %s" % dn.get("name"),
                                "Delivery Note Item %s" % item.get("name")],
             "rule_version": RULE_VERSION,
@@ -275,82 +568,93 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
         }
         if docstatus != 1:
             line["quantity_status"] = "not_current"
+        if direction in ("outbound_negative", "invalid"):
+            line["conflicts"].append("quantity_direction_" + direction)
         if relevance == "unknown":
             line["unknown_reasons"].append(scope_reason)
         if uom_status == "unknown":
             line["unknown_reasons"].append(uom_reason)
         if association in ("conflict", "ambiguous", "restricted"):
             line["conflicts"].append(assoc_reason)
-        if logistics_status in ("allocation_unknown", "identity_conflict"):
+        if logistics_status in ("allocation_unknown", "identity_conflict",
+                                "unresolved_waybill", "permission"):
             line["unknown_reasons"].append(logistics_status)
         if target_wh_status == "unknown":
             line["unknown_reasons"].append("target_warehouse_unknown")
         base_lines.append(line)
 
-    # Return allocation: original DN item capacity, no guessing.
-    returns = sorted(
-        [line for line in base_lines if line["is_return"]],
-        key=lambda row: (row["posting_date"] or "", row["delivery_note"] or "",
-                         row["idx"] or 0))
-    capacity = {row["delivery_note_item"]: _num(row["qty"])
+    # Return allocation: ERPNext negative qty → magnitude; strictly validated.
+    returns = sorted([line for line in base_lines if line["is_return"]],
+                     key=lambda row: (row["posting_date"] or "",
+                                      row["delivery_note"] or "", row["idx"] or 0))
+    capacity = {row["delivery_note_item"]: _finite(row["qty_magnitude"])
                 for row in base_lines if not row["is_return"]}
     allocated = defaultdict(float)
     for ret in returns:
-        ret["role"] = "return"
-        ret["gross_qty"] = _round(ret["qty"])
-        original_name = _text(
-            (items_by_name.get(ret["delivery_note_item"]) or {}).get("dn_detail"))
         if ret["docstatus"] != 1:
             ret["actual_qty"] = 0.0
             ret["quantity_status"] = "not_current"
             ret["return_status"] = "inactive_return"
             continue
+        magnitude = _finite(ret["qty_magnitude"])
+        if magnitude is None:
+            ret["return_status"] = "invalid_quantity"
+            ret["actual_qty"] = None
+            ret["conflicts"].append("invalid_quantity")
+            continue
+        original_name = _text((items_by_name.get(ret["delivery_note_item"]) or {})
+                              .get("dn_detail"))
         original = items_by_name.get(original_name)
         original_line = next((row for row in base_lines
                               if row["delivery_note_item"] == original_name), None)
+        expected_parent = _text(ret["return_against"])
         if not original_name:
             ret["return_status"] = "return_reference_missing"
         elif original is None:
             ret["return_status"] = "return_reference_missing"
         elif original.get("parent") not in header_by_name:
             ret["return_status"] = "return_reference_restricted"
-        elif original_line is None:
-            ret["return_status"] = "return_reference_missing"
-        elif original_line["is_return"]:
+        elif expected_parent != original.get("parent"):
+            ret["return_status"] = "return_reference_conflict"
+        elif int((header_by_name.get(original.get("parent")) or {})
+                 .get("docstatus") or 0) != 1:
+            ret["return_status"] = "return_reference_not_submitted"
+        elif original_line is None or original_line["is_return"]:
             ret["return_status"] = "return_of_return"
+        elif (_text(original.get("item_code")) != _text(ret["item_code"])
+              or _text(original.get("uom")) != _text(ret["uom"])
+              or _text((header_by_name.get(original.get("parent")) or {})
+                       .get("customer")) != _text(ret["customer"])
+              or _text(original.get("warehouse")) != _text(
+                  items_by_name.get(ret["delivery_note_item"], {}).get("warehouse"))):
+            ret["return_status"] = "return_identity_mismatch"
         else:
-            remaining = max(0.0, capacity.get(original_name, 0.0)
-                            - allocated[original_name])
-            take = min(_num(ret["qty"]), remaining)
-            allocated[original_name] += take
-            original_line["returned_qty"] = allocated[original_name]
-            original_line["actual_qty"] = max(
-                0.0, _num(original_line["qty"]) - allocated[original_name])
-            ret["actual_qty"] = -take
-            ret["return_status"] = ("return_matched" if take + 1e-9 >= _num(ret["qty"])
-                                    else "return_excess")
-            ret["excess_return_qty"] = max(0.0, _num(ret["qty"]) - take)
-            ret["so"] = original_line["so"]
-            ret["so_line"] = original_line["so_line"]
-            ret["association_status"] = original_line["association_status"]
-            ret["association_reason"] = "inherited_from_original"
-            ret["relevance_status"] = original_line["relevance_status"]
-            ret["exclusion_reason"] = original_line["exclusion_reason"]
-        if ret["return_status"] in ("return_reference_missing",
-                                    "return_reference_restricted",
-                                    "return_of_return"):
+            original_capacity = capacity.get(original_name)
+            if original_capacity is None:
+                ret["return_status"] = "return_reference_quantity_unknown"
+            else:
+                remaining = max(0.0, original_capacity - allocated[original_name])
+                take = min(magnitude, remaining)
+                allocated[original_name] += take
+                original_line["returned_qty"] = round(allocated[original_name], 6)
+                ret["actual_qty"] = -take
+                ret["return_status"] = ("return_matched"
+                                        if take + 1e-9 >= magnitude
+                                        else "return_excess")
+                ret["excess_return_qty"] = round(max(0.0, magnitude - take), 6)
+                ret["so"] = original_line["so"]
+                ret["so_line"] = original_line["so_line"]
+                ret["association_status"] = original_line["association_status"]
+                ret["association_reason"] = "inherited_from_original"
+                ret["relevance_status"] = original_line["relevance_status"]
+                ret["channel"] = original_line["channel"]
+                ret["warehouse"] = original_line["warehouse"]
+        if ret["return_status"] not in ("return_matched", "return_excess"):
             ret["actual_qty"] = 0.0
-        if ret["return_status"] in RETURN_ISSUES or ret["return_status"]:
-            if ret["return_status"] != "return_matched":
-                ret["conflicts"].append(ret["return_status"])
+        if ret["return_status"] not in ("return_matched",):
+            ret["conflicts"].append(ret["return_status"])
 
-    for line in base_lines:
-        if line["is_return"]:
-            continue
-        line["actual_qty"] = (max(0.0, _num(line["qty"]) - line["returned_qty"])
-                             if line["docstatus"] == 1 else 0.0)
-
-    # Association edges (including manual-review candidates).
+    summaries = summarize_lines(base_lines, so_items_by_name)
     association_edges = []
     for line in base_lines:
         association_edges.append({
@@ -360,8 +664,7 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
             "so": line["so"], "so_line": line["so_line"],
             "status": line["association_status"],
             "reason": line["association_reason"],
-            "qty": line["actual_qty"],
-            "uom": line["uom"],
+            "qty": line["actual_qty"], "uom": line["uom"],
             "allocation": ("linked_line" if line["association_status"] == "linked"
                            else "manual_review"),
             "source_records": line["source_records"],
@@ -378,83 +681,6 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
                 "source_records": line["source_records"],
             })
 
-    # SO fulfillment + replenishment supply ledgers.
-    linked_by_line = defaultdict(float)
-    so_line_meta = {}
-    for line in base_lines:
-        if line["association_status"] != "linked" or not line["so_line"]:
-            continue
-        key = (line["so"], line["so_line"])
-        linked_by_line[key] += _num(line["actual_qty"])
-        so_line_meta.setdefault(key, line)
-    pool = defaultdict(float)
-    for line in base_lines:
-        if line["association_status"] == "unlinked":
-            pool[(_text(line["customer"]), _text(line["item_code"]))] += _num(line["actual_qty"])
-    pool_remaining = dict(pool)
-    so_fulfillment = []
-    supply_ledger = []
-    for key in sorted(so_line_meta, key=lambda k: (str(k[0]), str(k[1]))):
-        line = so_line_meta[key]
-        so_item = so_items_by_name.get(key[1]) or {}
-        linked = round(linked_by_line[key], 6)
-        so_qty = _round(so_item.get("qty"))
-        order_uom = _text(so_item.get("uom"))
-        if so_qty is None or not order_uom or order_uom != _text(line.get("uom")):
-            so_open = None
-            potential = None
-            confirmed = None
-            unknown = None
-        else:
-            so_open = max(0.0, round(so_qty - linked, 6))
-            pool_key = (_text(line["customer"]), _text(line["item_code"]))
-            available_pool = pool_remaining.get(pool_key, 0.0)
-            potential = min(so_open, max(0.0, available_pool))
-            pool_remaining[pool_key] = available_pool - potential
-            confirmed = max(0.0, round(so_open - potential, 6))
-            unknown = potential
-        so_fulfillment.append({
-            "so": key[0], "so_line": key[1],
-            "item_code": line["item_code"], "uom": line["uom"],
-            "so_qty": so_qty, "linked_delivered_qty": linked,
-            "so_open_qty": so_open,
-            "unlinked_candidate_qty": (None if potential is None else potential),
-            "potential_overlap_qty": potential,
-            "confirmed_additional_supply_qty": confirmed,
-            "association_gap_qty": unknown,
-            "demand_status": "active",
-            "eligible": False,
-            "note": "未关联交付可能属于该 SO；potential_overlap 只供人工审核",
-        })
-        supply_ledger.append({
-            "supply_role": "so_line", "so": key[0], "so_line": key[1],
-            "item_code": line["item_code"], "uom": line["uom"],
-            "linked_fulfilled_qty": linked,
-            "confirmed_additional_supply_qty": confirmed,
-            "potential_overlap_qty": potential,
-            "unknown_qty": unknown,
-            "eligible": False,
-            "reason": "unlinked delivery is not proof of extra supply",
-        })
-    for line in base_lines:
-        if line["association_status"] != "unlinked" or not line["actual_qty"]:
-            continue
-        supply_ledger.append({
-            "supply_role": "unlinked_delivery",
-            "so": None, "so_line": None,
-            "item_code": line["item_code"], "uom": line["uom"],
-            "linked_fulfilled_qty": 0.0,
-            "confirmed_additional_supply_qty": 0.0,
-            "potential_overlap_qty": None,
-            "unknown_qty": _num(line["actual_qty"]),
-            "eligible": False,
-            "reason": "no SO association; keep logistics/PO trail only",
-            "delivery_note": line["delivery_note"],
-            "delivery_note_item": line["delivery_note_item"],
-            "candidate_so_lines": line["candidate_so_lines"],
-        })
-
-    # Physical chain: DN -> Shipment / Tongtool PO (never copy full DN qty).
     physical_chain = []
     for line in base_lines:
         numbers = line["logistic_numbers"] or []
@@ -479,7 +705,8 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
                 "target": shipment.get("shipment") or number.get("number"),
                 "target_is_record": bool(shipment.get("shipment")),
                 "qty": qty, "uom": line["uom"], "allocation": allocation,
-                "status": shipment.get("progress", {}).get("latest_progress_status")
+                "status": (shipment.get("progress") or {}).get(
+                    "latest_progress_status")
                 if isinstance(shipment.get("progress"), dict) else None,
             })
         if line["tongtool_po"]:
@@ -490,20 +717,14 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
                 "target_is_record": False, "qty": None, "uom": line["uom"],
                 "allocation": "code_only", "status": "code_only",
             })
-        physical_chain.append({
-            "delivery_note": line["delivery_note"],
-            "delivery_note_item": line["delivery_note_item"],
-            "stage": "receipt", "target": None, "target_is_record": False,
-            "qty": None, "uom": line["uom"], "allocation": "unknown",
-            "status": "not_integrated",
-        })
-        physical_chain.append({
-            "delivery_note": line["delivery_note"],
-            "delivery_note_item": line["delivery_note_item"],
-            "stage": "inventory", "target": None, "target_is_record": False,
-            "qty": None, "uom": line["uom"], "allocation": "unknown",
-            "status": "not_integrated",
-        })
+        for stage in ("receipt", "inventory"):
+            physical_chain.append({
+                "delivery_note": line["delivery_note"],
+                "delivery_note_item": line["delivery_note_item"],
+                "stage": stage, "target": None, "target_is_record": False,
+                "qty": None, "uom": line["uom"], "allocation": "unknown",
+                "status": "not_integrated",
+            })
 
     coverage_exceptions = []
     for line in base_lines:
@@ -518,8 +739,9 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
             reasons.append(line["association_reason"])
         if line["return_status"] and line["return_status"] != "return_matched":
             reasons.append(line["return_status"])
-        if line["actual_qty"] < 0:
-            reasons.append("return_negative_actual")
+        if line["quantity_direction"] not in ("outbound", "negative_return",
+                                              "positive_return", "zero_return"):
+            reasons.append("quantity_direction_" + line["quantity_direction"])
         if reasons:
             coverage_exceptions.append({
                 "delivery_note": line["delivery_note"],
@@ -528,74 +750,56 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
                 "association_status": line["association_status"],
                 "relevance_status": line["relevance_status"],
                 "reasons": sorted(set(reasons)),
-                "actual_qty": line["actual_qty"],
-                "uom": line["uom"],
+                "actual_qty": line["actual_qty"], "uom": line["uom"],
+                "warehouse": line["warehouse"], "channel": line["channel"],
             })
 
     association_counts = defaultdict(int)
     relevance_counts = defaultdict(int)
-    status_counts = defaultdict(int)
     for line in base_lines:
         association_counts[line["association_status"]] += 1
         relevance_counts[line["relevance_status"]] += 1
-        status_counts["docstatus_%s" % line["docstatus"]] += 1
-        if line["is_return"]:
-            status_counts["return"] += 1
-        if line["amended_from"]:
-            status_counts["amended_from"] += 1
     for key in ASSOCIATION_VALUES:
         association_counts.setdefault(key, 0)
     for key in RELEVANCE_VALUES:
         relevance_counts.setdefault(key, 0)
-    gross = sum(_num(line["gross_qty"]) for line in base_lines
-                if line["docstatus"] == 1 and not line["is_return"])
-    returns = sum(_num(line["gross_qty"]) for line in base_lines
-                  if line["docstatus"] == 1 and line["is_return"])
-    excess = sum(_num(line["excess_return_qty"]) for line in base_lines
-                 if line["docstatus"] == 1 and line["is_return"])
-    inactive_raw = sum(_num(line["gross_qty"]) for line in base_lines
-                       if line["docstatus"] != 1)
-    actual = sum(_num(line["actual_qty"]) for line in base_lines
-                 if line["docstatus"] == 1)
-    conservation = {
-        "submitted_gross_qty": round(gross, 6),
-        "submitted_return_qty": round(returns, 6),
-        "matched_return_qty": round(returns - excess, 6),
-        "excess_return_qty": round(excess, 6),
-        "inactive_raw_qty": round(inactive_raw, 6),
-        "actual_delivery_qty": round(actual, 6),
-        "conservation_ok": abs(
-            (gross - (returns - excess)) - actual) < 1e-6,
-    }
+
     unlinked_lines = [line for line in base_lines
                       if line["association_status"] == "unlinked"
                       and line["docstatus"] == 1]
-    by_customer = defaultdict(lambda: {"rows": 0, "qty": 0.0})
-    by_item = defaultdict(lambda: {"rows": 0, "qty": 0.0})
+    by_customer = defaultdict(int)
+    by_item = defaultdict(int)
     for line in unlinked_lines:
-        by_customer[line["customer"]]["rows"] += 1
-        by_customer[line["customer"]]["qty"] += _num(line["actual_qty"])
-        by_item[line["item_code"]]["rows"] += 1
-        by_item[line["item_code"]]["qty"] += _num(line["actual_qty"])
+        by_customer[line["customer"]] += 1
+        by_item[line["item_code"]] += 1
     unlinked_summary = {
         "rows": len(unlinked_lines),
-        "qty": round(sum(_num(line["actual_qty"]) for line in unlinked_lines), 6),
         "with_tongtool_po": sum(1 for line in unlinked_lines if line["tongtool_po"]),
         "with_waybill": sum(1 for line in unlinked_lines
                             if line["logistics_status"] != "no_waybill"),
+        "unknown_quantity_rows": sum(1 for line in unlinked_lines
+                                     if _finite(line["actual_qty"]) is None),
         "top_customers": [
-            {"customer": key, "rows": value["rows"], "qty": round(value["qty"], 6)}
+            {"customer": key, "rows": value}
             for key, value in sorted(by_customer.items(),
-                                     key=lambda item: (-item[1]["qty"], str(item[0])))[:20]],
+                                     key=lambda item: (-item[1], str(item[0])))[:20]],
         "top_items": [
-            {"item_code": key, "rows": value["rows"], "qty": round(value["qty"], 6)}
+            {"item_code": key, "rows": value}
             for key, value in sorted(by_item.items(),
-                                     key=lambda item: (-item[1]["qty"], str(item[0])))[:20]],
+                                     key=lambda item: (-item[1], str(item[0])))[:20]],
         "receipt_inventory_status": "not_integrated",
+        "note": ("Cross-item quantity totals are not reported; use "
+                 "conservation.groups for item×UOM×customer×warehouse×channel."),
     }
     coverage = {
-        "scope_rule_version": SCOPE_VERSION,
-        "approved_target_items": sorted(APPROVED_TARGET_ITEMS),
+        "scope": {
+            "status": scope.get("status"), "source": scope.get("source"),
+            "version": scope.get("version"), "hash": scope.get("hash"),
+            "reason": scope.get("reason"),
+            "items": sorted(scope.get("items") or {}),
+        },
+        "as_of": as_of,
+        "observed_at": observed_at,
         "delivery_notes": {
             "total": len(header_by_name),
             "submitted": sum(1 for dn in header_by_name.values()
@@ -611,30 +815,31 @@ def build_delivery_facts(headers, items, so_headers, so_items, permitted_sos,
         },
         "delivery_lines": {
             "total": len(base_lines),
-            "submitted": status_counts.get("docstatus_1", 0),
-            "draft": status_counts.get("docstatus_0", 0),
-            "cancelled": status_counts.get("docstatus_2", 0),
-            "returns": status_counts.get("return", 0),
-            "amended_from": status_counts.get("amended_from", 0),
+            "submitted": sum(1 for line in base_lines if line["docstatus"] == 1),
+            "draft": sum(1 for line in base_lines if line["docstatus"] == 0),
+            "cancelled": sum(1 for line in base_lines if line["docstatus"] == 2),
+            "returns": sum(1 for line in base_lines if line["is_return"]),
+            "amended_from": sum(1 for line in base_lines if line["amended_from"]),
         },
         "association": dict(sorted(association_counts.items())),
         "relevance": dict(sorted(relevance_counts.items())),
         "unlinked_summary": unlinked_summary,
+        "conservation": _conservation(base_lines),
         "restricted": bool(restricted),
-        "observed_at": observed_at,
-        "conservation": conservation,
     }
     return {
         "schema_version": SCHEMA_VERSION,
         "rule_version": RULE_VERSION,
         "implementation_version": IMPLEMENTATION_VERSION,
-        "scope": {"version": SCOPE_VERSION,
-                  "approved_items": sorted(APPROVED_TARGET_ITEMS)},
+        "scope": coverage["scope"],
+        "as_of": as_of,
         "delivery_lines": base_lines,
         "association_edges": association_edges,
         "coverage_exceptions": coverage_exceptions,
-        "so_fulfillment": so_fulfillment,
-        "supply_ledger": supply_ledger,
+        "so_fulfillment": summaries["so_fulfillment"],
+        "ambiguity_pools": summaries["ambiguity_pools"],
+        "supply_ledger": summaries["supply_ledger"],
+        "summary_reason": summaries["reason"],
         "physical_chain": physical_chain,
         "coverage": coverage,
     }
@@ -663,7 +868,7 @@ def _normalize_filters(filters=None, extra=None):
                      % (", ".join(unknown), ", ".join(sorted(FILTER_KEYS))),
                      frappe.ValidationError)
     out = {}
-    for key in ("customer", "item_code", "from_date", "to_date"):
+    for key in ("sales_order", "customer", "item_code", "from_date", "to_date"):
         value = filters.get(key)
         if value in (None, ""):
             continue
@@ -718,17 +923,9 @@ def _normalize_filters(filters=None, extra=None):
 
 
 def _load_reference_data(items):
-    so_details = sorted({_text(item.get("so_detail")) for item in items
-                         if _text(item.get("so_detail"))})
-    detail_rows = frappe.get_all(
-        "Sales Order Item", filters={"name": ["in", so_details]},
-        fields=["name", "parent", "item_code", "qty", "uom", "stock_uom"]) \
-        if so_details else []
-    detail_parent = {row.name: row.parent for row in detail_rows}
-    parents = {_text(item.get("against_sales_order")) for item in items
-               if _text(item.get("against_sales_order"))}
-    parents |= {row.parent for row in detail_rows if row.parent}
-    parents = sorted(parents)
+    """Parent permission first; child rows only for permitted SOs."""
+    parents = sorted({_text(item.get("against_sales_order")) for item in items
+                      if _text(item.get("against_sales_order"))})
     permitted_rows = frappe.get_list(
         "Sales Order", filters=[["name", "in", parents],
                                 ["docstatus", "in", (0, 1, 2)]],
@@ -742,19 +939,20 @@ def _load_reference_data(items):
         "Sales Order Item", filters={"parent": ["in", sorted(permitted)]},
         fields=["name", "parent", "item_code", "qty", "uom", "stock_uom"]) \
         if permitted else []
-    return headers, so_items, permitted, detail_parent
+    return headers, so_items, permitted
 
 
-def _candidate_rows(items, headers_by_name):
-    item_codes = sorted({_text(item.get("item_code")) for item in items
-                         if not _text(item.get("so_detail"))
-                         and not _text(item.get("against_sales_order"))
-                         and _text(item.get("item_code")) in APPROVED_TARGET_ITEMS})
+def _candidate_rows(items, headers_by_name, scope):
+    if scope.get("status") != "provided":
+        return {}
+    scope_items = set(scope.get("items") or {})
+    relevant = [item for item in items
+                if not _text(item.get("so_detail"))
+                and not _text(item.get("against_sales_order"))
+                and _text(item.get("item_code")) in scope_items]
+    item_codes = sorted({_text(item.get("item_code")) for item in relevant})
     customers = sorted({_text(headers_by_name.get(item.get("parent"), {}).get("customer"))
-                        for item in items
-                        if not _text(item.get("so_detail"))
-                        and not _text(item.get("against_sales_order"))
-                        and _text(item.get("item_code")) in APPROVED_TARGET_ITEMS})
+                        for item in relevant})
     customers = [value for value in customers if value]
     if not item_codes or not customers:
         return {}
@@ -798,10 +996,32 @@ def _load_logistics(dn_names):
     }
 
 
+def _query_coverage(lines, page):
+    association = defaultdict(int)
+    relevance = defaultdict(int)
+    for line in lines:
+        association[line["association_status"]] += 1
+        relevance[line["relevance_status"]] += 1
+    for key in ASSOCIATION_VALUES:
+        association.setdefault(key, 0)
+    for key in RELEVANCE_VALUES:
+        relevance.setdefault(key, 0)
+    return {
+        "filtered_rows": len(lines),
+        "page_rows": len(page),
+        "association": dict(sorted(association.items())),
+        "relevance": dict(sorted(relevance.items())),
+        "conservation": _conservation(page),
+        "aggregation_scope": "query_page",
+        "note": "Page-scoped aggregates; use export for the full snapshot.",
+    }
+
+
 @frappe.whitelist()
-def get_delivery_facts(filters=None, **kwargs):
+def get_delivery_facts(filters=None, scope=None, **kwargs):
     """DN-item anchored actual delivery facts; SO links are optional edges."""
     filters = _normalize_filters(filters, kwargs)
+    normalized_scope = normalize_scope(scope)
     if not frappe.has_permission("Delivery Note", "read"):
         frappe.throw("No permission for Delivery Note", frappe.PermissionError)
 
@@ -830,20 +1050,22 @@ def get_delivery_facts(filters=None, **kwargs):
                 "conversion_factor", "warehouse", "target_warehouse",
                 "against_sales_order", "so_detail", "dn_detail"])] if names else []
 
-    so_headers, so_items, permitted_sos, so_detail_parent = _load_reference_data(items)
+    so_headers, so_items, permitted_sos = _load_reference_data(items)
     headers_by_name = {row["name"]: row for row in headers}
-    candidates = _candidate_rows(items, headers_by_name)
+    candidates = _candidate_rows(items, headers_by_name, normalized_scope)
     logistics = _load_logistics(names)
+    as_of = now_datetime().date().isoformat()
     result = build_delivery_facts(
         headers, items, so_headers, so_items, permitted_sos, candidates,
-        logistics, instance=getattr(frappe.local, "site", "") or "",
-        observed_at=_iso(now_datetime()), restricted=restricted,
-        so_detail_parent=so_detail_parent)
+        logistics, scope=normalized_scope,
+        instance=getattr(frappe.local, "site", "") or "",
+        observed_at=_iso(now_datetime()), restricted=restricted, as_of=as_of)
     result["coverage"]["shipment_permission"] = logistics["shipment_permission"]
     result["coverage"]["shipment_logistics_event"] = logistics["event_status"]
-    result["coverage"]["restricted_delivery_notes"] = restricted
 
     rows = result["delivery_lines"]
+    if filters.get("sales_order"):
+        rows = [row for row in rows if row.get("so") == filters["sales_order"]]
     if filters.get("item_code"):
         rows = [row for row in rows if row.get("item_code") == filters["item_code"]]
     if filters.get("association_status"):
@@ -863,6 +1085,17 @@ def get_delivery_facts(filters=None, **kwargs):
     page = rows[offset:offset + limit]
     selected = {row["delivery_note_item"] for row in page}
     exhausted = offset + len(page) >= total
+    snapshot_payload = {
+        "ids": sorted(row["stable_id"] for row in rows),
+        "schema": result["schema_version"], "rule": result["rule_version"],
+        "implementation": result["implementation_version"],
+        "scope_hash": normalized_scope.get("hash"), "as_of": as_of,
+    }
+    snapshot_id = hashlib.sha1(json.dumps(
+        snapshot_payload, sort_keys=True).encode("utf-8")).hexdigest()
+
+    so_items_by_name = {row.get("name"): row for row in so_items or []}
+    summaries = summarize_lines(page, so_items_by_name)
     pagination = {
         "limit": limit, "offset": offset, "returned": len(page), "total": total,
         "next_offset": None if exhausted else offset + len(page),
@@ -878,16 +1111,28 @@ def get_delivery_facts(filters=None, **kwargs):
                                      if row.get("delivery_note_item") in selected]
     result["physical_chain"] = [row for row in result["physical_chain"]
                                 if row.get("delivery_note_item") in selected]
+    result["so_fulfillment"] = summaries["so_fulfillment"]
+    result["ambiguity_pools"] = summaries["ambiguity_pools"]
+    result["supply_ledger"] = summaries["supply_ledger"]
+    result["summary_reason"] = summaries["reason"]
+    result["coverage"]["global"] = {
+        key: value for key, value in result["coverage"].items()
+        if key not in ("global", "query")
+    }
+    result["coverage"]["query"] = _query_coverage(rows, page)
     result["pagination"] = pagination
+    result["snapshot_id"] = snapshot_id
     result["applied_filters"] = {key: value for key, value in filters.items()
                                  if key not in ("limit", "offset")}
     result["counts"] = {
-        "delivery_notes": len(headers),
-        "delivery_lines": total,
+        "delivery_notes": len({row.get("delivery_note") for row in page}),
+        "delivery_lines": len(page),
         "association_edges": len(result["association_edges"]),
         "coverage_exceptions": len(result["coverage_exceptions"]),
         "so_fulfillment": len(result["so_fulfillment"]),
+        "ambiguity_pools": len(result["ambiguity_pools"]),
         "supply_ledger": len(result["supply_ledger"]),
         "physical_chain": len(result["physical_chain"]),
     }
     return result
+

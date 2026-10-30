@@ -1,45 +1,73 @@
 # -*- coding: utf-8 -*-
 """Read-only adapter from delivery facts to warehouse_restock.
 
-It answers "what did we actually deliver for each approved target item, and
-what is still unresolved" without computing purchase orders.  Unknown stays
-unknown; no automatic ordering; FBA and in-house channels are never summed.
+Target scope must be injected by warehouse_restock (source/version/hash).
+Rows are split by item × UOM × channel × destination; partial snapshots,
+mixed versions and path failures are rejected. Unknown stays unknown.
+No purchase order is generated.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import math
 from collections import defaultdict
 
-SCOPE_VERSION = "jack_w1_sample9_2026-10-26"
-# Kept in sync with key_test.delivery_facts.APPROVED_TARGET_ITEMS.
-APPROVED_TARGET_ITEMS = {
-    "KS0156-NYBDSFH-52x52x5-BLACK": {"customer_sku": "TT0031038K0062927", "slot": "S1_urgent"},
-    "PK#KS0001-XMMBS-100-HEMPNATURAL": {"customer_sku": "C/Linen-Natural-100-688-wow", "slot": "S2_overlap_1"},
-    "ZTGJ5525-SOFALSHAPEDBRACKET-IRON-55x45x45": {"customer_sku": "TT0312701K0064561", "slot": "S2_overlap_2"},
-    "PK#KS0001-QDKTR-100-DEEPGREY": {"customer_sku": "CENCord995-DKGrey-97", "slot": "S3_in_production"},
-    "PK#KS0001-CMKTR-100-WHITE": {"customer_sku": "C/Cord-White-100-706-wow", "slot": "S5_po_eta_uncertain"},
-    "PK#KS0001-PR-100-WHITE": {"customer_sku": "C/Velvet-White-100-664-wow", "slot": "S6_zero_stock_1"},
-    "KS0121-KQC-194-WHITE": {"customer_sku": "TT0031010K0062880", "slot": "S6_zero_stock_2"},
-    "PK#KS0001-DM-194-IVORY": {"customer_sku": "CEN1607NLinen-Ivory-194", "slot": "S7_in_stock_sufficient"},
-    "PK#KS0001-DM-100-GREY": {"customer_sku": "CENKZ1323-LTGrey-97", "slot": "S8_in_stock_short"},
-}
 
-
-def _num(value):
+def _finite(value):
+    if value is None or isinstance(value, bool):
+        return None
     try:
-        return float(value or 0)
+        number = float(value)
     except (TypeError, ValueError):
-        return 0.0
+        return None
+    return number if math.isfinite(number) else None
 
 
 def _round(value):
-    return None if value is None else round(_num(value), 6)
+    number = _finite(value)
+    return None if number is None else round(number, 6)
+
+
+def _scope_hash(scope):
+    canonical = json.dumps({"source": scope.get("source"),
+                            "version": scope.get("version"),
+                            "items": sorted(scope.get("items") or [])},
+                           sort_keys=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def validate_delivery_snapshot(delivery):
+    """Common gates: complete pagination, single version, valid scope."""
+    if not isinstance(delivery, dict):
+        raise ValueError("delivery input must be an object")
+    pagination = delivery.get("pagination") or {}
+    if pagination.get("exhausted") is not True or pagination.get("partial") is True:
+        raise ValueError("delivery snapshot is partial or not exhausted")
+    for key in ("schema_version", "rule_version", "implementation_version"):
+        if not delivery.get(key):
+            raise ValueError("delivery snapshot missing %s" % key)
+    coverage = delivery.get("coverage") or {}
+    scope = delivery.get("scope") or coverage.get("scope") or {}
+    if scope.get("status") != "provided":
+        return {"status": "scope_pending", "rows": [], "summary": {
+            "auto_order": False,
+            "reason": "authoritative warehouse_restock scope not provided",
+        }}
+    if scope.get("hash") != _scope_hash(scope):
+        raise ValueError("delivery scope hash mismatch")
+    return {"status": "ok", "scope": scope, "coverage": coverage}
 
 
 def build_restock_delivery_view(delivery, *, fba_item_codes=(),
                                 channel_by_item=None):
-    """Return one row per approved target item (plus conservation summary)."""
-    lines = list((delivery or {}).get("delivery_lines") or [])
-    coverage = (delivery or {}).get("coverage") or {}
+    gate = validate_delivery_snapshot(delivery)
+    if gate["status"] != "ok":
+        return gate
+    scope = gate["scope"]
+    coverage = gate["coverage"]
+    lines = list(delivery.get("delivery_lines") or [])
+    pools = list(delivery.get("ambiguity_pools") or [])
     fba_items = {str(code) for code in (fba_item_codes or ())}
     channel_map = dict(channel_by_item or {})
     seen = set()
@@ -51,87 +79,106 @@ def build_restock_delivery_view(delivery, *, fba_item_codes=(),
         seen.add(key)
     grouped = defaultdict(list)
     for line in lines:
-        grouped[line.get("item_code")].append(line)
-
-    rows = []
-    for item_code in sorted(APPROVED_TARGET_ITEMS):
-        meta = APPROVED_TARGET_ITEMS[item_code]
-        item_lines = [line for line in grouped.get(item_code, [])
-                      if line.get("relevance_status") == "in_scope"]
-        current = [line for line in item_lines
-                   if line.get("docstatus") == 1]
-        actual = sum(_num(line.get("actual_qty")) for line in current)
-        linked = sum(_num(line.get("actual_qty")) for line in current
-                     if line.get("association_status") == "linked")
-        unlinked = sum(_num(line.get("actual_qty")) for line in current
-                       if line.get("association_status") == "unlinked")
-        unknown_qty = sum(_num(line.get("actual_qty")) for line in current
-                          if line.get("uom_status") != "known")
-        uom_unknown = any(line.get("uom_status") != "known" for line in current)
-        if not current:
-            actual_value = None
-            qty_status = "no_observed_delivery"
-        elif uom_unknown:
-            actual_value = None
-            qty_status = "unknown_uom"
-        else:
-            actual_value = _round(actual)
-            qty_status = "known"
-        channel = (channel_map.get(item_code)
-                   or ("fba" if item_code in fba_items else "unknown"))
+        if line.get("docstatus") != 1:
+            continue
+        channel = (line.get("channel")
+                   or channel_map.get(line.get("item_code"))
+                   or ("fba" if line.get("item_code") in fba_items else "unknown"))
         if channel not in ("fba", "in_house", "unknown"):
             channel = "unknown"
-        if channel == "unknown":
-            action = "manual_review_channel_unknown"
-        elif qty_status != "known":
-            action = "manual_review_delivery_unknown"
-        elif abs(unlinked) > 1e-9:
-            action = "manual_review_unlinked_delivery"
-        else:
-            action = "candidate_no_action"
-        rows.append({
-            "item_code": item_code,
-            "customer_sku": meta.get("customer_sku"),
-            "scope_slot": meta.get("slot"),
-            "scope_rule_version": SCOPE_VERSION,
-            "channel": channel,
-            "actual_delivery_qty": actual_value,
-            "qty_status": qty_status,
-            "linked_delivery_qty": _round(linked) if qty_status == "known" else None,
-            "unlinked_delivery_qty": _round(unlinked) if qty_status == "known" else None,
-            "unknown_delivery_qty": _round(unknown_qty) if unknown_qty else None,
-            "received_qty": None,
-            "pending_qty": None,
-            "inventory_qty": None,
-            "receipt_source_status": "not_integrated",
-            "inventory_source_status": "not_integrated",
-            "eligible_for_restock": False,
-            "suggested_action": action,
-            "auto_order": False,
-            "note": ("只输出行动建议；未关联交付/渠道/入库未证前不进入补货量"
-                     if action != "candidate_no_action" else
-                     "当前仅证明交付事实，不证明额外供应"),
-        })
-    in_scope = [line for line in lines
-                if line.get("relevance_status") == "in_scope"
-                and line.get("docstatus") == 1]
-    out_scope = [line for line in lines
-                 if line.get("relevance_status") == "out_of_scope"
-                 and line.get("docstatus") == 1]
+        destination = line.get("target_warehouse") or line.get("warehouse") or ""
+        key = (line.get("item_code"), line.get("uom") or "",
+               channel, destination)
+        grouped[key].append(line)
+    pool_by_key = defaultdict(list)
+    for pool in pools:
+        pool_by_key[(pool.get("item_code"), pool.get("uom") or "",
+                     pool.get("channel") or "unknown",
+                     pool.get("warehouse") or "")].append(pool)
+    rows = []
+    for item_code in sorted(scope.get("items") or []):
+        observed = {key: value for key, value in grouped.items()
+                    if key[0] == item_code}
+        if not observed:
+            rows.append({
+                "item_code": item_code, "uom": None, "channel": "unknown",
+                "destination": "", "actual_delivery_qty": None,
+                "qty_status": "no_observed_delivery",
+                "linked_delivery_qty": None, "unlinked_delivery_qty": None,
+                "unresolved_demand_qty": None, "potential_overlap_qty": None,
+                "unknown_delivery_qty": None,
+                "received_qty": None, "pending_qty": None,
+                "inventory_qty": None,
+                "receipt_source_status": "not_integrated",
+                "inventory_source_status": "not_integrated",
+                "eligible_for_restock": False,
+                "suggested_action": "manual_review_no_delivery_evidence",
+                "auto_order": False,
+                "note": "no observed submitted DN line; not zero",
+            })
+            continue
+        for key in sorted(observed, key=lambda item: tuple(
+                "" if part is None else str(part) for part in item)):
+            bucket = observed[key]
+            item_code, uom, channel, destination = key
+            actual_values = [_finite(line.get("actual_qty")) for line in bucket]
+            unknown = any(value is None for value in actual_values)
+            actual = None if unknown else round(sum(actual_values), 6)
+            linked_values = [_finite(line.get("actual_qty")) for line in bucket
+                             if line.get("association_status") == "linked"]
+            unlinked_values = [_finite(line.get("actual_qty")) for line in bucket
+                               if line.get("association_status") == "unlinked"]
+            linked = (None if any(value is None for value in linked_values)
+                      else round(sum(linked_values), 6))
+            unlinked = (None if any(value is None for value in unlinked_values)
+                        else round(sum(unlinked_values), 6))
+            pool_rows = pool_by_key.get((item_code, uom, channel, destination), [])
+            potential = [pool.get("potential_overlap_qty") for pool in pool_rows]
+            unresolved = [pool.get("unresolved_demand_qty") for pool in pool_rows]
+            potential_value = (None if len(potential) != 1
+                               or potential[0] is None else potential[0])
+            unresolved_value = (None if len(unresolved) != 1
+                                or unresolved[0] is None else unresolved[0])
+            if channel == "unknown":
+                action = "manual_review_channel_unknown"
+            elif unknown:
+                action = "manual_review_delivery_unknown"
+            elif unlinked is not None and abs(unlinked) > 1e-9:
+                action = "manual_review_unlinked_delivery"
+            elif potential_value:
+                action = "manual_review_potential_overlap"
+            else:
+                action = "candidate_no_action"
+            rows.append({
+                "item_code": item_code, "uom": uom, "channel": channel,
+                "destination": destination,
+                "actual_delivery_qty": actual,
+                "qty_status": "unknown" if unknown else "known",
+                "linked_delivery_qty": linked,
+                "unlinked_delivery_qty": unlinked,
+                "unresolved_demand_qty": unresolved_value,
+                "potential_overlap_qty": potential_value,
+                "unknown_delivery_qty": None,
+                "received_qty": None, "pending_qty": None,
+                "inventory_qty": None,
+                "receipt_source_status": "not_integrated",
+                "inventory_source_status": "not_integrated",
+                "eligible_for_restock": False,
+                "suggested_action": action,
+                "auto_order": False,
+                "note": "suggestion only; no automatic ordering",
+            })
     return {
-        "scope_rule_version": SCOPE_VERSION,
+        "status": "ok",
+        "scope": scope,
         "rows": rows,
         "summary": {
-            "approved_items": len(rows),
-            "in_scope_actual_delivery_qty": _round(
-                sum(_num(line.get("actual_qty")) for line in in_scope)),
-            "out_of_scope_actual_delivery_qty": _round(
-                sum(_num(line.get("actual_qty")) for line in out_scope)),
+            "approved_items": len(scope.get("items") or []),
+            "row_count": len(rows),
             "duplicate_line_ids": duplicates,
             "duplicate_free": not duplicates,
-            "conservation_actual_delivery_qty": (
-                coverage.get("conservation") or {}).get("actual_delivery_qty"),
+            "grouping": "item×uom×channel×destination",
             "auto_order": False,
-            "note": "No purchase order is generated by this adapter.",
+            "note": "No cross-UOM or cross-channel sum; no purchase order generated.",
         },
     }

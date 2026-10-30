@@ -919,7 +919,13 @@ class DeliveryExportTest(unittest.TestCase):
             "delivery_lines": lines, "association_edges": [],
             "coverage_exceptions": [], "so_fulfillment": [],
             "supply_ledger": [], "physical_chain": [],
-            "coverage": {"delivery_lines": {"total": total}},
+            "scope": {"status": "pending", "source": None, "version": None,
+                      "hash": None, "items": []},
+            "snapshot_id": "snap-%s" % total,
+            "coverage": {"delivery_lines": {"total": total},
+                         "as_of": "2026-10-30",
+                         "shipment_logistics_event": {"available": True},
+                         "shipment_permission": True},
             "pagination": {
                 "limit": limit, "offset": offset, "returned": len(lines),
                 "total": total, "next_offset": None if end >= total else end,
@@ -932,7 +938,7 @@ class DeliveryExportTest(unittest.TestCase):
     def _run(self, td, total=3, page_size=2):
         calls = []
 
-        def fake(base, key, secret, filters):
+        def fake(base, key, secret, filters, scope=None):
             calls.append(dict(filters))
             return self._delivery_page(total, int(filters["offset"]),
                                        int(filters["limit"]))
@@ -974,7 +980,7 @@ class DeliveryExportTest(unittest.TestCase):
             old = {"run_id": "previous-success"}
             (out / "latest.json").write_text(json.dumps(old), encoding="utf-8")
 
-            def fake(base, key, secret, filters):
+            def fake(base, key, secret, filters, scope=None):
                 batch = self._delivery_page(3, int(filters["offset"]),
                                             int(filters["limit"]))
                 if int(filters["offset"]) > 0 and batch["delivery_lines"]:
@@ -994,6 +1000,61 @@ class DeliveryExportTest(unittest.TestCase):
             self.assertEqual(rc, 1)
             self.assertEqual(json.loads((out / "latest.json").read_text(
                 encoding="utf-8")), old)
+            self.assertFalse((out / "runs").exists())
+
+
+    def test_delivery_mixed_version_across_pages_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            old = {"run_id": "previous-success"}
+            (out / "latest.json").write_text(json.dumps(old), encoding="utf-8")
+
+            def fake(base, key, secret, filters, scope=None):
+                batch = self._delivery_page(3, int(filters["offset"]),
+                                            int(filters["limit"]))
+                if int(filters["offset"]) > 0:
+                    batch["rule_version"] = "other-rule"
+                return batch
+
+            with mock.patch.object(self.exporter.iss, "load_credentials",
+                                   return_value=("k", "s")), \
+                 mock.patch.object(self.exporter.iss, "resolve_env_files",
+                                   return_value=None), \
+                 mock.patch.object(self.exporter.iss, "ENV_URLS",
+                                   {"test": "http://test"}), \
+                 mock.patch.object(self.exporter, "_call_delivery",
+                                   side_effect=fake):
+                rc = self.exporter.main(["--delivery-all", "--test", "--no-excel",
+                                         "--page-size", "2", "--out", td])
+            self.assertEqual(rc, 1)
+            self.assertFalse((out / "runs").exists())
+            self.assertEqual(json.loads((out / "latest.json").read_text(
+                encoding="utf-8")), old)
+
+    def test_delivery_snapshot_drift_across_pages_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td)
+            old = {"run_id": "previous-success"}
+            (out / "latest.json").write_text(json.dumps(old), encoding="utf-8")
+
+            def fake(base, key, secret, filters, scope=None):
+                batch = self._delivery_page(3, int(filters["offset"]),
+                                            int(filters["limit"]))
+                if int(filters["offset"]) > 0:
+                    batch["snapshot_id"] = "snap-drifted"
+                return batch
+
+            with mock.patch.object(self.exporter.iss, "load_credentials",
+                                   return_value=("k", "s")), \
+                 mock.patch.object(self.exporter.iss, "resolve_env_files",
+                                   return_value=None), \
+                 mock.patch.object(self.exporter.iss, "ENV_URLS",
+                                   {"test": "http://test"}), \
+                 mock.patch.object(self.exporter, "_call_delivery",
+                                   side_effect=fake):
+                rc = self.exporter.main(["--delivery-all", "--test", "--no-excel",
+                                         "--page-size", "2", "--out", td])
+            self.assertEqual(rc, 1)
             self.assertFalse((out / "runs").exists())
 
 

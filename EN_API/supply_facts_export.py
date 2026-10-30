@@ -46,8 +46,8 @@ DATASETS = ("lines", "stage_balances", "milestones", "availability_schedule",
             "links", "production_evidence", "shipment_progress",
             "receipt_reconciliation", "inventory_bridge")
 DELIVERY_DATASETS = ("delivery_lines", "association_edges",
-                     "coverage_exceptions", "so_fulfillment", "supply_ledger",
-                     "physical_chain")
+                     "coverage_exceptions", "so_fulfillment",
+                     "ambiguity_pools", "supply_ledger", "physical_chain")
 EVIDENCE_CLASSES = ("first_process_done", "all_process_done", "qc_performed",
                     "qc_passed", "stock_in_posted")
 DEFAULT_OUT = EN_API / "out" / "supply_facts"
@@ -69,10 +69,12 @@ def _call(base_url, key, secret, filters):
     return message
 
 
-def _call_delivery(base_url, key, secret, filters):
+def _call_delivery(base_url, key, secret, filters, scope=None):
     import urllib.parse
-    path = METHOD_DELIVERY + "?" + urllib.parse.urlencode(
-        {"filters": json.dumps(filters, ensure_ascii=False)})
+    params = {"filters": json.dumps(filters, ensure_ascii=False)}
+    if scope is not None:
+        params["scope"] = json.dumps(scope, ensure_ascii=False)
+    path = METHOD_DELIVERY + "?" + urllib.parse.urlencode(params)
     status, body = iss.api_get_status(path, base_url, key, secret, timeout=300)
     if status != 200:
         raise iss.QueryError("get_delivery_facts HTTP %s %s"
@@ -161,19 +163,43 @@ def _paginate(base_url, key, secret, base_filters, page_size, max_pages=MAX_PAGE
 
 def _paginate_delivery(base_url, key, secret, page_size, *,
                        include_inactive=False, base_filters=None,
-                       max_pages=MAX_PAGES):
+                       scope=None, max_pages=MAX_PAGES):
     offset = 0
     page = 0
     batches = []
     seen = set()
     expected_total = None
+    signature = None
     while page < max_pages:
         filters = dict(base_filters or {})
         filters.update({"limit": page_size, "offset": offset,
                         "include_unlinked": 1})
         if include_inactive:
             filters["include_inactive"] = 1
-        batch = _call_delivery(base_url, key, secret, filters)
+        batch = _call_delivery(base_url, key, secret, filters, scope=scope)
+        current = {
+            "schema_version": batch.get("schema_version"),
+            "rule_version": batch.get("rule_version"),
+            "implementation_version": batch.get("implementation_version"),
+            "scope": batch.get("scope"),
+            "as_of": (batch.get("coverage") or {}).get("as_of"),
+            "snapshot_id": batch.get("snapshot_id"),
+            "source_status": (batch.get("coverage") or {}).get(
+                "shipment_logistics_event"),
+            "shipment_permission": (batch.get("coverage") or {}).get(
+                "shipment_permission"),
+        }
+        if signature is None:
+            signature = current
+            if not all(current.get(key) for key in (
+                    "schema_version", "rule_version",
+                    "implementation_version", "snapshot_id")):
+                raise iss.QueryError("delivery batch missing version/snapshot fields")
+        elif current != signature:
+            raise iss.QueryError(
+                "delivery batch drift/version mismatch: %s != %s"
+                % (json.dumps(current, sort_keys=True, default=str),
+                   json.dumps(signature, sort_keys=True, default=str)))
         lines = batch.get("delivery_lines") or []
         for line in lines:
             key_value = line.get("delivery_note_item")
@@ -964,6 +990,8 @@ def main(argv=None):
                         help="交付扫描包含草稿/取消 DN（仅留痕，不计实际交付）")
     parser.add_argument("--delivery-customer", help="交付扫描客户过滤")
     parser.add_argument("--delivery-item", help="交付扫描物料过滤")
+    parser.add_argument("--delivery-scope-json",
+                        help="warehouse_restock 权威目标范围 JSON（source/version/hash/items）")
     args = parser.parse_args(argv)
 
     if not (args.codes or args.so or args.all or args.delivery_all):
@@ -996,9 +1024,9 @@ def main(argv=None):
               "inventory_bridge": [],
               "delivery_lines": [], "association_edges": [],
               "coverage_exceptions": [], "so_fulfillment": [],
-              "supply_ledger": [], "physical_chain": [],
-              "delivery_coverage": {}, "delivery_pagination": None,
-              "delivery_versions": {},
+              "ambiguity_pools": [], "supply_ledger": [], "physical_chain": [],
+              "delivery_coverage": {}, "delivery_scope": {},
+              "delivery_pagination": None, "delivery_versions": {},
               "partial": False,
               "counts": {}, "coverage": {}, "sources": {}, "source_timestamps": {},
               "restricted": {}, "external_sources": {},
@@ -1059,18 +1087,28 @@ def main(argv=None):
             delivery_filters["customer"] = args.delivery_customer
         if args.delivery_item:
             delivery_filters["item_code"] = args.delivery_item
+        delivery_scope = None
+        if args.delivery_scope_json:
+            try:
+                delivery_scope = _load_json(args.delivery_scope_json)
+            except (OSError, json.JSONDecodeError) as exc:
+                print("✗ 交付范围文件无效，未创建新版本: %s" % exc,
+                      file=sys.stderr)
+                return 2
         try:
             batches, delivery_terminated = _paginate_delivery(
                 base_url, key, secret, args.page_size,
                 include_inactive=args.delivery_include_inactive,
-                base_filters=delivery_filters)
+                base_filters=delivery_filters, scope=delivery_scope)
             first = batches[0]
             result["delivery_versions"] = {
                 key: first.get(key) for key in
                 ("schema_version", "rule_version", "implementation_version")}
             result["delivery_coverage"] = first.get("coverage") or {}
+            result["delivery_scope"] = first.get("scope") or {}
             result["delivery_pagination"] = first.get("pagination") or {}
             result["so_fulfillment"] = first.get("so_fulfillment") or []
+            result["ambiguity_pools"] = first.get("ambiguity_pools") or []
             result["supply_ledger"] = first.get("supply_ledger") or []
             for batch in batches:
                 for name in ("delivery_lines", "association_edges",
@@ -1081,6 +1119,7 @@ def main(argv=None):
                 "association_edges": len(result["association_edges"]),
                 "coverage_exceptions": len(result["coverage_exceptions"]),
                 "so_fulfillment": len(result["so_fulfillment"]),
+                "ambiguity_pools": len(result["ambiguity_pools"]),
                 "supply_ledger": len(result["supply_ledger"]),
                 "physical_chain": len(result["physical_chain"]),
             })
@@ -1155,6 +1194,7 @@ def main(argv=None):
             "restricted": result["restricted"],
             "external_sources": result["external_sources"],
             "delivery_coverage": result.get("delivery_coverage"),
+            "delivery_scope": result.get("delivery_scope"),
             "delivery_pagination": result.get("delivery_pagination"),
             "counts": result["counts"],
             "partial": result["partial"],
@@ -1217,6 +1257,10 @@ def main(argv=None):
             },
             "so_fulfillment": {
                 "rows": len(result["so_fulfillment"]),
+                "source": "server" if args.delivery_all else "not_requested",
+            },
+            "ambiguity_pools": {
+                "rows": len(result["ambiguity_pools"]),
                 "source": "server" if args.delivery_all else "not_requested",
             },
             "supply_ledger": {

@@ -447,7 +447,8 @@ function so_chain_render($box, data) {
         return '<th style="white-space:nowrap;position:relative;overflow:hidden"' + t + '>' + c.label
             + '<span class="so-chain-grip" data-k="' + c.k + '" title="拖动调整列宽（双击=自适应内容）"></span></th>';
     }).join('');
-    const html = '<div style="margin-bottom:4px"><a href="#" class="so-chain-delivery" style="color:' + SO_CHAIN_HEAD + '"><b>实际交付 / 未关联 SO</b></a>'
+    const html = '<div style="margin-bottom:4px"><a href="#" class="so-chain-delivery-so" style="color:' + SO_CHAIN_HEAD + '"><b>本 SO 实际交付</b></a>'
+        + '　<a href="#" class="so-chain-delivery-global" style="color:' + SO_CHAIN_HEAD + '">全局实际交付</a>'
         + '<span class="text-muted" style="font-size:11px;margin-left:8px">DN 明细为锚；未关联不猜 SO</span></div>'
         + '<div style="overflow:auto">'
         + '<table class="table table-bordered so-chain-tbl" style="margin:0;width:100%;table-layout:fixed;font-size:12px">'
@@ -470,9 +471,13 @@ function so_chain_render($box, data) {
         e.preventDefault();
         so_chain_show_detail(data.lines[$(this).data('i')], data.sales_order);
     });
-    $box.find('.so-chain-delivery').on('click', function (e) {
+    $box.find('.so-chain-delivery-so').on('click', function (e) {
         e.preventDefault();
-        so_chain_show_delivery(data.sales_order);
+        so_chain_show_delivery(data.sales_order, true);
+    });
+    $box.find('.so-chain-delivery-global').on('click', function (e) {
+        e.preventDefault();
+        so_chain_show_delivery(data.sales_order, false);
     });
 }
 
@@ -961,9 +966,11 @@ function so_chain_delivery_html(msg) {
     return h + '</tbody></table>';
 }
 
-function so_chain_show_delivery(so) {
+function so_chain_show_delivery(so, onlySo) {
+    let offset = 0;
+    const limit = 200;
     const d = new frappe.ui.Dialog({
-        title: __('实际交付 / 未关联 SO：') + so,
+        title: (onlySo ? __('本 SO 实际交付：') : __('全局实际交付：')) + (so || ''),
         size: 'extra-large',
         fields: [
             { fieldtype: 'Data', fieldname: 'customer', label: __('客户') },
@@ -971,14 +978,25 @@ function so_chain_show_delivery(so) {
             { fieldtype: 'Date', fieldname: 'from_date', label: __('从') },
             { fieldtype: 'Date', fieldname: 'to_date', label: __('到') },
             { fieldtype: 'Select', fieldname: 'association_status', label: __('关联状态'),
-              options: '\nlinked\nso_header_only\nunlinked\nambiguous\nconflict\nrestricted' },
-            { fieldtype: 'Check', fieldname: 'include_unlinked', label: __('含未关联'), default: 1 },
+              options: '
+linked
+so_header_only
+unlinked
+ambiguous
+conflict
+restricted' },
+            { fieldtype: 'Check', fieldname: 'include_unlinked', label: __('含未关联'),
+              default: onlySo ? 0 : 1 },
             { fieldtype: 'HTML', fieldname: 'html' },
         ],
     });
     const refresh = function () {
         const values = d.get_values() || {};
-        const filters = { limit: 200, offset: 0, include_unlinked: values.include_unlinked ? 1 : 0 };
+        const filters = {
+            limit: limit, offset: offset,
+            include_unlinked: onlySo ? 0 : (values.include_unlinked ? 1 : 0),
+        };
+        if (onlySo && so) filters.sales_order = so;
         ['customer', 'item_code', 'from_date', 'to_date', 'association_status'].forEach(function (key) {
             if (values[key]) filters[key] = values[key];
         });
@@ -986,7 +1004,24 @@ function so_chain_show_delivery(so) {
             method: 'key_test.delivery_facts.get_delivery_facts',
             args: { filters: JSON.stringify(filters) },
             callback: function (r) {
-                d.fields_dict.html.$wrapper.html(so_chain_delivery_html(r.message || {}));
+                const msg = r.message || {};
+                const pg = msg.pagination || {};
+                const total = Number(pg.total || 0);
+                const pageNo = Math.floor(offset / limit) + 1;
+                const pages = Math.max(1, Math.ceil(total / limit));
+                const nav = '<div style="margin:6px 0;font-size:12px">'
+                    + '<a href="#" class="delivery-prev" style="margin-right:12px">上一页</a>'
+                    + '第 ' + pageNo + ' / ' + pages + ' 页　共 ' + total + ' 行'
+                    + '<a href="#" class="delivery-next" style="margin-left:12px">下一页</a></div>';
+                d.fields_dict.html.$wrapper.html(so_chain_delivery_html(msg) + nav);
+                d.fields_dict.html.$wrapper.find('.delivery-prev').on('click', function (e) {
+                    e.preventDefault();
+                    if (offset >= limit) { offset -= limit; refresh(); }
+                });
+                d.fields_dict.html.$wrapper.find('.delivery-next').on('click', function (e) {
+                    e.preventDefault();
+                    if (offset + limit < total) { offset += limit; refresh(); }
+                });
             },
         });
     };
@@ -996,6 +1031,8 @@ function so_chain_show_delivery(so) {
     ['customer', 'item_code', 'from_date', 'to_date',
      'association_status', 'include_unlinked'].forEach(function (name) {
         const field = d.fields_dict[name];
-        if (field && field.$input) field.$input.on('change', refresh);
+        if (field && field.$input) {
+            field.$input.on('change', function () { offset = 0; refresh(); });
+        }
     });
 }

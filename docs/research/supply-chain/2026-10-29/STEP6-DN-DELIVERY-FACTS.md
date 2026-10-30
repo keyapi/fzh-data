@@ -1,114 +1,94 @@
 ---
 okf: v0.1
 type: Spec
-title: 第六步：DN 实际交付事实层（A–E）与真实基线
+title: 第六步：DN 实际交付事实层（A–E，第二版）
 date: 2026-10-30
 updated: 2026-10-30
 owner: claude-worker
-status: implemented locally + test-station read-only scan; runtime integrations pending
+status: implemented locally + test-station read-only scan; scope/integrations pending
 scope: read-only; no writes; no auto-linking; no auto-ordering; production not deployed
 tags: [supply-chain, delivery-note, actual-delivery, reconciliation]
 ---
 
 # 第六步：DN 实际交付事实层
 
-## A. 范围与真实基线（测试站，2026-10-30）
+## 0. 范围与权威输入（修正）
 
-范围基准：`jack_w1_sample9_2026-10-26`（9 个已冻结代表 SKU，非业务批准清单）。
-`APPROVED_TARGET_ITEMS` 明确列出 9 个 item_code；未列入一律 `out_of_scope`，
-缺 item_code 记 `unknown`。分公司映射未证 → `branch_status=unknown`。
+- 冻结 9-SKU 只是**验收 fixture**，不是业务批准目标全集。
+- 正式 scope 必须由 warehouse_restock 注入：`source`、`version`、`hash`、`items`；
+  API 校验 hash，导出通过 `--delivery-scope-json` 注入。
+- 没有业务 scope 时 relevance 全部 `unknown`，E 阶段 `scope_pending`，不生成补货建议。
+- 未列入 scope → `out_of_scope`；缺 item_code → `unknown`；不使用前缀/BOM 扩围。
 
-只读扫描（`include_inactive=1`，全部可读 DN）：
+## A. 真实基线（测试站，2026-10-30 只读）
 
-| 项 | 数量 |
+全部可读 DN（`include_inactive=1`）：
+
+| 项 | 行数 |
 |---|---:|
-| DN 头 | 345（已提交 268 / 草稿 23 / 取消 54；退货 0；amended 16） |
-| DN 明细行 | 1,264（已提交 1,038 / 草稿 55 / 取消 171；退货 0；修订 56） |
-| linked | 57（已提交 10） |
+| DN 头 | 345（提交 268 / 草稿 23 / 取消 54；退货 0；amended 16） |
+| DN 行 | 1,264（提交 1,038 / 草稿 55 / 取消 171；退货 0；amended 56） |
+| linked | 57（提交 10） |
 | so_header_only / ambiguous / conflict / restricted | 0 / 0 / 0 / 0 |
-| unlinked | 1,207（已提交 1,028） |
-| in_scope / out_of_scope / unknown | 9 / 1,255 / 0 |
-| restricted | false |
+| unlinked | 1,207（提交 1,028；有运单 39；PO 代码 0） |
+| relevance（无业务 scope） | unknown 1,264；E pending |
+| relevance（仅验收 fixture 回归，不算业务结论） | in_scope 9 / out 1,255 |
 
-数量守恒（全部可读）：
+未关联行按客户只报行数：裁剪部 362、生产车间 259、CENTRADE 178、物流包装部 85、
+技术科 103、波兰公司 40、美国FBA仓 1。**不输出跨商品数量总和**。
 
-- 输入毛量 224,972.5 + 未提交草稿/取消 23,620.52
-- 已提交退货 0，匹配退货 0，超退 0
-- 实际交付 224,972.5；`conservation_ok=true`
+数量守恒只按 `item×UOM×customer×warehouse×channel` 分组：
+`conservation.groups[]` 逐组输出 gross/return/actual/unknown；全局只报行数
+（total/submitted/inactive/returns/unknown_quantity），不把 224,972.5 当作业务守恒量。
 
-未关联 DN 行去向（已提交 1,028 行 / 数量 224,928.5）：
+验收 fixture 下 9 行均来自 `DN-26-00058`，合计实际交付 131（仅 fixture 回归）。
 
-- 内部客户：裁剪部 362 行 / 121,346.8、生产车间 259 / 70,387.0、
-  物流包装部 85 / 11,270.0、技术科 103 / 1,840.7；
-- 外部客户：CENTRADE 178 / 19,254.0、波兰公司 40 / 829.0、美国FBA仓 1 / 1.0；
-- 有运单 39 行，有通途 PO 代码 0 行；receipt/inventory 全部 `not_integrated`；
-- 全部保留 DN 明细、物流/PO 追踪资格，不猜 SO、不按同物料分配。
+## B. 退货账（修正）
 
-目标 9 行明细全部来自 `DN-26-00058`（CENTRADE），均 unlinked，合计实际交付 131：
+- 支持 ERPNext 负数 qty；保留 `raw_signed_qty` 与 `qty_magnitude=abs(qty)`；
+  正数退货与负数退货结果等价。
+- 严格校验：`return_against`、`dn_detail`、原单 docstatus=1、item/UOM/customer/warehouse；
+  原单草稿/取消/缺失/受限分别留痕，不抵扣。
+- 原行 `actual_qty` 保持毛额，退货行 `actual_qty=-匹配量`；净额只扣一次，
+  不再“原行净额 + 负向退货”双重抵扣。
+- 超退单独 `excess_return_qty`；原单无 SO 时退货保持 unlinked。
 
-| item_code | 行数 | 实际数量 |
-|---|---:|---:|
-| PK#KS0001-CMKTR-100-WHITE | 1 | 10 |
-| PK#KS0001-XMMBS-100-HEMPNATURAL | 8 | 121 |
+## C. 三本账（修正）
 
-其余 7 个目标 item 本轮无已提交 DN 记录 → `no_observed_delivery`，不写 0。
+- **实际交付账**：`delivery_lines`（毛额 + 已匹配退货负向行，净额一次）。
+- **SO 履约账**：`so_fulfillment` 只输出 `so_open_qty` / `unresolved_demand_qty`；
+  **不再把 SO 余额当 confirmed additional supply**。
+- **补货供应账**：`supply_ledger` 只有 linked fulfilled、unresolved demand、
+  unlinked delivery；无独立物理证据时 potential overlap 不转成确定供应。
+- `ambiguity_pools` 按 `item×UOM×customer×warehouse×channel` 汇总未关联池，
+  只做组级 min(open, pool)，不把池贪心分配给某条 SO 行，结果与输入顺序无关。
+- `physical_chain`：多运单 qty=null；PO code_only；receipt/inventory not_integrated。
 
-## B. 独立 DN 实际交付账
+## D. API / 页面 / 导出（修正）
 
-入口：`key_test.delivery_facts.get_delivery_facts`（schema `supply-facts/v3`）。
+- `get_delivery_facts(filters, scope)`：父单权限优先，再读子表；
+  受限 SO 不泄露名称/明细/计数。
+- 筛选/分页同步裁剪 `delivery_lines / association_edges / coverage_exceptions /
+  so_fulfillment / ambiguity_pools / supply_ledger / physical_chain` 与 counts；
+  `coverage.global` 为全量、`coverage.query` 为当前筛选/页面，聚合标注 `query_page`。
+- SO 页面「本 SO 实际交付」只查该 SO；另设「全局实际交付」入口，200 行/页可翻页。
+- 导出跨页校验 schema/rule/implementation/scope/as_of/source status/snapshot_id；
+  混版本、并发漂移、重复稳定键、写盘失败均不创建 run、不切 latest。
 
-- 稳定身份：`source_instance + delivery_note + delivery_note_item`；
-- 每行保留原始 DN/明细、docstatus、is_return、return_against、amended_from、
-  source_modified；实际 item_code/qty/uom/stock_qty/stock_uom/换算依据；
-  客户、公司、来源仓/目标仓及证据状态；过账日期/时间、时区状态、采集时间；
-  SO/SO 行与关联状态；范围/数量/身份/目的仓/物流/入库/库存状态；原始来源与版本。
-- 仅已提交 DN 计入当前实际交付；草稿/取消留痕但不累加；修订字段保留；
-- 退货按 `return_against + dn_detail` 逐原明细容量抵扣；超退/缺失/受限/退货的退货
-  分别留痕；无 SO 原单的退货保持 unlinked；
-- 没有 SO 的有效 DN 行完整保留；
-- 不同 item/UOM/仓库不串量；权限受限写 `restricted`，不伪装为空。
+## E. warehouse_restock 适配（修正）
 
-## C. 三本账与防重复
+- 必须先通过 snapshot gate：`pagination.exhausted=true`、非 partial、版本齐全、
+  scope 已提供且 hash 匹配；否则 `scope_pending` 或拒绝。
+- 行粒度：`item×UOM×channel×destination`；同 SKU 双渠道、双 UOM、双仓分行，
+  不跨单位/渠道合计。
+- 输出 actual/linked/unlinked/unresolved/potential；unknown 不写 0；
+  `eligible_for_restock=false`、`auto_order=false`。
 
-- **实际交付账**：`delivery_lines`（原发 + 匹配退货，净额只出现一次）。
-- **SO 履约账**：`so_fulfillment`（仅 linked 行；含 SO 量、已关联交付、SO 余额、
-  未关联候选、potential_overlap、confirmed_additional_supply、association_gap）。
-- **补货供应账**：`supply_ledger`（SO 行 + unlinked delivery；未关联只作 unknown，
-  不确认额外供应）。
-- `association_edges` 含 linked/header-only/ambiguous/conflict/restricted/unlinked
-  以及 `candidate` 边；候选只供人工审核，不写回。
-- 物理链：`physical_chain` 输出 DN→Shipment→Tongtool PO→receipt→inventory；
-  多运单 qty=null/allocation_unknown，PO 仅 code_only，receipt/inventory
-  `not_integrated`；同一物理货不在供应账重复出现。
+## 回归与 pending
 
-关键反例：SO 100、linked DN 70、unlinked 10 → 实际交付 80、明确 SO 履约 70、
-SO 余额 30、potential_overlap 10、confirmed additional supply 20。
+已覆盖：负数退货、正负等价、双重抵扣、跨 item/仓/UOM 退货、草稿/取消原单、
+缺失/NaN/Infinity、多运单、同 SKU 双渠道、多 SO 顺序不变、筛选聚合隔离、
+混版本/快照漂移/重复键/写盘失败、导出分页与 latest 保护、SO 页面范围。
 
-## D. 页面 / API / 导出
-
-- API：`get_delivery_facts(filters)`，支持 customer/item/date/association/relevance/
-  include_unlinked/include_inactive/limit/offset；稳定排序与 exhausted/partial。
-- 人工视图：SO 链条面板「实际交付 / 未关联 SO」弹窗，同源调用上述 API；
-  未关联行高亮，展示候选 SO 仅作审核。
-- 导出：`--delivery-all [--delivery-include-inactive]` 生成
-  `delivery_lines / association_edges / coverage_exceptions / so_fulfillment /
-  supply_ledger / physical_chain` 六类 JSON + Excel + manifest；SHA-256、原子
-  latest、失败不切换；manifest 记录 schema/rule/implementation、覆盖与分页。
-
-## E. 补货程序适配
-
-`warehouse_restock/delivery_facts_adapter.py`：
-
-- 只输出每个目标 SKU 的实际交付/未关联/未知与行动建议，`auto_order=false`；
-- 未关联、渠道未知、UOM 未知、无观察记录都不会写成 0；
-- FBA 与 in-house 分渠道行，不跨渠道求和；
-- receipt/inventory 仍 `not_integrated`，`eligible_for_restock=false`；
-- 棉花、扣子、独立内胆等不在 9-SKU 清单 → `out_of_scope`，不扩大范围。
-
-## 验证与 pending
-
-- 12 组反例已转自动测试（key_test `test_delivery_facts.py` + fzh adapter/export）。
-- 真实 API 分页/过滤：1,038 已提交行，limit/offset、linked/in_scope/include_unlinked
-  均通过；全量扫描 1,264 行 exhausted。
-- pending：普通受限用户 HTTP 权限、浏览器会话、真实通途入库/QI、生产部署；
-  目标分公司映射、海外可售、库存可售口径仍未证，不写成通过。
+仍 pending：普通受限用户真实 HTTP 权限、浏览器会话、真实通途入库/QI、
+生产部署、权威业务 scope 注入后的 A/E 分布。不得把 fixture 结果写成业务批准。
