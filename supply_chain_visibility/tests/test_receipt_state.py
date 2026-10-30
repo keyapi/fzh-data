@@ -32,6 +32,7 @@ def coverage(complete=True):
         "truncated": False,
         "not_collected": [],
         "source_as_of": "2026-10-31T00:00:00+08:00",
+        "covered_po_codes": ["PO-1"],
     }
 
 
@@ -102,6 +103,24 @@ class CoverageTests(unittest.TestCase):
         self.assertIsNone(row["pending_qty"])
         self.assertEqual(row["pending_evidence_status"], "unknown")
 
+    def test_coverage_for_another_po_does_not_prove_this_link(self):
+        cov = coverage()
+        cov["covered_po_codes"] = ["PO-A"]
+        row = reconcile([link(po=("PO-B",))], [], cov=cov)[0]
+        self.assertEqual(row["status"], "signed_pending_tongtool_receipt")
+        self.assertEqual(row["coverage_status"], "scope_mismatch")
+        self.assertEqual(row["exclusion_reason"], "coverage_scope_mismatch")
+        self.assertIsNone(row["received_qty"])
+        self.assertIsNone(row["pending_qty"])
+
+    def test_malformed_windows_are_invalid_not_complete(self):
+        bad = coverage()
+        bad["requested_windows"] = []
+        row = reconcile([link()], [], cov=bad)[0]
+        self.assertEqual(row["coverage_status"], "invalid")
+        self.assertIsNone(row["received_qty"])
+        self.assertIsNone(row["pending_qty"])
+
 
 class StateMachineTests(unittest.TestCase):
     def test_signed_without_receipt_is_pending(self):
@@ -163,6 +182,29 @@ class StateMachineTests(unittest.TestCase):
         self.assertEqual(row["over_receipt_qty"], "2")
         self.assertTrue(row["receipt_conflict"])
         self.assertEqual(row["exclusion_reason"], "over_receipt")
+
+    def test_incomplete_coverage_never_closes_even_at_link_qty(self):
+        bad = coverage()
+        bad["query_range_complete"] = False
+        row = reconcile([link()], [receipt(qty=10)], cov=bad)[0]
+        self.assertEqual(row["status"], "signed_pending_tongtool_receipt")
+        self.assertEqual(row["receipt_completion"], "coverage_incomplete")
+        self.assertEqual(row["received_qty"], "10")
+        self.assertIsNone(row["pending_qty"])
+        self.assertIsNone(row["tongtool_receipt_at"])
+        self.assertEqual(row["exclusion_reason"], "coverage_incomplete")
+
+    def test_incomplete_coverage_over_receipt_stays_conflict(self):
+        bad = coverage()
+        bad["query_range_complete"] = False
+        row = reconcile([link()], [receipt(qty=12)], cov=bad)[0]
+        self.assertEqual(row["status"], "signed_pending_tongtool_receipt")
+        self.assertEqual(row["receipt_completion"], "over_receipt")
+        self.assertEqual(row["received_qty"], "12")
+        self.assertIsNone(row["pending_qty"])
+        self.assertEqual(row["over_receipt_qty"], "2")
+        self.assertTrue(row["receipt_conflict"])
+        self.assertIsNone(row["tongtool_receipt_at"])
 
     def test_receipt_before_signature_is_conflict(self):
         row = reconcile(

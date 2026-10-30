@@ -113,6 +113,20 @@ class SalesOrderRenderTest(unittest.TestCase):
         self.assertIn("已签收·待通途入库", html)
         self.assertIn("通途入库未接入", html)
 
+    def test_logistics_progress_shows_identity_conflict(self):
+        progress = [{"logistic_number": "ZMT1", "identity_conflict": True,
+                     "shipment_candidates": ["SHIP-1", "SHIP-2"],
+                     "latest_progress_status": "已签收",
+                     "stage": "signed_pending_tongtool_receipt",
+                     "shipment_signed_at": "2026-10-20",
+                     "receipt_completion": "complete",
+                     "inventory_inclusion_status": "included"}]
+        html = _render_doc([_line(shipment_progress=progress,
+                                  work_orders=[])])["tree"]
+        self.assertIn("身份冲突（不展示确定状态）", html)
+        self.assertIn("SHIP-1, SHIP-2", html)
+        self.assertNotIn("已签收·待通途入库", html)
+
     def test_footer_describes_full_process_evidence(self):
         html = render([_line()])
         self.assertIn("全工序已证", html)

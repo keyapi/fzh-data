@@ -134,6 +134,14 @@ def _rank(status: str) -> Optional[int]:
     return _STAGE_RANK.get(status)
 
 
+def _time_verified(evidence: ProgressEvidence) -> bool:
+    return _tz_status(evidence.event_at) == "verified"
+
+
+def _orders_need_verified_time(rows) -> bool:
+    return any(not _time_verified(row) for row in rows)
+
+
 def _tz_status(value) -> str:
     text = _text(value)
     if not text:
@@ -250,6 +258,13 @@ def adjudicate_progress(evidences: Iterable[ProgressEvidence]) -> dict:
                 reasons.add("same_time_conflict")
                 return _result(None, None, None, False, reasons, rows)
             if timed:
+                if (len(timed) > 1
+                        and len({_text(row.event_at) for row in timed}) > 1
+                        and _orders_need_verified_time(timed)):
+                    # Picking the later terminal would rely on an unverified
+                    # timezone; do not fabricate an order.
+                    reasons.update(("time_order_unknown", "timezone_unverified"))
+                    return _result(None, None, None, False, reasons, rows)
                 chosen = max(timed, key=lambda row: _parse(row.event_at))
                 if len(timed) < len(finals):
                     reasons.add("missing_time")
@@ -259,6 +274,11 @@ def adjudicate_progress(evidences: Iterable[ProgressEvidence]) -> dict:
             else:
                 chosen = finals[0]
         else:
+            if timed and len({_text(row.event_at) for row in timed}) > 1 \
+                    and _orders_need_verified_time(timed):
+                reasons.update(("time_order_unknown", "timezone_unverified"))
+                return _result(_normalized(finals[0]), None, finals[0].source,
+                               True, reasons, rows, kind="actual")
             chosen = max(timed, key=lambda row: _parse(row.event_at)) if timed else finals[0]
             if timed and any(_parse(row.event_at) is None for row in finals):
                 reasons.add("missing_time")
@@ -294,30 +314,49 @@ def adjudicate_progress(evidences: Iterable[ProgressEvidence]) -> dict:
         max_rank = max(rank for rank, _ in ranked)
         top = [row for rank, row in ranked if rank == max_rank]
         timed_top = [row for row in top if _parse(row.event_at) is not None]
-        chosen = (max(timed_top, key=lambda row: _parse(row.event_at))
-                  if timed_top else top[0])
-        chosen_at = _parse(chosen.event_at)
+        chosen_at = None
+        if (len(timed_top) > 1
+                and len({_text(row.event_at) for row in timed_top}) > 1
+                and _orders_need_verified_time(timed_top)):
+            chosen = top[0]
+            reasons.update(("time_order_unknown", "timezone_unverified"))
+        else:
+            chosen = (max(timed_top, key=lambda row: _parse(row.event_at))
+                      if timed_top else top[0])
+            chosen_at = _parse(chosen.event_at)
         # A later event that regresses to an earlier stage is contradictory:
         # it makes the whole line unknown instead of confirming either side.
         if chosen_at is not None:
             for row in timed:
                 rank = _rank(_normalized(row))
                 if rank is not None and rank < max_rank and _parse(row.event_at) > chosen_at:
+                    if not (_time_verified(row) and _time_verified(chosen)):
+                        reasons.update(("time_order_unknown", "timezone_unverified"))
+                        continue
                     reasons.add("stage_regression")
                     return _result(None, None, None, False, reasons, rows)
         # Same instant, different payload is never force-ordered.
-        same_instant = [row for row in timed
-                        if _text(row.event_at) == _text(chosen.event_at)]
-        if len({_normalized(row) for row in same_instant}) > 1:
-            reasons.add("same_time_conflict")
-            return _result(None, None, None, False, reasons, rows)
-        return _result(_normalized(chosen), chosen.event_at, chosen.source,
-                       False, reasons, rows, kind="actual")
+        if chosen_at is not None:
+            same_instant = [row for row in timed
+                            if _text(row.event_at) == _text(chosen.event_at)]
+            if len({_normalized(row) for row in same_instant}) > 1:
+                reasons.add("same_time_conflict")
+                return _result(None, None, None, False, reasons, rows)
+        return _result(_normalized(chosen),
+                       chosen.event_at if chosen_at is not None else None,
+                       chosen.source, False, reasons, rows, kind="actual")
 
     if estimates:
         timed = [row for row in estimates if _parse(row.event_at) is not None]
-        if timed:
+        chosen_at = None
+        if (len(timed) > 1
+                and len({_text(row.event_at) for row in timed}) > 1
+                and _orders_need_verified_time(timed)):
+            chosen = estimates[0]
+            reasons.update(("time_order_unknown", "timezone_unverified"))
+        elif timed:
             chosen = max(timed, key=lambda row: _parse(row.event_at))
+            chosen_at = _parse(chosen.event_at)
         else:
             chosen = estimates[0]
         variants = {(_normalized(row), _text(row.event_at)) for row in estimates}
@@ -325,8 +364,9 @@ def adjudicate_progress(evidences: Iterable[ProgressEvidence]) -> dict:
             reasons.add("eta_conflict")
         if len({_normalized(row) for row in estimates}) > 1 and not timed:
             reasons.add("missing_time")
-        return _result(_normalized(chosen), chosen.event_at, chosen.source,
-                       False, reasons, rows, kind="estimated")
+        return _result(_normalized(chosen),
+                       chosen.event_at if chosen_at is not None else None,
+                       chosen.source, False, reasons, rows, kind="estimated")
 
     reasons.add("unknown_status")
     return _result(None, None, None, False, reasons, rows)

@@ -28,6 +28,7 @@ class FakeFrappe(types.ModuleType):
         self.permitted_dns = []
         self.permitted_shipments = []
         self.event_rows = []
+        self.event_error = None
         self.last_query = None
         self.db = types.SimpleNamespace(
             sql=self.sql, count=self.count, has_column=lambda *a, **k: True,
@@ -93,6 +94,9 @@ class FakeFrappe(types.ModuleType):
         raise (exc or Exception)(message)
 
     def get_all(self, *args, **kwargs):
+        doctype = args[0] if args else kwargs.get("doctype")
+        if doctype == "Shipment Logistics Event" and self.event_error is not None:
+            raise self.event_error
         return list(self.event_rows)
 
 
@@ -1079,7 +1083,7 @@ class SupplyFactsContractTest(unittest.TestCase):
 
     def test_implementation_version_bumped_for_interface_change(self):
         self.assertEqual(self.facts.IMPLEMENTATION_VERSION,
-                         "key_test.supply_facts@2026-10-30.2")
+                         "key_test.supply_facts@2026-10-30.3")
 
     def test_manifest_carries_rule_and_implementation_versions(self):
         self.fake.so_rows = []
@@ -1188,8 +1192,10 @@ class SupplyFactsContractTest(unittest.TestCase):
                       dlvr="2026-10-23", match_status="", modified="2026-10-29")]
         self.fake.permitted_shipments = ["SHIP-1", "SHIP-2"]
         try:
-            numbers, shipments, restricted = self.facts.load_shipments(["DN-1"])
+            numbers, shipments, restricted, event_status = \
+                self.facts.load_shipments(["DN-1"])
             self.assertFalse(restricted)
+            self.assertTrue(event_status["available"])
             self.assertEqual(numbers["DN-1"][0]["number"], "ZMT1")
             row = shipments["ZMT1"]
             self.assertTrue(row["identity_conflict"])
@@ -1220,7 +1226,7 @@ class SupplyFactsContractTest(unittest.TestCase):
                                   event_name="到港", event_date="2026-10-20",
                                   location="", description="已到港")]
         try:
-            _, shipments, _ = self.facts.load_shipments(["DN-1"])
+            _, shipments, _, _ = self.facts.load_shipments(["DN-1"])
             progress = shipments["ZMT1"]["progress"]
             self.assertEqual(progress["latest_progress_status"], "已到港")
         finally:
@@ -1228,6 +1234,64 @@ class SupplyFactsContractTest(unittest.TestCase):
             self.fake.shipment_rows = []
             self.fake.permitted_shipments = []
             self.fake.event_rows = []
+
+    def test_event_query_failure_is_not_silent_empty(self):
+        self.fake.number_rows = [
+            _AttrDict(dn="DN-1", number="ZMT1", is_primary=1)]
+        self.fake.shipment_rows = [
+            _AttrDict(shipment="SHIP-1", number="ZMT1", status11="已离港",
+                      status4="在途", eta=None, atd="2026-10-20", ata=None,
+                      dlvr=None, match_status="", modified="2026-10-29")]
+        self.fake.permitted_shipments = ["SHIP-1"]
+        self.fake.event_error = RuntimeError("event query boom")
+        try:
+            _, shipments, _, event_status = self.facts.load_shipments(["DN-1"])
+            self.assertFalse(event_status["available"])
+            self.assertEqual(event_status["reason"], "query_error")
+            self.assertTrue(event_status["error"])
+            self.assertIn("progress", shipments["ZMT1"])
+        finally:
+            self.fake.number_rows = []
+            self.fake.shipment_rows = []
+            self.fake.permitted_shipments = []
+            self.fake.event_error = None
+
+    def test_event_query_failure_marks_supply_facts_partial(self):
+        self.fake.so_rows = [self._row(1)]
+        self.fake.permitted_sos = ["SO-1"]
+        self.fake.total_sos = 1
+        self.fake.dn_rows = [_AttrDict(
+            dn="DN-1", date="2026-10-16", status="", docstatus=1, is_return=0,
+            return_against=None, tongtool_po=None, so_line="SOI-1",
+            dn_item="DNI-1", dn_detail=None, qty=10.0, uom="个",
+            warehouse="WH-1")]
+        self.fake.permitted_dns = ["DN-1"]
+        self.fake.number_rows = [
+            _AttrDict(dn="DN-1", number="ZMT1", is_primary=1)]
+        self.fake.shipment_rows = [
+            _AttrDict(shipment="SHIP-1", number="ZMT1", status11="已离港",
+                      status4="在途", eta=None, atd="2026-10-20", ata=None,
+                      dlvr=None, match_status="", modified="2026-10-29")]
+        self.fake.permitted_shipments = ["SHIP-1"]
+        self.fake.event_error = RuntimeError("event boom")
+        try:
+            result = self.facts.get_supply_facts({"sales_order": "SO-1"})
+            status = result["source_status"]["shipment_logistics_event"]
+            self.assertFalse(status["available"])
+            self.assertEqual(status["reason"], "query_error")
+            self.assertTrue(result["manifest"]["partial"])
+            self.assertIn("shipment logistics event source unavailable: query_error",
+                          result["manifest"]["notes"])
+        finally:
+            self.fake.so_rows = []
+            self.fake.permitted_sos = []
+            self.fake.total_sos = 0
+            self.fake.dn_rows = []
+            self.fake.permitted_dns = []
+            self.fake.number_rows = []
+            self.fake.shipment_rows = []
+            self.fake.permitted_shipments = []
+            self.fake.event_error = None
 
     def test_conflicting_progress_is_unknown_and_keeps_candidates(self):
         progress = {"latest_progress_status": None, "latest_progress_at": None,

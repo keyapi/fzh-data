@@ -357,7 +357,7 @@ class LocalInputError(Exception):
 
 
 COVERAGE_KEYS = {"query_range_complete", "requested_windows", "truncated",
-                 "not_collected", "source_as_of"}
+                 "not_collected", "source_as_of", "covered_po_codes"}
 LINK_FIELDS = {"shipment", "dn", "po_codes", "signed_at", "qty", "uom", "sku",
                "warehouse", "identity_confidence", "status_semantics"}
 RECEIPT_LINE_FIELDS = {"receipt_id", "line_id", "po_code", "sku", "warehouse",
@@ -429,7 +429,28 @@ def _validate_coverage(value):
             raise LocalInputError("coverage.%s must be a list" % name)
         for index, window in enumerate(windows):
             _validate_window(window, "coverage", "%s[%s]" % (name, index))
-    _require_aware_time(value["source_as_of"], "coverage", "source_as_of")
+    if not value["requested_windows"]:
+        raise LocalInputError(
+            "coverage.requested_windows must contain at least one window")
+    source_as_of = _require_aware_time(value["source_as_of"], "coverage",
+                                       "source_as_of")
+    source_dt = datetime.fromisoformat(source_as_of.strip().replace("Z", "+00:00"))
+    for index, window in enumerate(value["requested_windows"]):
+        start_dt = datetime.fromisoformat(
+            window["start"].strip().replace("Z", "+00:00"))
+        end_dt = datetime.fromisoformat(window["end"].strip().replace("Z", "+00:00"))
+        if start_dt > end_dt:
+            raise LocalInputError(
+                "coverage.requested_windows[%s] start is after end" % index)
+        if end_dt > source_dt:
+            raise LocalInputError(
+                "coverage.source_as_of is earlier than requested_windows[%s].end"
+                % index)
+    codes = value["covered_po_codes"]
+    if not isinstance(codes, list) or not all(
+            isinstance(code, str) and code.strip() for code in codes):
+        raise LocalInputError(
+            "coverage.covered_po_codes must be a list of non-empty strings")
 
 
 def _validate_duplicate_identity(rows, identity_fn, payload_fn, label):
@@ -560,6 +581,14 @@ def _load_local_input(path, kind):
             raise LocalInputError("links must be a list")
         for index, row in enumerate(links):
             _validate_link_row(row, index)
+        covered = {code.strip() for code in payload["coverage"]["covered_po_codes"]}
+        for index, row in enumerate(links):
+            uncovered = sorted({code for code in row["po_codes"]
+                                if code not in covered})
+            if uncovered:
+                raise LocalInputError(
+                    "links[%s].po_codes not covered by coverage.covered_po_codes: %s"
+                    % (index, ", ".join(uncovered)))
         for index, row in enumerate(receipts):
             _validate_receipt_line(row, index)
         _validate_duplicate_identity(

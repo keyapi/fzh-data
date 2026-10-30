@@ -302,5 +302,45 @@ class DualLineTests(unittest.TestCase):
         self.assertEqual(forward, reverse)
 
 
+class TimeZoneOrderingTests(unittest.TestCase):
+    def test_naive_and_aware_terminals_cannot_be_ordered(self):
+        result = adjudicate_progress([
+            ev("已签收", "2026-10-28T10:00:00", source="manual"),
+            ev("已上传POD", "2026-10-29T10:00:00+08:00"),
+        ])
+        self.assertIsNone(result["latest_progress_status"])
+        self.assertTrue(result["conflict_flag"])
+        self.assertIn("time_order_unknown", result["conflict_reasons"])
+        self.assertIn("timezone_unverified", result["conflict_reasons"])
+
+    def test_same_terminal_with_unverified_times_keeps_status_without_at(self):
+        result = adjudicate_progress([
+            ev("已签收", "2026-10-28T10:00:00"),
+            ev("已签收", "2026-10-29T10:00:00", source="manual"),
+        ])
+        self.assertEqual(result["latest_progress_status"], "已签收")
+        self.assertIsNone(result["latest_progress_at"])
+        self.assertTrue(result["is_final"])
+        self.assertIn("time_order_unknown", result["conflict_reasons"])
+
+    def test_same_stage_unverified_times_do_not_pick_latest(self):
+        result = adjudicate_progress([
+            ev("已到港", "2026-10-20T08:00:00"),
+            ev("已到港", "2026-10-25T08:00:00", source="manual"),
+        ])
+        self.assertEqual(result["latest_progress_status"], "已到港")
+        self.assertIsNone(result["latest_progress_at"])
+        self.assertIn("timezone_unverified", result["conflict_reasons"])
+
+    def test_regression_is_not_asserted_on_unverified_times(self):
+        result = adjudicate_progress([
+            ev("派送中", "2026-10-20T08:00:00"),
+            ev("已到港", "2026-10-25T08:00:00"),
+        ])
+        self.assertEqual(result["latest_progress_status"], "派送中")
+        self.assertIn("time_order_unknown", result["conflict_reasons"])
+        self.assertNotIn("stage_regression", result["conflict_reasons"])
+
+
 if __name__ == "__main__":
     unittest.main()

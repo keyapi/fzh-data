@@ -509,10 +509,14 @@ def get_so_chain(sales_order):
             source_status.setdefault("delivery_note", {
                 "available": False, "reason": "permission"})
         if dns and frappe.has_permission("Shipment", "read"):
-            ship_numbers, shipment_by_number, _ship_restricted = load_shipments(
-                sorted({d.get("dn") for d in dns if d.get("dn")}))
+            ship_numbers, shipment_by_number, _ship_restricted, event_status = \
+                load_shipments(sorted({d.get("dn") for d in dns if d.get("dn")}))
         else:
             ship_numbers, shipment_by_number = {}, {}
+            event_status = {"available": False, "restricted": False,
+                            "reason": "permission"}
+        if not event_status.get("available", True):
+            source_status["shipment_logistics_event"] = event_status
         shipment_progress = build_shipment_progress(
             {"so": doc.name, "so_line": it.name, "item_code": it.item_code},
             {"dns": dns, "numbers_by_dn": ship_numbers,
@@ -587,7 +591,7 @@ def get_so_chain(sales_order):
 
     for name in ("sales_order", "production_plan", "delivery_note", "work_order",
                  "job_card", "tracking_number", "stock_entry",
-                 "quality_inspection"):
+                 "quality_inspection", "shipment_logistics_event"):
         source_status.setdefault(name, {"available": True})
     for name in ("tongtool_po", "receipt", "inventory"):
         source_status.setdefault(name, {"available": False,
@@ -621,6 +625,7 @@ def get_so_line_logistics(sales_order, so_line):
         "sales_order": doc.name, "so_line": item.name, "item_code": item.item_code,
         "item_name": item.item_name,
         "permissions": {"delivery_note": True, "shipment": True},
+        "source_status": {}, "partial": False,
         "dns": [],
     }
     if not frappe.has_permission("Delivery Note", "read"):
@@ -652,11 +657,15 @@ def get_so_line_logistics(sales_order, so_line):
 
     numbers_by_dn = dn_logistic_numbers(dn_names)
     all_numbers = sorted({n["number"] for values in numbers_by_dn.values() for n in values})
-    shipment_by_number, events_by_shipment, identity_conflicts = {}, {}, {}
+    shipment_by_number, shipment_groups = {}, defaultdict(list)
+    events_by_shipment, identity_conflicts = defaultdict(list), {}
+    event_status = {"available": True, "restricted": False, "reason": ""}
     if all_numbers and not (
             frappe.has_permission("Shipment", "read")
             and frappe.db.has_column("Shipment", "custom_zmt_logistic_number")):
         result["permissions"]["shipment"] = False
+        event_status = {"available": False, "restricted": False,
+                        "reason": "permission"}
     elif all_numbers:
         candidates = frappe.db.sql(
             """select name, custom_zmt_logistic_number as number,
@@ -673,43 +682,70 @@ def get_so_line_logistics(sales_order, so_line):
             filters=[["custom_zmt_logistic_number", "in", all_numbers],
                      ["docstatus", "in", (0, 1)]],
             fields=["name"], limit_page_length=0)}
-        grouped_shipments = defaultdict(list)
         for candidate in candidates:
             if candidate.name in permitted_shipments:
-                grouped_shipments[candidate.number].append(candidate)
-        shipment_by_number = {}
-        identity_conflicts = {}
-        for number, rows in grouped_shipments.items():
+                shipment_groups[candidate.number].append(candidate)
+        for number, rows in shipment_groups.items():
             rows.sort(key=lambda row: str(row.name))
-            shipment_by_number[number] = rows[0]
-            if len(rows) > 1:
+            if len(rows) == 1:
+                shipment_by_number[number] = rows[0]
+            else:
+                # Never elect a representative: the whole number is unresolved.
                 identity_conflicts[number] = [row.name for row in rows]
-        if shipment_by_number:
-            for event in frappe.get_all(
-                    "Shipment Logistics Event",
-                    filters={"parent": ["in", sorted({c.name for c in shipment_by_number.values()})],
-                             "parenttype": "Shipment"},
-                    fields=["parent", "seq", "event_time", "event_name", "event_date",
-                            "location", "description"],
-                    order_by="parent asc, idx asc"):
-                events_by_shipment.setdefault(event.parent, []).append({
-                    "seq": event.seq,
-                    "time": str(event.event_time or "")[:16],
-                    "name": event.event_name or "",
-                    "date": str(event.event_date or "")[:10],
-                    "location": event.location or "",
-                    "description": event.description or "",
-                })
+        parents = sorted({row.name for rows in shipment_groups.values()
+                          for row in rows})
+        if parents:
+            try:
+                if not frappe.has_permission("Shipment Logistics Event", "read"):
+                    raise PermissionError("no Shipment Logistics Event permission")
+                for event in frappe.get_all(
+                        "Shipment Logistics Event",
+                        filters={"parent": ["in", parents],
+                                 "parenttype": "Shipment"},
+                        fields=["parent", "seq", "event_time", "event_name",
+                                "event_date", "location", "description"],
+                        order_by="parent asc, idx asc"):
+                    events_by_shipment[event.parent].append({
+                        "seq": event.seq,
+                        "time": str(event.event_time or "")[:16],
+                        "name": event.event_name or "",
+                        "date": str(event.event_date or "")[:10],
+                        "location": event.location or "",
+                        "description": event.description or "",
+                    })
+            except Exception as exc:  # noqa: BLE001
+                permission = type(exc).__name__ in (
+                    "PermissionError", "frappe.exceptions.PermissionError")
+                event_status = {
+                    "available": False, "restricted": permission,
+                    "reason": "permission" if permission else "query_error",
+                    "error": str(exc)}
+
+    def _evidence(raw):
+        return {
+            "shipment": raw.name,
+            "status4": raw.status4 or "", "status11": raw.status11 or "",
+            "last_node": str(raw.last_node or "")[:10],
+            "eta": str(raw.eta or "")[:10], "atd": str(raw.atd or "")[:10],
+            "ata": str(raw.ata or "")[:10], "dlvr": str(raw.dlvr or "")[:10],
+            "match_status": raw.match_status or "", "source": raw.source or "",
+            "events": events_by_shipment.get(raw.name, []),
+        }
+
+    result["source_status"] = {"shipment_logistics_event": event_status}
+    result["partial"] = not event_status.get("available", True)
 
     for row in dn_rows:
         numbers = []
         for entry in numbers_by_dn.get(row.dn, []):
+            rows = shipment_groups.get(entry["number"], [])
             shipment = shipment_by_number.get(entry["number"])
             numbers.append({
                 "number": entry["number"], "primary": entry["primary"],
                 "shipment": shipment.name if shipment else "",
-                "identity_conflict": entry["number"] in identity_conflicts,
-                "shipment_candidates": identity_conflicts.get(entry["number"], []),
+                "identity_conflict": len(rows) > 1,
+                "shipment_candidates": [raw.name for raw in rows] if len(rows) > 1 else [],
+                "shipment_evidence": [_evidence(raw) for raw in rows],
                 "status4": shipment.status4 if shipment else "",
                 "status11": shipment.status11 if shipment else "",
                 "last_node": str(shipment.last_node or "")[:10] if shipment else "",

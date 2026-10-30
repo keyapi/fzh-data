@@ -35,6 +35,7 @@ def _coverage(**overrides):
         "truncated": False,
         "not_collected": [],
         "source_as_of": "2026-10-31T00:00:00+08:00",
+        "covered_po_codes": ["PO-1"],
     }
     value.update(overrides)
     return value
@@ -696,6 +697,32 @@ class LocalInputValidationTest(unittest.TestCase):
     def test_missing_coverage_field_is_rejected(self):
         payload = _state_payload()
         del payload["coverage"]["not_collected"]
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_complete_with_empty_windows_is_rejected(self):
+        payload = _state_payload()
+        payload["coverage"]["requested_windows"] = []
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_reversed_window_is_rejected(self):
+        payload = _state_payload()
+        payload["coverage"]["requested_windows"] = [{
+            "start": "2026-10-31T00:00:00+08:00",
+            "end": "2026-10-01T00:00:00+08:00"}]
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_source_as_of_before_window_end_is_rejected(self):
+        payload = _state_payload()
+        payload["coverage"]["source_as_of"] = "2026-10-15T00:00:00+08:00"
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_link_po_outside_coverage_scope_is_rejected(self):
+        payload = _state_payload()
+        payload["links"][0]["po_codes"] = ["PO-B"]
         with self.assertRaises(self.exporter.LocalInputError):
             self._load(payload)
 

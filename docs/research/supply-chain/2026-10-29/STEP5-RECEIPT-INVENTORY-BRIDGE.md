@@ -27,21 +27,26 @@ tags: [supply-chain, receipt, tongtool, inventory, reconciliation]
 ```text
 coverage = {
   query_range_complete: bool,
-  requested_windows: [{start, end}],
+  requested_windows: [{start, end}],   # 非空；start<=end
   truncated: bool,
   not_collected: [{start, end}] | bool,
-  source_as_of: 带时区时间
+  source_as_of: 带时区时间,             # 必须 >= 每个 window.end
+  covered_po_codes: [str]               # 本次查询实际覆盖的 PO 身份
 }
 ```
 
-- `complete = query_range_complete and not truncated and not not_collected and source_as_of 有值`；
-- **只有覆盖完整时，“无 receipt 行”才允许 `received_qty=0` known**；
-- 覆盖缺失/截断时，无匹配行 → `received_qty=null`、`pending_qty=null`、
-  `completion=unknown`、`exclusion_reason=coverage_incomplete`，状态仍
-  `signed_pending_tongtool_receipt`；
-- 覆盖不完整但已有部分 receipt → `received` 可已知、`completion=partial`，
-  `pending_qty=null`（覆盖外可能还有 receipt）；
-- 每行输出 `coverage` 原值与 `coverage_status`（complete/incomplete/missing）。
+- 覆盖必须能证明**当前 link 的全部 po_codes** 都在 `covered_po_codes` 内；
+  只给 `query_range_complete=true` 不足以证明任何 PO；
+- 空/反向窗口、无时区时间、`source_as_of < window.end`、PO scope 不匹配 → 不是完整覆盖；
+- **只有 link-specific coverage 完整时，“无 receipt 行”才允许 `received_qty=0` known**；
+- 覆盖缺失/截断/未采集/scope 不匹配时：
+  - 已观察到的合法 `received_qty` 可保留 known；
+  - `pending_qty` 必须 unknown；
+  - **不得** `receipt_completion=complete`、不得进入 `tongtool_received`、
+    不得输出作为关闭依据的 `tongtool_receipt_at`；
+  - 已观察量仍超过 `link.qty` 时照常报 `over_receipt` conflict；
+- 每行输出 `coverage` 原值与 `coverage_status`
+  （complete/incomplete/invalid/missing/scope_mismatch）。
 
 ## 3. 签收→入库状态机
 
@@ -49,10 +54,11 @@ coverage = {
 
 - 未签收：`in_transit`；
 - 已签收无/部分入库：`signed_pending_tongtool_receipt` + `receipt_completion=pending/partial`；
-- 只有完整入库已证才进入 `tongtool_received`；
+- 只有完整入库已证**且 link-specific coverage 完整**才进入 `tongtool_received`；
+  不完整覆盖下即使 observed qty 等于 link qty 也只能 `coverage_incomplete` + pending；
 - **超收**：`received > link.qty` → 不进入 `tongtool_received`；输出
   `receipt_completion=over_receipt`、`over_receipt_qty`、`receipt_conflict=true`，
-  状态留在 pending；
+  状态留在 pending；覆盖不完整时 `pending_qty=null`，但超收冲突照常成立；
 - **receipt 早于签收** → `status=unknown`、`receipt_conflict=true`、
   `exclusion_reason=receipt_before_signed`；
 - **时区**：所有时间先显式校验；naive/非法时间不得当作 UTC。naive/aware 混用不崩；
@@ -115,6 +121,8 @@ inventory-bridge:   {"schema_version":"supply-facts/inventory-bridge/v1",
 
 - 布尔字段只接受 JSON `true/false`；字符串 `"true"/"false"` 拒绝；
 - 拒绝未知字段、缺字段、schema/版本不一致、重复身份异载荷、无时区/非法时间；
+- 拒绝空 `requested_windows`、`start > end`、`source_as_of < window.end`；
+- 拒绝 `covered_po_codes` 未覆盖任一 link 的 `po_codes`（PO scope 不匹配）；
 - 校验失败：不创建成功 run、不切换 `latest.json`；manifest 标记
   `receipt_reconciliation.links_source = server_auto | local_input | none`。
 

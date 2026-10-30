@@ -120,6 +120,8 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 Logistics Event 三来源；终态粘性；实际优先；`source_updated_at` 不提升阶段；
 终态缺 `dlvr` → `shipment_signed_at=null`（不得用 `ata`）；ETA-only 不得证明实际在途；
 阶段回退/同时间冲突/异常/撤销/人工值未映射 → unknown 或 conflict 并保留候选；
+naive/date-only 时间不按 UTC 假定，若终态选择、阶段回退或同刻判断依赖未证时区 →
+`time_order_unknown` + `timezone_unverified`，不伪造先后；
 同号多 Shipment → `shipment_identity_conflict`，禁止 last-write-wins；
 同 DN/物流号/Shipment 去重，退货 DN 不生成进度行。通途入库与库存未接入时
 `receipt_completion=unknown`、`received/pending=null`、`receipt_source_status=not_integrated`、
@@ -134,8 +136,13 @@ pending_qty/over_receipt_qty/received_evidence_status/pending_evidence_status/
 receipt_conflict/receipt_basis/identity_confidence/coverage_status/exclusion_reason/
 receipt_duplicates/unmatched_receipt_rows`。
 
-规则：输入必须带 collection coverage；**只有覆盖完整时无 receipt 行才等于 0**；
-覆盖缺失/截断 → received/pending unknown；超收 → `over_receipt` 不进入 received；
+规则：输入必须带 link-specific collection coverage
+（`query_range_complete`、非空且 `start<=end<=source_as_of` 的 `requested_windows`、
+`truncated`、`not_collected`、`covered_po_codes`），且当前 link 的全部 `po_codes`
+必须位于 `covered_po_codes`。**只有该覆盖完整时无 receipt 行才等于 0**；
+覆盖缺失/截断/scope 不匹配 → 已观察 `received_qty` 可 known，但 `pending_qty`
+unknown、不得 `complete`、不得进入 `tongtool_received`、不得输出关闭用
+`tongtool_receipt_at`；observed qty 超过 link qty 仍报 `over_receipt`；
 receipt 早于签收 → conflict；时区显式校验；lag 输出秒/小时/天；缺有效时间不伪造
 `tongtool_receipt_at`。详见 STEP5。
 
@@ -158,12 +165,15 @@ unmatched + not_collected + after_snapshot + uncertain。详见 STEP5。
 `--receipt-state-json` = `{schema_version:"supply-facts/receipt-state/v1", coverage, links, receipts}`；
 `--inventory-bridge-json` = `{schema_version:"supply-facts/inventory-bridge/v1", coverage, snapshots, receipts}`。
 coverage 必含 `query_range_complete`、`requested_windows`、`truncated`、`not_collected`、
-`source_as_of`（带时区）。布尔只接受 JSON true/false；拒绝未知/缺字段、schema 不一致、
-重复身份异载荷、无时区时间；失败不创建 run、不切换 `latest.json`。
+`source_as_of`（带时区）、`covered_po_codes`。布尔只接受 JSON true/false；
+拒绝未知/缺字段、schema 不一致、重复身份异载荷、无时区时间、空 `requested_windows`、
+`start>end`、`source_as_of<window.end`、以及 link `po_codes` 超出覆盖 scope；
+失败不创建 run、不切换 `latest.json`。
 
 ### `manifest`
 
-`schema_version=supply-facts/v2`、`rule_version`（数量规则版本）、`implementation_version`（实现/构建版本，服务端返回与本地导出产物都携带）、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`source_status`（逐来源 `{available, reason}`）/`external_sources`）、`counts`、`partial`、`truncated`、`termination_reason`（`exhausted`/`page_limit`）、`pagination`、`partial_reasons`、`notes`、`files`（相对路径 + sha256）、`performance`。响应顶层同样返回 `source_status`。
+`schema_version=supply-facts/v2`、`rule_version`（数量规则版本）、`implementation_version`（实现/构建版本，服务端返回与本地导出产物都携带）、`run_id`、`as_of`（快照日）、`as_of_kind=current_snapshot`、`observed_at`（采集时刻）、`generated_at`、`scope`、`coverage`（来源/权限/`restricted`/`source_status`（逐来源 `{available, reason}`，
+含 `shipment_logistics_event`）/`external_sources`）、`counts`、`partial`、`truncated`、`termination_reason`（`exhausted`/`page_limit`）、`pagination`、`partial_reasons`、`notes`、`files`（相对路径 + sha256）、`performance`。响应顶层同样返回 `source_status`。
 
 ## 2. 批量入口
 
@@ -189,7 +199,7 @@ filters = JSON object
 
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
 - Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
-- 当前 `implementation_version=key_test.supply_facts@2026-10-30.2`；`rule_version=2026-10-29.7`；接口/分页行为变更必须 bump，混合版本继续拒绝。
+- 当前 `implementation_version=key_test.supply_facts@2026-10-30.3`；`rule_version=2026-10-29.8`；接口/分页行为变更必须 bump，混合版本继续拒绝。
 - 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
 - `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。
 - `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。

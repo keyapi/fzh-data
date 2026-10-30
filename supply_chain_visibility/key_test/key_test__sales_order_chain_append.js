@@ -386,7 +386,9 @@ function so_chain_tree_html(line) {
            + '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
            + '<thead><tr><th>运单</th><th>最新进度</th><th>阶段</th><th>签收</th><th>通途入库</th><th>库存包含</th><th>可售</th></tr></thead><tbody>';
         line.shipment_progress.forEach(function (s) {
-            const stageTxt = s.stage === 'signed_pending_tongtool_receipt' ? '已签收·待通途入库'
+            const conflict = !!s.identity_conflict;
+            const stageTxt = conflict ? '身份冲突（不展示确定状态）'
+                : s.stage === 'signed_pending_tongtool_receipt' ? '已签收·待通途入库'
                 : s.stage === 'tongtool_received' ? '通途已入库'
                 : s.stage === 'shipped_in_transit' ? '运输中' : '未知/冲突';
             const receipt = (s.receipt_completion && s.receipt_completion !== 'unknown')
@@ -394,11 +396,14 @@ function so_chain_tree_html(line) {
             const incl = s.inventory_inclusion_status === 'included' ? '已包含'
                 : (s.inventory_inclusion_status || 'unknown');
             h += '<tr><td>' + so_chain_esc(s.logistic_number || '—')
-               + '</td><td>' + so_chain_esc(s.latest_progress_status || '—')
+               + (conflict && (s.shipment_candidates || []).length
+                    ? '<br><span class="text-danger" style="font-size:11px">候选: '
+                      + so_chain_esc((s.shipment_candidates || []).join(', ')) + '</span>' : '')
+               + '</td><td>' + (conflict ? '—' : so_chain_esc(s.latest_progress_status || '—'))
                + '</td><td>' + stageTxt
-               + '</td><td>' + so_chain_esc(s.shipment_signed_at || '—')
-               + '</td><td>' + so_chain_esc(receipt)
-               + '</td><td>' + so_chain_esc(incl)
+               + '</td><td>' + (conflict ? '—' : so_chain_esc(s.shipment_signed_at || '—'))
+               + '</td><td>' + (conflict ? '—' : so_chain_esc(receipt))
+               + '</td><td>' + (conflict ? '—' : so_chain_esc(incl))
                + '</td><td>不可售</td></tr>';
         });
         h += '</tbody></table></div>';
@@ -638,17 +643,39 @@ function so_chain_head_leg_html(dns) {
            + '<th>离港</th><th>到港</th><th>签收</th><th>匹配</th></tr></thead><tbody>';
         numbers.forEach(function (n) {
             const events = n.events || [];
+            const conflict = !!n.identity_conflict;
+            const evidence = n.shipment_evidence || [];
             h += '<tr>'
-               + '<td>' + (n.shipment ? so_chain_link('Shipment', n.shipment, n.number) : so_chain_esc(n.number))
-               + (n.primary ? ' <span class="text-muted">(主)</span>' : '') + '</td>'
-               + '<td>' + (n.status11 ? so_chain_t(n.status11) : '<span class="text-muted">状态未知</span>') + '</td>'
-               + '<td>' + so_chain_esc(n.last_node || '-') + '</td>'
-               + '<td>' + so_chain_esc(n.eta || '-') + '</td>'
-               + '<td>' + so_chain_esc(n.atd || '-') + '</td>'
-               + '<td>' + so_chain_esc(n.ata || '-') + '</td>'
-               + '<td>' + so_chain_esc(n.dlvr || '-') + '</td>'
-               + '<td>' + so_chain_esc(n.match_status || '-') + '</td></tr>';
-            if (events.length) {
+               + '<td>' + (conflict
+                    ? '运单号 ' + so_chain_esc(n.number)
+                      + ' <span class="indicator-pill red">身份冲突</span>'
+                    : (n.shipment ? so_chain_link('Shipment', n.shipment, n.number) : so_chain_esc(n.number)))
+               + (!conflict && n.primary ? ' <span class="text-muted">(主)</span>' : '') + '</td>'
+               + '<td>' + (conflict
+                    ? '<span class="text-danger">身份冲突：不展示确定状态</span>'
+                    : (n.status11 ? so_chain_t(n.status11) : '<span class="text-muted">状态未知</span>')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.last_node || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.eta || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.atd || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.ata || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.dlvr || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.match_status || '-')) + '</td></tr>';
+            if (conflict) {
+                h += '<tr><td colspan="8" style="border-top:none;padding:2px 8px 6px">'
+                   + '<div class="text-danger" style="font-size:11px;margin-bottom:2px">同一运单号对应 '
+                   + evidence.length + ' 张 Shipment，拒绝任选代表；以下原值待人工核对。</div>'
+                   + '<table class="table" style="margin:4px 0;font-size:11px"><thead><tr>'
+                   + '<th>Shipment</th><th>status11</th><th>status4</th><th>离港</th><th>到港</th><th>签收</th></tr></thead><tbody>';
+                evidence.forEach(function (e) {
+                    h += '<tr><td>' + so_chain_link('Shipment', e.shipment, e.shipment) + '</td>'
+                       + '<td>' + so_chain_esc(e.status11 || '-') + '</td>'
+                       + '<td>' + so_chain_esc(e.status4 || '-') + '</td>'
+                       + '<td>' + so_chain_esc(e.atd || '-') + '</td>'
+                       + '<td>' + so_chain_esc(e.ata || '-') + '</td>'
+                       + '<td>' + so_chain_esc(e.dlvr || '-') + '</td></tr>';
+                });
+                h += '</tbody></table></td></tr>';
+            } else if (events.length) {
                 h += '<tr><td colspan="8" style="border-top:none;padding:2px 8px 6px">'
                    + '<details><summary class="text-muted" style="font-size:11px;cursor:pointer">轨迹 '
                    + events.length + ' 个节点</summary>'
@@ -670,6 +697,11 @@ function so_chain_head_leg_html(dns) {
 
 function so_chain_show_logistics(data, so) {
     const perms = data.permissions || {};
+    const eventStatus = (data.source_status || {}).shipment_logistics_event || {};
+    const eventWarn = eventStatus.available === false
+        ? '<div class="text-danger" style="margin-bottom:6px">物流事件读取失败（'
+          + so_chain_esc(eventStatus.reason || 'unknown')
+          + '），状态/轨迹不完整（partial）。</div>' : '';
     const head = '<div style="margin-bottom:6px"><b>'
         + so_chain_link('Item', data.item_code, data.item_code) + '</b>'
         + (data.item_name ? '　' + so_chain_esc(data.item_name) : '') + '</div>';
@@ -679,7 +711,7 @@ function so_chain_show_logistics(data, so) {
     } else if (perms.shipment === false) {
         body = '<div class="text-muted">无 Shipment 读取权限，运单状态不可见。</div>';
     } else {
-        body = so_chain_head_leg_html(data.dns || []);
+        body = eventWarn + so_chain_head_leg_html(data.dns || []);
     }
     const d = new frappe.ui.Dialog({
         title: __('头程物流：') + so + ' / ' + (data.item_name || data.item_code),

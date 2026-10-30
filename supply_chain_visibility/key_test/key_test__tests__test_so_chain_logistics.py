@@ -23,6 +23,7 @@ class FakeFrappe(types.ModuleType):
         self.number_rows = []
         self.shipment_rows = []
         self.event_rows = []
+        self.event_error = None
         self.permitted = {"Delivery Note": None, "Shipment": None}
         self.readable = {}
         self.PermissionError = PermissionError
@@ -48,6 +49,8 @@ class FakeFrappe(types.ModuleType):
 
     def get_all(self, doctype, filters=None, fields=None, order_by=None):
         self.get_all_calls.append((doctype, filters, fields, order_by))
+        if doctype == "Shipment Logistics Event" and self.event_error is not None:
+            raise self.event_error
         return list(self.event_rows)
 
     def sql(self, query, values=None, as_dict=False):
@@ -120,6 +123,7 @@ class LogisticsDialogContractTest(unittest.TestCase):
         self.fake_frappe.get_list_calls.clear()
         self.fake_frappe.get_all_calls.clear()
         self.fake_frappe.readable = {}
+        self.fake_frappe.event_error = None
         self.fake_frappe.permitted = {"Delivery Note": ["DN-1"], "Shipment": ["SHIP-1", "SHIP-2"]}
         self.fake_frappe.docs[("Sales Order", "SO-1")] = types.SimpleNamespace(
             name="SO-1", items=[_item("SOI-1"), _item("SOI-2", item_code="SKU-2")])
@@ -153,6 +157,38 @@ class LogisticsDialogContractTest(unittest.TestCase):
         self.assertEqual(numbers[1]["events"], [])
         self.assertEqual(len(self.fake_frappe.get_all_calls), 1)
         self.assertTrue(result["permissions"]["shipment"])
+
+    def test_duplicate_number_never_elects_a_representative(self):
+        self.fake_frappe.shipment_rows = [
+            types.SimpleNamespace(name="SHIP-1", number="ZMT1", status4="在途",
+                                  status11="已离港", last_node=None, eta=None,
+                                  atd=None, ata=None, dlvr=None,
+                                  match_status="", source=""),
+            types.SimpleNamespace(name="SHIP-3", number="ZMT1", status4="签收",
+                                  status11="已签收", last_node=None, eta=None,
+                                  atd=None, ata=None, dlvr=None,
+                                  match_status="", source=""),
+        ]
+        self.fake_frappe.permitted["Shipment"] = ["SHIP-1", "SHIP-3"]
+        result = self.chain.get_so_line_logistics("SO-1", "SOI-1")
+        number = result["dns"][0]["numbers"][0]
+        self.assertTrue(number["identity_conflict"])
+        self.assertEqual(number["shipment"], "")
+        self.assertEqual(number["status11"], "")
+        self.assertEqual(number["shipment_candidates"], ["SHIP-1", "SHIP-3"])
+        self.assertEqual([e["shipment"] for e in number["shipment_evidence"]],
+                         ["SHIP-1", "SHIP-3"])
+        self.assertEqual(number["shipment_evidence"][1]["status11"], "已签收")
+
+    def test_event_query_failure_is_reported_not_silent(self):
+        self.fake_frappe.event_error = RuntimeError("event boom")
+        result = self.chain.get_so_line_logistics("SO-1", "SOI-1")
+        status = result["source_status"]["shipment_logistics_event"]
+        self.assertFalse(status["available"])
+        self.assertEqual(status["reason"], "query_error")
+        self.assertTrue(status["error"])
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["dns"][0]["numbers"][0]["events"], [])
 
     def test_unknown_line_is_rejected(self):
         with self.assertRaises(Exception):

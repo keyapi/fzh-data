@@ -52,6 +52,10 @@ STATUS_ORDER 内的规范值保持恒等
 版本：`event-logistics/v1`。先做精确匹配，再做唯一 token 匹配；多 token 命中或未知描述
 不投票、保留 raw。`ETA`/`预计` 只进入预计证据，事件时间不等于 ETA 日期，不据此伪造。
 
+事件查询失败或权限不足**不得静默变成空事件**：`supply_facts` 与 `so_chain` 都必须返回
+`source_status.shipment_logistics_event = {available:false, reason:query_error|permission}`
+并令 `partial=true`；前端头程弹窗显示读取失败提示。
+
 ## 2. 裁决优先级
 
 1. 有效实际终态（`已签收` / `已上传POD` / `已完结`）粘性最高；
@@ -74,7 +78,12 @@ STATUS_ORDER 内的规范值保持恒等
 - 多套 ETA → 全部保留 + `eta_conflict`，不自动选一个当实际；
 - 两条终态但只有一条有时间 → 选有时间的终态 + `terminal_status_conflict` +
   `missing_time`；只有两条都有时间且相同才判 `same_time_conflict`；
-- 同一物流号命中多条 Shipment → `shipment_identity_conflict`，禁止 last-write-wins。
+- **时区未证时不做跨来源排序**：naive/date-only 时间不按 UTC 假定；终态选择、阶段回退
+  或同刻判断若依赖未证时区 → `time_order_unknown` + `timezone_unverified`，
+  不伪造先后（状态可保留时 `latest_progress_at=null`）；
+- 同一物流号命中多条 Shipment → `shipment_identity_conflict`，禁止 last-write-wins；
+  `so_chain` 头程弹窗不选代表、不展示任意一条的确定状态，只列候选与原始证据，
+  前端显示“身份冲突（不展示确定状态）”。
 
 ## 3. 输出
 

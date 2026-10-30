@@ -33,15 +33,29 @@ class ReceiptCoverage:
     truncated_windows: tuple = ()
     not_collected_windows: tuple = ()
     source_as_of: Optional[str] = None
+    covered_po_codes: tuple = ()
+    invalid_reason: Optional[str] = None
 
     @property
     def complete(self) -> bool:
-        return bool(self.query_range_complete
+        return bool(self.invalid_reason is None
+                    and self.query_range_complete
                     and not self.truncated_windows
                     and not self.not_collected_windows
-                    and self.source_as_of)
+                    and self.requested_windows)
+
+    def proves(self, po_codes) -> bool:
+        """Link-specific proof: all of this link's POs are inside scope."""
+        if not self.complete:
+            return False
+        codes = {str(code).strip() for code in (po_codes or ()) if str(code).strip()}
+        covered = {str(code).strip() for code in self.covered_po_codes
+                   if str(code).strip()}
+        return bool(codes) and codes <= covered
 
     def status(self) -> str:
+        if self.invalid_reason:
+            return "invalid"
         return "complete" if self.complete else "incomplete"
 
     def as_dict(self) -> dict:
@@ -51,7 +65,9 @@ class ReceiptCoverage:
             "truncated_windows": _window_list(self.truncated_windows),
             "not_collected_windows": _window_list(self.not_collected_windows),
             "source_as_of": self.source_as_of,
+            "covered_po_codes": list(self.covered_po_codes),
             "complete": self.complete,
+            "invalid_reason": self.invalid_reason,
         }
 
     @classmethod
@@ -61,7 +77,7 @@ class ReceiptCoverage:
         if isinstance(value, cls):
             return value
         if not isinstance(value, dict):
-            return cls()
+            return cls(invalid_reason="coverage_not_object")
         truncated_windows = _window_pairs(value.get("truncated_windows"))
         if value.get("truncated") is True and not truncated_windows:
             truncated_windows = (("truncated", "truncated"),)
@@ -70,12 +86,36 @@ class ReceiptCoverage:
             not_collected = (("not_collected", "not_collected"),)
         else:
             not_collected = _window_pairs(not_collected)
+        windows = _window_pairs(value.get("requested_windows"))
+        covered = tuple(
+            str(code).strip() for code in value.get("covered_po_codes") or ()
+            if str(code).strip())
+        invalid = None
+        if not windows:
+            invalid = "requested_windows_empty"
+        else:
+            for start, end in windows:
+                parsed_start, parsed_end = _aware_parse(start), _aware_parse(end)
+                if parsed_start is None or parsed_end is None:
+                    invalid = "window_time_unverified"
+                    break
+                if parsed_start > parsed_end:
+                    invalid = "window_reversed"
+                    break
+            if invalid is None:
+                as_of = _aware_parse(value.get("source_as_of"))
+                if as_of is None:
+                    invalid = "source_as_of_unverified"
+                elif any(_aware_parse(end) > as_of for _, end in windows):
+                    invalid = "source_as_of_before_window_end"
         return cls(
             query_range_complete=value.get("query_range_complete") is True,
-            requested_windows=_window_pairs(value.get("requested_windows")),
+            requested_windows=windows,
             truncated_windows=truncated_windows,
             not_collected_windows=not_collected,
             source_as_of=value.get("source_as_of"),
+            covered_po_codes=covered,
+            invalid_reason=invalid,
         )
 
 
@@ -217,7 +257,6 @@ def reconcile_signed_receipts(
     all_links = list(links or [])
     all_receipts = list(receipts or [])
     envelope = ReceiptCoverage.from_mapping(coverage)
-    coverage_state = "missing" if envelope is None else envelope.status()
     coverage_out = envelope.as_dict() if envelope is not None else None
     unique, duplicates, conflict_keys = _dedupe(all_receipts)
 
@@ -235,6 +274,17 @@ def reconcile_signed_receipts(
 
     rows = []
     for link in all_links:
+        if envelope is None:
+            coverage_state = "missing"
+        elif envelope.invalid_reason:
+            coverage_state = "invalid"
+        elif not envelope.complete:
+            coverage_state = "incomplete"
+        elif not envelope.proves(link.po_codes):
+            coverage_state = "scope_mismatch"
+        else:
+            coverage_state = "complete"
+        coverage_complete = coverage_state == "complete"
         common = {"coverage": coverage_out,
                   "coverage_status": coverage_state,
                   "signed_time_status": _time_status(link.signed_at)}
@@ -297,10 +347,13 @@ def reconcile_signed_receipts(
             continue
 
         signed_at = _aware_parse(link.signed_at)
+        coverage_exclusion = ("coverage_scope_mismatch"
+                              if coverage_state == "scope_mismatch"
+                              else "coverage_incomplete")
         if not matching:
-            if coverage_state != "complete":
+            if not coverage_complete:
                 rows.append(_row(
-                    link, STAGE_PENDING, exclusion="coverage_incomplete",
+                    link, STAGE_PENDING, exclusion=coverage_exclusion,
                     duplicates=duplicates, unmatched=unmatched,
                     lag_status="no_receipt", **common))
             else:
@@ -342,7 +395,8 @@ def reconcile_signed_receipts(
 
         if received > link_qty:
             rows.append(_row(
-                link, STAGE_PENDING, received=received, pending=Decimal(0),
+                link, STAGE_PENDING, received=received,
+                pending=Decimal(0) if coverage_complete else None,
                 completion="over_receipt",
                 over_receipt=received - link_qty, receipt_conflict=True,
                 exclusion="over_receipt", first_at=first_at, last_at=last_at,
@@ -362,13 +416,24 @@ def reconcile_signed_receipts(
                 duplicates=duplicates, unmatched=unmatched, **common))
             continue
 
-        complete = received >= link_qty
-        completion = ("complete" if complete else
-                      "partial" if received > 0 else "unknown")
-        status = STAGE_RECEIVED if complete else STAGE_PENDING
-        pending = (Decimal(0) if complete else
-                   (link_qty - received
-                    if coverage_state == "complete" else None))
+        observed_complete = received >= link_qty
+        if observed_complete and coverage_complete:
+            completion, status = "complete", STAGE_RECEIVED
+            exclusion = None
+        elif observed_complete:
+            # Observed quantity reaches the link quantity, but the collection
+            # scope is not proven: never close or confirm pending.
+            completion, status = "coverage_incomplete", STAGE_PENDING
+            exclusion = coverage_exclusion
+        else:
+            completion = "partial" if received > 0 else "unknown"
+            status, exclusion = STAGE_PENDING, None
+        if coverage_complete and status == STAGE_RECEIVED:
+            pending = Decimal(0)
+        elif coverage_complete:
+            pending = link_qty - received
+        else:
+            pending = None
         lag_seconds = lag_hours = lag_days = None
         lag_status = "unknown"
         if last_at and signed_at:
@@ -388,7 +453,7 @@ def reconcile_signed_receipts(
             completion=completion, first_at=first_at, last_at=last_at,
             receipt_at=last_at if status == STAGE_RECEIVED else None,
             lag_seconds=lag_seconds, lag_hours=lag_hours, lag_days=lag_days,
-            lag_status=lag_status,
+            lag_status=lag_status, exclusion=exclusion,
             receipt_time_status=receipt_time_status,
             duplicates=duplicates, unmatched=unmatched, **common))
     return rows

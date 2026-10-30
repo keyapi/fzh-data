@@ -29,8 +29,8 @@ from key_test.shipment_progress import (
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v2"
-RULE_VERSION = "2026-10-29.7"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.2"
+RULE_VERSION = "2026-10-29.8"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.3"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -1405,22 +1405,33 @@ def load_dns(lines):
 
 
 def _load_shipment_events(shipment_names):
-    """Batch-load the Shipment Logistics Event child rows (read-only)."""
+    """Batch-load the Shipment Logistics Event child rows (read-only).
+
+    Returns ``(events_by_parent, status)``. Missing permissions or a failed
+    query degrade progress evidence but are never reported as "no events".
+    """
     events = defaultdict(list)
+    status = {"available": True, "restricted": False, "reason": ""}
     names = sorted({name for name in (shipment_names or []) if name})
     if not names:
-        return events
+        return events, status
     try:
+        if not frappe.has_permission("Shipment Logistics Event", "read"):
+            return events, {"available": False, "restricted": True,
+                            "reason": "permission"}
         rows = frappe.get_all(
             "Shipment Logistics Event",
             filters={"parent": ["in", names], "parenttype": "Shipment"},
             fields=["parent", "seq", "event_time", "event_name", "event_date",
                     "location", "description"],
             order_by="parent asc, idx asc")
-    except Exception:  # noqa: BLE001
-        # Event history is additive evidence; losing it must not hide the
-        # status lines already loaded.
-        return events
+    except Exception as exc:  # noqa: BLE001
+        permission = type(exc).__name__ in ("PermissionError", "ValidationError",
+                                            "frappe.exceptions.PermissionError")
+        return events, {"available": False,
+                        "restricted": permission,
+                        "reason": "permission" if permission else "query_error",
+                        "error": str(exc)}
     for event in rows:
         events[event.parent].append({
             "seq": event.seq,
@@ -1430,7 +1441,7 @@ def _load_shipment_events(shipment_names):
             "location": event.location,
             "description": event.description,
         })
-    return events
+    return events, status
 
 
 def _identity_conflict_progress(rows, events_by_shipment):
@@ -1459,6 +1470,7 @@ def load_shipments(dn_names):
     all_numbers = sorted({n["number"] for values in numbers.values() for n in values})
     shipments = {}
     restricted = False
+    event_status = {"available": True, "restricted": False, "reason": ""}
     if all_numbers and frappe.db.has_column("Shipment", "custom_zmt_status11"):
         candidates = frappe.db.sql(
             """select name as shipment, custom_zmt_logistic_number as number,
@@ -1478,7 +1490,7 @@ def load_shipments(dn_names):
         for row in candidates:
             if row.shipment in permitted:
                 grouped[row.number].append(row)
-        events_by_shipment = _load_shipment_events(
+        events_by_shipment, event_status = _load_shipment_events(
             [row.shipment for row in candidates if row.shipment in permitted])
         for number in sorted(grouped):
             rows = sorted(grouped[number], key=lambda row: str(row.shipment))
@@ -1495,7 +1507,7 @@ def load_shipments(dn_names):
             representative["progress"] = _identity_conflict_progress(
                 rows, events_by_shipment)
             shipments[number] = representative
-    return numbers, shipments, restricted
+    return numbers, shipments, restricted, event_status
 
 
 def _permission_flags():
@@ -1545,6 +1557,9 @@ def get_supply_facts(filters=None, **kwargs):
         applied = {k: v for k, v in filters.items() if k not in ("limit", "offset")}
         empty_source_status = {
             name: _source_state(ok) for name, ok in permissions.items()}
+        empty_source_status["shipment_logistics_event"] = _source_state(
+            permissions["shipment"], False,
+            {"reason": "permission"} if not permissions["shipment"] else None)
         for name in ("tongtool_po", "receipt", "inventory"):
             empty_source_status[name] = {"available": False, "restricted": False,
                                          "reason": "not_integrated"}
@@ -1588,8 +1603,10 @@ def get_supply_facts(filters=None, **kwargs):
     wo_restricted = bool(wo_status.get("restricted"))
     dns, dn_restricted = (load_dns(lines) if permissions["delivery_note"] else ({}, False))
     dn_names = sorted({d.dn for values in dns.values() for d in values})
-    numbers_by_dn, shipment_by_number, ship_restricted = (
-        load_shipments(dn_names) if permissions["shipment"] else ({}, {}, False)
+    numbers_by_dn, shipment_by_number, ship_restricted, event_status = (
+        load_shipments(dn_names) if permissions["shipment"]
+        else ({}, {}, False, {"available": False, "restricted": False,
+                              "reason": "permission"})
     )
     if not permissions["shipment"]:
         numbers_by_dn = {dn: [] for dn in dn_names}
@@ -1737,6 +1754,9 @@ def get_supply_facts(filters=None, **kwargs):
         "shipment": _source_state(
             permissions["shipment"], ship_restricted,
             {"reason": "permission"} if not permissions["shipment"] else None),
+        "shipment_logistics_event": _source_state(
+            event_status.get("available", True),
+            event_status.get("restricted", False), event_status),
     }
     if "job_card_time_log" in wo_status:
         source_status["job_card_time_log"] = _source_state(
