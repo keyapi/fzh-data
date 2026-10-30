@@ -164,6 +164,8 @@ class TimeClosureTests(unittest.TestCase):
         self.assertEqual(row["receipts_outside_coverage"], 1)
         self.assertEqual(row["outside_coverage_qty"], "6")
         self.assertEqual(row["outside_coverage_receipts"][0]["line_id"], "L2")
+        self.assertEqual(row["outside_coverage_receipts"][0]["reason"],
+                         "receipt_outside_coverage")
 
     def test_po_full_history_mode_closes_without_time_windows(self):
         cov = coverage()
@@ -224,6 +226,8 @@ class TimeClosureTests(unittest.TestCase):
         self.assertIsNone(row["pending_qty"])
         self.assertEqual(row["receipt_completion"], "receipt_time_unverified")
         self.assertEqual(row["receipts_time_unverified"], 1)
+        self.assertEqual(row["unverified_receipts"][0]["reason"],
+                         "receipt_time_unverified")
         self.assertIsNone(row["tongtool_receipt_at"])
 
     def test_mixed_valid_ten_and_unverified_one(self):

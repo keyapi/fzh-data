@@ -459,9 +459,16 @@ def reconcile_signed_receipts(
                                      else _out(outside_qty)),
             "outside_coverage_receipts": [
                 {"receipt_id": line.receipt_id, "line_id": line.line_id,
-                 "effective_at": line.effective_at, "qty": str(line.qty)}
+                 "effective_at": line.effective_at, "qty": str(line.qty),
+                 "reason": "receipt_outside_coverage"}
                 for line in outside],
             "receipts_time_unverified": len(unplaceable),
+            "unverified_receipts": [
+                {"receipt_id": line.receipt_id, "line_id": line.line_id,
+                 "effective_at": line.effective_at, "qty": str(line.qty),
+                 "time_status": _time_status(line.effective_at),
+                 "reason": "receipt_time_unverified"}
+                for line in unplaceable],
         }
         has_unverified_time = bool(unplaceable)
         observed_statuses = {_time_status(line.effective_at)
@@ -674,7 +681,7 @@ def _row(link: ShipmentLink, status: str, *, exclusion=None, received=None,
          coverage=None, coverage_status="missing",
          signed_status_proven=False, receipts_outside_coverage=0,
          outside_coverage_qty=None, outside_coverage_receipts=None,
-         receipts_time_unverified=0) -> dict:
+         receipts_time_unverified=0, unverified_receipts=None) -> dict:
     return {
         "shipment": link.shipment,
         "dn": link.dn,
@@ -708,6 +715,7 @@ def _row(link: ShipmentLink, status: str, *, exclusion=None, received=None,
         "outside_coverage_qty": outside_coverage_qty,
         "outside_coverage_receipts": list(outside_coverage_receipts or []),
         "receipts_time_unverified": receipts_time_unverified,
+        "unverified_receipts": list(unverified_receipts or []),
         "coverage": coverage,
         "coverage_status": coverage_status,
         "exclusion_reason": exclusion or "",

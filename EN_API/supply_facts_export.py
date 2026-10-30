@@ -528,7 +528,7 @@ def _validate_receipt_line(row, index):
             raise LocalInputError("%s.%s must be a non-empty string" % (label, name))
     _require_bool(row["uom_proven"], label, "uom_proven")
     _require_bool(row["identity_proven"], label, "identity_proven")
-    _require_aware_time(row["effective_at"], label, "effective_at")
+    _require_aware_time(row["effective_at"], label, "effective_at", allow_none=True)
     if row["qty"] is None or isinstance(row["qty"], bool):
         raise LocalInputError("%s.qty must be a number" % label)
     return row
@@ -557,7 +557,8 @@ def _validate_receipt_event(row, index):
     _require_bool(row["uom_proven"], label, "uom_proven")
     _require_bool(row["quantity_semantics_proven"], label,
                   "quantity_semantics_proven")
-    _require_aware_time(row["receipt_effective_at"], label, "receipt_effective_at")
+    _require_aware_time(row["receipt_effective_at"], label, "receipt_effective_at",
+                        allow_none=True)
     if row["qty"] is None or isinstance(row["qty"], bool):
         raise LocalInputError("%s.qty must be a number" % label)
     for name in ("po_line_id", "dn_line_id", "shipment_id"):

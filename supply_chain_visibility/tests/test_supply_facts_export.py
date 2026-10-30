@@ -769,6 +769,11 @@ class LocalInputValidationTest(unittest.TestCase):
         with self.assertRaises(self.exporter.LocalInputError):
             self._load(payload)
 
+    def test_receipt_effective_at_may_be_null_for_unverified_rows(self):
+        payload = _state_payload()
+        payload["receipts"][0]["effective_at"] = None
+        self.assertIsNone(self._load(payload)["receipts"][0]["effective_at"])
+
     def test_schema_mismatch_is_rejected(self):
         payload = _state_payload()
         payload["schema_version"] = "supply-facts/receipt-state/v2"
