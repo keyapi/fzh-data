@@ -29,8 +29,8 @@ from key_test.shipment_progress import (
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v2"
-RULE_VERSION = "2026-10-29.8"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.3"
+RULE_VERSION = "2026-10-29.9"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.4"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -829,6 +829,7 @@ def build_shipment_progress(line, ctx):
                 "latest_progress_kind": progress.get("latest_progress_kind"),
                 "progress_source": progress.get("progress_source"),
                 "is_final": is_final,
+                "signed_status_proven": is_final,
                 "conflict_flag": progress.get("conflict_flag"),
                 "conflict_reasons": progress.get("conflict_reasons") or [],
                 "progress_candidates": candidates,

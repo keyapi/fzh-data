@@ -130,21 +130,29 @@ naive/date-only 时间不按 UTC 假定，若终态选择、阶段回退或同�
 ### `receipt_reconciliation`（签收→通途入库）
 
 `shipment/dn/po_codes/sku/warehouse/uom/status/status_semantics/shipment_signed_at/
-signed_time_status/tongtool_first|last|receipt_at/receipt_time_status/
-receipt_lag_seconds|hours|days/receipt_lag_status/receipt_completion/received_qty/
-pending_qty/over_receipt_qty/received_evidence_status/pending_evidence_status/
-receipt_conflict/receipt_basis/identity_confidence/coverage_status/exclusion_reason/
-receipt_duplicates/unmatched_receipt_rows`。
+signed_status_proven/signed_time_status/tongtool_first|last|receipt_at/
+receipt_time_status/receipt_lag_seconds|hours|days/receipt_lag_status/
+receipt_completion/received_qty/pending_qty/over_receipt_qty/
+received_evidence_status/pending_evidence_status/receipt_conflict/receipt_basis/
+identity_confidence/coverage_status/receipts_outside_coverage/outside_coverage_qty/
+receipts_time_unverified/exclusion_reason/receipt_duplicates/unmatched_receipt_rows`。
 
 规则：输入必须带 link-specific collection coverage
 （`query_range_complete`、非空且 `start<=end<=source_as_of` 的 `requested_windows`、
-`truncated`、`not_collected`、`covered_po_codes`），且当前 link 的全部 `po_codes`
-必须位于 `covered_po_codes`。**只有该覆盖完整时无 receipt 行才等于 0**；
-覆盖缺失/截断/scope 不匹配 → 已观察 `received_qty` 可 known，但 `pending_qty`
-unknown、不得 `complete`、不得进入 `tongtool_received`、不得输出关闭用
-`tongtool_receipt_at`；observed qty 超过 link qty 仍报 `over_receipt`；
-receipt 早于签收 → conflict；时区显式校验；lag 输出秒/小时/天；缺有效时间不伪造
-`tongtool_receipt_at`。详见 STEP5。
+`truncated`、`not_collected`、`covered_po_codes`、`coverage_mode`）。`time_range`
+模式的窗口并集必须连续覆盖 `[shipment_signed_at, source_as_of]`（检测窗口空档）；
+`receipt.effective_at` 必须在窗口内，否则 `receipt_outside_coverage` 不计关闭量；
+时间缺失/无时区无法定位的记录标 `receipt_time_unverified`，也不计关闭量。
+来源按 PO 全历史时须显式 `coverage_mode=po_full_history` + `po_full_history_proven`
++ 来源 + `po_full_history_as_of`，禁止用无关时间窗口冒充完整覆盖。
+`ShipmentLink.signed_status_proven=true` 且 `signed_at=null` 时保持
+`signed_pending_tongtool_receipt`，不得回退 `in_transit`。
+**只有该覆盖完整时无 receipt 行才等于 0**；覆盖缺失/截断/scope 不匹配/时间不闭环 →
+已观察 `received_qty` 可 known，但 `pending_qty` unknown、不得 `complete`、
+不得进入 `tongtool_received`、不得输出关闭用 `tongtool_receipt_at`；
+observed qty 超过 link qty 仍报 `over_receipt`；receipt 早于签收 → conflict；
+时区显式校验；lag 输出秒/小时/天；缺有效时间不伪造 `tongtool_receipt_at`。
+详见 STEP5。
 
 ### `inventory_bridge`（快照包含关系）
 
@@ -165,10 +173,12 @@ unmatched + not_collected + after_snapshot + uncertain。详见 STEP5。
 `--receipt-state-json` = `{schema_version:"supply-facts/receipt-state/v1", coverage, links, receipts}`；
 `--inventory-bridge-json` = `{schema_version:"supply-facts/inventory-bridge/v1", coverage, snapshots, receipts}`。
 coverage 必含 `query_range_complete`、`requested_windows`、`truncated`、`not_collected`、
-`source_as_of`（带时区）、`covered_po_codes`。布尔只接受 JSON true/false；
-拒绝未知/缺字段、schema 不一致、重复身份异载荷、无时区时间、空 `requested_windows`、
-`start>end`、`source_as_of<window.end`、以及 link `po_codes` 超出覆盖 scope；
-失败不创建 run、不切换 `latest.json`。
+`source_as_of`（带时区）、`covered_po_codes`；可选 `coverage_mode`（time_range 默认 /
+po_full_history + `po_full_history_proven/source/as_of`）。布尔只接受 JSON true/false；
+拒绝未知/缺字段、schema 不一致、重复身份异载荷、无时区时间、空 `requested_windows`
+（time_range）、`start>end`、`source_as_of<window.end`、link `po_codes` 超出覆盖 scope、
+time_range 携带 full-history 证明字段；`signed_at` 可为 null，`signed_status_proven`
+为可选布尔；失败不创建 run、不切换 `latest.json`。
 
 ### `manifest`
 
@@ -199,7 +209,7 @@ filters = JSON object
 
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
 - Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
-- 当前 `implementation_version=key_test.supply_facts@2026-10-30.3`；`rule_version=2026-10-29.8`；接口/分页行为变更必须 bump，混合版本继续拒绝。
+- 当前 `implementation_version=key_test.supply_facts@2026-10-30.4`；`rule_version=2026-10-29.9`；接口/分页行为变更必须 bump，混合版本继续拒绝。
 - 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
 - `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。
 - `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。

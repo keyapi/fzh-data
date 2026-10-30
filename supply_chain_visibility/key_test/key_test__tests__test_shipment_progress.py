@@ -341,6 +341,35 @@ class TimeZoneOrderingTests(unittest.TestCase):
         self.assertIn("time_order_unknown", result["conflict_reasons"])
         self.assertNotIn("stage_regression", result["conflict_reasons"])
 
+    def test_same_terminal_order_invariance_without_unique_time_pick(self):
+        rows = [ev("已签收", "2026-10-28T10:00:00"),
+                ev("已签收", "2026-10-29T10:00:00", source="manual")]
+        forward = adjudicate_progress(rows)
+        reverse = adjudicate_progress(list(reversed(rows)))
+        self.assertEqual(forward, reverse)
+        self.assertIsNone(forward["progress_source"])
+        self.assertEqual(forward["latest_progress_status"], "已签收")
+
+    def test_same_non_terminal_order_invariance_without_unique_time_pick(self):
+        rows = [ev("已到港", "2026-10-20T08:00:00"),
+                ev("已到港", "2026-10-25T08:00:00", source="manual")]
+        forward = adjudicate_progress(rows)
+        reverse = adjudicate_progress(list(reversed(rows)))
+        self.assertEqual(forward, reverse)
+        self.assertIsNone(forward["progress_source"])
+        self.assertEqual(forward["latest_progress_status"], "已到港")
+
+    def test_eta_order_invariance_without_unique_time_pick(self):
+        rows = [ev("ETA", "2026-11-18T00:00:00", kind="estimated",
+                   source="carrier_eta"),
+                ev("ETA", "2026-11-20T00:00:00", kind="estimated",
+                   source="manual")]
+        forward = adjudicate_progress(rows)
+        reverse = adjudicate_progress(list(reversed(rows)))
+        self.assertEqual(forward, reverse)
+        self.assertIsNone(forward["progress_source"])
+        self.assertEqual(forward["latest_progress_status"], "ETA")
+
 
 if __name__ == "__main__":
     unittest.main()

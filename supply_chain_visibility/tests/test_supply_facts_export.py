@@ -36,6 +36,7 @@ def _coverage(**overrides):
         "not_collected": [],
         "source_as_of": "2026-10-31T00:00:00+08:00",
         "covered_po_codes": ["PO-1"],
+        "coverage_mode": "time_range",
     }
     value.update(overrides)
     return value
@@ -726,6 +727,36 @@ class LocalInputValidationTest(unittest.TestCase):
         with self.assertRaises(self.exporter.LocalInputError):
             self._load(payload)
 
+    def test_po_full_history_mode_accepts_empty_windows(self):
+        payload = _state_payload()
+        payload["coverage"].update({
+            "requested_windows": [],
+            "coverage_mode": "po_full_history",
+            "po_full_history_proven": True,
+            "po_full_history_source": "tongtool_receipt_history",
+            "po_full_history_as_of": "2026-10-31T00:00:00+08:00",
+        })
+        self.assertEqual(self._load(payload)["coverage"]["coverage_mode"],
+                         "po_full_history")
+
+    def test_time_mode_rejects_full_history_proof_fields(self):
+        payload = _state_payload()
+        payload["coverage"]["po_full_history_proven"] = True
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_signed_at_may_be_null_when_status_is_proven(self):
+        payload = _state_payload()
+        payload["links"][0]["signed_at"] = None
+        payload["links"][0]["signed_status_proven"] = True
+        self.assertEqual(self._load(payload)["links"][0]["signed_status_proven"], True)
+
+    def test_signed_status_proven_must_be_boolean(self):
+        payload = _state_payload()
+        payload["links"][0]["signed_status_proven"] = "true"
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
     def test_schema_mismatch_is_rejected(self):
         payload = _state_payload()
         payload["schema_version"] = "supply-facts/receipt-state/v2"
@@ -813,7 +844,8 @@ class AutoLinkTest(unittest.TestCase):
                 "stage": "signed_pending_tongtool_receipt",
                 "shipment": "SHIP-1", "dn": "DN-1", "tongtool_po": "PO-1",
                 "item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
-                "shipment_signed_at": "2026-10-20"}],
+                "is_final": True,
+                "shipment_signed_at": "2026-10-20T10:00:00+08:00"}],
             "manifest": {
                 "schema_version": "supply-facts/v1", "rule_version": "v1",
                 "implementation_version": "impl-v1", "as_of": "2026-10-29",

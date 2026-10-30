@@ -357,9 +357,15 @@ class LocalInputError(Exception):
 
 
 COVERAGE_KEYS = {"query_range_complete", "requested_windows", "truncated",
-                 "not_collected", "source_as_of", "covered_po_codes"}
+                 "not_collected", "source_as_of", "covered_po_codes",
+                 "coverage_mode", "po_full_history_proven",
+                 "po_full_history_source", "po_full_history_as_of"}
+REQUIRED_COVERAGE_KEYS = {"query_range_complete", "requested_windows",
+                          "truncated", "not_collected", "source_as_of",
+                          "covered_po_codes"}
 LINK_FIELDS = {"shipment", "dn", "po_codes", "signed_at", "qty", "uom", "sku",
-               "warehouse", "identity_confidence", "status_semantics"}
+               "warehouse", "identity_confidence", "status_semantics",
+               "signed_status_proven"}
 RECEIPT_LINE_FIELDS = {"receipt_id", "line_id", "po_code", "sku", "warehouse",
                        "uom", "qty", "effective_at", "quantity_semantics",
                        "uom_proven", "identity_proven"}
@@ -418,39 +424,60 @@ def _validate_coverage(value):
     unknown = sorted(set(value) - COVERAGE_KEYS)
     if unknown:
         raise LocalInputError("coverage unknown field(s): %s" % ", ".join(unknown))
-    missing = sorted(COVERAGE_KEYS - set(value))
+    missing = sorted(REQUIRED_COVERAGE_KEYS - set(value))
     if missing:
         raise LocalInputError("coverage missing field(s): %s" % ", ".join(missing))
     _require_bool(value["query_range_complete"], "coverage", "query_range_complete")
     _require_bool(value["truncated"], "coverage", "truncated")
+    mode = value.get("coverage_mode") or "time_range"
+    if mode not in ("time_range", "po_full_history"):
+        raise LocalInputError("coverage.coverage_mode must be time_range or po_full_history")
     for name in ("requested_windows", "not_collected"):
         windows = value[name]
         if not isinstance(windows, list):
             raise LocalInputError("coverage.%s must be a list" % name)
         for index, window in enumerate(windows):
             _validate_window(window, "coverage", "%s[%s]" % (name, index))
-    if not value["requested_windows"]:
-        raise LocalInputError(
-            "coverage.requested_windows must contain at least one window")
     source_as_of = _require_aware_time(value["source_as_of"], "coverage",
                                        "source_as_of")
     source_dt = datetime.fromisoformat(source_as_of.strip().replace("Z", "+00:00"))
-    for index, window in enumerate(value["requested_windows"]):
-        start_dt = datetime.fromisoformat(
-            window["start"].strip().replace("Z", "+00:00"))
-        end_dt = datetime.fromisoformat(window["end"].strip().replace("Z", "+00:00"))
-        if start_dt > end_dt:
-            raise LocalInputError(
-                "coverage.requested_windows[%s] start is after end" % index)
-        if end_dt > source_dt:
-            raise LocalInputError(
-                "coverage.source_as_of is earlier than requested_windows[%s].end"
-                % index)
     codes = value["covered_po_codes"]
     if not isinstance(codes, list) or not all(
             isinstance(code, str) and code.strip() for code in codes):
         raise LocalInputError(
             "coverage.covered_po_codes must be a list of non-empty strings")
+    if mode == "time_range":
+        for name in ("po_full_history_proven", "po_full_history_source",
+                     "po_full_history_as_of"):
+            if value.get(name) is not None:
+                raise LocalInputError(
+                    "coverage.%s must not be used with coverage_mode=time_range"
+                    % name)
+        if not value["requested_windows"]:
+            raise LocalInputError(
+                "coverage.requested_windows must contain at least one window")
+        for index, window in enumerate(value["requested_windows"]):
+            start_dt = datetime.fromisoformat(
+                window["start"].strip().replace("Z", "+00:00"))
+            end_dt = datetime.fromisoformat(
+                window["end"].strip().replace("Z", "+00:00"))
+            if start_dt > end_dt:
+                raise LocalInputError(
+                    "coverage.requested_windows[%s] start is after end" % index)
+            if end_dt > source_dt:
+                raise LocalInputError(
+                    "coverage.source_as_of is earlier than requested_windows[%s].end"
+                    % index)
+    else:
+        if value.get("po_full_history_proven") is not True:
+            raise LocalInputError(
+                "coverage.po_full_history_proven must be JSON true")
+        if not isinstance(value.get("po_full_history_source"), str) or not \
+                value["po_full_history_source"].strip():
+            raise LocalInputError(
+                "coverage.po_full_history_source must be a non-empty string")
+        _require_aware_time(value.get("po_full_history_as_of"), "coverage",
+                            "po_full_history_as_of")
 
 
 def _validate_duplicate_identity(rows, identity_fn, payload_fn, label):
@@ -470,7 +497,8 @@ def _validate_duplicate_identity(rows, identity_fn, payload_fn, label):
 
 def _validate_link_row(row, index):
     label = "links[%s]" % index
-    _check_keys(row, LINK_FIELDS, LINK_FIELDS, "links", index)
+    _check_keys(row, LINK_FIELDS, LINK_FIELDS - {"signed_status_proven"},
+                "links", index)
     for name in ("shipment", "dn", "sku", "warehouse", "uom",
                  "identity_confidence", "status_semantics"):
         if not isinstance(row[name], str) or not row[name].strip():
@@ -478,7 +506,9 @@ def _validate_link_row(row, index):
     if not isinstance(row["po_codes"], list) or not all(
             isinstance(code, str) for code in row["po_codes"]):
         raise LocalInputError("%s.po_codes must be a list of strings" % label)
-    _require_aware_time(row["signed_at"], label, "signed_at")
+    _require_aware_time(row["signed_at"], label, "signed_at", allow_none=True)
+    if "signed_status_proven" in row:
+        _require_bool(row["signed_status_proven"], label, "signed_status_proven")
     if row["qty"] is None or isinstance(row["qty"], bool):
         raise LocalInputError("%s.qty must be a number" % label)
     return row
@@ -655,7 +685,9 @@ def _auto_shipment_links(result):
             warehouse=row.get("warehouse"),
             identity_confidence=("proven" if po_codes and qty is not None
                                  else "unproven"),
-            status_semantics="unproven"))
+            status_semantics="unproven",
+            signed_status_proven=bool(
+                row.get("signed_status_proven") or row.get("is_final"))))
     return links
 
 
@@ -694,7 +726,8 @@ def _shipment_link(row):
         uom=row.get("uom"), sku=row.get("sku"),
         warehouse=row.get("warehouse"),
         identity_confidence=row.get("identity_confidence", "unproven"),
-        status_semantics=row.get("status_semantics", "unproven"))
+        status_semantics=row.get("status_semantics", "unproven"),
+        signed_status_proven=row.get("signed_status_proven") is True)
 
 
 def _snapshot_row(row):
@@ -752,11 +785,13 @@ def _write_xlsx(path, result):
                               "received_qty", "pending_qty",
                               "received_evidence_status", "pending_evidence_status",
                               "receipt_basis", "identity_confidence",
+                              "signed_status_proven",
                               "receipt_source_status", "inventory_inclusion_status",
                               "source_status"],
         "receipt_reconciliation": ["shipment", "dn", "po_codes", "sku", "warehouse",
                                    "uom", "status", "status_semantics",
-                                   "shipment_signed_at", "signed_time_status",
+                                   "shipment_signed_at", "signed_status_proven",
+                                   "signed_time_status",
                                    "tongtool_first_receipt_at",
                                    "tongtool_last_receipt_at", "tongtool_receipt_at",
                                    "receipt_time_status", "receipt_lag_seconds",
@@ -767,7 +802,8 @@ def _write_xlsx(path, result):
                                    "pending_evidence_status", "receipt_conflict",
                                    "receipt_basis",
                                    "identity_confidence", "coverage_status",
-                                   "exclusion_reason",
+                                   "receipts_outside_coverage",
+                                   "outside_coverage_qty", "exclusion_reason",
                                    "receipt_duplicates", "unmatched_receipt_rows"],
         "inventory_bridge": ["receipt_id", "line_id", "po_code", "po_line_id",
                              "dn_line_id", "shipment_id", "sku", "warehouse", "uom",

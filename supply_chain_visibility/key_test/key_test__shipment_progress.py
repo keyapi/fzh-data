@@ -142,6 +142,12 @@ def _orders_need_verified_time(rows) -> bool:
     return any(not _time_verified(row) for row in rows)
 
 
+def _unique_source(rows, at) -> Optional[str]:
+    """Return a source only when exactly one candidate owns this event time."""
+    matching = [row for row in rows if _text(row.event_at) == _text(at)]
+    return matching[0].source if len(matching) == 1 else None
+
+
 def _tz_status(value) -> str:
     text = _text(value)
     if not text:
@@ -277,7 +283,7 @@ def adjudicate_progress(evidences: Iterable[ProgressEvidence]) -> dict:
             if timed and len({_text(row.event_at) for row in timed}) > 1 \
                     and _orders_need_verified_time(timed):
                 reasons.update(("time_order_unknown", "timezone_unverified"))
-                return _result(_normalized(finals[0]), None, finals[0].source,
+                return _result(_normalized(finals[0]), None, None,
                                True, reasons, rows, kind="actual")
             chosen = max(timed, key=lambda row: _parse(row.event_at)) if timed else finals[0]
             if timed and any(_parse(row.event_at) is None for row in finals):
@@ -294,7 +300,9 @@ def adjudicate_progress(evidences: Iterable[ProgressEvidence]) -> dict:
                     or other_at > chosen_at):
                 reasons.add("terminal_over_nonterminal")
                 break
-        return _result(_normalized(chosen), chosen.event_at, chosen.source,
+        source = (_unique_source(timed, chosen.event_at) if timed
+                  else (chosen.source if len(finals) == 1 else None))
+        return _result(_normalized(chosen), chosen.event_at, source,
                        True, reasons, rows, kind="actual")
 
     if exceptions:
@@ -344,7 +352,10 @@ def adjudicate_progress(evidences: Iterable[ProgressEvidence]) -> dict:
                 return _result(None, None, None, False, reasons, rows)
         return _result(_normalized(chosen),
                        chosen.event_at if chosen_at is not None else None,
-                       chosen.source, False, reasons, rows, kind="actual")
+                       (_unique_source(timed_top, chosen.event_at)
+                        if chosen_at is not None
+                        else (chosen.source if len(top) == 1 else None)),
+                       False, reasons, rows, kind="actual")
 
     if estimates:
         timed = [row for row in estimates if _parse(row.event_at) is not None]
@@ -366,7 +377,10 @@ def adjudicate_progress(evidences: Iterable[ProgressEvidence]) -> dict:
             reasons.add("missing_time")
         return _result(_normalized(chosen),
                        chosen.event_at if chosen_at is not None else None,
-                       chosen.source, False, reasons, rows, kind="estimated")
+                       (_unique_source(timed, chosen.event_at)
+                        if chosen_at is not None
+                        else (chosen.source if len(estimates) == 1 else None)),
+                       False, reasons, rows, kind="estimated")
 
     reasons.add("unknown_status")
     return _result(None, None, None, False, reasons, rows)

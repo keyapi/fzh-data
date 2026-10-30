@@ -34,29 +34,82 @@ class ReceiptCoverage:
     not_collected_windows: tuple = ()
     source_as_of: Optional[str] = None
     covered_po_codes: tuple = ()
+    coverage_mode: str = "time_range"
+    po_full_history_proven: bool = False
+    po_full_history_source: Optional[str] = None
+    po_full_history_as_of: Optional[str] = None
     invalid_reason: Optional[str] = None
 
     @property
-    def complete(self) -> bool:
-        return bool(self.invalid_reason is None
-                    and self.query_range_complete
-                    and not self.truncated_windows
-                    and not self.not_collected_windows
-                    and self.requested_windows)
-
-    def proves(self, po_codes) -> bool:
-        """Link-specific proof: all of this link's POs are inside scope."""
-        if not self.complete:
+    def structural_complete(self) -> bool:
+        if self.invalid_reason is not None or not self.query_range_complete:
             return False
+        if self.truncated_windows or self.not_collected_windows:
+            return False
+        if self.coverage_mode == "po_full_history":
+            return bool(self.po_full_history_proven
+                        and self.po_full_history_source
+                        and self.po_full_history_as_of)
+        return bool(self.requested_windows)
+
+    @property
+    def complete(self) -> bool:
+        return self.structural_complete
+
+    def po_scope_proven(self, po_codes) -> bool:
         codes = {str(code).strip() for code in (po_codes or ()) if str(code).strip()}
         covered = {str(code).strip() for code in self.covered_po_codes
                    if str(code).strip()}
         return bool(codes) and codes <= covered
 
+    def covers_interval(self, start, end) -> bool:
+        """True when merged windows continuously cover [start, end]."""
+        start_dt, end_dt = _aware_parse(start), _aware_parse(end)
+        if start_dt is None or end_dt is None or start_dt > end_dt:
+            return False
+        bounds = sorted(
+            (parsed_start, parsed_end)
+            for parsed_start, parsed_end in (
+                (_aware_parse(a), _aware_parse(b))
+                for a, b in self.requested_windows)
+            if parsed_start is not None and parsed_end is not None)
+        if not bounds:
+            return False
+        cursor = start_dt
+        for window_start, window_end in bounds:
+            if window_end < cursor:
+                continue
+            if window_start > cursor:
+                return False
+            if window_end > cursor:
+                cursor = window_end
+            if cursor >= end_dt:
+                return True
+        return cursor >= end_dt
+
+    def proves(self, po_codes, signed_at=None) -> bool:
+        """Link-specific proof: PO scope plus complete time coverage."""
+        if not self.structural_complete or not self.po_scope_proven(po_codes):
+            return False
+        if self.coverage_mode == "po_full_history":
+            return True
+        if not signed_at:
+            return False
+        return self.covers_interval(signed_at, self.source_as_of)
+
+    def status_for(self, po_codes, signed_at=None) -> str:
+        if self.invalid_reason:
+            return "invalid"
+        if not self.structural_complete:
+            return "incomplete"
+        if not self.po_scope_proven(po_codes):
+            return "scope_mismatch"
+        return "complete" if self.proves(po_codes, signed_at) else "incomplete"
+
     def status(self) -> str:
         if self.invalid_reason:
             return "invalid"
-        return "complete" if self.complete else "incomplete"
+        return "complete" if self.structural_complete else "incomplete"
 
     def as_dict(self) -> dict:
         return {
@@ -66,9 +119,30 @@ class ReceiptCoverage:
             "not_collected_windows": _window_list(self.not_collected_windows),
             "source_as_of": self.source_as_of,
             "covered_po_codes": list(self.covered_po_codes),
-            "complete": self.complete,
+            "coverage_mode": self.coverage_mode,
+            "po_full_history_proven": bool(self.po_full_history_proven),
+            "po_full_history_source": self.po_full_history_source,
+            "po_full_history_as_of": self.po_full_history_as_of,
+            "window_gaps": self.window_gaps(),
+            "complete": self.structural_complete,
             "invalid_reason": self.invalid_reason,
         }
+
+    def window_gaps(self) -> list:
+        bounds = sorted(
+            (parsed_start, parsed_end)
+            for parsed_start, parsed_end in (
+                (_aware_parse(a), _aware_parse(b))
+                for a, b in self.requested_windows)
+            if parsed_start is not None and parsed_end is not None)
+        gaps = []
+        cursor = None
+        for window_start, window_end in bounds:
+            if cursor is not None and window_start > cursor:
+                gaps.append({"start": cursor.isoformat(),
+                             "end": window_start.isoformat()})
+            cursor = window_end if cursor is None else max(cursor, window_end)
+        return gaps
 
     @classmethod
     def from_mapping(cls, value) -> Optional["ReceiptCoverage"]:
@@ -90,18 +164,29 @@ class ReceiptCoverage:
         covered = tuple(
             str(code).strip() for code in value.get("covered_po_codes") or ()
             if str(code).strip())
+        mode = value.get("coverage_mode") or "time_range"
         invalid = None
-        if not windows:
-            invalid = "requested_windows_empty"
+        if mode not in ("time_range", "po_full_history"):
+            invalid = "coverage_mode_unknown"
+        elif mode == "po_full_history":
+            if value.get("po_full_history_proven") is not True:
+                invalid = "po_full_history_unproven"
+            elif not str(value.get("po_full_history_source") or "").strip():
+                invalid = "po_full_history_source_missing"
+            elif _aware_parse(value.get("po_full_history_as_of")) is None:
+                invalid = "po_full_history_as_of_unverified"
         else:
-            for start, end in windows:
-                parsed_start, parsed_end = _aware_parse(start), _aware_parse(end)
-                if parsed_start is None or parsed_end is None:
-                    invalid = "window_time_unverified"
-                    break
-                if parsed_start > parsed_end:
-                    invalid = "window_reversed"
-                    break
+            if not windows:
+                invalid = "requested_windows_empty"
+            else:
+                for start, end in windows:
+                    parsed_start, parsed_end = _aware_parse(start), _aware_parse(end)
+                    if parsed_start is None or parsed_end is None:
+                        invalid = "window_time_unverified"
+                        break
+                    if parsed_start > parsed_end:
+                        invalid = "window_reversed"
+                        break
             if invalid is None:
                 as_of = _aware_parse(value.get("source_as_of"))
                 if as_of is None:
@@ -115,6 +200,10 @@ class ReceiptCoverage:
             not_collected_windows=not_collected,
             source_as_of=value.get("source_as_of"),
             covered_po_codes=covered,
+            coverage_mode=mode,
+            po_full_history_proven=value.get("po_full_history_proven") is True,
+            po_full_history_source=value.get("po_full_history_source"),
+            po_full_history_as_of=value.get("po_full_history_as_of"),
             invalid_reason=invalid,
         )
 
@@ -138,6 +227,18 @@ def _window_list(pairs) -> list:
     return [{"start": start, "end": end} for start, end in pairs]
 
 
+def _within_windows(value, pairs) -> bool:
+    parsed = _aware_parse(value)
+    if parsed is None:
+        return False
+    for start, end in pairs or ():
+        parsed_start, parsed_end = _aware_parse(start), _aware_parse(end)
+        if parsed_start is not None and parsed_end is not None \
+                and parsed_start <= parsed <= parsed_end:
+            return True
+    return False
+
+
 @dataclass(frozen=True)
 class ShipmentLink:
     shipment: str
@@ -150,6 +251,7 @@ class ShipmentLink:
     warehouse: Optional[str] = None
     identity_confidence: str = "unproven"
     status_semantics: str = "unproven"
+    signed_status_proven: bool = False
 
 
 @dataclass(frozen=True)
@@ -276,18 +378,14 @@ def reconcile_signed_receipts(
     for link in all_links:
         if envelope is None:
             coverage_state = "missing"
-        elif envelope.invalid_reason:
-            coverage_state = "invalid"
-        elif not envelope.complete:
-            coverage_state = "incomplete"
-        elif not envelope.proves(link.po_codes):
-            coverage_state = "scope_mismatch"
         else:
-            coverage_state = "complete"
+            coverage_state = envelope.status_for(link.po_codes, link.signed_at)
         coverage_complete = coverage_state == "complete"
         common = {"coverage": coverage_out,
                   "coverage_status": coverage_state,
-                  "signed_time_status": _time_status(link.signed_at)}
+                  "signed_time_status": _time_status(link.signed_at),
+                  "signed_status_proven": bool(
+                      link.signed_status_proven or link.signed_at)}
         unmatched = sum(1 for line in unique if not _link_matches(line, link))
         if not link.po_codes:
             rows.append(_row(link, STAGE_UNKNOWN, exclusion="no_po_link",
@@ -300,7 +398,7 @@ def reconcile_signed_receipts(
                              duplicates=duplicates, unmatched=unmatched,
                              **common))
             continue
-        if not link.signed_at:
+        if not (link.signed_status_proven or link.signed_at):
             rows.append(_row(link, STAGE_IN_TRANSIT, duplicates=duplicates,
                              unmatched=unmatched, **common))
             continue
@@ -319,6 +417,52 @@ def reconcile_signed_receipts(
                              duplicates=duplicates, unmatched=unmatched,
                              **common))
             continue
+        in_window, outside, unplaceable = [], [], []
+        for line in matching:
+            if envelope is not None and envelope.coverage_mode == "time_range":
+                if _aware_parse(line.effective_at) is None:
+                    unplaceable.append(line)
+                    continue
+                target = (in_window if _within_windows(
+                    line.effective_at, envelope.requested_windows) else outside)
+            else:
+                target = in_window
+            target.append(line)
+        outside_qty = Decimal(0)
+        outside_unknown = False
+        for line in outside:
+            qty = _decimal(line.qty)
+            if qty is None:
+                outside_unknown = True
+            else:
+                outside_qty += qty
+        outside_fields = {
+            "receipts_outside_coverage": len(outside),
+            "outside_coverage_qty": (None if outside_unknown
+                                     else _out(outside_qty)),
+            "outside_coverage_receipts": [
+                {"receipt_id": line.receipt_id, "line_id": line.line_id,
+                 "effective_at": line.effective_at, "qty": str(line.qty)}
+                for line in outside],
+            "receipts_time_unverified": len(unplaceable),
+        }
+        if unplaceable:
+            # An observed receipt whose time cannot be located in the coverage
+            # interval cannot contribute to (or be excluded from) closing.
+            observed_statuses = {_time_status(line.effective_at)
+                                 for line in unplaceable}
+            unplaceable_status = ("timezone_missing"
+                                  if "timezone_missing" in observed_statuses
+                                  else ("missing" if "missing" in observed_statuses
+                                        else "invalid"))
+            rows.append(_row(
+                link, STAGE_PENDING, exclusion="receipt_time_unverified",
+                duplicates=duplicates, unmatched=unmatched,
+                receipt_time_status=unplaceable_status,
+                lag_status="receipt_time_unverified",
+                **outside_fields, **common))
+            continue
+        matching = in_window
         if any(link_count[(line.po_code, line.sku, line.warehouse, line.uom)] > 1
                for line in matching):
             rows.append(_row(link, STAGE_UNKNOWN,
@@ -355,13 +499,13 @@ def reconcile_signed_receipts(
                 rows.append(_row(
                     link, STAGE_PENDING, exclusion=coverage_exclusion,
                     duplicates=duplicates, unmatched=unmatched,
-                    lag_status="no_receipt", **common))
+                    lag_status="no_receipt", **outside_fields, **common))
             else:
                 rows.append(_row(
                     link, STAGE_PENDING, received=Decimal(0), pending=link_qty,
                     completion="pending", duplicates=duplicates,
                     unmatched=unmatched,
-                    lag_status="no_receipt", **common))
+                    lag_status="no_receipt", **outside_fields, **common))
             continue
 
         received = Decimal(0)
@@ -382,7 +526,7 @@ def reconcile_signed_receipts(
         if invalid_quantity:
             rows.append(_row(link, STAGE_UNKNOWN, exclusion="invalid_quantity",
                              duplicates=duplicates, unmatched=unmatched,
-                             **common))
+                             **outside_fields, **common))
             continue
 
         all_times_verified = time_statuses == {"verified"}
@@ -402,7 +546,8 @@ def reconcile_signed_receipts(
                 exclusion="over_receipt", first_at=first_at, last_at=last_at,
                 receipt_time_status=receipt_time_status,
                 lag_status="over_receipt",
-                duplicates=duplicates, unmatched=unmatched, **common))
+                duplicates=duplicates, unmatched=unmatched,
+                **outside_fields, **common))
             continue
 
         if first_at and signed_at and _aware_parse(first_at) < signed_at:
@@ -413,7 +558,8 @@ def reconcile_signed_receipts(
                 last_at=last_at,
                 receipt_time_status=receipt_time_status,
                 lag_status="receipt_before_signed",
-                duplicates=duplicates, unmatched=unmatched, **common))
+                duplicates=duplicates, unmatched=unmatched,
+                **outside_fields, **common))
             continue
 
         observed_complete = received >= link_qty
@@ -455,7 +601,8 @@ def reconcile_signed_receipts(
             lag_seconds=lag_seconds, lag_hours=lag_hours, lag_days=lag_days,
             lag_status=lag_status, exclusion=exclusion,
             receipt_time_status=receipt_time_status,
-            duplicates=duplicates, unmatched=unmatched, **common))
+            duplicates=duplicates, unmatched=unmatched,
+            **outside_fields, **common))
     return rows
 
 
@@ -465,7 +612,10 @@ def _row(link: ShipmentLink, status: str, *, exclusion=None, received=None,
          lag_status="unknown", signed_time_status="missing",
          receipt_time_status="missing", over_receipt=None,
          receipt_conflict=False, duplicates=0, unmatched=0,
-         coverage=None, coverage_status="missing") -> dict:
+         coverage=None, coverage_status="missing",
+         signed_status_proven=False, receipts_outside_coverage=0,
+         outside_coverage_qty=None, outside_coverage_receipts=None,
+         receipts_time_unverified=0) -> dict:
     return {
         "shipment": link.shipment,
         "dn": link.dn,
@@ -476,6 +626,7 @@ def _row(link: ShipmentLink, status: str, *, exclusion=None, received=None,
         "status": status,
         "status_semantics": link.status_semantics,
         "shipment_signed_at": link.signed_at,
+        "signed_status_proven": bool(signed_status_proven),
         "signed_time_status": signed_time_status,
         "tongtool_first_receipt_at": first_at,
         "tongtool_last_receipt_at": last_at,
@@ -494,6 +645,10 @@ def _row(link: ShipmentLink, status: str, *, exclusion=None, received=None,
         "receipt_conflict": bool(receipt_conflict),
         "receipt_basis": "signed_assumed",
         "identity_confidence": link.identity_confidence,
+        "receipts_outside_coverage": receipts_outside_coverage,
+        "outside_coverage_qty": outside_coverage_qty,
+        "outside_coverage_receipts": list(outside_coverage_receipts or []),
+        "receipts_time_unverified": receipts_time_unverified,
         "coverage": coverage,
         "coverage_status": coverage_status,
         "exclusion_reason": exclusion or "",

@@ -80,7 +80,9 @@ STATUS_ORDER 内的规范值保持恒等
   `missing_time`；只有两条都有时间且相同才判 `same_time_conflict`；
 - **时区未证时不做跨来源排序**：naive/date-only 时间不按 UTC 假定；终态选择、阶段回退
   或同刻判断若依赖未证时区 → `time_order_unknown` + `timezone_unverified`，
-  不伪造先后（状态可保留时 `latest_progress_at=null`）；
+  不伪造先后（状态可保留时 `latest_progress_at=null`）；无法唯一选择候选时
+  `progress_source=null`，不得用 `top[0]/finals[0]/estimates[0]` 输出任意来源，
+  正序/逆序响应必须完全一致；
 - 同一物流号命中多条 Shipment → `shipment_identity_conflict`，禁止 last-write-wins；
   `so_chain` 头程弹窗不选代表、不展示任意一条的确定状态，只列候选与原始证据，
   前端显示“身份冲突（不展示确定状态）”。
