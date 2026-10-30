@@ -105,7 +105,7 @@ class AssociationTests(unittest.TestCase):
         self.assertEqual(fulfillment["so_open_qty"], 30.0)
         self.assertEqual(fulfillment["unresolved_demand_qty"], 30.0)
         self.assertIsNone(fulfillment["potential_overlap_qty"])
-        self.assertIsNone(fulfillment["confirmed_additional_supply_qty"])
+        self.assertNotIn("confirmed_additional_supply_qty", fulfillment)
         pool = result["ambiguity_pools"][0]
         self.assertEqual(pool["potential_overlap_qty"], 10.0)
         self.assertEqual(pool["unresolved_demand_qty"], 20.0)

@@ -35,7 +35,7 @@ ACCEPTANCE_FIXTURE_ITEMS = {
 }
 
 FILTER_KEYS = {
-    "sales_order", "customer", "item_code", "from_date", "to_date",
+    "scope", "sales_order", "customer", "item_code", "from_date", "to_date",
     "association_status", "relevance_status", "include_unlinked",
     "include_inactive", "limit", "offset",
 }
@@ -43,7 +43,7 @@ ASSOCIATION_VALUES = {
     "linked", "so_header_only", "unlinked", "ambiguous", "conflict", "restricted",
 }
 RELEVANCE_VALUES = {"in_scope", "out_of_scope", "unknown"}
-FRAMEWORK_ARGS = {"cmd", "csrf_token", "_"}
+FRAMEWORK_ARGS = {"cmd", "csrf_token", "_", "scope"}
 DEFAULT_LIMIT = 500
 MAX_LIMIT = 2000
 SORT_KEYS = ["posting_date", "delivery_note", "idx", "delivery_note_item"]
@@ -81,15 +81,23 @@ def normalize_scope(raw):
     """Validate authoritative scope input from warehouse_restock."""
     pending = {"status": "pending", "source": None, "version": None,
                "hash": None, "items": {}, "reason": "no_authoritative_scope"}
+    if isinstance(raw, dict) and raw.get("status") in ("provided", "pending",
+                                                        "invalid") \
+            and isinstance(raw.get("items"), dict):
+        return raw
     if raw in (None, "", {}):
         return pending
     if isinstance(raw, str):
+        if raw.strip().lower() in ("", "none", "null"):
+            return pending
         try:
             raw = json.loads(raw)
         except Exception:
             return dict(pending, status="invalid", reason="scope_not_json")
     if not isinstance(raw, dict):
         return dict(pending, status="invalid", reason="scope_not_object")
+    if not any(raw.get(key) for key in ("source", "version", "hash", "items")):
+        return pending
     source, version, expected_hash = (_text(raw.get("source")),
                                       _text(raw.get("version")),
                                       _text(raw.get("hash")))
@@ -285,7 +293,6 @@ def summarize_lines(lines, so_items_by_name):
             "so_open_qty": open_qty,
             "unresolved_demand_qty": open_qty,
             "potential_overlap_qty": None,
-            "confirmed_additional_supply_qty": None,
             "open_status": open_status,
             "eligible": False,
             "note": ("无独立物理证据，SO 余额只记 unresolved demand；"
@@ -351,7 +358,6 @@ def summarize_lines(lines, so_items_by_name):
             "linked_fulfilled_qty": row["linked_delivered_qty"],
             "unresolved_demand_qty": row["unresolved_demand_qty"],
             "potential_overlap_qty": None,
-            "confirmed_additional_supply_qty": None,
             "eligible": False,
             "reason": "SO balance is unresolved demand, not confirmed supply",
         })
@@ -366,7 +372,6 @@ def summarize_lines(lines, so_items_by_name):
             "linked_fulfilled_qty": 0.0,
             "unresolved_demand_qty": None,
             "potential_overlap_qty": None,
-            "confirmed_additional_supply_qty": None,
             "eligible": False,
             "unknown_qty": _round(line.get("actual_qty")),
             "reason": "no SO association; keep logistics/PO trail only",
@@ -868,6 +873,8 @@ def _normalize_filters(filters=None, extra=None):
                      % (", ".join(unknown), ", ".join(sorted(FILTER_KEYS))),
                      frappe.ValidationError)
     out = {}
+    if "scope" in filters:
+        out["_scope"] = filters.get("scope")
     for key in ("sales_order", "customer", "item_code", "from_date", "to_date"):
         value = filters.get(key)
         if value in (None, ""):
@@ -1018,10 +1025,10 @@ def _query_coverage(lines, page):
 
 
 @frappe.whitelist()
-def get_delivery_facts(filters=None, scope=None, **kwargs):
+def get_delivery_facts(filters=None, **kwargs):
     """DN-item anchored actual delivery facts; SO links are optional edges."""
     filters = _normalize_filters(filters, kwargs)
-    normalized_scope = normalize_scope(scope)
+    normalized_scope = normalize_scope(filters.pop("_scope", None))
     if not frappe.has_permission("Delivery Note", "read"):
         frappe.throw("No permission for Delivery Note", frappe.PermissionError)
 
@@ -1126,8 +1133,7 @@ def get_delivery_facts(filters=None, scope=None, **kwargs):
                                  if key not in ("limit", "offset")}
     result["counts"] = {
         "delivery_notes": len({row.get("delivery_note") for row in page}),
-        "delivery_lines": len(page),
-        "association_edges": len(result["association_edges"]),
+        "delivery_lines": len(page),        "association_edges": len(result["association_edges"]),
         "coverage_exceptions": len(result["coverage_exceptions"]),
         "so_fulfillment": len(result["so_fulfillment"]),
         "ambiguity_pools": len(result["ambiguity_pools"]),
