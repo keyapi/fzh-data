@@ -22,7 +22,7 @@ tags: [supply-chain, delivery-note, actual-delivery, reconciliation]
 
 | 项 | 数量 |
 |---|---:|
-| DN 头 | 345（已提交 268 / 草稿 23 / 取消 54；退货 0；修订来源 36 行） |
+| DN 头 | 345（已提交 268 / 草稿 23 / 取消 54；退货 0；amended 16） |
 | DN 明细行 | 1,264（已提交 1,038 / 草稿 55 / 取消 171；退货 0；修订 56） |
 | linked | 57（已提交 10） |
 | so_header_only / ambiguous / conflict / restricted | 0 / 0 / 0 / 0 |
