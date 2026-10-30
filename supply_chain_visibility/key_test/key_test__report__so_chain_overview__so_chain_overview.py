@@ -1,145 +1,224 @@
 # -*- coding: utf-8 -*-
-"""key_test app：Script Report「订单链条总览」(SO Chain Overview)
+"""SO Chain Overview report.
 
-每个「还未发完」的订单行一行，给阶段 / 未发量 / 异常，顶部出 KPI 汇总（report_summary）+ 阶段分布图。
-口径与 key_test.so_chain.get_so_chain 一致：已发按出库单 item_code 净额（退货抵扣）；
-WO.status 不作事实（本报表只用「有无工单」粗判，细粒度工序进度看 SO 表单内嵌区块）。
-
-落点：key_test/key_test/report/so_chain_overview/so_chain_overview.{json,py,js}
-依赖：Report 记录由 bench migrate 生成（report_type=Script Report）。
+LEGACY QUANTITY SCOPE: this report reads the pre-evidence query
+(``supply_query.get_report_data``) and its quantity columns are navigation
+aids only. It is NOT wired to the unified production evidence
+(``key_test.production_evidence``); do not use its numbers to prove
+production completion. The unified evidence view is the SO form chain panel
+and the batch export (``key_test.supply_facts.get_supply_facts``).
 """
 import frappe
 from frappe import _
 from frappe.utils import getdate, today
 
-# 模块级 `filters` 变量：Frappe 的 filter 自动发现对自定义报表会静默失败
-# （见 docs/fac-dev-notes.md Lesson 64），显式声明可绕过。
+from key_test.supply_query import (
+    format_head_leg,
+    fmt_qty,
+    get_dn_and_logistics,
+    get_report_data,
+)
+
 filters = [
     {"fieldname": "customer", "label": _("客户"), "fieldtype": "Link", "options": "Customer"},
-    {"fieldname": "from_date", "label": _("下单日期 ≥"), "fieldtype": "Date"},
+    {"fieldname": "from_date", "label": _("SO下单日期从"), "fieldtype": "Date"},
+    {"fieldname": "to_date", "label": _("SO下单日期至"), "fieldtype": "Date"},
+    {"fieldname": "sales_order", "label": _("销售订单"), "fieldtype": "Link", "options": "Sales Order"},
+    {"fieldname": "delivery_note", "label": _("指定出库单"), "fieldtype": "Link", "options": "Delivery Note"},
+    {"fieldname": "item_code", "label": _("物料"), "fieldtype": "Link", "options": "Item"},
+    {"fieldname": "customer_item_code", "label": _("客户物料号"), "fieldtype": "Data"},
+    {"fieldname": "warehouse", "label": _("SO行交货仓"), "fieldtype": "Link", "options": "Warehouse"},
+    {"fieldname": "dn_from_date", "label": _("DN过账日期从"), "fieldtype": "Date"},
+    {"fieldname": "dn_to_date", "label": _("DN过账日期至"), "fieldtype": "Date"},
     {"fieldname": "only_overdue", "label": _("只看交期已过"), "fieldtype": "Check"},
+    {"fieldname": "include_delivered", "label": _("含已出库完成"), "fieldtype": "Check"},
 ]
 
 COLS = [
     ("Sales Order", "so", "Link", "Sales Order", 120),
-    ("客户", "customer", "Data", None, 150),
-    ("物料", "item_code", "Link", "Item", 200),
-    ("客户物料号", "customer_item_code", "Data", None, 160),
-    ("交货日期", "delivery_date", "Date", None, 95),
-    ("订单量", "qty", "Float", None, 80),
-    ("已发", "shipped", "Float", None, 80),
-    ("未发", "open_qty", "Float", None, 80),
-    ("阶段", "stage_txt", "Data", None, 130),
-    ("工单数", "wo_n", "Int", None, 70),
-    ("菲号数", "tn_n", "Int", None, 70),
-    ("异常", "flags", "Data", None, 200),
+    (_("客户"), "customer", "Data", None, 150),
+    (_("物料"), "item_code", "Link", "Item", 200),
+    (_("客户物料号"), "customer_item_code", "Data", None, 160),
+    (_("单位"), "uom", "Link", "UOM", 70),
+    (_("交货日期"), "delivery_date", "Date", None, 95),
+    (_("订单量"), "qty", "Float", None, 80),
+    (_("SO全周期已发"), "shipped", "Float", None, 105),
+    (_("所选DN/日期净发量"), "selected_dn_qty", "Float", None, 110),
+    (_("未发"), "open_qty", "Float", None, 80),
+    (_("阶段"), "stage_txt", "Data", None, 130),
+    (_("工单数"), "wo_n", "Int", None, 70),
+    (_("菲号数"), "tn_n", "Int", None, 70),
+    (_("生产链条"), "prod_chain", "Data", None, 180),
+    (_("销售出库"), "dn_chain", "Data", None, 170),
+    (_("头程物流"), "head_leg", "Data", None, 200),
+    (_("异常"), "flags", "Data", None, 200),
 ]
 
 
 def _columns():
-    return [{"label": _(c[0]), "fieldname": c[1], "fieldtype": c[2], "options": c[3],
-             "width": c[4]} for c in COLS]
+    return [{"label": label, "fieldname": fieldname, "fieldtype": fieldtype,
+             "options": options, "width": width}
+            for label, fieldname, fieldtype, options, width in COLS]
 
 
 def execute(filters=None):
     filters = frappe._dict(filters or {})
-    cond = ["so.docstatus = 1", "(soi.qty - soi.delivered_qty) > 0"]
-    val = {}
-    if filters.get("customer"):
-        cond.append("so.customer = %(customer)s")
-        val["customer"] = filters.customer
-    if filters.get("from_date"):
-        cond.append("so.transaction_date >= %(from_date)s")
-        val["from_date"] = filters.from_date
-    where = " and ".join(cond)
-
-    rows = frappe.db.sql(
-        f"""select so.name as so, so.customer_name as customer, so.status as so_status,
-                   so.delivery_date as delivery_date,
-                   soi.name as so_line,
-                   soi.item_code, soi.customer_item_code,
-                   soi.qty, soi.delivered_qty, (soi.qty - soi.delivered_qty) as open_qty
-            from `tabSales Order` so
-            join `tabSales Order Item` soi on soi.parent = so.name
-            where {where}""", val, as_dict=True)
-
-    # 每 (SO, 物料) 的：出库净额
-    dn = frappe.db.sql(
-        """select dni.against_sales_order as so, dni.item_code as item_code,
-                  sum(dni.qty) as shipped
-           from `tabDelivery Note Item` dni
-           join `tabDelivery Note` d on d.name = dni.parent
-           where d.docstatus = 1
-           group by dni.against_sales_order, dni.item_code""", as_dict=True)
-    ship_map = {(r.so, r.item_code): (r.shipped or 0) for r in dn}
-
-    # 每 SO 行有无工单：**用行级外键 Work Order.sales_order_item**（复合键会让同 SO 同 item_code
-    # 的多行互串，生产实测 1464 张工单重复挂）。兜底 production_plan_item→PP.sales_order_item / fg_sales_order_item。
-    wo_res = frappe.db.sql(
-        """select w.name as wo, w.sales_order_item as soi_a,
-                  ppi.sales_order_item as soi_b, w.fg_sales_order_item as soi_c
-           from `tabWork Order` w
-           left join `tabProduction Plan Item` ppi on ppi.name = w.production_plan_item
-           where w.docstatus = 1""", as_dict=True)
-    wo_map, wo_to_line = {}, {}
-    for w in wo_res:
-        line = w.soi_a or w.soi_b or w.soi_c
-        if line:
-            wo_map[line] = wo_map.get(line, 0) + 1
-            wo_to_line[w.wo] = line
-    tn_res = frappe.db.sql(
-        """select work_order, count(*) as n from `tabTracking Number`
-           where ifnull(work_order, '') != '' group by work_order""", as_dict=True)
-    tn_map = {}
-    for t in tn_res:
-        line = wo_to_line.get(t.work_order)
-        if line:
-            tn_map[line] = tn_map.get(line, 0) + (t.n or 0)
+    rows, ship_map, selected_map, line_wo, line_tn, _visibility = get_report_data(filters)
+    dn_summary, logistics_summary, dn_extra = get_dn_and_logistics(rows)
 
     tday = getdate(today())
     data, stages = [], {}
-    n_overdue = n_dead = 0
-    for r in rows:
-        shipped = round(float(ship_map.get((r.so, r.item_code), 0) or 0), 3)
-        open_qty = round(float(r.open_qty or 0), 3)
-        has_wo = wo_map.get(r.so_line, 0) > 0
+    n_overdue = n_dead = n_delivered = 0
+    for row in rows:
+        shipped = (round(float(ship_map.get(row.so_line, 0) or 0), 3)
+                   if ship_map is not None else None)
+        has_dn_selection = bool(filters.get("delivery_note") or filters.get("dn_from_date") or filters.get("dn_to_date"))
+        selected_dn_qty = (
+            round(float(selected_map.get(row.so_line, 0) or 0), 3)
+            if has_dn_selection and selected_map is not None else None
+        )
+        open_qty = round(float(row.open_qty or 0), 3) if shipped is not None else None
+        is_open = float(row.open_qty or 0) > 1e-6
+        unit_known = bool(row.uom)
+        shipped_unit_mismatch = row.so_line in _visibility.get("shipped_unit_mismatch_lines", set())
+        selected_unit_mismatch = row.so_line in _visibility.get("selected_unit_mismatch_lines", set())
+        if shipped_unit_mismatch:
+            shipped = None
+        if not unit_known:
+            shipped = selected_dn_qty = open_qty = None
+        elif shipped_unit_mismatch:
+            open_qty = None
+        if selected_unit_mismatch:
+            selected_dn_qty = None
         flags = []
-        if r.so_status == "Closed":
-            stage, sub = 3, "Closed未发(死单)"
-            n_dead += 1
-            flags.append("死单")
-        elif shipped + 1e-6 >= float(r.qty or 0):
-            stage, sub = 3, "已出库完成"
-        elif not has_wo:
-            stage, sub = 1, "未排产(无工单)"
-            flags.append("无工单")
+        closed = row.so_status == "Closed"
+        if not unit_known:
+            stage, sub = 0, _("订单单位未知")
+        elif shipped_unit_mismatch:
+            stage, sub = 0, _("DN单位与SO单位不一致")
+        elif shipped is None:
+            stage, sub = (3, _("Closed，出库信息不可见")) if closed else (0, _("数量/出库信息不可见"))
+        elif not is_open or shipped + 1e-6 >= float(row.qty or 0):
+            stage, sub = 3, _("已出库完成")
+        elif closed:
+            stage, sub = 3, _("Closed未发(死单)")
+        elif line_wo is None:
+            stage, sub = 0, _("生产信息不可见")
+        elif not line_wo.get(row.so_line):
+            stage, sub = 1, _("未排产(无工单)")
+            flags.append(_("无工单"))
         else:
-            stage, sub = 2, "生产中/待发"
-        dd = r.delivery_date and getdate(r.delivery_date)
-        if dd and dd < tday and r.so_status != "Closed":
+            stage, sub = 2, _("生产中/待发")
+        if closed and is_open:
+            flags.append(_("死单"))
+        due_date = row.delivery_date and getdate(row.delivery_date)
+        overdue_days = 0
+        if due_date and due_date < tday and not closed and is_open:
+            overdue_days = (tday - due_date).days
             n_overdue += 1
-            flags.append("交期已过")
-        if filters.get("only_overdue") and "交期已过" not in flags:
+            flags.append(_("交期已过 {0} 天").format(overdue_days))
+        if line_wo is None:
+            flags.append(_("工单/计划信息无权限，数量未知"))
+        if line_tn is None:
+            flags.append(_("菲号信息无权限，数量未知"))
+        if ship_map is None:
+            flags.append(_("出库信息无权限，已发量未知"))
+        if shipped_unit_mismatch:
+            flags.append(_("DN行UOM与SO行UOM不一致，已发量/未发量未知"))
+        if selected_unit_mismatch:
+            flags.append(_("所选DN行UOM与SO行UOM不一致，所选净发量未知"))
+        if not unit_known:
+            flags.append(_("订单单位缺失，数量未知"))
+        if dn_summary is None:
+            flags.append(_("出库明细无权限，摘要未知"))
+        if row.so_line in dn_extra["dn_unit_mismatch_lines"]:
+            flags.append(_("出库单行UOM与SO行UOM不一致，出库摘要未知"))
+        if row.so_line in dn_extra["blank_so_detail_ambiguous_lines"]:
+            flags.append(_("出库单未绑定订单行且同物料多行，出库摘要未知"))
+        if row.so_line in dn_extra["shipment_restricted_lines"]:
+            flags.append(_("部分Shipment不可见，头程状态未知"))
+        if logistics_summary is None:
+            flags.append(_("头程物流无权限，运单状态未知"))
+        if filters.get("only_overdue") and not overdue_days:
             continue
-        stages[stage] = stages.get(stage, 0.0) + open_qty
+        if closed and is_open:
+            n_dead += 1
+        if is_open:
+            stages[stage] = stages.get(stage, 0) + 1
+        else:
+            n_delivered += 1
+        wo_n = len(line_wo.get(row.so_line, [])) if line_wo is not None else None
+        tn_n = line_tn.get(row.so_line, 0) if line_tn is not None else None
+        prod_chain = (f"{wo_n}工单·{tn_n}菲号"
+                      if wo_n is not None and tn_n is not None else "—")
+        dn_entry = dn_summary.get(row.so_line) if dn_summary is not None else None
+        if dn_summary is None or not unit_known:
+            dn_chain = "—"
+        elif row.so_line not in dn_summary:
+            dn_chain = _("无出库")
+        elif dn_entry is None:
+            dn_chain = "—"
+        else:
+            dn_chain = "%d单·已发%s" % (dn_entry["dns"], fmt_qty(dn_entry["shipped"]))
+            if dn_entry["returned"]:
+                dn_chain += "·退" + fmt_qty(-dn_entry["returned"])
+        if logistics_summary is None:
+            head_leg = "—"
+        elif row.so_line in logistics_summary:
+            entry = logistics_summary[row.so_line]
+            if entry is None:
+                head_leg = "—"
+            elif not entry["numbers"]:
+                head_leg = _("无运单")
+            else:
+                head_leg = format_head_leg(entry["status_counts"])
+        elif dn_summary is not None and row.so_line in dn_summary and dn_entry is None:
+            head_leg = "—"
+        else:
+            head_leg = _("无出库")
         data.append({
-            "so": r.so, "customer": r.customer, "item_code": r.item_code,
-            "customer_item_code": r.customer_item_code, "delivery_date": r.delivery_date,
-            "qty": float(r.qty or 0), "shipped": shipped, "open_qty": open_qty,
-            "stage_txt": f"{stage} {sub}", "flags": " / ".join(flags),
-            "wo_n": wo_map.get(r.so_line, 0), "tn_n": tn_map.get(r.so_line, 0),
+            "so": row.so, "customer": row.customer, "item_code": row.item_code,
+            "customer_item_code": row.customer_item_code, "uom": row.uom,
+            "delivery_date": row.delivery_date,
+            "qty": float(row.qty or 0) if unit_known else None,
+            "shipped": shipped, "selected_dn_qty": selected_dn_qty,
+            "open_qty": open_qty, "stage_txt": f"{stage} {sub}", "flags": " / ".join(flags),
+            "so_line": row.so_line, "wo_n": wo_n, "tn_n": tn_n,
+            "prod_chain": prod_chain, "dn_chain": dn_chain, "head_leg": head_leg,
+            "is_open": is_open,
         })
 
-    total_open = round(sum(d["open_qty"] for d in data), 3)
+    open_rows = [item for item in data if item["is_open"]]
+    open_by_unit = {}
+    for item in open_rows:
+        if item["open_qty"] is not None and item["uom"] and item["open_qty"] > 0:
+            open_by_unit[item["uom"]] = open_by_unit.get(item["uom"], 0.0) + item["open_qty"]
+    unknown_qty_count = sum(item["open_qty"] is None for item in open_rows)
     summary = [
-        {"label": _("行数(未发完)"), "value": len(data), "datatype": "Int"},
-        {"label": _("未发总量"), "value": total_open, "datatype": "Float"},
+        {"label": _("行数(未发完)"), "value": len(open_rows), "datatype": "Int"},
+        *[{"label": _("未发总量（{0}）").format(uom), "value": round(open_by_unit[uom], 3), "datatype": "Float"}
+          for uom in sorted(open_by_unit)],
+        {"label": _("未发量未知行（权限/单位受限）"), "value": unknown_qty_count, "datatype": "Int",
+         "indicator": "Red" if unknown_qty_count else "Green"},
         {"label": _("交期已过(行)"), "value": n_overdue, "datatype": "Int", "indicator": "Red" if n_overdue else "Green"},
         {"label": _("死单(Closed未发)"), "value": n_dead, "datatype": "Int", "indicator": "Red" if n_dead else "Green"},
     ]
+    if filters.get("include_delivered"):
+        summary.append({"label": _("含已出库完成(行)"), "value": n_delivered, "datatype": "Int"})
+    chart_stages = [
+        (0, _("信息不可见")),
+        (1, _("未排产")),
+        (2, _("生产中/待发")),
+        (3, _("已发完成/Closed未发")),
+    ]
     chart = {
-        "data": {"labels": [f"阶段{k}" for k in sorted(stages)],
-                 "datasets": [{"name": _("未发量"), "values": [stages[k] for k in sorted(stages)]}]},
+        "data": {
+            "labels": [label for _, label in chart_stages],
+            "datasets": [{
+                "name": _("未发SO行数"),
+                "values": [stages.get(key, 0) for key, _ in chart_stages],
+            }],
+        },
         "type": "bar",
     }
     return _columns(), data, None, chart, summary

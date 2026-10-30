@@ -1,3 +1,193 @@
+// 销售订单：表头「上传Excel(客户物料编号→物料编号)」按钮 + 无扣一致性校验
+// 迁移自 Client Script「销售订单 子表 items 上传Excel  客户物料编号 转为 物料编号」(2026-10-10)
+// 该 Client Script 已停用(enabled=0)，逻辑以此文件为准。
+
+// 忽略重复值 每次点击按钮 先清空子表
+frappe.ui.form.on('Sales Order', {
+    refresh: function(frm) {
+        // 判断单据是否为草稿状态
+        if (frm.doc.docstatus === 0) {  // docstatus === 0 表示草稿状态
+            frm.fields_dict["custom_process_file_customer_item_code"].$wrapper.show();
+        } else {
+            frm.fields_dict["custom_process_file_customer_item_code"].$wrapper.hide();
+        }
+
+        // 按钮点击事件
+        frm.fields_dict["custom_process_file_customer_item_code"].onclick = function() {
+            const file_url = frm.doc.custom_attach_file_customer_item_code; // 获取上传文件的 URL
+
+            // 调用后端方法，传递文件 URL
+            frappe.call({
+                method: 'key_test.item_utils.read_excel_file',
+                args: {
+                    file_url: file_url,
+                    customer: frm.doc.customer,
+                    customer_name: frm.doc.customer_name
+                },
+                callback: function(response) {
+                    if (response.message) {
+                        const item_codes = response.message;
+
+                        // 清空子表 items
+                        frm.clear_table('items');
+
+                        // 遍历 item_codes 并添加新行
+                        item_codes.forEach(item => {
+                            frm.add_child('items', {
+                                customer_item_code: item.customer_item_code,
+                                item_code: item.item_code,
+                                item_name: item.item_name,      // 添加物料名称
+                                uom: item.uom,                  // 添加单位
+                                rate: item.rate,                // 添加价格
+                                qty: item.qty,                  // 添加数量
+                                custom_label_combination: item.custom_label_combination, // 添加标签组合
+                                description: item.description,   // 添加 description
+                                delivery_date: item.delivery_date, // 添加出货日期
+                                custom_fba_sku: item.custom_fba_sku, //添加 FBA SKU
+                                type_of_manufacturing: item.type_of_manufacturing, // 添加生产方式
+                                custom_tongtool_item_name: item.tongtool_item_name
+                            });
+                        });
+
+                        frm.refresh_field('items'); // 刷新子表显示
+                        frappe.msgprint(__('已成功添加项目到子表'));
+
+                        // 执行无扣一致性校验
+                        validate_no_buckle_consistency(frm);
+
+                    } else {
+                        frappe.msgprint(__('未找到任何项目'));
+                    }
+                }
+            });
+        };
+    }
+});
+
+/**
+ * 校验子表中“无扣”内容是否一致
+ * 条件1：通途物料名称包含“无扣”但系统物料名称不包含“无扣”
+ * 条件2：通途物料名称不包含“无扣”但系统物料名称包含“无扣”
+ * 只对物料组属于以下物料组的行进行校验：
+ * - 皮壳#三角靠枕
+ * - 皮壳#三角靠枕无扣
+ * - 三角靠枕无扣
+ * - 三角靠枕
+*/
+
+function validate_no_buckle_consistency(frm) {
+    // 调用 get_descendant_groups 获取需要校验的物料组列表
+    frappe.call({
+        method: 'key_test.item_utils.get_descendant_groups',
+        callback: function(response) {
+            if (response.message) {
+                const { cp_item_groups, bcp_item_groups, log_message } = response.message;
+                // cp_item_groups 和 bcp_item_groups 都是列表，包含了子孙分组
+                // 根据需求，应该校验 cp_item_groups 和 bcp_item_groups 中的所有物料组
+                const target_item_groups = [...cp_item_groups, ...bcp_item_groups];
+
+                // 执行校验逻辑，传入目标物料组列表
+                perform_validation(frm, target_item_groups);
+                // console.log(target_item_groups)
+            }
+        }
+    });
+}
+function perform_validation(frm, target_item_groups) {
+    let errors = [];
+    let items = frm.doc.items || [];
+    let $grid_body = frm.fields_dict['items'].grid.$body;
+
+    if (!$grid_body || $grid_body.length === 0) {
+        $grid_body = $(frm.fields_dict['items'].grid.wrapper).find('.grid-body .rows');
+    }
+    // 清除所有行的背景颜色
+    $grid_body.find('.grid-row').css('background-color', '');
+
+    items.forEach((row, idx) => {
+        // 检查当前物料组是否在目标列表中
+        if (!target_item_groups.includes(row.item_group)) {
+            return; // 不在列表中，跳过校验
+        }
+
+        const tongtool_name = (row.custom_tongtool_item_name || '').trim();
+        const system_name = (row.item_name || '').trim();
+        const tongtool_has = tongtool_name.includes('无扣');
+        const system_has = system_name.includes('无扣');
+        let is_conflict = false;
+
+        if (tongtool_has && !system_has) {
+            errors.push(`第 ${idx+1} 行：通途物料名称含“无扣”但系统物料名称不含（物料编码：${row.item_code || row.customer_item_code}）`);
+            is_conflict = true;
+        } else if (!tongtool_has && system_has) {
+            errors.push(`第 ${idx+1} 行：通途物料名称不含“无扣”但系统物料名称含“无扣”（物料编码：${row.item_code || row.customer_item_code}）`);
+            is_conflict = true;
+        }
+
+        if (is_conflict && $grid_body) {
+            let $row = $grid_body.find('.grid-row:eq(' + idx + ')');
+            $row.css('background-color', '#fff3e0');
+        }
+    });
+
+    if (errors.length > 0) {
+        frappe.msgprint({
+            title: __('无扣信息不一致提醒'),
+            indicator: 'orange',
+            message: errors.join('<br>')
+        });
+    }
+}
+
+
+// frappe.ui.form.on('Sales Order', {
+//     refresh: function(frm) {
+//         frm.fields_dict["custom_process_file_customer_item_code"].onclick = function() {
+//             const file_url = frm.doc.custom_attach_file_customer_item_code; // 获取上传文件的 URL
+
+//             // 调用后端方法，传递文件 URL
+//             frappe.call({
+//                 method: 'key_test.item_utils.read_excel_file',
+//                 args: {
+//                     file_url: file_url
+//                 },
+//                 callback: function(response) {
+//                     if (response.message) {
+//                         const item_codes = response.message;
+//                         const existing_customer_item_codes = frm.doc.items.map(item => item.customer_item_code);
+
+//                         // 遍历 item_codes 并处理重复项
+//                         item_codes.forEach(item => {
+//                             if (existing_customer_item_codes.includes(item.customer_item_code)) {
+//                                 frappe.msgprint(__('已存在相同的 customer_item_code: ') + item.customer_item_code);
+//                                 // 删除已有的行
+//                                 frm.doc.items = frm.doc.items.filter(existing_item => existing_item.customer_item_code !== item.customer_item_code);
+//                             }
+
+//                             // 添加新行
+//                             frm.add_child('items', {
+//                                 customer_item_code: item.customer_item_code,
+//                                 item_code: item.item_code,
+//                                 item_name: item.item_name,      // 添加物料名称
+//                                 uom: item.uom,                  // 添加单位
+//                                 rate: item.rate,                // 添加价格
+//                                 qty: item.qty,                  // 添加数量
+//                                 custom_label_combination: item.custom_label_combination, // 添加标签组合
+//                                 description: item.description,   // 添加 description
+//                                 delivery_date: item.delivery_date // 添加出货日期
+//                             });
+//                         });
+
+//                         frm.refresh_field('items'); // 刷新子表显示
+//                         frappe.msgprint(__('已成功添加项目到子表'));
+//                     } else {
+//                         frappe.msgprint(__('未找到任何项目'));
+//                     }
+//                 }
+//             });
+//         };
+//     }
+// });
 // ─────────────────────────────────────────────────────────────────────────
 // 「供应链链条」内嵌 SO 表单 —— 追加到 key_test/public/js/sales_order.js **末尾**
 //
@@ -30,23 +220,49 @@ frappe.ui.form.on('Sales Order', {
 
 const SO_CHAIN_PROD = '#0d7a3f';   // 生产 主色
 const SO_CHAIN_DN = '#0a6ed1';     // 出库 主色
+const SO_CHAIN_HEAD = '#6f42c1';   // 头程物流 主色
 function so_chain_esc(s) { return frappe.utils.escape_html(s == null ? '' : String(s)); }
-function so_chain_num(v) { const f = Number(v || 0); return (Math.round(f * 1000) / 1000).toString(); }
+function so_chain_num(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    const f = Number(v);
+    if (!isFinite(f)) return '—';
+    return (Math.round(f * 1000) / 1000).toString();
+}
+// 后端 evidence_status() 的统一口径：known / estimated / unknown
+function so_chain_is_known(status) { return status === 'known'; }
+// 按状态选数量：known→proven；estimated→estimated（估算）；unknown→—
+function so_chain_qty_by_status(proven, estimated, status) {
+    if (status === 'known') {
+        return (proven === null || proven === undefined) ? '—' : so_chain_num(proven);
+    }
+    if (status === 'estimated') {
+        return (estimated === null || estimated === undefined)
+            ? '—' : so_chain_num(estimated) + '（估算）';
+    }
+    if (status === null || status === undefined) {
+        if (proven !== null && proven !== undefined) return so_chain_num(proven);
+        if (estimated !== null && estimated !== undefined) return so_chain_num(estimated) + '（估算）';
+    }
+    return '—';
+}
 function so_chain_t(s) { return so_chain_esc(s == null ? '' : __(String(s))); }
 function so_chain_link(doctype, name, label) {
     if (!name) return so_chain_esc(label || '');
-    let slug;
-    try { slug = frappe.router.slug(doctype); }
-    catch (e) { slug = doctype.toLowerCase().replace(/ /g, '-'); }
-    return '<a href="/app/' + slug + '/' + encodeURIComponent(name) + '" target="_blank">'
+    let url;
+    try {
+        url = frappe.utils.get_form_link(doctype, name);
+    } catch (e) {
+        url = '/app/' + doctype.toLowerCase().replace(/ /g, '-') + '/' + encodeURIComponent(name);
+    }
+    return '<a href="' + so_chain_esc(url) + '" target="_blank" rel="noopener noreferrer">'
          + so_chain_esc(label || name) + '</a>';
 }
 const SO_CHAIN_DEF_COLS = [
     { k: 'item', label: '订单行物料', w: 0 },      // 0 = 弹性列：吸收剩余宽度（多看物料名）
     { k: 'code', label: '客户物料号', w: 115 },
     { k: 'qty', label: '订单量', w: 54 },
-    { k: 'reported', label: '报工', w: 60 },       // 末道必经工序报工（成品行=子装配件齐套）
-    { k: 'instock', label: '入库', w: 60 },        // 入库单量(produced_qty)
+    { k: 'reported', label: '全工序', w: 60 },     // 全工序已证量（production evidence）
+    { k: 'instock', label: '入库净额', w: 60 },    // Stock Entry 已提交净额
     { k: 'shipped', label: '已发', w: 54 },
     { k: 'deliv', label: '交期', w: 96 },
     { k: 'stage', label: '阶段', w: 106 },
@@ -55,8 +271,8 @@ const SO_CHAIN_DEF_COLS = [
 ];
 const SO_CHAIN_COLS = SO_CHAIN_DEF_COLS.length;
 const SO_CHAIN_COL_TITLE = {
-    reported: '报工：末道必经工序已报工量（成品行取皮壳/内胆齐套，取较慢者）',
-    instock: '入库：本物料工单入库量（入库单 produced_qty）',
+    reported: '全工序：全工序已证完成量（proven）；估算/未知不当作已证',
+    instock: '入库净额：已提交 Manufacture 入库单成品行净额（毛额 − 规范化退货）',
     shipped: '已发：销售出库净额（含退货抵扣）'
 };
 function so_chain_widths() {
@@ -168,14 +384,19 @@ function so_chain_render($box, data) {
     let tOpenQty = 0;
     const rows = (data.lines || []).map(function (l, idx) {
         tOpenQty += Number(l.open_qty || 0);
-        // 报工 / 入库 两列；不一致标黄（报工=末道报工；成品行=子装配件齐套）
-        const hasRep = (l.reported !== null && l.reported !== undefined);
-        const diff = hasRep && Math.abs(Number(l.reported) - Number(l.instock || 0)) > 1e-6;
+        // 全工序 / 入库净额 两列；只有两侧都是 known(proven) 才比较差异
+        const bothKnown = so_chain_is_known(l.reported_status) && so_chain_is_known(l.instock_status);
+        const diff = bothKnown && Math.abs(Number(l.reported) - Number(l.instock)) > 1e-6;
         const hi = diff ? ' background:#fff9e6' : '';
-        const hiTitle = diff ? ' title="报工与入库不一致 —— 报工 ' + so_chain_num(l.reported) + ' / 入库 '
+        const hiTitle = diff ? ' title="全工序与入库不一致 —— 全工序 ' + so_chain_num(l.reported) + ' / 入库净额 '
             + so_chain_num(l.instock) + (l.report_note ? '（' + so_chain_esc(l.report_note) + '）' : '') + '"' : '';
-        // 生产链条摘要（文本 = 展开框标题）
-        const prodSummary = so_chain_summary_text(l, 'prod');
+        // 生产链条摘要（文本 = 展开框标题）+ 证据状态/QC/冲突
+        const evTxt = '·证据' + (l.reported_status || 'unknown')
+            + (l.qc_passed_status ? '·QC ' + so_chain_esc(l.qc_passed_status)
+                : (l.qc_status ? '·QC ' + so_chain_esc(l.qc_status) : ''))
+            + ((l.evidence_conflicts || []).length
+                ? '·冲突:' + so_chain_esc(l.evidence_conflicts.join(',')) : '');
+        const prodSummary = so_chain_summary_text(l, 'prod') + evTxt;
         const forgot = (l.forgot_complete || []);
         const forgotBadge = forgot.length
             ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆工单已全部完成：' + so_chain_esc(forgot.join(', ')) + '">忘点完工?</span>'
@@ -206,9 +427,9 @@ function so_chain_render($box, data) {
             + '<td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + so_chain_esc(l.customer_item_code) + '">' + so_chain_esc(l.customer_item_code) + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.qty) + '</td>'
             + '<td style="text-align:right;white-space:nowrap' + hi + '"' + hiTitle + '>'
-                + (diff ? '<b>' : '') + (hasRep ? so_chain_num(l.reported) : '—') + (diff ? '</b>' : '') + '</td>'
+                + (diff ? '<b>' : '') + so_chain_qty_by_status(l.reported, l.all_process_estimated, l.reported_status) + (diff ? '</b>' : '') + '</td>'
             + '<td style="text-align:right;white-space:nowrap' + hi + '"' + hiTitle + '>'
-                + (diff ? '<b>' : '') + so_chain_num(l.instock) + (diff ? '</b>' : '') + '</td>'
+                + (diff ? '<b>' : '') + so_chain_qty_by_status(l.instock, l.instock_estimated, l.instock_status) + (diff ? '</b>' : '') + '</td>'
             + '<td style="text-align:right;white-space:nowrap">' + so_chain_num(l.delivered) + '</td>'
             + '<td style="white-space:nowrap;overflow:hidden">' + dd + '</td>'
             + '<td style="white-space:nowrap;overflow:hidden"><span class="indicator-pill ' + stageColor + '">' + l.stage + ' ' + so_chain_esc(l.substate) + '</span></td>'
@@ -226,7 +447,10 @@ function so_chain_render($box, data) {
         return '<th style="white-space:nowrap;position:relative;overflow:hidden"' + t + '>' + c.label
             + '<span class="so-chain-grip" data-k="' + c.k + '" title="拖动调整列宽（双击=自适应内容）"></span></th>';
     }).join('');
-    const html = '<div style="overflow:auto">'
+    const html = '<div style="margin-bottom:4px"><a href="#" class="so-chain-delivery-so" style="color:' + SO_CHAIN_HEAD + '"><b>本 SO 实际交付</b></a>'
+        + '　<a href="#" class="so-chain-delivery-global" style="color:' + SO_CHAIN_HEAD + '">全局实际交付</a>'
+        + '<span class="text-muted" style="font-size:11px;margin-left:8px">DN 明细为锚；未关联不猜 SO</span></div>'
+        + '<div style="overflow:auto">'
         + '<table class="table table-bordered so-chain-tbl" style="margin:0;width:100%;table-layout:fixed;font-size:12px">'
         + '<colgroup>' + cols + '</colgroup>'
         + '<thead><tr>' + ths + '</tr></thead>'
@@ -235,7 +459,7 @@ function so_chain_render($box, data) {
         + '未发合计 ' + so_chain_num(tOpenQty) + '　·　'
         + '列宽：拖拽表头右缘分隔条调整、双击自适应（自动记忆）。'
         + '点「生产」＝展开 生产计划+工单→菲号→工序卡；点「出库」＝展开 出库单明细；同区切换。⤢ 弹窗看全图。'
-        + '报工=末道必经工序报工（成品行取皮壳/内胆齐套）；入库=本物料工单入库量；两者不一致标黄。已发按出库单净额(含退货抵扣)。</div></div>';
+        + '全工序=全工序已证完成量（proven；估算/未知不计）；入库=已提交 Manufacture 入库净额（毛额−退货）；两者均为已知且不一致时标黄。已发按出库单净额(含退货抵扣)。</div></div>';
     $box.html(html);
     so_chain_make_resizable($box, W);
 
@@ -246,6 +470,14 @@ function so_chain_render($box, data) {
     $box.find('.so-chain-dialog').on('click', function (e) {
         e.preventDefault();
         so_chain_show_detail(data.lines[$(this).data('i')], data.sales_order);
+    });
+    $box.find('.so-chain-delivery-so').on('click', function (e) {
+        e.preventDefault();
+        so_chain_show_delivery(data.sales_order, true);
+    });
+    $box.find('.so-chain-delivery-global').on('click', function (e) {
+        e.preventDefault();
+        so_chain_show_delivery(data.sales_order, false);
     });
 }
 
@@ -322,6 +554,61 @@ function so_chain_tree_html(line) {
                  + (p.pending_qty ? '（待产 ' + so_chain_num(p.pending_qty) + '）' : '');
           }).join('、') + '</div>';
     }
+    if (line.reported_status !== undefined) {
+        h += '<div style="margin-bottom:6px;font-size:12px"><b>生产证据</b>：全工序 '
+           + so_chain_qty_by_status(line.reported, line.all_process_estimated, line.reported_status)
+           + '（' + so_chain_esc(line.reported_confidence || 'unknown') + '）'
+           + '　入库净额 ' + so_chain_qty_by_status(line.instock, line.instock_estimated, line.instock_status)
+           + (line.qc_passed_status ? '　QC ' + so_chain_esc(line.qc_passed_status)
+               : (line.qc_status ? '　QC ' + so_chain_esc(line.qc_status) : ''))
+           + ((line.evidence_reasons || []).length
+               ? '　原因: ' + so_chain_esc(line.evidence_reasons.join(',')) : '')
+           + ((line.evidence_conflicts || []).length
+               ? '　冲突: ' + so_chain_esc(line.evidence_conflicts.join(',')) : '')
+           + '</div>';
+    }
+    if (line.subassemblies && line.subassemblies.length) {
+        h += '<div style="margin-bottom:6px;font-size:12px"><b>子装配件（独立证据，不计入成品）</b>'
+           + '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
+           + '<thead><tr><th>物料</th><th>工单</th><th>全工序</th><th>入库净额</th><th>置信度</th></tr></thead><tbody>';
+        line.subassemblies.forEach(function (s) {
+            const ev = s.all_process_done || {};
+            const stock = s.stock_in_posted || {};
+            h += '<tr><td>' + so_chain_link('Item', s.production_item, s.production_item || '')
+               + '</td><td>' + so_chain_link('Work Order', s.wo, s.wo || '')
+               + '</td><td style="text-align:right">' + so_chain_qty_by_status(ev.qty_proven, ev.qty_estimated, ev.qty_status)
+               + '</td><td style="text-align:right">' + so_chain_qty_by_status(stock.qty_proven, stock.qty_estimated, stock.qty_status)
+               + '</td><td>' + so_chain_esc(ev.confidence || 'unknown') + '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+    }
+    if (line.shipment_progress && line.shipment_progress.length) {
+        h += '<div style="margin-bottom:6px;font-size:12px"><b>物流进度</b>'
+           + '<table class="table table-bordered" style="margin:4px 0;font-size:12px">'
+           + '<thead><tr><th>运单</th><th>最新进度</th><th>阶段</th><th>签收</th><th>通途入库</th><th>库存包含</th><th>可售</th></tr></thead><tbody>';
+        line.shipment_progress.forEach(function (s) {
+            const conflict = !!s.identity_conflict;
+            const stageTxt = conflict ? '身份冲突（不展示确定状态）'
+                : s.stage === 'signed_pending_tongtool_receipt' ? '已签收·待通途入库'
+                : s.stage === 'tongtool_received' ? '通途已入库'
+                : s.stage === 'shipped_in_transit' ? '运输中' : '未知/冲突';
+            const receipt = (s.receipt_completion && s.receipt_completion !== 'unknown')
+                ? s.receipt_completion : '通途入库未接入';
+            const incl = s.inventory_inclusion_status === 'included' ? '已包含'
+                : (s.inventory_inclusion_status || 'unknown');
+            h += '<tr><td>' + so_chain_esc(s.logistic_number || '—')
+               + (conflict && (s.shipment_candidates || []).length
+                    ? '<br><span class="text-danger" style="font-size:11px">候选: '
+                      + so_chain_esc((s.shipment_candidates || []).join(', ')) + '</span>' : '')
+               + '</td><td>' + (conflict ? '—' : so_chain_esc(s.latest_progress_status || '—'))
+               + '</td><td>' + stageTxt
+               + '</td><td>' + (conflict ? '—' : so_chain_esc(s.shipment_signed_at || '—'))
+               + '</td><td>' + (conflict ? '—' : so_chain_esc(receipt))
+               + '</td><td>' + (conflict ? '—' : so_chain_esc(incl))
+               + '</td><td>不可售</td></tr>';
+        });
+        h += '</tbody></table></div>';
+    }
     if (!line.work_orders || !line.work_orders.length) {
         return h + '<div class="text-muted">无工单</div>';
     }
@@ -337,9 +624,12 @@ function so_chain_tree_html(line) {
               + (w.item_name ? ' <span class="text-muted" style="font-size:11px">: ' + so_chain_esc(w.item_name) + '</span>' : '')
               + so_chain_item_type(w.item_code) : '')
            + (w.docstatus === 0 ? ' <span class="indicator-pill gray">草稿</span>' : '')
+           + (w.cancelled ? ' <span class="indicator-pill red">已取消（入库事实保留）</span>' : '')
            + (w.pp ? '　计划 ' + so_chain_link('Production Plan', w.pp, w.pp) : '')
            + (isForgot ? ' <span class="indicator-pill yellow" title="成品工单未完工，但同行的皮壳/内胆已全部完成 —— 疑似忘了点完工">忘点完工?</span>' : '')
            + '　工单量 ' + so_chain_num(w.qty) + '　完成 ' + so_chain_num(w.done)
+           + (w.all_process_status ? '（' + so_chain_esc(w.all_process_status) + '）' : '')
+           + '　入库 ' + so_chain_num(w.stock_in_posted)
            + '　头部状态 ' + so_chain_t(w.status)
            + (w.produced_head ? '（已产 ' + so_chain_num(w.produced_head) + '）' : '')
            + (w.ops_total ? '　工序 ' + w.ops_done + '/' + w.ops_total : '')
@@ -416,6 +706,82 @@ function so_chain_dn_html(line) {
     return h + '</tbody></table>';
 }
 
+// ── 数量阶段 / 里程碑 / 分批可售（与批量导出同一份 supply facts）────────────
+const SO_CHAIN_STAGE_LABEL = {
+    not_planned: '未排产', in_production: '在产', produced_pending_dn: '全工序完成待出库',
+    shipped_in_transit: '运输中', arrived_not_sellable: '到货未可售',
+    delivered_sellable: '已可售交付', cancelled: '已取消', returned: '退货',
+    draft_dn: '草稿出库', over_produced: '超产现存', unknown: '未知'
+};
+const SO_CHAIN_NODE_LABEL = {
+    order_placed: '下单', promised_delivery: '订单交期', production_start: '开工',
+    production_end: '完工', dispatch: '出库', departure: '离港',
+    arrival: '到港', delivery: '签收'
+};
+
+function so_chain_facts_html(facts) {
+    const manifest = facts.manifest || {};
+    let h = '';
+    if (manifest.partial) {
+        h += '<div class="text-danger" style="font-size:11px;margin-bottom:6px">部分来源无权限：'
+           + so_chain_esc((manifest.notes || []).join('；')) + '</div>';
+    }
+    const stages = facts.stage_balances || [];
+    h += '<div style="font-weight:600;font-size:12px;margin:4px 0">数量阶段（互斥）</div>';
+    if (stages.length) {
+        h += '<table class="table table-bordered" style="margin:0 0 10px;font-size:12px">'
+           + '<thead><tr><th>阶段</th><th>数量</th><th>单位</th><th>明细</th><th>依据/排除</th></tr></thead><tbody>';
+        stages.forEach(function (r) {
+            h += '<tr><td>' + so_chain_t(SO_CHAIN_STAGE_LABEL[r.stage] || r.stage) + '</td>'
+               + '<td style="text-align:right">' + (r.qty == null ? '未知' : so_chain_num(r.qty)) + '</td>'
+               + '<td>' + so_chain_esc(r.uom || '-') + '</td>'
+               + '<td>' + so_chain_esc(r.stage_detail || '') + '</td>'
+               + '<td class="text-muted">' + so_chain_esc(r.exclusion_reason || '') + '</td></tr>';
+        });
+        h += '</tbody></table>';
+    } else {
+        h += '<div class="text-muted" style="font-size:12px">无阶段余额</div>';
+    }
+
+    const miles = facts.milestones || [];
+    h += '<div style="font-weight:600;font-size:12px;margin:4px 0">节点（原计划 / 最新预计 / 实际）</div>';
+    if (miles.length) {
+        h += '<table class="table table-bordered" style="margin:0 0 10px;font-size:12px">'
+           + '<thead><tr><th>节点</th><th>原计划</th><th>承诺</th><th>最新预计</th><th>实际</th><th>来源</th></tr></thead><tbody>';
+        miles.forEach(function (m) {
+            h += '<tr><td>' + so_chain_t(SO_CHAIN_NODE_LABEL[m.node] || m.node) + '</td>'
+               + '<td>' + so_chain_esc(m.baseline_planned_at || '-') + '</td>'
+               + '<td>' + so_chain_esc(m.committed_due_at || '-') + '</td>'
+               + '<td>' + so_chain_esc(m.latest_expected_at || '-') + '</td>'
+               + '<td>' + so_chain_esc(m.actual_at || '-') + '</td>'
+               + '<td class="text-muted">' + so_chain_esc(m.source_record || '') + '</td></tr>';
+        });
+        h += '</tbody></table>';
+    } else {
+        h += '<div class="text-muted" style="font-size:12px">无节点证据</div>';
+    }
+
+    const tranches = facts.availability_schedule || [];
+    h += '<div style="font-weight:600;font-size:12px;margin:4px 0">分批可售计划</div>';
+    if (tranches.length) {
+        h += '<table class="table table-bordered" style="margin:0;font-size:12px">'
+           + '<thead><tr><th>片段</th><th>数量</th><th>可售日</th><th>最新预计</th><th>情景</th><th>排除原因</th></tr></thead><tbody>';
+        tranches.forEach(function (t) {
+            const qty = t.qty == null ? '分配未知' : so_chain_num(t.qty);
+            h += '<tr><td>' + so_chain_esc(t.batch_key || t.tranche_id) + '</td>'
+               + '<td style="text-align:right">' + qty + '</td>'
+               + '<td>' + so_chain_esc(t.available_date || '未知') + '</td>'
+               + '<td>' + so_chain_esc(t.latest_expected_at || '-') + '</td>'
+               + '<td>' + so_chain_t(t.scenario || '') + '</td>'
+               + '<td class="text-muted">' + so_chain_esc(t.exclusion_reason || '') + '</td></tr>';
+        });
+        h += '</tbody></table>';
+    } else {
+        h += '<div class="text-muted" style="font-size:12px">无可售片段</div>';
+    }
+    return h;
+}
+
 function so_chain_show_detail(line, so) {
     const head = '<div style="margin-bottom:6px"><b>' + so_chain_link('Item', line.item_code, line.item_code) + '</b>'
         + '　订单 ' + so_chain_num(line.qty) + '　已发 ' + so_chain_num(line.delivered)
@@ -429,6 +795,7 @@ function so_chain_show_detail(line, so) {
             + '<div style="border:1px solid ' + color + ';border-top:none;border-radius:0 0 4px 4px;padding:8px 10px">'
             + body + '</div></div>';
     };
+    const factsId = 'so-chain-facts-' + String(line.so_line || 'line').replace(/[^A-Za-z0-9_-]/g, '');
     const d = new frappe.ui.Dialog({
         title: __('链条明细：') + so + ' / ' + (line.item_name || line.item_code),
         size: 'extra-large',
@@ -437,6 +804,235 @@ function so_chain_show_detail(line, so) {
     d.fields_dict.html.$wrapper.html('<div style="max-height:72vh;overflow:auto">' + head
         + sec(SO_CHAIN_PROD, '生产链条', so_chain_tree_html(line))
         + sec(SO_CHAIN_DN, '出库', so_chain_dn_html(line))
+        + '<div id="' + factsId + '" style="margin-top:10px"></div>'
         + '</div>');
     d.show();
+    frappe.call({
+        method: 'key_test.supply_facts.get_supply_facts',
+        args: { filters: { sales_order: so, so_line: line.so_line, include_delivered: 1 } },
+        callback: function (response) {
+            const box = document.getElementById(factsId);
+            if (box && response && response.message) {
+                box.innerHTML = so_chain_facts_html(response.message);
+            }
+        },
+        error: function () {
+            const box = document.getElementById(factsId);
+            if (box) box.innerHTML = '<div class="text-muted">数量事实加载失败或无权限</div>';
+        },
+    });
+}
+
+// ── 头程物流（独立弹窗）：DN → 运单号 → Shipment 状态/里程碑 + 轨迹 ──────────
+function so_chain_head_leg_html(dns) {
+    if (!dns || !dns.length) return '<div class="text-muted">无销售出库</div>';
+    let anyNumbers = false;
+    let h = '';
+    dns.forEach(function (d) {
+        const numbers = d.numbers || [];
+        if (numbers.length) anyNumbers = true;
+        h += '<div style="margin:8px 0 4px"><b>' + so_chain_link('Delivery Note', d.dn, d.dn) + '</b>'
+           + '　' + so_chain_esc(d.date || '-') + '　' + so_chain_t(d.status)
+           + (d.docstatus === 0 ? ' <span class="text-muted">(草稿)</span>' : '')
+           + (d.is_return ? ' <span class="text-danger">(退货)</span>' : '') + '</div>';
+        if (!numbers.length) {
+            h += '<div class="text-muted" style="font-size:12px;margin-left:8px">该出库单未填运单号</div>';
+            return;
+        }
+        h += '<table class="table table-bordered" style="margin:0 0 4px;font-size:12px">'
+           + '<thead><tr><th>运单号</th><th>状态</th><th>最新节点</th><th>ETA</th>'
+           + '<th>离港</th><th>到港</th><th>签收</th><th>匹配</th></tr></thead><tbody>';
+        numbers.forEach(function (n) {
+            const events = n.events || [];
+            const conflict = !!n.identity_conflict;
+            const evidence = n.shipment_evidence || [];
+            h += '<tr>'
+               + '<td>' + (conflict
+                    ? '运单号 ' + so_chain_esc(n.number)
+                      + ' <span class="indicator-pill red">身份冲突</span>'
+                    : (n.shipment ? so_chain_link('Shipment', n.shipment, n.number) : so_chain_esc(n.number)))
+               + (!conflict && n.primary ? ' <span class="text-muted">(主)</span>' : '') + '</td>'
+               + '<td>' + (conflict
+                    ? '<span class="text-danger">身份冲突：不展示确定状态</span>'
+                    : (n.status11 ? so_chain_t(n.status11) : '<span class="text-muted">状态未知</span>')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.last_node || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.eta || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.atd || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.ata || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.dlvr || '-')) + '</td>'
+               + '<td>' + (conflict ? '-' : so_chain_esc(n.match_status || '-')) + '</td></tr>';
+            if (conflict) {
+                h += '<tr><td colspan="8" style="border-top:none;padding:2px 8px 6px">'
+                   + '<div class="text-danger" style="font-size:11px;margin-bottom:2px">同一运单号对应 '
+                   + evidence.length + ' 张 Shipment，拒绝任选代表；以下原值待人工核对。</div>'
+                   + '<table class="table" style="margin:4px 0;font-size:11px"><thead><tr>'
+                   + '<th>Shipment</th><th>status11</th><th>status4</th><th>离港</th><th>到港</th><th>签收</th></tr></thead><tbody>';
+                evidence.forEach(function (e) {
+                    h += '<tr><td>' + so_chain_link('Shipment', e.shipment, e.shipment) + '</td>'
+                       + '<td>' + so_chain_esc(e.status11 || '-') + '</td>'
+                       + '<td>' + so_chain_esc(e.status4 || '-') + '</td>'
+                       + '<td>' + so_chain_esc(e.atd || '-') + '</td>'
+                       + '<td>' + so_chain_esc(e.ata || '-') + '</td>'
+                       + '<td>' + so_chain_esc(e.dlvr || '-') + '</td></tr>';
+                });
+                h += '</tbody></table></td></tr>';
+            } else if (events.length) {
+                h += '<tr><td colspan="8" style="border-top:none;padding:2px 8px 6px">'
+                   + '<details><summary class="text-muted" style="font-size:11px;cursor:pointer">轨迹 '
+                   + events.length + ' 个节点</summary>'
+                   + '<table class="table" style="margin:4px 0;font-size:11px"><thead><tr>'
+                   + '<th>时间</th><th>节点</th><th>地点</th><th>描述</th></tr></thead><tbody>';
+                events.forEach(function (e) {
+                    h += '<tr><td>' + so_chain_esc(e.time || e.date || '') + '</td>'
+                       + '<td>' + so_chain_esc(e.name || '') + '</td>'
+                       + '<td>' + so_chain_esc(e.location || '') + '</td>'
+                       + '<td>' + so_chain_esc(e.description || '') + '</td></tr>';
+                });
+                h += '</tbody></table></details></td></tr>';
+            }
+        });
+        h += '</tbody></table>';
+    });
+    return (anyNumbers ? '' : '<div class="text-muted" style="margin-bottom:6px">有出库单，但未填运单号</div>') + h;
+}
+
+function so_chain_show_logistics(data, so) {
+    const perms = data.permissions || {};
+    const eventStatus = (data.source_status || {}).shipment_logistics_event || {};
+    const eventWarn = eventStatus.available === false
+        ? '<div class="text-danger" style="margin-bottom:6px">物流事件读取失败（'
+          + so_chain_esc(eventStatus.reason || 'unknown')
+          + '），状态/轨迹不完整（partial）。</div>' : '';
+    const head = '<div style="margin-bottom:6px"><b>'
+        + so_chain_link('Item', data.item_code, data.item_code) + '</b>'
+        + (data.item_name ? '　' + so_chain_esc(data.item_name) : '') + '</div>';
+    let body;
+    if (perms.delivery_note === false) {
+        body = '<div class="text-muted">无 Delivery Note 读取权限，无法显示头程物流。</div>';
+    } else if (perms.shipment === false) {
+        body = '<div class="text-muted">无 Shipment 读取权限，运单状态不可见。</div>';
+    } else {
+        body = eventWarn + so_chain_head_leg_html(data.dns || []);
+    }
+    const d = new frappe.ui.Dialog({
+        title: __('头程物流：') + so + ' / ' + (data.item_name || data.item_code),
+        size: 'extra-large',
+        fields: [{ fieldtype: 'HTML', fieldname: 'html' }],
+    });
+    d.fields_dict.html.$wrapper.html('<div style="max-height:72vh;overflow:auto">' + head
+        + '<div style="border:1px solid ' + SO_CHAIN_HEAD + ';border-radius:4px;padding:8px 10px">'
+        + body + '</div></div>');
+    d.show();
+}
+
+// ── 实际交付 / 未关联 SO（DN 明细为锚，独立只读事实层）────────────────────
+function so_chain_delivery_html(msg) {
+    msg = msg || {};
+    const lines = msg.delivery_lines || [];
+    const cov = msg.coverage || {};
+    const pg = msg.pagination || {};
+    let h = '<div style="font-size:12px;margin-bottom:6px">'
+        + '范围 ' + so_chain_esc((msg.scope || {}).version || 'unknown')
+        + '　·　DN ' + so_chain_num(cov.delivery_notes ? cov.delivery_notes.total : 0)
+        + '　·　行 ' + so_chain_num(pg.total || lines.length)
+        + '　·　' + so_chain_esc(pg.termination_reason || '')
+        + (cov.restricted ? '　<span class="text-danger">含受限来源（partial）</span>' : '')
+        + '</div>'
+        + '<div class="text-muted" style="font-size:11px;margin-bottom:4px">'
+        + '未关联/冲突/范围外行保留原值；候选 SO 仅供人工审核，不自动回写。</div>'
+        + '<table class="table table-bordered" style="margin:0;font-size:12px">'
+        + '<thead><tr><th>DN</th><th>商品</th><th>客户</th><th>日期</th><th>数量</th>'
+        + '<th>实际</th><th>关联</th><th>范围</th><th>目标仓</th><th>物流</th><th>原因</th></tr></thead><tbody>';
+    lines.forEach(function (l) {
+        const highlight = l.association_status === 'unlinked'
+            ? ' background:#fff9e6' : '';
+        h += '<tr style="' + highlight + '">'
+            + '<td>' + so_chain_link('Delivery Note', l.delivery_note, l.delivery_note)
+            + '<div class="text-muted" style="font-size:10px">' + so_chain_esc(l.delivery_note_item) + '</div></td>'
+            + '<td>' + so_chain_esc(l.item_code || '-') + '</td>'
+            + '<td>' + so_chain_esc(l.customer || '-') + '</td>'
+            + '<td>' + so_chain_esc(l.posting_date || '-') + '</td>'
+            + '<td style="text-align:right">' + so_chain_num(l.qty) + ' ' + so_chain_esc(l.uom || '') + '</td>'
+            + '<td style="text-align:right">' + so_chain_num(l.actual_qty) + '</td>'
+            + '<td>' + so_chain_esc(l.association_status || 'unknown') + '</td>'
+            + '<td>' + so_chain_esc(l.relevance_status || 'unknown') + '</td>'
+            + '<td>' + so_chain_esc(l.target_warehouse || '未知') + '</td>'
+            + '<td>' + so_chain_esc(l.logistics_status || 'unknown') + '</td>'
+            + '<td>' + so_chain_esc((l.conflicts || []).concat(l.unknown_reasons || []).join(',')) + '</td></tr>';
+    });
+    if (!lines.length) {
+        h += '<tr><td colspan="11" class="text-muted">当前筛选无记录（不代表 0）</td></tr>';
+    }
+    return h + '</tbody></table>';
+}
+
+function so_chain_show_delivery(so, onlySo) {
+    let offset = 0;
+    const limit = 200;
+    const d = new frappe.ui.Dialog({
+        title: (onlySo ? __('本 SO 实际交付：') : __('全局实际交付：')) + (so || ''),
+        size: 'extra-large',
+        fields: [
+            { fieldtype: 'Data', fieldname: 'customer', label: __('客户') },
+            { fieldtype: 'Data', fieldname: 'item_code', label: __('商品') },
+            { fieldtype: 'Date', fieldname: 'from_date', label: __('从') },
+            { fieldtype: 'Date', fieldname: 'to_date', label: __('到') },
+            { fieldtype: 'Select', fieldname: 'association_status', label: __('关联状态'),
+              options: '
+linked
+so_header_only
+unlinked
+ambiguous
+conflict
+restricted' },
+            { fieldtype: 'Check', fieldname: 'include_unlinked', label: __('含未关联'),
+              default: onlySo ? 0 : 1 },
+            { fieldtype: 'HTML', fieldname: 'html' },
+        ],
+    });
+    const refresh = function () {
+        const values = d.get_values() || {};
+        const filters = {
+            limit: limit, offset: offset,
+            include_unlinked: onlySo ? 0 : (values.include_unlinked ? 1 : 0),
+        };
+        if (onlySo && so) filters.sales_order = so;
+        ['customer', 'item_code', 'from_date', 'to_date', 'association_status'].forEach(function (key) {
+            if (values[key]) filters[key] = values[key];
+        });
+        frappe.call({
+            method: 'key_test.delivery_facts.get_delivery_facts',
+            args: { filters: JSON.stringify(filters) },
+            callback: function (r) {
+                const msg = r.message || {};
+                const pg = msg.pagination || {};
+                const total = Number(pg.total || 0);
+                const pageNo = Math.floor(offset / limit) + 1;
+                const pages = Math.max(1, Math.ceil(total / limit));
+                const nav = '<div style="margin:6px 0;font-size:12px">'
+                    + '<a href="#" class="delivery-prev" style="margin-right:12px">上一页</a>'
+                    + '第 ' + pageNo + ' / ' + pages + ' 页　共 ' + total + ' 行'
+                    + '<a href="#" class="delivery-next" style="margin-left:12px">下一页</a></div>';
+                d.fields_dict.html.$wrapper.html(so_chain_delivery_html(msg) + nav);
+                d.fields_dict.html.$wrapper.find('.delivery-prev').on('click', function (e) {
+                    e.preventDefault();
+                    if (offset >= limit) { offset -= limit; refresh(); }
+                });
+                d.fields_dict.html.$wrapper.find('.delivery-next').on('click', function (e) {
+                    e.preventDefault();
+                    if (offset + limit < total) { offset += limit; refresh(); }
+                });
+            },
+        });
+    };
+    d.fields_dict.html.$wrapper.html('<div class="text-muted">加载中…</div>');
+    d.show();
+    refresh();
+    ['customer', 'item_code', 'from_date', 'to_date',
+     'association_status', 'include_unlinked'].forEach(function (name) {
+        const field = d.fields_dict[name];
+        if (field && field.$input) {
+            field.$input.on('change', function () { offset = 0; refresh(); });
+        }
+    });
 }
