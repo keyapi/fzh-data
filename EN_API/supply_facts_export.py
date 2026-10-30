@@ -173,10 +173,12 @@ def _paginate_delivery(base_url, key, secret, page_size, *,
     while page < max_pages:
         filters = dict(base_filters or {})
         filters.update({"limit": page_size, "offset": offset,
-                        "include_unlinked": 1})
+                        "include_unlinked": 1, "aggregate_all": 1})
+        if scope is not None:
+            filters["scope"] = scope
         if include_inactive:
             filters["include_inactive"] = 1
-        batch = _call_delivery(base_url, key, secret, filters, scope=scope)
+        batch = _call_delivery(base_url, key, secret, filters)
         current = {
             "schema_version": batch.get("schema_version"),
             "rule_version": batch.get("rule_version"),
@@ -1106,7 +1108,6 @@ def main(argv=None):
                 ("schema_version", "rule_version", "implementation_version")}
             result["delivery_coverage"] = first.get("coverage") or {}
             result["delivery_scope"] = first.get("scope") or {}
-            result["delivery_pagination"] = first.get("pagination") or {}
             result["so_fulfillment"] = first.get("so_fulfillment") or []
             result["ambiguity_pools"] = first.get("ambiguity_pools") or []
             result["supply_ledger"] = first.get("supply_ledger") or []
@@ -1114,6 +1115,14 @@ def main(argv=None):
                 for name in ("delivery_lines", "association_edges",
                              "coverage_exceptions", "physical_chain"):
                     result[name].extend(batch.get(name) or [])
+            result["delivery_pagination"] = {
+                "limit": args.page_size, "pages": len(batches),
+                "returned": len(result["delivery_lines"]),
+                "total": len(result["delivery_lines"]),
+                "exhausted": delivery_terminated == "exhausted",
+                "partial": delivery_terminated != "exhausted",
+                "termination_reason": delivery_terminated,
+            }
             result["counts"].update({
                 "delivery_lines": len(result["delivery_lines"]),
                 "association_edges": len(result["association_edges"]),

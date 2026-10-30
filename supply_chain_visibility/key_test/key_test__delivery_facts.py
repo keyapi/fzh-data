@@ -37,7 +37,7 @@ ACCEPTANCE_FIXTURE_ITEMS = {
 FILTER_KEYS = {
     "scope", "sales_order", "customer", "item_code", "from_date", "to_date",
     "association_status", "relevance_status", "include_unlinked",
-    "include_inactive", "limit", "offset",
+    "include_inactive", "aggregate_all", "limit", "offset",
 }
 ASSOCIATION_VALUES = {
     "linked", "so_header_only", "unlinked", "ambiguous", "conflict", "restricted",
@@ -900,7 +900,8 @@ def _normalize_filters(filters=None, extra=None):
             frappe.throw("Unknown %s: %s" % (key, ", ".join(bad)),
                          frappe.ValidationError)
         out[key] = set(values)
-    for key, default in (("include_unlinked", True), ("include_inactive", False)):
+    for key, default in (("include_unlinked", True), ("include_inactive", False),
+                         ("aggregate_all", False)):
         if key not in filters:
             out[key] = default
             continue
@@ -1102,7 +1103,8 @@ def get_delivery_facts(filters=None, **kwargs):
         snapshot_payload, sort_keys=True).encode("utf-8")).hexdigest()
 
     so_items_by_name = {row.get("name"): row for row in so_items or []}
-    summaries = summarize_lines(page, so_items_by_name)
+    summary_rows = rows if filters.get("aggregate_all") else page
+    summaries = summarize_lines(summary_rows, so_items_by_name)
     pagination = {
         "limit": limit, "offset": offset, "returned": len(page), "total": total,
         "next_offset": None if exhausted else offset + len(page),
@@ -1126,7 +1128,9 @@ def get_delivery_facts(filters=None, **kwargs):
         key: value for key, value in result["coverage"].items()
         if key not in ("global", "query")
     }
-    result["coverage"]["query"] = _query_coverage(rows, page)
+    result["coverage"]["query"] = _query_coverage(rows, summary_rows)
+    result["coverage"]["query"]["aggregation_scope"] = (
+        "filtered" if filters.get("aggregate_all") else "query_page")
     result["pagination"] = pagination
     result["snapshot_id"] = snapshot_id
     result["applied_filters"] = {key: value for key, value in filters.items()
