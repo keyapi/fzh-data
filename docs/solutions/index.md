@@ -13,6 +13,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-30 | 供应链补货 A/B/C 数据管线：活跃宇宙→市场归属→库存归并→决策基座 | [architecture-patterns/supply-chain-a-b-c-data-pipeline.md](architecture-patterns/supply-chain-a-b-c-data-pipeline.md) |
+| 2026-10-30 | 供应链复审与人工升级：能自动判的不要甩给人 | [workflow-issues/supply-chain-review-and-human-escalation.md](workflow-issues/supply-chain-review-and-human-escalation.md) |
+| 2026-10-30 | SKU 归一、单位层级、套件与拆包成品：供应链补货的复用规则 | [best-practices/sku-normalization-uom-sets-split-package.md](best-practices/sku-normalization-uom-sets-split-package.md) |
 | 2026-10-21 | 多 Agent 返修—复审循环：worker 完成 ≠ 评审完成 ≠ 验收通过 | [best-practices/multi-agent-rework-review-status-separation.md](best-practices/multi-agent-rework-review-status-separation.md) |
 | 2026-10-21 | Orca 多 Agent 自动化的领取锁、超时恢复与 Codex 额度探针 | [workflow-issues/orca-multi-agent-automation-claims-and-quota.md](workflow-issues/orca-multi-agent-automation-claims-and-quota.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |

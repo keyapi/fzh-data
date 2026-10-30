@@ -40,3 +40,4 @@ tags: [workflow-issues, index]
 | [amazon-account-period-late-submission-audit.md](amazon-account-period-late-submission-audit.md) | Amazon&新平台账期「提交异常/迟交」审计方法与规则 |
 | [workflow-copy-prod-to-test.md](workflow-copy-prod-to-test.md) | 从生产系统复制 Purchase Receipt 工作流 V3 到测试系统 |
 | [orca-multi-agent-automation-claims-and-quota.md](orca-multi-agent-automation-claims-and-quota.md) | Orca 多 Agent 周期任务：原子领取、锁释放、超时只标待核验、Codex 额度页脚消失时的探针 |
+| [supply-chain-review-and-human-escalation.md](supply-chain-review-and-human-escalation.md) | 供应链复审与人工升级：能自动判的不要甩给人；命名硬规则、复审分层、多 Agent 操作要点 |

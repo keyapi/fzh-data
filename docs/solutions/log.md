@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-30（供应链 A/B/C 复盘）
+- **新增**: `architecture-patterns/supply-chain-a-b-c-data-pipeline.md` —— 四层 artifact 边界；库存仓作投放证据、DN 时间裁决、套件/拆包/CG 汇总行、join 三态。
+- **新增**: `best-practices/sku-normalization-uom-sets-split-package.md` —— casefold/后缀归一、0库存忽略、单一形态正常、HM 独立、TJ# 拆 Bundle、Cover/Foam 组装、三层单位；列出 9 条已推翻旧结论。
+- **新增**: `workflow-issues/supply-chain-review-and-human-escalation.md` —— 能自动判的不要甩给人；89→0、CG 47→0、254 中 212 行 0 库存忽略；命名只用美东USNJ/美中USTX；复审分层与多 Agent 要点。
+
 ## 2026-10-21（多 Agent 调度与四轮返修验收）
 - **新增**: `workflow-issues/orca-multi-agent-automation-claims-and-quota.md` —— Orca 周期任务的四个机制坑：手动 `automations run` 跳过 precheck、worker 完成后不释放 `locks/<task>.lock` 导致下一轮被挡、超时只能标 `needs_verification` 不能自动重派、Codex 5h 页脚在健康额度下消失需用极小 `codex exec` 探针（并把 precheck 超时从 60s 提到 180s）。另记锁屏时 GUI 权限弹窗不可用，改走 `claude -p --permission-mode auto` headless。
 - **新增**: `best-practices/multi-agent-rework-review-status-separation.md` —— worker 完成 ≠ 评审完成 ≠ 业务验收；四轮返修（`22ae9a1e` 6P1+3P2 → `49a142e0` 2P1+1P2 → `e6b3cc9a` 1P2 → `4b7ec55f` PASS）的做法：每轮新 commit 不 amend、评审意见必须可复现带 file:line、只修当前阻断项、非阻塞 P3 验收后单独修文档、明确停止条件。证据：84 条离线测试、2,040 行两轮回放、zip/manifest/行去向哈希一致。
