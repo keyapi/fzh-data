@@ -47,6 +47,10 @@ class AssociationTests(unittest.TestCase):
         self.assertEqual(row["status"], "unknown")
         self.assertEqual(row["exclusion_reason"], "no_po_link")
 
+    def test_early_exit_still_reports_signed_time_status(self):
+        row = reconcile([link(po=(), signed="2026-10-20")], [])[0]
+        self.assertEqual(row["signed_time_status"], "timezone_missing")
+
     def test_receipt_for_other_po_is_not_counted(self):
         row = reconcile([link()], [receipt(po="PO-OTHER")])[0]
         self.assertEqual(row["status"], "signed_pending_tongtool_receipt")

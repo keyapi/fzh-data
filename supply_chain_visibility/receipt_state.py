@@ -236,7 +236,8 @@ def reconcile_signed_receipts(
     rows = []
     for link in all_links:
         common = {"coverage": coverage_out,
-                  "coverage_status": coverage_state}
+                  "coverage_status": coverage_state,
+                  "signed_time_status": _time_status(link.signed_at)}
         unmatched = sum(1 for line in unique if not _link_matches(line, link))
         if not link.po_codes:
             rows.append(_row(link, STAGE_UNKNOWN, exclusion="no_po_link",
@@ -295,20 +296,18 @@ def reconcile_signed_receipts(
                              **common))
             continue
 
-        signed_status = _time_status(link.signed_at)
         signed_at = _aware_parse(link.signed_at)
         if not matching:
             if coverage_state != "complete":
                 rows.append(_row(
                     link, STAGE_PENDING, exclusion="coverage_incomplete",
                     duplicates=duplicates, unmatched=unmatched,
-                    signed_time_status=signed_status,
                     lag_status="no_receipt", **common))
             else:
                 rows.append(_row(
                     link, STAGE_PENDING, received=Decimal(0), pending=link_qty,
                     completion="pending", duplicates=duplicates,
-                    unmatched=unmatched, signed_time_status=signed_status,
+                    unmatched=unmatched,
                     lag_status="no_receipt", **common))
             continue
 
@@ -330,7 +329,7 @@ def reconcile_signed_receipts(
         if invalid_quantity:
             rows.append(_row(link, STAGE_UNKNOWN, exclusion="invalid_quantity",
                              duplicates=duplicates, unmatched=unmatched,
-                             signed_time_status=signed_status, **common))
+                             **common))
             continue
 
         all_times_verified = time_statuses == {"verified"}
@@ -347,7 +346,6 @@ def reconcile_signed_receipts(
                 completion="over_receipt",
                 over_receipt=received - link_qty, receipt_conflict=True,
                 exclusion="over_receipt", first_at=first_at, last_at=last_at,
-                signed_time_status=signed_status,
                 receipt_time_status=receipt_time_status,
                 lag_status="over_receipt",
                 duplicates=duplicates, unmatched=unmatched, **common))
@@ -358,7 +356,7 @@ def reconcile_signed_receipts(
                 link, STAGE_UNKNOWN, received=received, pending=None,
                 completion="unknown", receipt_conflict=True,
                 exclusion="receipt_before_signed", first_at=first_at,
-                last_at=last_at, signed_time_status=signed_status,
+                last_at=last_at,
                 receipt_time_status=receipt_time_status,
                 lag_status="receipt_before_signed",
                 duplicates=duplicates, unmatched=unmatched, **common))
@@ -381,7 +379,7 @@ def reconcile_signed_receipts(
             lag_days = int(total // 86400)
             lag_status = "verified"
         elif last_at:
-            lag_status = "signed_time_%s" % signed_status
+            lag_status = "signed_time_%s" % common["signed_time_status"]
         else:
             lag_status = "receipt_time_%s" % receipt_time_status
         rows.append(_row(
@@ -391,7 +389,6 @@ def reconcile_signed_receipts(
             receipt_at=last_at if status == STAGE_RECEIVED else None,
             lag_seconds=lag_seconds, lag_hours=lag_hours, lag_days=lag_days,
             lag_status=lag_status,
-            signed_time_status=signed_status,
             receipt_time_status=receipt_time_status,
             duplicates=duplicates, unmatched=unmatched, **common))
     return rows
