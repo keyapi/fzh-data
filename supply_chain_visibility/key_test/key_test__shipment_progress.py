@@ -246,11 +246,13 @@ def adjudicate_progress(evidences: Iterable[ProgressEvidence]) -> dict:
         timed = [row for row in finals if _parse(row.event_at) is not None]
         if len(statuses) > 1:
             reasons.add("terminal_status_conflict")
-            if timed and len({_text(row.event_at) for row in timed}) == 1:
+            if len(timed) > 1 and len({_text(row.event_at) for row in timed}) == 1:
                 reasons.add("same_time_conflict")
                 return _result(None, None, None, False, reasons, rows)
             if timed:
                 chosen = max(timed, key=lambda row: _parse(row.event_at))
+                if len(timed) < len(finals):
+                    reasons.add("missing_time")
             elif len({_normalized(row) for row in finals}) > 1:
                 reasons.add("missing_time")
                 return _result(None, None, None, False, reasons, rows)

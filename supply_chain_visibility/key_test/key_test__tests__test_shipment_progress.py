@@ -62,6 +62,18 @@ class TerminalStickinessTests(unittest.TestCase):
         self.assertFalse(result["is_final"])
         self.assertTrue(result["conflict_flag"])
 
+    def test_one_timed_terminal_wins_and_flags_missing_time(self):
+        result = adjudicate_progress([
+            ev("已签收", None, granularity="coarse", source="manual_status"),
+            ev("已上传POD", "2026-10-29T10:00:00+08:00"),
+        ])
+        self.assertEqual(result["latest_progress_status"], "已上传POD")
+        self.assertEqual(result["latest_progress_at"], "2026-10-29T10:00:00+08:00")
+        self.assertTrue(result["is_final"])
+        self.assertIn("terminal_status_conflict", result["conflict_reasons"])
+        self.assertIn("missing_time", result["conflict_reasons"])
+        self.assertNotIn("same_time_conflict", result["conflict_reasons"])
+
 
 class ActualOverEstimatedTests(unittest.TestCase):
     def test_actual_arrival_beats_later_eta(self):

@@ -72,6 +72,8 @@ STATUS_ORDER 内的规范值保持恒等
 - **ETA-only** → `latest_progress_kind=estimated`，`classify_stage` 返回 `unknown`，
   不得证明实际 `shipped_in_transit`；
 - 多套 ETA → 全部保留 + `eta_conflict`，不自动选一个当实际；
+- 两条终态但只有一条有时间 → 选有时间的终态 + `terminal_status_conflict` +
+  `missing_time`；只有两条都有时间且相同才判 `same_time_conflict`；
 - 同一物流号命中多条 Shipment → `shipment_identity_conflict`，禁止 last-write-wins。
 
 ## 3. 输出
