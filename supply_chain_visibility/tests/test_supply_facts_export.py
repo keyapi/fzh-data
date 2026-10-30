@@ -27,6 +27,56 @@ def _empty_target():
             "implementation_version": "", "as_of": ""}
 
 
+def _coverage(**overrides):
+    value = {
+        "query_range_complete": True,
+        "requested_windows": [{"start": "2026-10-01T00:00:00+08:00",
+                               "end": "2026-10-31T00:00:00+08:00"}],
+        "truncated": False,
+        "not_collected": [],
+        "source_as_of": "2026-10-31T00:00:00+08:00",
+    }
+    value.update(overrides)
+    return value
+
+
+def _state_payload():
+    return {
+        "schema_version": "supply-facts/receipt-state/v1",
+        "coverage": _coverage(),
+        "links": [{"shipment": "SHIP-1", "dn": "DN-1",
+                   "po_codes": ["PO-1"],
+                   "signed_at": "2026-10-20T10:00:00+08:00",
+                   "qty": 10, "uom": "个", "sku": "SKU-1",
+                   "warehouse": "WH-1", "identity_confidence": "proven",
+                   "status_semantics": "unproven"}],
+        "receipts": [{"receipt_id": "R1", "line_id": "L1",
+                      "po_code": "PO-1", "sku": "SKU-1",
+                      "warehouse": "WH-1", "uom": "个", "qty": 10,
+                      "effective_at": "2026-10-25T10:00:00+08:00",
+                      "quantity_semantics": "increment",
+                      "uom_proven": True, "identity_proven": True}],
+    }
+
+
+def _bridge_payload():
+    return {
+        "schema_version": "supply-facts/inventory-bridge/v1",
+        "coverage": _coverage(),
+        "snapshots": [{"inventory_snapshot_id": "SNAP-1", "sku": "SKU-1",
+                       "warehouse": "WH-1", "uom": "个", "available": 100,
+                       "as_of": "2026-10-05T00:00:00+00:00",
+                       "window_start": "2026-10-01T00:00:00+00:00",
+                       "window_end": "2026-10-05T23:59:59+00:00"}],
+        "receipts": [{"receipt_id": "R1", "line_id": "L1",
+                      "po_code": "PO-1", "sku": "SKU-1",
+                      "warehouse": "WH-1", "uom": "个", "qty": 10,
+                      "receipt_effective_at": "2026-10-10T10:00:00+00:00",
+                      "uom_proven": True,
+                      "quantity_semantics_proven": True}],
+    }
+
+
 def _batch(**coverage):
     return {"lines": [], "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [], "production_evidence": [],
@@ -534,18 +584,24 @@ class ProductionEvidenceExportTest(unittest.TestCase):
 
     def test_local_receipt_and_inventory_inputs_are_exported(self):
         state = {
+            "schema_version": self.exporter.RECEIPT_STATE_SCHEMA,
+            "coverage": _coverage(),
             "links": [{"shipment": "SHIP-1", "dn": "DN-1",
-                       "po_codes": ["PO-1"], "signed_at": "2026-10-20",
+                       "po_codes": ["PO-1"],
+                       "signed_at": "2026-10-20T10:00:00+08:00",
                        "qty": 10, "uom": "个", "sku": "SKU-1",
-                       "warehouse": "WH-1", "identity_confidence": "proven"}],
+                       "warehouse": "WH-1", "identity_confidence": "proven",
+                       "status_semantics": "unproven"}],
             "receipts": [{"receipt_id": "R1", "line_id": "L1",
                           "po_code": "PO-1", "sku": "SKU-1",
                           "warehouse": "WH-1", "uom": "个", "qty": 10,
-                          "effective_at": "2026-10-25",
+                          "effective_at": "2026-10-25T10:00:00+08:00",
                           "quantity_semantics": "increment",
                           "uom_proven": True, "identity_proven": True}],
         }
         bridge = {
+            "schema_version": self.exporter.INVENTORY_BRIDGE_SCHEMA,
+            "coverage": _coverage(),
             "snapshots": [{"inventory_snapshot_id": "SNAP-1", "sku": "SKU-1",
                            "warehouse": "WH-1", "uom": "个", "available": 100,
                            "as_of": "2026-10-05T00:00:00+00:00",
@@ -600,6 +656,172 @@ class ProductionEvidenceExportTest(unittest.TestCase):
             self.assertEqual(json.loads((out / "latest.json").read_text(encoding="utf-8")),
                              old)
             self.assertEqual(list((out / "runs").glob("run-*")), [])
+
+
+class LocalInputValidationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.exporter = _load_exporter()
+
+    def _load(self, payload, kind="receipt_state", name="state.json"):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / name
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            return self.exporter._load_local_input(str(path), kind)
+
+    def test_valid_payload_passes(self):
+        self.assertEqual(self._load(_state_payload())["schema_version"],
+                         self.exporter.RECEIPT_STATE_SCHEMA)
+        self.assertEqual(self._load(_bridge_payload(), "inventory_bridge"),
+                         _bridge_payload())
+
+    def test_string_boolean_is_rejected(self):
+        payload = _state_payload()
+        payload["coverage"]["query_range_complete"] = "true"
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_unknown_field_is_rejected(self):
+        payload = _state_payload()
+        payload["links"][0]["extra"] = 1
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_unknown_top_level_field_is_rejected(self):
+        payload = _state_payload()
+        payload["collection_windows"] = []
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_missing_coverage_field_is_rejected(self):
+        payload = _state_payload()
+        del payload["coverage"]["not_collected"]
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_schema_mismatch_is_rejected(self):
+        payload = _state_payload()
+        payload["schema_version"] = "supply-facts/receipt-state/v2"
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_naive_time_is_rejected(self):
+        payload = _state_payload()
+        payload["links"][0]["signed_at"] = "2026-10-20"
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_duplicate_identity_with_different_payload_is_rejected(self):
+        payload = _state_payload()
+        second = dict(payload["receipts"][0], qty=6)
+        payload["receipts"].append(second)
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload)
+
+    def test_bridge_inclusion_proof_must_be_structured(self):
+        payload = _bridge_payload()
+        payload["receipts"][0]["inclusion_proof"] = True
+        with self.assertRaises(self.exporter.LocalInputError):
+            self._load(payload, "inventory_bridge")
+
+    def test_invalid_input_does_not_create_run_or_switch_latest(self):
+        bad = _state_payload()
+        bad["coverage"]["truncated"] = "false"
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "out"
+            out.mkdir()
+            old = {"run_id": "previous-success"}
+            (out / "latest.json").write_text(json.dumps(old), encoding="utf-8")
+            bad_path = Path(td) / "bad.json"
+            bad_path.write_text(json.dumps(bad), encoding="utf-8")
+            with mock.patch.object(self.exporter.iss, "load_credentials",
+                                   return_value=("k", "s")), \
+                 mock.patch.object(self.exporter.iss, "resolve_env_files",
+                                   return_value=None), \
+                 mock.patch.object(self.exporter.iss, "ENV_URLS",
+                                   {"test": "http://test"}), \
+                 mock.patch.object(self.exporter, "_call",
+                                   side_effect=AssertionError("must not query")):
+                rc = self.exporter.main(
+                    ["--so", "SO-1", "--test", "--no-excel", "--out", str(out),
+                     "--receipt-state-json", str(bad_path)])
+            self.assertEqual(rc, 2)
+            self.assertEqual(json.loads((out / "latest.json").read_text(
+                encoding="utf-8")), old)
+            self.assertFalse((out / "runs").exists())
+
+
+class AutoLinkTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.exporter = _load_exporter()
+
+    def test_auto_links_use_server_shipment_progress(self):
+        result = {
+            "stage_balances": [{
+                "stage": "signed_pending_tongtool_receipt", "batch_key": "DN-1",
+                "item_code": "KS0001", "uom": "个", "warehouse": "WH-1",
+                "qty": 10.0}],
+            "shipment_progress": [{
+                "stage": "signed_pending_tongtool_receipt",
+                "shipment": "SHIP-1", "dn": "DN-1", "tongtool_po": "PO-1",
+                "item_code": "KS0001", "uom": "个", "warehouse": "WH-1",
+                "shipment_signed_at": "2026-10-20"}],
+        }
+        links = self.exporter._auto_shipment_links(result)
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].shipment, "SHIP-1")
+        self.assertEqual(links[0].po_codes, ("PO-1",))
+        self.assertEqual(links[0].qty, 10.0)
+        self.assertEqual(links[0].identity_confidence, "proven")
+
+    def test_auto_links_drive_export_without_hand_written_links(self):
+        page = {
+            "lines": [{"so": "SO-1", "so_line": "SOI-1"}],
+            "stage_balances": [{
+                "stage": "signed_pending_tongtool_receipt", "batch_key": "DN-1",
+                "item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+                "qty": 10.0}],
+            "shipment_progress": [{
+                "stage": "signed_pending_tongtool_receipt",
+                "shipment": "SHIP-1", "dn": "DN-1", "tongtool_po": "PO-1",
+                "item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+                "shipment_signed_at": "2026-10-20"}],
+            "manifest": {
+                "schema_version": "supply-facts/v1", "rule_version": "v1",
+                "implementation_version": "impl-v1", "as_of": "2026-10-29",
+                "partial": True, "counts": {"input": 1},
+                "coverage": {}, "notes": [],
+            },
+            "pagination": {"limit": 500, "offset": 0, "returned": 1,
+                           "total": 1, "next_offset": None, "exhausted": True,
+                           "partial": False, "termination_reason": "exhausted"},
+        }
+        state = _state_payload()
+        del state["links"]
+        with tempfile.TemporaryDirectory() as td:
+            state_path = Path(td) / "state.json"
+            state_path.write_text(json.dumps(state), encoding="utf-8")
+            with mock.patch.object(self.exporter.iss, "load_credentials",
+                                   return_value=("k", "s")), \
+                 mock.patch.object(self.exporter.iss, "resolve_env_files",
+                                   return_value=None), \
+                 mock.patch.object(self.exporter.iss, "ENV_URLS",
+                                   {"test": "http://test"}), \
+                 mock.patch.object(self.exporter, "_call", return_value=page):
+                rc = self.exporter.main(
+                    ["--so", "SO-1", "--test", "--no-excel", "--out", td,
+                     "--receipt-state-json", str(state_path)])
+            self.assertEqual(rc, 0)
+            run = list((Path(td) / "runs").glob("run-*"))[0]
+            rows = json.loads((run / "receipt_reconciliation.json").read_text(
+                encoding="utf-8"))
+            manifest = json.loads((run / "manifest.json").read_text(
+                encoding="utf-8"))
+        self.assertEqual(rows[0]["status"], "tongtool_received")
+        self.assertEqual(
+            manifest["datasets"]["receipt_reconciliation"]["links_source"],
+            "server_auto")
 
 
 if __name__ == "__main__":

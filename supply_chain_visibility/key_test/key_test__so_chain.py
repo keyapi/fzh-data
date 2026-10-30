@@ -17,9 +17,10 @@
   * 已发：出库单按 item_code 匹配的带符号 qty 之和（退货行负数自动抵扣）
   * WO.status / produced_qty 不可信，进度只看工序卡
 """
+from collections import defaultdict
+
 import frappe
 from frappe.utils import getdate, now_datetime, today
-
 from key_test.production_evidence import (
     build_wo_evidence,
     evidence_status,
@@ -651,7 +652,7 @@ def get_so_line_logistics(sales_order, so_line):
 
     numbers_by_dn = dn_logistic_numbers(dn_names)
     all_numbers = sorted({n["number"] for values in numbers_by_dn.values() for n in values})
-    shipment_by_number, events_by_shipment = {}, {}
+    shipment_by_number, events_by_shipment, identity_conflicts = {}, {}, {}
     if all_numbers and not (
             frappe.has_permission("Shipment", "read")
             and frappe.db.has_column("Shipment", "custom_zmt_logistic_number")):
@@ -672,7 +673,17 @@ def get_so_line_logistics(sales_order, so_line):
             filters=[["custom_zmt_logistic_number", "in", all_numbers],
                      ["docstatus", "in", (0, 1)]],
             fields=["name"], limit_page_length=0)}
-        shipment_by_number = {c.number: c for c in candidates if c.name in permitted_shipments}
+        grouped_shipments = defaultdict(list)
+        for candidate in candidates:
+            if candidate.name in permitted_shipments:
+                grouped_shipments[candidate.number].append(candidate)
+        shipment_by_number = {}
+        identity_conflicts = {}
+        for number, rows in grouped_shipments.items():
+            rows.sort(key=lambda row: str(row.name))
+            shipment_by_number[number] = rows[0]
+            if len(rows) > 1:
+                identity_conflicts[number] = [row.name for row in rows]
         if shipment_by_number:
             for event in frappe.get_all(
                     "Shipment Logistics Event",
@@ -697,6 +708,8 @@ def get_so_line_logistics(sales_order, so_line):
             numbers.append({
                 "number": entry["number"], "primary": entry["primary"],
                 "shipment": shipment.name if shipment else "",
+                "identity_conflict": entry["number"] in identity_conflicts,
+                "shipment_candidates": identity_conflicts.get(entry["number"], []),
                 "status4": shipment.status4 if shipment else "",
                 "status11": shipment.status11 if shipment else "",
                 "last_node": str(shipment.last_node or "")[:10] if shipment else "",

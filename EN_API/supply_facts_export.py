@@ -19,6 +19,7 @@ import os
 import shutil
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 EN_API = Path(__file__).resolve().parent
@@ -47,6 +48,8 @@ EVIDENCE_CLASSES = ("first_process_done", "all_process_done", "qc_performed",
                     "qc_passed", "stock_in_posted")
 DEFAULT_OUT = EN_API / "out" / "supply_facts"
 SCHEMA_VERSION = "supply-facts/v2"
+RECEIPT_STATE_SCHEMA = "supply-facts/receipt-state/v1"
+INVENTORY_BRIDGE_SCHEMA = "supply-facts/inventory-bridge/v1"
 
 
 def _call(base_url, key, secret, filters):
@@ -336,7 +339,8 @@ def _flatten_shipment_progress(rows):
     out = []
     for row in rows or []:
         item = dict(row)
-        for key in ("conflict_reasons", "progress_candidates", "source_status"):
+        for key in ("conflict_reasons", "progress_candidates", "source_status",
+                    "shipment_candidates"):
             if key in item and not isinstance(item[key], str):
                 item[key] = json.dumps(item[key], ensure_ascii=False, default=str)
         out.append(item)
@@ -348,6 +352,284 @@ def _load_json(path):
         return json.load(fh)
 
 
+class LocalInputError(Exception):
+    """Local read-only input violates the strict schema/coverage contract."""
+
+
+COVERAGE_KEYS = {"query_range_complete", "requested_windows", "truncated",
+                 "not_collected", "source_as_of"}
+LINK_FIELDS = {"shipment", "dn", "po_codes", "signed_at", "qty", "uom", "sku",
+               "warehouse", "identity_confidence", "status_semantics"}
+RECEIPT_LINE_FIELDS = {"receipt_id", "line_id", "po_code", "sku", "warehouse",
+                       "uom", "qty", "effective_at", "quantity_semantics",
+                       "uom_proven", "identity_proven"}
+SNAPSHOT_FIELDS = {"inventory_snapshot_id", "sku", "warehouse", "uom",
+                   "available", "as_of", "window_start", "window_end"}
+RECEIPT_EVENT_FIELDS = {"receipt_id", "line_id", "po_code", "sku", "warehouse",
+                        "uom", "qty", "receipt_effective_at", "uom_proven",
+                        "quantity_semantics_proven", "po_line_id",
+                        "dn_line_id", "shipment_id", "inclusion_proof"}
+RECEIPT_EVENT_REQUIRED = RECEIPT_EVENT_FIELDS - {
+    "po_line_id", "dn_line_id", "shipment_id", "inclusion_proof"}
+
+
+def _check_keys(row, allowed, required, label, index):
+    if not isinstance(row, dict):
+        raise LocalInputError("%s[%s] must be an object" % (label, index))
+    unknown = sorted(set(row) - allowed)
+    if unknown:
+        raise LocalInputError("%s[%s] unknown field(s): %s"
+                              % (label, index, ", ".join(unknown)))
+    missing = sorted(required - set(row))
+    if missing:
+        raise LocalInputError("%s[%s] missing field(s): %s"
+                              % (label, index, ", ".join(missing)))
+
+
+def _require_bool(value, label, name):
+    if not isinstance(value, bool):
+        raise LocalInputError("%s.%s must be a JSON boolean (true/false)" % (label, name))
+    return value
+
+
+def _require_aware_time(value, label, name, allow_none=False):
+    if value is None and allow_none:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise LocalInputError("%s.%s must be an ISO-8601 string with timezone" % (label, name))
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        raise LocalInputError("%s.%s is not a valid ISO-8601 time" % (label, name))
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise LocalInputError("%s.%s must carry an explicit timezone offset" % (label, name))
+    return value
+
+
+def _validate_window(value, label, name):
+    _check_keys(value, {"start", "end"}, {"start", "end"}, label, name)
+    _require_aware_time(value["start"], label + "." + name, "start")
+    _require_aware_time(value["end"], label + "." + name, "end")
+
+
+def _validate_coverage(value):
+    if not isinstance(value, dict):
+        raise LocalInputError("coverage must be an object")
+    unknown = sorted(set(value) - COVERAGE_KEYS)
+    if unknown:
+        raise LocalInputError("coverage unknown field(s): %s" % ", ".join(unknown))
+    missing = sorted(COVERAGE_KEYS - set(value))
+    if missing:
+        raise LocalInputError("coverage missing field(s): %s" % ", ".join(missing))
+    _require_bool(value["query_range_complete"], "coverage", "query_range_complete")
+    _require_bool(value["truncated"], "coverage", "truncated")
+    for name in ("requested_windows", "not_collected"):
+        windows = value[name]
+        if not isinstance(windows, list):
+            raise LocalInputError("coverage.%s must be a list" % name)
+        for index, window in enumerate(windows):
+            _validate_window(window, "coverage", "%s[%s]" % (name, index))
+    _require_aware_time(value["source_as_of"], "coverage", "source_as_of")
+
+
+def _validate_duplicate_identity(rows, identity_fn, payload_fn, label):
+    groups = {}
+    for index, row in enumerate(rows):
+        key = identity_fn(row)
+        if key in (None, "", (None, None)):
+            continue
+        groups.setdefault(key, []).append((index, row))
+    for key, entries in groups.items():
+        payloads = {json.dumps(payload_fn(row), sort_keys=True, default=str)
+                    for _, row in entries}
+        if len(payloads) > 1:
+            raise LocalInputError("%s duplicate identity %s has different payloads"
+                                  % (label, key))
+
+
+def _validate_link_row(row, index):
+    label = "links[%s]" % index
+    _check_keys(row, LINK_FIELDS, LINK_FIELDS, "links", index)
+    for name in ("shipment", "dn", "sku", "warehouse", "uom",
+                 "identity_confidence", "status_semantics"):
+        if not isinstance(row[name], str) or not row[name].strip():
+            raise LocalInputError("%s.%s must be a non-empty string" % (label, name))
+    if not isinstance(row["po_codes"], list) or not all(
+            isinstance(code, str) for code in row["po_codes"]):
+        raise LocalInputError("%s.po_codes must be a list of strings" % label)
+    _require_aware_time(row["signed_at"], label, "signed_at")
+    if row["qty"] is None or isinstance(row["qty"], bool):
+        raise LocalInputError("%s.qty must be a number" % label)
+    return row
+
+
+def _validate_receipt_line(row, index):
+    label = "receipts[%s]" % index
+    _check_keys(row, RECEIPT_LINE_FIELDS, RECEIPT_LINE_FIELDS, "receipts", index)
+    for name in ("receipt_id", "line_id", "po_code", "sku", "warehouse", "uom",
+                 "quantity_semantics"):
+        if not isinstance(row[name], str) or not row[name].strip():
+            raise LocalInputError("%s.%s must be a non-empty string" % (label, name))
+    _require_bool(row["uom_proven"], label, "uom_proven")
+    _require_bool(row["identity_proven"], label, "identity_proven")
+    _require_aware_time(row["effective_at"], label, "effective_at")
+    if row["qty"] is None or isinstance(row["qty"], bool):
+        raise LocalInputError("%s.qty must be a number" % label)
+    return row
+
+
+def _validate_snapshot_row(row, index):
+    label = "snapshots[%s]" % index
+    _check_keys(row, SNAPSHOT_FIELDS, SNAPSHOT_FIELDS, "snapshots", index)
+    for name in ("inventory_snapshot_id", "sku", "warehouse", "uom"):
+        if not isinstance(row[name], str) or not row[name].strip():
+            raise LocalInputError("%s.%s must be a non-empty string" % (label, name))
+    for name in ("as_of", "window_start", "window_end"):
+        _require_aware_time(row[name], label, name)
+    if row["available"] is None or isinstance(row["available"], bool):
+        raise LocalInputError("%s.available must be a number" % label)
+    return row
+
+
+def _validate_receipt_event(row, index):
+    label = "receipts[%s]" % index
+    _check_keys(row, RECEIPT_EVENT_FIELDS, RECEIPT_EVENT_REQUIRED,
+                "receipts", index)
+    for name in ("receipt_id", "line_id", "po_code", "sku", "warehouse", "uom"):
+        if not isinstance(row[name], str) or not row[name].strip():
+            raise LocalInputError("%s.%s must be a non-empty string" % (label, name))
+    _require_bool(row["uom_proven"], label, "uom_proven")
+    _require_bool(row["quantity_semantics_proven"], label,
+                  "quantity_semantics_proven")
+    _require_aware_time(row["receipt_effective_at"], label, "receipt_effective_at")
+    if row["qty"] is None or isinstance(row["qty"], bool):
+        raise LocalInputError("%s.qty must be a number" % label)
+    for name in ("po_line_id", "dn_line_id", "shipment_id"):
+        if row.get(name) is not None and not isinstance(row[name], str):
+            raise LocalInputError("%s.%s must be a string or null" % (label, name))
+    proof = row.get("inclusion_proof")
+    if proof is not None:
+        if not isinstance(proof, dict):
+            raise LocalInputError("%s.inclusion_proof must be an object" % label)
+        _check_keys(proof, {"proof_type", "source_record", "receipt_identity",
+                            "snapshot_id", "source_as_of"},
+                    {"proof_type", "source_record", "receipt_identity",
+                     "snapshot_id", "source_as_of"},
+                    label + ".inclusion_proof", index)
+        identity = proof["receipt_identity"]
+        if not isinstance(identity, (dict, list, tuple)):
+            raise LocalInputError("%s.inclusion_proof.receipt_identity invalid" % label)
+        _require_aware_time(proof["source_as_of"], label + ".inclusion_proof",
+                            "source_as_of")
+    return row
+
+
+def _load_local_input(path, kind):
+    try:
+        payload = _load_json(path)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise LocalInputError("cannot read %s: %s" % (path, exc))
+    if kind == "receipt_state":
+        allowed = {"schema_version", "coverage", "links", "receipts"}
+        required = {"schema_version", "coverage", "receipts"}
+        schema = RECEIPT_STATE_SCHEMA
+    else:
+        allowed = {"schema_version", "coverage", "snapshots", "receipts"}
+        required = allowed
+        schema = INVENTORY_BRIDGE_SCHEMA
+    unknown = sorted(set(payload) - allowed) if isinstance(payload, dict) else []
+    if not isinstance(payload, dict):
+        raise LocalInputError("%s must be a JSON object" % kind)
+    if unknown:
+        raise LocalInputError("%s unknown top-level field(s): %s"
+                              % (kind, ", ".join(unknown)))
+    missing = sorted(required - set(payload))
+    if missing:
+        raise LocalInputError("%s missing top-level field(s): %s"
+                              % (kind, ", ".join(missing)))
+    if payload["schema_version"] != schema:
+        raise LocalInputError("%s schema_version must be %s (got %r)"
+                              % (kind, schema, payload["schema_version"]))
+    _validate_coverage(payload["coverage"])
+    receipts = payload["receipts"]
+    if not isinstance(receipts, list):
+        raise LocalInputError("%s.receipts must be a list" % kind)
+    if kind == "receipt_state":
+        links = payload.get("links", [])
+        if not isinstance(links, list):
+            raise LocalInputError("links must be a list")
+        for index, row in enumerate(links):
+            _validate_link_row(row, index)
+        for index, row in enumerate(receipts):
+            _validate_receipt_line(row, index)
+        _validate_duplicate_identity(
+            receipts, lambda row: (row.get("receipt_id"), row.get("line_id")),
+            lambda row: {k: v for k, v in row.items()
+                         if k not in ("receipt_id", "line_id")},
+            "receipts")
+    else:
+        snapshots = payload["snapshots"]
+        if not isinstance(snapshots, list):
+            raise LocalInputError("snapshots must be a list")
+        for index, row in enumerate(snapshots):
+            _validate_snapshot_row(row, index)
+        for index, row in enumerate(receipts):
+            _validate_receipt_event(row, index)
+        _validate_duplicate_identity(
+            receipts, lambda row: (row.get("receipt_id"), row.get("line_id")),
+            lambda row: {k: v for k, v in row.items()
+                         if k not in ("receipt_id", "line_id")},
+            "receipts")
+        _validate_duplicate_identity(
+            snapshots,
+            lambda row: (row.get("inventory_snapshot_id"), row.get("sku"),
+                         row.get("warehouse"), row.get("uom")),
+            lambda row: row, "snapshots")
+    return payload
+
+
+def _auto_shipment_links(result):
+    """Build Shipment -> DN -> PO links from the server's own evidence."""
+    balances = {}
+    for row in result.get("stage_balances") or []:
+        if row.get("stage") != "signed_pending_tongtool_receipt":
+            continue
+        dn = row.get("batch_key")
+        if not dn:
+            continue
+        key = (dn, row.get("item_code"), row.get("uom"), row.get("warehouse"))
+        balances.setdefault(key, []).append(row)
+    links, seen = [], set()
+    for row in result.get("shipment_progress") or []:
+        if row.get("stage") != "signed_pending_tongtool_receipt":
+            continue
+        if row.get("identity_conflict"):
+            continue
+        shipment = row.get("shipment")
+        dn = row.get("dn")
+        if not shipment or not dn:
+            continue
+        po_codes = tuple(code for code in [row.get("tongtool_po")] if code)
+        key = (shipment, dn, po_codes)
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates = balances.get(
+            (dn, row.get("item_code"), row.get("uom"), row.get("warehouse")), [])
+        qty = (candidates[0].get("qty")
+               if len(candidates) == 1 and candidates[0].get("qty") is not None
+               else None)
+        links.append(ShipmentLink(
+            shipment=shipment, dn=dn, po_codes=po_codes,
+            signed_at=row.get("shipment_signed_at"), qty=qty,
+            uom=row.get("uom"), sku=row.get("item_code"),
+            warehouse=row.get("warehouse"),
+            identity_confidence=("proven" if po_codes and qty is not None
+                                 else "unproven"),
+            status_semantics="unproven"))
+    return links
+
+
 def _receipt_event(row):
     return ReceiptEvent(
         receipt_id=row.get("receipt_id"), line_id=row.get("line_id"),
@@ -356,11 +638,11 @@ def _receipt_event(row):
         quantity=row.get("qty", row.get("quantity")),
         stock_effective_at=row.get("receipt_effective_at",
                                    row.get("stock_effective_at")),
-        uom_proven=bool(row.get("uom_proven")),
-        quantity_semantics_proven=bool(row.get("quantity_semantics_proven")),
+        uom_proven=row.get("uom_proven") is True,
+        quantity_semantics_proven=row.get("quantity_semantics_proven") is True,
         po_line_id=row.get("po_line_id"), dn_line_id=row.get("dn_line_id"),
         shipment_id=row.get("shipment_id"),
-        inclusion_proof=bool(row.get("inclusion_proof")))
+        inclusion_proof_record=row.get("inclusion_proof"))
 
 
 def _receipt_line(row):
@@ -392,8 +674,7 @@ def _snapshot_row(row):
         sku=row.get("sku"), warehouse=row.get("warehouse"),
         uom=row.get("uom"), available=row.get("available"),
         as_of=row.get("as_of"), window_start=row.get("window_start"),
-        window_end=row.get("window_end"),
-        inclusion_proof=bool(row.get("inclusion_proof")))
+        window_end=row.get("window_end"))
 
 
 def _write_xlsx(path, result):
@@ -428,9 +709,12 @@ def _write_xlsx(path, result):
                                 "observed_at", "gross_qty", "return_qty", "net_qty",
                                 "source_records", "reasons", "conflicts"],
         "shipment_progress": ["so", "so_line_id", "item_code", "dn", "shipment",
-                              "logistic_number", "warehouse", "uom", "status11",
-                              "status4", "status_semantics", "eta", "atd", "ata",
-                              "dlvr", "latest_progress_status", "latest_progress_at",
+                              "logistic_number", "shipment_candidates",
+                              "identity_conflict", "warehouse", "uom", "status11",
+                              "status4", "status4_normalized",
+                              "status4_normalization", "status_semantics", "eta",
+                              "atd", "ata", "dlvr", "latest_progress_status",
+                              "latest_progress_at", "latest_progress_kind",
                               "progress_source", "is_final", "conflict_flag",
                               "conflict_reasons", "progress_candidates", "stage",
                               "shipment_signed_at", "tongtool_first_receipt_at",
@@ -443,22 +727,29 @@ def _write_xlsx(path, result):
                               "source_status"],
         "receipt_reconciliation": ["shipment", "dn", "po_codes", "sku", "warehouse",
                                    "uom", "status", "status_semantics",
-                                   "shipment_signed_at", "tongtool_first_receipt_at",
+                                   "shipment_signed_at", "signed_time_status",
+                                   "tongtool_first_receipt_at",
                                    "tongtool_last_receipt_at", "tongtool_receipt_at",
-                                   "receipt_lag_days", "receipt_completion",
-                                   "received_qty", "pending_qty",
+                                   "receipt_time_status", "receipt_lag_seconds",
+                                   "receipt_lag_hours", "receipt_lag_days",
+                                   "receipt_lag_status", "receipt_completion",
+                                   "received_qty", "pending_qty", "over_receipt_qty",
                                    "received_evidence_status",
-                                   "pending_evidence_status", "receipt_basis",
-                                   "identity_confidence", "exclusion_reason",
+                                   "pending_evidence_status", "receipt_conflict",
+                                   "receipt_basis",
+                                   "identity_confidence", "coverage_status",
+                                   "exclusion_reason",
                                    "receipt_duplicates", "unmatched_receipt_rows"],
         "inventory_bridge": ["receipt_id", "line_id", "po_code", "po_line_id",
                              "dn_line_id", "shipment_id", "sku", "warehouse", "uom",
                              "qty", "receipt_effective_at",
                              "receipt_inclusion_status", "inclusion_proof",
+                             "inclusion_proof_type",
                              "post_snapshot_delta_qty", "conditional_delta_qty",
                              "eligible", "count_in_inventory", "inventory_snapshot_id",
                              "source_as_of", "snapshot_window_start",
-                             "snapshot_window_end", "exclusion_reason", "duplicate_of"],
+                             "snapshot_window_end", "snapshot_candidates",
+                             "exclusion_reason", "duplicate_of"],
     }
     for name in DATASETS:
         ws = wb.create_sheet(name)
@@ -471,7 +762,10 @@ def _write_xlsx(path, result):
             rows = result[name]
         ws.append(headers)
         for row in rows:
-            ws.append([row.get(key) for key in headers])
+            ws.append([
+                json.dumps(value, ensure_ascii=False, default=str)
+                if isinstance(value, (dict, list)) else value
+                for value in (row.get(key) for key in headers)])
         ws.freeze_panes = "A2"
     covered = wb.create_sheet("Coverage")
     covered.append(["key", "value"])
@@ -533,6 +827,18 @@ def main(argv=None):
     base_url = iss.ENV_URLS[env]
     started = time.perf_counter()
 
+    receipt_payload = bridge_payload = None
+    try:
+        if args.receipt_state_json:
+            receipt_payload = _load_local_input(
+                args.receipt_state_json, "receipt_state")
+        if args.inventory_bridge_json:
+            bridge_payload = _load_local_input(
+                args.inventory_bridge_json, "inventory_bridge")
+    except LocalInputError as exc:
+        print("✗ 本地输入校验失败，未创建新版本: %s" % exc, file=sys.stderr)
+        return 2
+
     result = {"lines": [], "stage_balances": [], "milestones": [],
               "availability_schedule": [], "links": [], "production_evidence": [],
               "shipment_progress": [], "receipt_reconciliation": [],
@@ -588,21 +894,30 @@ def main(argv=None):
         return 1
 
     _finalize_coverage(result)
-    if args.receipt_state_json:
-        payload = _load_json(args.receipt_state_json)
+    receipt_links_source = "none"
+    if receipt_payload is not None:
+        links = [_shipment_link(row) for row in receipt_payload.get("links") or []]
+        if links:
+            receipt_links_source = "local_input"
+        else:
+            links = _auto_shipment_links(result)
+            receipt_links_source = "server_auto" if links else "none"
         result["receipt_reconciliation"] = reconcile_signed_receipts(
-            [_shipment_link(row) for row in payload.get("links") or []],
-            [_receipt_line(row) for row in payload.get("receipts") or []])
-    if args.inventory_bridge_json:
-        payload = _load_json(args.inventory_bridge_json)
+            links,
+            [_receipt_line(row) for row in receipt_payload.get("receipts") or []],
+            coverage=receipt_payload.get("coverage"))
+        result["_receipt_coverage"] = receipt_payload.get("coverage")
+        result["_receipt_links_source"] = receipt_links_source
+    if bridge_payload is not None:
         windows = [SnapshotWindow(row["start"], row["end"])
-                   for row in payload.get("collection_windows") or []]
+                   for row in bridge_payload["coverage"]["requested_windows"]]
         bridge = build_inventory_bridge(
-            [_snapshot_row(row) for row in payload.get("snapshots") or []],
-            [_receipt_event(row) for row in payload.get("receipts") or []],
+            [_snapshot_row(row) for row in bridge_payload.get("snapshots") or []],
+            [_receipt_event(row) for row in bridge_payload.get("receipts") or []],
             collection_windows=windows or None)
         result["inventory_bridge"] = bridge["rows"]
         result["_inventory_bridge_summary"] = bridge["summary"]
+        result["_inventory_bridge_coverage"] = bridge_payload.get("coverage")
     query_seconds = time.perf_counter() - started
     run_id = hashlib.sha1(("%s|%s|%s|%s|%s|%s" % (
         result["as_of"], args.codes, args.so, args.all, len(result["lines"]),
@@ -665,12 +980,19 @@ def main(argv=None):
             "receipt_reconciliation": {
                 "rows": len(result["receipt_reconciliation"]),
                 "source": ("local_receipt_state"
-                           if args.receipt_state_json else "not_integrated"),
+                           if receipt_payload is not None else "not_integrated"),
+                "links_source": receipt_links_source,
+                "coverage": result.get("_receipt_coverage"),
+                "schema_version": (RECEIPT_STATE_SCHEMA
+                                   if receipt_payload is not None else None),
             },
             "inventory_bridge": {
                 "rows": len(result["inventory_bridge"]),
                 "source": ("local_inventory_bridge"
-                           if args.inventory_bridge_json else "not_integrated"),
+                           if bridge_payload is not None else "not_integrated"),
+                "coverage": result.get("_inventory_bridge_coverage"),
+                "schema_version": (INVENTORY_BRIDGE_SCHEMA
+                                   if bridge_payload is not None else None),
                 "summary": result.get("_inventory_bridge_summary"),
                 "eligible": False,
             },

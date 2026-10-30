@@ -29,8 +29,8 @@ from key_test.shipment_progress import (
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v2"
-RULE_VERSION = "2026-10-29.6"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.1"
+RULE_VERSION = "2026-10-29.7"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.2"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -779,24 +779,46 @@ def build_links(line, ctx):
 
 
 def build_shipment_progress(line, ctx):
-    """Per Shipment progress evidence for one SO line; receipt side is unknown."""
+    """Per DN × waybill progress evidence for one SO line; receipt side is unknown.
+
+    One outbound DN can appear as several grouped rows (per item detail or
+    warehouse). Returns are excluded: they never belong to the outbound
+    progress set. Identical (dn, waybill, shipment) entries are emitted once.
+    """
     rows = []
+    seen = set()
     for dn in ctx.get("dns") or []:
+        if int(dn.get("is_return") or 0):
+            continue
         numbers = (ctx.get("numbers_by_dn") or {}).get(dn.get("dn"), [])
         for entry in numbers:
             number = entry.get("number")
             shipment = (ctx.get("shipment_by_number") or {}).get(number) or {}
             progress = shipment.get("progress") or progress_from_shipment(shipment)
+            candidates = progress.get("progress_candidates") or []
+            identity_conflict = bool(shipment.get("identity_conflict"))
+            identity_key = (dn.get("dn"), number,
+                            tuple(shipment.get("shipment_candidates") or [])
+                            if identity_conflict else shipment.get("shipment"))
+            if identity_key in seen:
+                continue
+            seen.add(identity_key)
+            manual = next((item for item in candidates
+                           if item.get("line") == "status4"), None)
             stage = classify_stage(progress)
             is_final = bool(progress.get("is_final"))
             rows.append({
                 "so": line.get("so"), "so_line_id": line.get("so_line"),
                 "item_code": line.get("item_code"), "dn": dn.get("dn"),
                 "shipment": shipment.get("shipment"), "logistic_number": number,
+                "shipment_candidates": shipment.get("shipment_candidates") or [],
+                "identity_conflict": identity_conflict,
                 "tongtool_po": dn.get("tongtool_po"),
                 "warehouse": dn.get("warehouse"), "uom": dn.get("uom"),
                 "status11": shipment.get("status11"),
                 "status4": shipment.get("status4"),
+                "status4_normalized": (manual or {}).get("normalized_status"),
+                "status4_normalization": (manual or {}).get("normalization"),
                 "status_semantics": "unproven",
                 "eta": _day(shipment.get("eta")),
                 "atd": _day(shipment.get("atd")),
@@ -804,11 +826,12 @@ def build_shipment_progress(line, ctx):
                 "dlvr": _day(shipment.get("dlvr")),
                 "latest_progress_status": progress.get("latest_progress_status"),
                 "latest_progress_at": progress.get("latest_progress_at"),
+                "latest_progress_kind": progress.get("latest_progress_kind"),
                 "progress_source": progress.get("progress_source"),
                 "is_final": is_final,
                 "conflict_flag": progress.get("conflict_flag"),
                 "conflict_reasons": progress.get("conflict_reasons") or [],
-                "progress_candidates": progress.get("progress_candidates") or [],
+                "progress_candidates": candidates,
                 "stage": stage,
                 "shipment_signed_at": (progress.get("latest_progress_at")
                                        if is_final else None),
@@ -828,6 +851,9 @@ def build_shipment_progress(line, ctx):
                 "source_status": {"receipt": "not_integrated",
                                   "inventory": "not_integrated"},
             })
+    rows.sort(key=lambda row: (str(row.get("dn") or ""),
+                               str(row.get("logistic_number") or ""),
+                               str(row.get("shipment") or "")))
     return rows
 
 
@@ -1378,6 +1404,56 @@ def load_dns(lines):
     return out, restricted
 
 
+def _load_shipment_events(shipment_names):
+    """Batch-load the Shipment Logistics Event child rows (read-only)."""
+    events = defaultdict(list)
+    names = sorted({name for name in (shipment_names or []) if name})
+    if not names:
+        return events
+    try:
+        rows = frappe.get_all(
+            "Shipment Logistics Event",
+            filters={"parent": ["in", names], "parenttype": "Shipment"},
+            fields=["parent", "seq", "event_time", "event_name", "event_date",
+                    "location", "description"],
+            order_by="parent asc, idx asc")
+    except Exception:  # noqa: BLE001
+        # Event history is additive evidence; losing it must not hide the
+        # status lines already loaded.
+        return events
+    for event in rows:
+        events[event.parent].append({
+            "seq": event.seq,
+            "time": event.event_time,
+            "name": event.event_name,
+            "date": event.event_date,
+            "location": event.location,
+            "description": event.description,
+        })
+    return events
+
+
+def _identity_conflict_progress(rows, events_by_shipment):
+    candidates = []
+    for row in rows:
+        progress = progress_from_shipment(
+            row, events_by_shipment.get(row.shipment, []))
+        candidates.extend(progress.get("progress_candidates") or [])
+    candidates.sort(key=lambda item: (
+        str(item.get("source") or ""), str(item.get("source_record") or ""),
+        str(item.get("raw_status") or "")))
+    return {
+        "latest_progress_status": None,
+        "latest_progress_at": None,
+        "latest_progress_kind": None,
+        "progress_source": None,
+        "is_final": False,
+        "conflict_flag": True,
+        "conflict_reasons": ["shipment_identity_conflict"],
+        "progress_candidates": candidates,
+    }
+
+
 def load_shipments(dn_names):
     numbers = dn_logistic_numbers(dn_names) if dn_names else {}
     all_numbers = sorted({n["number"] for values in numbers.values() for n in values})
@@ -1398,10 +1474,27 @@ def load_shipments(dn_names):
                                  ["docstatus", "in", (0, 1)]],
             fields=["name"], limit_page_length=0)}
         restricted = {c.shipment for c in candidates} != permitted
+        grouped = defaultdict(list)
         for row in candidates:
             if row.shipment in permitted:
-                row["progress"] = progress_from_shipment(row)
-                shipments[row.number] = row
+                grouped[row.number].append(row)
+        events_by_shipment = _load_shipment_events(
+            [row.shipment for row in candidates if row.shipment in permitted])
+        for number in sorted(grouped):
+            rows = sorted(grouped[number], key=lambda row: str(row.shipment))
+            if len(rows) == 1:
+                row = rows[0]
+                row["progress"] = progress_from_shipment(
+                    row, events_by_shipment.get(row.shipment, []))
+                shipments[number] = row
+                continue
+            representative = dict(rows[0])
+            representative["shipment"] = None
+            representative["identity_conflict"] = True
+            representative["shipment_candidates"] = [row.shipment for row in rows]
+            representative["progress"] = _identity_conflict_progress(
+                rows, events_by_shipment)
+            shipments[number] = representative
     return numbers, shipments, restricted
 
 

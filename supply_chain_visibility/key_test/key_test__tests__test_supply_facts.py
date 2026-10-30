@@ -23,7 +23,11 @@ class FakeFrappe(types.ModuleType):
         self.permitted_sos = []
         self.total_sos = 0
         self.dn_rows = []
+        self.number_rows = []
+        self.shipment_rows = []
         self.permitted_dns = []
+        self.permitted_shipments = []
+        self.event_rows = []
         self.last_query = None
         self.db = types.SimpleNamespace(
             sql=self.sql, count=self.count, has_column=lambda *a, **k: True,
@@ -63,6 +67,10 @@ class FakeFrappe(types.ModuleType):
         if "from `tabDelivery Note Item`" in query:
             allowed = set(values.get("lines") or [])
             return [row for row in self.dn_rows if row.so_line in allowed]
+        if "from `tabDelivery Note Logistics Number`" in query:
+            return list(self.number_rows)
+        if "custom_zmt_logistic_number as number" in query:
+            return list(self.shipment_rows)
         return []
 
     def count(self, doctype, filters=None):
@@ -73,6 +81,9 @@ class FakeFrappe(types.ModuleType):
             return [types.SimpleNamespace(name=name) for name in self.permitted_sos]
         if doctype == "Delivery Note":
             return [types.SimpleNamespace(name=name) for name in self.permitted_dns]
+        if doctype == "Shipment":
+            return [types.SimpleNamespace(name=name)
+                    for name in self.permitted_shipments]
         return []
 
     def has_permission(self, doctype, ptype, doc=None):
@@ -82,7 +93,7 @@ class FakeFrappe(types.ModuleType):
         raise (exc or Exception)(message)
 
     def get_all(self, *args, **kwargs):
-        return []
+        return list(self.event_rows)
 
 
 def _line(**overrides):
@@ -195,8 +206,8 @@ def _dn_row(**overrides):
 
 
 def _ship(number="ZMT1", status="已离港", eta="2026-11-01", atd="2026-10-17",
-          ata=None, dlvr=None):
-    return {"shipment": "SHIP-1", "number": number, "status11": status, "status4": "在途",
+          ata=None, dlvr=None, status4="在途"):
+    return {"shipment": "SHIP-1", "number": number, "status11": status, "status4": status4,
             "eta": eta, "atd": atd, "ata": ata, "dlvr": dlvr, "match_status": "Matched"}
 
 
@@ -1068,7 +1079,7 @@ class SupplyFactsContractTest(unittest.TestCase):
 
     def test_implementation_version_bumped_for_interface_change(self):
         self.assertEqual(self.facts.IMPLEMENTATION_VERSION,
-                         "key_test.supply_facts@2026-10-30.1")
+                         "key_test.supply_facts@2026-10-30.2")
 
     def test_manifest_carries_rule_and_implementation_versions(self):
         self.fake.so_rows = []
@@ -1127,6 +1138,96 @@ class SupplyFactsContractTest(unittest.TestCase):
             self.assertIsNone(row["received_qty"])
             self.assertIsNone(row["pending_qty"])
             self.assertEqual(row["receipt_completion"], "unknown")
+
+    def test_shipment_progress_dedupes_rows_and_skips_returns(self):
+        fact = self.facts.build_line_facts(
+            _line(), _ctx(
+                dns=[_dn(qty=60.0), _dn(qty=40.0, warehouse="WH-2"),
+                     _dn(qty=10.0, is_return=1)],
+                numbers_by_dn={"DN-1": [{"number": "A"}, {"number": "A"}]},
+                shipment_by_number={"A": _ship("A", "已离港")}))
+        rows = fact["shipment_progress"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["dn"], "DN-1")
+        self.assertEqual(rows[0]["logistic_number"], "A")
+
+    def test_eta_only_is_unknown_not_in_transit(self):
+        fact = self.facts.build_line_facts(
+            _line(), _ctx(
+                dns=[_dn(qty=100.0)],
+                numbers_by_dn={"DN-1": [{"number": "A"}]},
+                shipment_by_number={"A": _ship("A", "", eta="2026-11-18",
+                                               atd=None, status4="")}))
+        stages = fact["stage_balances"]
+        self.assertEqual(sum(r["qty"] for r in stages
+                             if r["stage"] == self.facts.STAGE_UNKNOWN), 100.0)
+        self.assertFalse([r for r in stages
+                          if r["stage"] == self.facts.STAGE_IN_TRANSIT])
+        self.assertEqual(fact["shipment_progress"][0]["stage"], "unknown")
+
+    def test_signed_without_dlvr_keeps_signed_at_null(self):
+        fact = self.facts.build_line_facts(
+            _line(), _ctx(
+                dns=[_dn(qty=100.0)],
+                numbers_by_dn={"DN-1": [{"number": "A"}]},
+                shipment_by_number={"A": _ship("A", "已签收",
+                                               ata="2026-10-20")}))
+        row = fact["shipment_progress"][0]
+        self.assertTrue(row["is_final"])
+        self.assertIsNone(row["shipment_signed_at"])
+
+    def test_duplicate_waybill_identity_is_not_last_write_wins(self):
+        self.fake.number_rows = [
+            _AttrDict(dn="DN-1", number="ZMT1", is_primary=1)]
+        self.fake.shipment_rows = [
+            _AttrDict(shipment="SHIP-1", number="ZMT1", status11="已离港",
+                      status4="在途", eta=None, atd="2026-10-20", ata=None,
+                      dlvr=None, match_status="", modified="2026-10-29"),
+            _AttrDict(shipment="SHIP-2", number="ZMT1", status11="已签收",
+                      status4="签收", eta=None, atd=None, ata="2026-10-22",
+                      dlvr="2026-10-23", match_status="", modified="2026-10-29")]
+        self.fake.permitted_shipments = ["SHIP-1", "SHIP-2"]
+        try:
+            numbers, shipments, restricted = self.facts.load_shipments(["DN-1"])
+            self.assertFalse(restricted)
+            self.assertEqual(numbers["DN-1"][0]["number"], "ZMT1")
+            row = shipments["ZMT1"]
+            self.assertTrue(row["identity_conflict"])
+            self.assertIsNone(row["shipment"])
+            self.assertEqual(sorted(row["shipment_candidates"]),
+                             ["SHIP-1", "SHIP-2"])
+            self.assertEqual(row["progress"]["conflict_reasons"],
+                             ["shipment_identity_conflict"])
+            self.assertIsNone(row["progress"]["latest_progress_status"])
+            raw = {c["raw_status"] for c in row["progress"]["progress_candidates"]}
+            self.assertTrue({"已离港", "已签收"} <= raw)
+        finally:
+            self.fake.number_rows = []
+            self.fake.shipment_rows = []
+            self.fake.permitted_shipments = []
+
+    def test_loaded_logistics_events_feed_progress(self):
+        self.fake.number_rows = [
+            _AttrDict(dn="DN-1", number="ZMT1", is_primary=1)]
+        self.fake.shipment_rows = [
+            _AttrDict(shipment="SHIP-1", number="ZMT1", status11="",
+                      status4="", eta=None, atd=None, ata=None, dlvr=None,
+                      match_status="", modified="2026-10-29")]
+        self.fake.permitted_shipments = ["SHIP-1"]
+        self.fake.event_rows = [
+            types.SimpleNamespace(parent="SHIP-1", seq=1,
+                                  event_time="2026-10-20 10:00",
+                                  event_name="到港", event_date="2026-10-20",
+                                  location="", description="已到港")]
+        try:
+            _, shipments, _ = self.facts.load_shipments(["DN-1"])
+            progress = shipments["ZMT1"]["progress"]
+            self.assertEqual(progress["latest_progress_status"], "已到港")
+        finally:
+            self.fake.number_rows = []
+            self.fake.shipment_rows = []
+            self.fake.permitted_shipments = []
+            self.fake.event_rows = []
 
     def test_conflicting_progress_is_unknown_and_keeps_candidates(self):
         progress = {"latest_progress_status": None, "latest_progress_at": None,

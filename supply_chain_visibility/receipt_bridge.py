@@ -106,8 +106,42 @@ class SnapshotRow:
     as_of: Optional[Timestamp] = None
     window_start: Optional[Timestamp] = None
     window_end: Optional[Timestamp] = None
-    inclusion_proof: bool = False
     proof: SourceProof = SourceProof()
+
+
+PROOF_FIELDS = ("proof_type", "source_record", "receipt_identity",
+                "snapshot_id", "source_as_of")
+
+
+def _snapshot_identity(row: SnapshotRow):
+    return (row.inventory_snapshot_id, str(row.as_of), str(row.window_start),
+            str(row.window_end))
+
+
+def _proof_identity(value):
+    if isinstance(value, dict):
+        return (value.get("receipt_id"), value.get("line_id"))
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        return (value[0], value[1])
+    return None
+
+
+def _validate_inclusion_proof(record, event, snapshot: SnapshotRow):
+    """Return the structured proof or a conflict reason code."""
+    if not isinstance(record, dict):
+        return None, "inclusion_proof_missing"
+    missing = [name for name in PROOF_FIELDS
+               if record.get(name) in (None, "")]
+    if missing:
+        return record, "inclusion_proof_incomplete"
+    if str(record.get("snapshot_id")) != str(snapshot.inventory_snapshot_id):
+        return record, "inclusion_proof_identity_mismatch"
+    if str(record.get("source_as_of")) != str(snapshot.as_of):
+        return record, "inclusion_proof_identity_mismatch"
+    if _proof_identity(record.get("receipt_identity")) != (
+            event.receipt_id, event.line_id):
+        return record, "inclusion_proof_identity_mismatch"
+    return record, None
 
 
 def _receipt_payload(event: ReceiptEvent):
@@ -122,12 +156,21 @@ def build_inventory_bridge(
     *,
     collection_windows: Optional[Iterable[SnapshotWindow]] = None,
 ) -> dict:
-    """Per-receipt inclusion status; receipts are never added to inventory here."""
+    """Per-receipt inclusion status bound to exactly one snapshot identity.
+
+    One computation can reference only one snapshot. Several snapshot rows are
+    acceptable only when they describe the same identity; any second
+    id/version makes every receipt conflicted instead of splicing windows.
+    """
     snapshot_rows = list(snapshots or [])
     events = list(receipt_events or [])
     snapshot_groups = defaultdict(list)
     for row in snapshot_rows:
         snapshot_groups[(row.sku, row.warehouse, row.uom)].append(row)
+    snapshot_identities = sorted({_snapshot_identity(row) for row in snapshot_rows})
+    single_snapshot = len(snapshot_identities) == 1
+    bound = (sorted(snapshot_rows, key=_snapshot_identity)[0]
+             if single_snapshot else None)
     collected = (None if collection_windows is None
                  else _window_bounds(collection_windows))
 
@@ -160,7 +203,8 @@ def build_inventory_bridge(
             "qty": None if quantity is None else str(quantity),
             "receipt_effective_at": event.stock_effective_at,
             "receipt_inclusion_status": "unknown",
-            "inclusion_proof": False,
+            "inclusion_proof": None,
+            "inclusion_proof_type": None,
             "post_snapshot_delta_qty": None,
             "conditional_delta_qty": None,
             "eligible": False,
@@ -169,6 +213,7 @@ def build_inventory_bridge(
             "source_as_of": None,
             "snapshot_window_start": None,
             "snapshot_window_end": None,
+            "snapshot_candidates": [],
             "exclusion_reason": "",
             "duplicate_of": None,
         }
@@ -189,17 +234,34 @@ def build_inventory_bridge(
             base["exclusion_reason"] = "unmatched_snapshot"
             rows.append(base)
             continue
-        starts = [_aware(row.window_start) for row in group]
-        ends = [_aware(row.window_end) for row in group]
-        starts = [value for value in starts if value]
-        ends = [value for value in ends if value]
-        start = min(starts) if starts else None
-        end = max(ends) if ends else None
-        base["inventory_snapshot_id"] = group[0].inventory_snapshot_id
-        base["source_as_of"] = (str(group[0].as_of)
-                                if group[0].as_of is not None else None)
+        if not single_snapshot:
+            base["receipt_inclusion_status"] = "conflict"
+            base["exclusion_reason"] = "multiple_snapshot_versions"
+            base["snapshot_candidates"] = [
+                {"inventory_snapshot_id": row.inventory_snapshot_id,
+                 "as_of": None if row.as_of is None else str(row.as_of),
+                 "window_start": None if row.window_start is None else str(row.window_start),
+                 "window_end": None if row.window_end is None else str(row.window_end)}
+                for row in sorted(group, key=_snapshot_identity)]
+            rows.append(base)
+            continue
+        snapshot = bound
+        start = _aware(snapshot.window_start)
+        end = _aware(snapshot.window_end)
+        base["inventory_snapshot_id"] = snapshot.inventory_snapshot_id
+        base["source_as_of"] = (str(snapshot.as_of)
+                                if snapshot.as_of is not None else None)
         base["snapshot_window_start"] = start.isoformat() if start else None
         base["snapshot_window_end"] = end.isoformat() if end else None
+        if len({str(row.available) for row in group}) > 1:
+            base["receipt_inclusion_status"] = "conflict"
+            base["exclusion_reason"] = "snapshot_payload_conflict"
+            base["snapshot_candidates"] = [
+                {"inventory_snapshot_id": row.inventory_snapshot_id,
+                 "available": row.available}
+                for row in sorted(group, key=repr)]
+            rows.append(base)
+            continue
         if not _has_stable_id(event):
             base["exclusion_reason"] = "missing_stable_id"
             rows.append(base)
@@ -230,16 +292,24 @@ def build_inventory_bridge(
             base["exclusion_reason"] = "missing_snapshot_window"
             rows.append(base)
             continue
-        proof = bool(event.inclusion_proof or any(row.inclusion_proof for row in group))
+        proof, proof_reason = _validate_inclusion_proof(
+            event.inclusion_proof_record, event, snapshot)
+        base["inclusion_proof"] = proof
+        base["inclusion_proof_type"] = (proof or {}).get("proof_type")
+        if proof_reason in ("inclusion_proof_identity_mismatch",
+                            "inclusion_proof_incomplete"):
+            base["receipt_inclusion_status"] = "conflict"
+            base["exclusion_reason"] = proof_reason
+            rows.append(base)
+            continue
         if effective > end:
             base["receipt_inclusion_status"] = "after_snapshot"
             base["post_snapshot_delta_qty"] = str(quantity)
             base["conditional_delta_qty"] = str(quantity)
             base["exclusion_reason"] = "after_snapshot_conditional"
         elif effective < start:
-            if proof:
+            if proof is not None and proof_reason is None:
                 base["receipt_inclusion_status"] = "included"
-                base["inclusion_proof"] = True
                 base["count_in_inventory"] = True
                 base["exclusion_reason"] = "inclusion_proof"
             else:
@@ -273,18 +343,33 @@ def build_inventory_bridge(
         "after_snapshot": counts.get("after_snapshot", 0),
         "uncertain": counts.get("uncertain", 0),
     }
+    deltas = defaultdict(lambda: {"qty": Decimal(0), "rows": 0})
+    for row in rows:
+        if row["post_snapshot_delta_qty"] is not None:
+            key = (row["sku"], row["warehouse"], row["uom"])
+            deltas[key]["qty"] += Decimal(row["post_snapshot_delta_qty"])
+            deltas[key]["rows"] += 1
+    ordered_deltas = [
+        {"sku": key[0], "warehouse": key[1], "uom": key[2],
+         "qty": str(value["qty"]), "rows": value["rows"]}
+        for key, value in sorted(
+            deltas.items(),
+            key=lambda item: tuple("" if part is None else str(part)
+                                   for part in item[0]))
+    ]
     return {
         "rows": rows,
         "summary": {
             "input_count": len(rows),
             "partition": partition,
             "partition_total": sum(partition.values()),
-            "post_snapshot_delta_qty": str(sum(
-                Decimal(row["post_snapshot_delta_qty"]) for row in rows
-                if row["post_snapshot_delta_qty"] is not None)),
+            "post_snapshot_delta": ordered_deltas,
+            "snapshot_identity_count": len(snapshot_identities),
+            "snapshot_binding": (bound.inventory_snapshot_id
+                                 if bound is not None else None),
             "eligible": False,
             "note": ("Receipts are not added to inventory. Included rows are already "
-                     "inside the snapshot; post-snapshot rows stay conditional deltas."),
+                     "inside the bound snapshot; post-snapshot rows stay conditional deltas."),
         },
     }
 

@@ -36,10 +36,13 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
 - **阶段分配**：工单覆盖量 `wo_coverage=min(Σ工单数量, 订单量)`；实际在产只按有开工证据的工单计算（工序卡有实际开工时间或已完工），`在产量=min(余额, max(0, 已开工覆盖-已完工))`；已下达但无开工记录的工单覆盖只证明计划，进 `unknown`；超出覆盖的余额进 `not_planned`。工单单位与订单单位不一致时完工量不可归一，生产类阶段整体进 `unknown`。已提交生产计划（同物料）覆盖但尚未建工单的部分进 `unknown`（不判为未计划）；计划不可读时同样进 `unknown`；计划单位缺失或与订单单位不一致时不计覆盖量，剩余余额整体进 `unknown`（不计算未覆盖差额）。
 - **行级权限**：SO/DN/WO/PP/Shipment 均先取当前用户可读单据集合再取数；受限来源写入 `coverage.restricted` 并置 `partial=true`；因受限无法判断的阶段一律 `unknown`，不得解释为「没有」。
 - **单位**：出库单位与订单单位不一致**或缺失**且无换算证据时，不归一运算；输出「数量归属未知」+ 原单位实物片段；缺失单位标 `qty_status=unknown`。`milestones` 与 `links` 中的派生数量同样只在来源单位与订单单位一致时输出，否则 qty=null 并给原因。
-- **物流阶段裁决（v2）**：终态粘性 + 实际优先 + 阶段顺序。到港/清关/转运/派送仍属
-  `shipped_in_transit`；只有已签收/POD 才进入 `signed_pending_tongtool_receipt`；
+- **物流阶段裁决（v2）**：status11 + status4（显式 normalization map）+ Shipment
+  Logistics Event 三来源；终态粘性 + 实际优先 + 阶段顺序。到港/清关/转运/派送仍属
+  `shipped_in_transit`（仅 actual）；只有已签收/POD 才进入 `signed_pending_tongtool_receipt`；
+  ETA-only 只能是预计证据；终态缺 `dlvr` → `shipment_signed_at=null`；阶段回退 →
+  unknown+conflict；同号多 Shipment → identity conflict；
   多运单全部签收时 DN 进入待入库但每条 Shipment 不复制 DN 数量；部分签收/状态未知保守留在途；
-  冲突/异常/撤销 → `unknown` + `conflict_flag`。详见 STEP4。
+  冲突/异常/撤销/未映射人工值 → unknown/conflict。详见 STEP4。
 - **退货**：按 `return_against` 锁定原出库单，再**按原出库明细（`dn_detail`）逐条校验身份与剩余可抵扣量**，匹配量汇总到 DN；读取时不同原明细的退货行不合并，聚合组同时保留逐明细数量（`item_qty`）。`dn_detail` 指向的明细不存在于原单 → **明细引用冲突**，不抵扣、不做单行兜底，单独报冲突；缺 `dn_detail` 时只有原单**恰好一条原始明细**才按该明细剩余容量兜底——原单有多条原始明细（即使同仓同单位聚合成一组）一律视为归属未知、不抵扣；未参与冲突的其他明细保留已证净额。所有路径共用同一份按原始明细记账的容量账本：结果与退货处理顺序无关，且每条明细累计抵扣不超过其原始数量。`returned` 行按来源拆分：实际抵扣、超退（超出该明细可抵扣量）、明细引用冲突、未关联原单 / 无法归属；各项之和等于退货原值，不得把超退或冲突描述为已抵扣。退货缺口 `min(退货量, 需求余额)` 记 `unknown`，不得推断为「待出库」或「在产」，扣除后余额再分配在产/未计划。
 - **取消**：需求取消与已生产/已发实物分开记录；实物片段带 `demand_status=cancelled`，不随订单状态删除。
 - **as_of**：服务端只支持当前快照；历史 `as_of` 直接拒绝（HTTP 错误），不能由客户端校验替代。
@@ -99,21 +102,64 @@ tags: [supply-chain, replenishment, facts, manifest, so-chain]
   查询失败写 `source_status` + `partial_reasons`，`partial` 在全部来源检查后重算。
 
 
-### `shipment_progress`（最终物流状态，per Shipment）
+### `shipment_progress`（最终物流状态，per DN×运单）
 
-`so`、`so_line_id`、`item_code`、`dn`、`shipment`、`logistic_number`、`tongtool_po`、
-`warehouse`、`uom`、`status11`、`status4`、`status_semantics=unproven`、`eta/atd/ata/dlvr`、
-`latest_progress_status`、`latest_progress_at`、`progress_source`、`is_final`、
-`conflict_flag`、`conflict_reasons`、`progress_candidates`、`stage`、
+`so`、`so_line_id`、`item_code`、`dn`、`shipment`、`shipment_candidates`、
+`identity_conflict`、`logistic_number`、`tongtool_po`、`warehouse`、`uom`、
+`status11`、`status4`、`status4_normalized`、`status4_normalization`、
+`status_semantics=unproven`、`eta/atd/ata/dlvr`、
+`latest_progress_status`、`latest_progress_at`、`latest_progress_kind`
+（actual/estimated）、`progress_source`、`is_final`、`conflict_flag`、
+`conflict_reasons`、`progress_candidates`（含 status11/status4/事件原值）、`stage`、
 `shipment_signed_at`、`tongtool_first/last/receipt_at`、`receipt_lag_days`、
 `receipt_completion`、`received_qty/pending_qty`(+evidence_status)、
 `receipt_basis=signed_assumed`、`identity_confidence`、`receipt_source_status`、
 `inventory_inclusion_status`。
 
-规则：证据等级 + 阶段顺序裁决；终态粘性；实际优先；`source_updated_at` 不提升阶段；
-同时间冲突/异常/撤销/缺时间 → unknown+conflict 并保留候选。通途入库与库存未接入时
+规则：status11（fine）+ status4（coarse，经 `status4-manual/v1` 映射）+ Shipment
+Logistics Event 三来源；终态粘性；实际优先；`source_updated_at` 不提升阶段；
+终态缺 `dlvr` → `shipment_signed_at=null`（不得用 `ata`）；ETA-only 不得证明实际在途；
+阶段回退/同时间冲突/异常/撤销/人工值未映射 → unknown 或 conflict 并保留候选；
+同号多 Shipment → `shipment_identity_conflict`，禁止 last-write-wins；
+同 DN/物流号/Shipment 去重，退货 DN 不生成进度行。通途入库与库存未接入时
 `receipt_completion=unknown`、`received/pending=null`、`receipt_source_status=not_integrated`、
 `inventory_inclusion_status=unknown`。详见 STEP4/STEP5。
+
+### `receipt_reconciliation`（签收→通途入库）
+
+`shipment/dn/po_codes/sku/warehouse/uom/status/status_semantics/shipment_signed_at/
+signed_time_status/tongtool_first|last|receipt_at/receipt_time_status/
+receipt_lag_seconds|hours|days/receipt_lag_status/receipt_completion/received_qty/
+pending_qty/over_receipt_qty/received_evidence_status/pending_evidence_status/
+receipt_conflict/receipt_basis/identity_confidence/coverage_status/exclusion_reason/
+receipt_duplicates/unmatched_receipt_rows`。
+
+规则：输入必须带 collection coverage；**只有覆盖完整时无 receipt 行才等于 0**；
+覆盖缺失/截断 → received/pending unknown；超收 → `over_receipt` 不进入 received；
+receipt 早于签收 → conflict；时区显式校验；lag 输出秒/小时/天；缺有效时间不伪造
+`tongtool_receipt_at`。详见 STEP5。
+
+### `inventory_bridge`（快照包含关系）
+
+`receipt_id/line_id/po_code/po_line_id/dn_line_id/shipment_id/sku/warehouse/uom/qty/
+receipt_effective_at/receipt_inclusion_status/inclusion_proof（结构化字典或 null）/
+inclusion_proof_type/post_snapshot_delta_qty/conditional_delta_qty/eligible/
+count_in_inventory/inventory_snapshot_id/source_as_of/snapshot_window_start|end/
+snapshot_candidates/exclusion_reason/duplicate_of`。
+
+规则：一次计算只绑定唯一快照身份，多快照/版本 → conflict（禁止 min(start)+max(end)）；
+proof 逐 receipt 结构化（proof_type/source_record/receipt_identity/snapshot_id/
+source_as_of），身份不一致 → conflict；summary 的 post-snapshot delta 按
+SKU×仓×UOM 分组，禁止跨单位求和；input = included + duplicate + conflict +
+unmatched + not_collected + after_snapshot + uncertain。详见 STEP5。
+
+### 本地只读输入（严格 schema）
+
+`--receipt-state-json` = `{schema_version:"supply-facts/receipt-state/v1", coverage, links, receipts}`；
+`--inventory-bridge-json` = `{schema_version:"supply-facts/inventory-bridge/v1", coverage, snapshots, receipts}`。
+coverage 必含 `query_range_complete`、`requested_windows`、`truncated`、`not_collected`、
+`source_as_of`（带时区）。布尔只接受 JSON true/false；拒绝未知/缺字段、schema 不一致、
+重复身份异载荷、无时区时间；失败不创建 run、不切换 `latest.json`。
 
 ### `manifest`
 
@@ -143,7 +189,7 @@ filters = JSON object
 
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
 - Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
-- 当前 `implementation_version=key_test.supply_facts@2026-10-30.1`；`rule_version=2026-10-29.6`；接口/分页行为变更必须 bump，混合版本继续拒绝。
+- 当前 `implementation_version=key_test.supply_facts@2026-10-30.2`；`rule_version=2026-10-29.7`；接口/分页行为变更必须 bump，混合版本继续拒绝。
 - 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
 - `sales_order` / `so_line` / `customer` / `item_code` / `customer_item_code` / `warehouse` / 日期 / `include_delivered` 是**行选择**；`warehouse` 指 SO 行目标仓。
 - `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。

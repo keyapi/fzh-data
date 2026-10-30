@@ -9,15 +9,17 @@ from key_test.shipment_progress import (
     ProgressEvidence,
     adjudicate_progress,
     classify_stage,
+    progress_from_shipment,
 )
 
 
 def ev(status, at=None, kind="actual", source="carrier", updated=None,
-       record=None):
+       record=None, granularity="fine", vote=True, line="status11"):
     return ProgressEvidence(
         raw_status=status, normalized_status=status, event_kind=kind,
         event_at=at, source_updated_at=updated, source=source,
-        source_record=record or "%s@%s" % (source, status))
+        source_record=record or "%s@%s" % (source, status),
+        granularity=granularity, vote=vote, line=line)
 
 
 class TerminalStickinessTests(unittest.TestCase):
@@ -81,12 +83,13 @@ class ActualOverEstimatedTests(unittest.TestCase):
 
 
 class StageOrderTests(unittest.TestCase):
-    def test_higher_stage_wins_even_if_earlier(self):
+    def test_regressing_stage_is_unknown_conflict(self):
         result = adjudicate_progress([
             ev("派送中", "2026-10-20T08:00:00+08:00"),
             ev("已到港", "2026-10-25T08:00:00+08:00"),
         ])
-        self.assertEqual(result["latest_progress_status"], "派送中")
+        self.assertIsNone(result["latest_progress_status"])
+        self.assertFalse(result["is_final"])
         self.assertTrue(result["conflict_flag"])
         self.assertIn("stage_regression", result["conflict_reasons"])
 
@@ -187,15 +190,104 @@ class SourceRevisionTests(unittest.TestCase):
 
 
 class EstimatedOnlyTests(unittest.TestCase):
-    def test_eta_only_is_not_a_progress_status(self):
+    def test_eta_only_is_not_actual_transport(self):
         result = adjudicate_progress([
             ev("ETA", "2026-11-18T00:00:00+08:00", kind="estimated",
                source="carrier_eta"),
         ])
         self.assertEqual(result["latest_progress_status"], "ETA")
+        self.assertEqual(result["latest_progress_kind"], "estimated")
         self.assertFalse(result["is_final"])
         self.assertFalse(result["conflict_flag"])
-        self.assertEqual(classify_stage(result), TRANSPORT_STAGE)
+        self.assertEqual(classify_stage(result), UNKNOWN_STAGE)
+
+
+class DualLineTests(unittest.TestCase):
+    def _row(self, **overrides):
+        row = {"shipment": "SHIP-1", "status11": "", "status4": "",
+               "atd": None, "ata": None, "dlvr": None, "eta": None,
+               "modified": "2026-10-29 10:00:00"}
+        row.update(overrides)
+        return row
+
+    def test_status4_signed_beats_status11_departed_with_conflict(self):
+        row = self._row(status11="已离港", status4="签收",
+                        dlvr="2026-10-25")
+        result = progress_from_shipment(row)
+        self.assertEqual(result["latest_progress_status"], "已签收")
+        self.assertTrue(result["is_final"])
+        self.assertTrue(result["conflict_flag"])
+        self.assertIn("terminal_over_nonterminal", result["conflict_reasons"])
+        raw = [c["raw_status"] for c in result["progress_candidates"]]
+        self.assertIn("签收", raw)
+        self.assertIn("已离港", raw)
+
+    def test_unmapped_manual_value_stays_raw_and_conflicts(self):
+        result = progress_from_shipment(self._row(status4="待发"))
+        self.assertIsNone(result["latest_progress_status"])
+        self.assertTrue(result["conflict_flag"])
+        self.assertIn("manual_status_unmapped", result["conflict_reasons"])
+        manual = next(c for c in result["progress_candidates"]
+                      if c["line"] == "status4")
+        self.assertEqual(manual["raw_status"], "待发")
+        self.assertIsNone(manual["normalized_status"])
+        self.assertFalse(manual["vote"])
+
+    def test_coarse_manual_votes_only_without_fine_evidence(self):
+        only_manual = progress_from_shipment(self._row(status4="在途"))
+        self.assertEqual(only_manual["latest_progress_status"], "运输中")
+        self.assertEqual(classify_stage(only_manual), TRANSPORT_STAGE)
+
+        fine = progress_from_shipment(
+            self._row(status11="已离港", status4="在途", atd="2026-10-20"))
+        self.assertEqual(fine["latest_progress_status"], "已离港")
+        manual = next(c for c in fine["progress_candidates"]
+                      if c["line"] == "status4")
+        self.assertFalse(manual["vote"])
+
+    def test_event_rows_feed_actual_candidates(self):
+        result = progress_from_shipment(self._row(), [{
+            "seq": 1, "time": "2026-10-20 10:00",
+            "name": "到港", "date": "2026-10-20", "description": "已到港"}])
+        self.assertEqual(result["latest_progress_status"], "已到港")
+        event = next(c for c in result["progress_candidates"]
+                     if c["line"] == "event")
+        self.assertEqual(event["raw_status"], "已到港")
+
+    def test_unmapped_event_is_raw_candidate_without_vote(self):
+        result = progress_from_shipment(
+            self._row(status11="已离港", atd="2026-10-20"),
+            [{"seq": 2, "time": "2026-10-21 08:00",
+              "description": "货物前往海外仓"}])
+        self.assertEqual(result["latest_progress_status"], "已离港")
+        event = next(c for c in result["progress_candidates"]
+                     if c["line"] == "event")
+        self.assertFalse(event["vote"])
+        self.assertEqual(event["raw_status"], "货物前往海外仓")
+
+    def test_terminal_without_dlvr_never_borrows_ata(self):
+        result = progress_from_shipment(
+            self._row(status11="已签收", ata="2026-10-20"))
+        self.assertEqual(result["latest_progress_status"], "已签收")
+        self.assertTrue(result["is_final"])
+        self.assertIsNone(result["latest_progress_at"])
+
+    def test_two_eta_values_conflict_and_stay_estimated(self):
+        result = progress_from_shipment(self._row(eta="2026-11-18"), [{
+            "seq": 3, "time": "2026-10-20 09:00",
+            "description": "ETA 11/08"}])
+        self.assertEqual(result["latest_progress_status"], "ETA")
+        self.assertEqual(result["latest_progress_kind"], "estimated")
+        self.assertIn("eta_conflict", result["conflict_reasons"])
+        self.assertEqual(classify_stage(result), UNKNOWN_STAGE)
+
+    def test_progress_input_order_is_stable(self):
+        events = [{"seq": 1, "time": "2026-10-20 08:00", "description": "已到港"},
+                  {"seq": 2, "time": "2026-10-21 08:00", "description": "清关中"}]
+        row = self._row(status11="已离港", atd="2026-10-19")
+        forward = progress_from_shipment(row, events)
+        reverse = progress_from_shipment(row, list(reversed(events)))
+        self.assertEqual(forward, reverse)
 
 
 if __name__ == "__main__":

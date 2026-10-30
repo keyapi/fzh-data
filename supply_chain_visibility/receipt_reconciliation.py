@@ -32,7 +32,9 @@ class ReceiptEvent:
     po_line_id: Optional[str] = None
     dn_line_id: Optional[str] = None
     shipment_id: Optional[str] = None
+    # Legacy boolean stays readable but never proves snapshot inclusion.
     inclusion_proof: bool = False
+    inclusion_proof_record: Optional[dict] = None
 
 
 @dataclass(frozen=True)
