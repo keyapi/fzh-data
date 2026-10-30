@@ -6,6 +6,9 @@ title: supply_chain_visibility 变更日志
 
 # 变更日志
 
+## 2026-10-30
+- 新增本地DN/PO供应消费器：仅关闭创建审计included行、保留部分到货/缺映射/旧审计/退货例外，生成单张Parquet及版本manifest，失败保留latest。真实有界42行样例已跑通；SO/生产/库存与预测未接，不冒称完整补货建议。详见reference/supply-position-consumer.md。
+
 ## 2026-10-27
 - 按用户授权将测试 key_test 快进到 c34fa53，备份旧覆盖文件并重启测试 bench；服务器 41 项 unittest 和真实报表 REST 验证通过。生产未改动，部署详情见 JACK_QA 的 P0-TEST-DEPLOY 条目。
 - 完成复审收尾：160 项本地测试与 2 项子测试通过，app 41 项离线测试通过；保留业务未知与证据入口，未部署生产。

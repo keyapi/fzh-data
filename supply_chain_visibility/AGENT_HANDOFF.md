@@ -56,6 +56,11 @@
 
 ## 6. 供应事实批量入口（2026-10-27）
 
+> 2026-10-30新增本地DN/PO消费入口：`supply_position.py`；见
+> `docs/reference/supply-position-consumer.md`。依赖完整创建文档的lines，当前
+> delivery_plan审计查询尚不返回lines；缺失保留待核。输出只覆盖DN/PO，
+> 不作为完整补货/库存结果，不运行历史warehouse_restock导入流程。
+
 - 契约与字段：`docs/reference/supply-facts-contract.md`。
 - 服务端：key_test `supply_facts.py` → whitelist `get_supply_facts`（SO 行 → stage_balances / milestones / availability_schedule / links / manifest）。
 - 本地入口：`EN_API/supply_facts_export.py`（JSON + Excel + sha256 + `latest.json` 原子指针；失败不覆盖最后成功版本）。

@@ -9,6 +9,7 @@ tags: [supply-chain-visibility, reference]
 
 | 标题 | 文件 |
 |------|------|
+| DN/PO单张供应消费表：输入、运行与失败保护 | [supply-position-consumer.md](supply-position-consumer.md) |
 | EN 供应链全链路实体地图与仓库覆盖盘点 | [en-supply-chain-map.md](en-supply-chain-map.md) |
 | EN 供应链各环节基数（一对多/多对多）实测与连接键铁律 | [en-chain-cardinality.md](en-chain-cardinality.md) |
 | 菲号（Tracking Number）语义与「工单→菲号→工序卡」层级 | [en-tracking-number-semantics.md](en-tracking-number-semantics.md) |
