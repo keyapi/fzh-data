@@ -27,6 +27,7 @@ date: 2026-10-23
 | **Jack 唯一入口** | [handoffs/JACK_ENTRY](handoffs/JACK_ENTRY.md) |
 | **Jack 唯一问答日志** | [handoffs/JACK_QA](handoffs/JACK_QA.md) |
 | **W1 合并就绪清单** | [handoffs/2026-10-26-merge-readiness](handoffs/2026-10-26-merge-readiness.md) |
+| **P0 交付形态（待 Codex 审）** | [reviews/2026-10-26-p0-delivery-options](reviews/2026-10-26-p0-delivery-options.md) |
 | Jack 任务书（W1–W4） | [handoffs/2026-10-23-jack-supply-timeline](handoffs/2026-10-23-jack-supply-timeline.md) |
 | 早期七问答复（归档） | [handoffs/2026-10-23-jack-w1-answers](handoffs/2026-10-23-jack-w1-answers.md) |
 | R1 详细答复（2026-10-26） | [handoffs/2026-10-26-jack-w1-answers-r1](handoffs/2026-10-26-jack-w1-answers-r1.md) |
