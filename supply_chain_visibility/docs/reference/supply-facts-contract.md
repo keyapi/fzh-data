@@ -263,6 +263,24 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 **PO 状态刷新**：`po_status_refresh.refresh_po_statuses` 按 10 个/批、可断点续跑；
 `rate_limited/partial/missing` 一律记 `unqueried`，不以 partial 当成功；SKU→PO 先去重。
 
+### `full_supply_facts`（J3–J5，DN/PO + SO/生产/库存/在途/签收）
+
+模块：`supply_chain_visibility/full_supply_facts.py`，schema `full-supply-facts/v1`。
+
+- 输入：`supply_position` 消费器输出 + 保存的 SO 余额、生产证据、库存快照、在途、签收/POD、批准商品全集。
+- 输出：按 `item×uom×warehouse×purpose×tt_sku×branch` 一行，字段含
+  `dn_net_qty / po_completed_assumed_qty / open_po_qty / unresolved_qty /
+  so_open_qty / in_production_qty / in_production_estimated_qty /
+  inventory_qty / in_transit_qty / received_qty`、可用日期与置信度、逐源 observed_at、未知原因。
+- 规则：SO 余额只作需求，不计已证生产；estimated 生产单列；未知/来源不可用保持 null；
+  独立 DN 行保留；批准商品无证据也列一行（`approved_item_without_evidence`）；
+  POD 上传日不作签收日，仅 `signed_at` 计入 `received_qty`；
+  同一 DN 多运单不复制整单数量（`multi_waybill_allocation_unknown`）。
+- `build_timeline` 输出供应侧节点与 `forecast_connected=false`，不产生建议量。
+- `assess_freshness(as_of, max_age_seconds)` 逐源标记 stale/unknown/future；
+  过期或来源时间未知不作为新鲜数据。
+- 所有行 `netting_ready=false`、`auto_order=false`；最终补货建议由主线完成。
+
 ### `manifest`
 
 `schema_version=supply-facts/v3`（并保留 `supply_facts_schema_version` 与
