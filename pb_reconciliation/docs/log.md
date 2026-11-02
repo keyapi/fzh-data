@@ -8,6 +8,10 @@ timestamp: 2026-08-14
 
 # 变更日志
 
+## 2026-11-02
+- **惯例**: 钉钉销售收款确认单的 PB 月包——表单只按结日一行（新平台 / PotteryBarnUS / USD），**不要**填月度总金额行。日 CSV 按升序附上后，最后再附 `merge_invoices.py` 产出的 `PB invoice 合并 YYYYMM.csv`（新财务要整月一份）。日文件夹须先归进 `YYYYMM/`。详见 `docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md`。
+- **交叉**: 摘单后 CSV 丢表头会让下游少读一张票（金额碰巧相同时更像「多删了一张」）——正文在 PR #297 `pb-invoice-csv-header-loss.md`，合并前不要在 main 当已存在。
+
 ## 2026-09-23
 - **改造**: `reconcile_pb.py` 纳入范围改为**整月口径** —— 锚点(`Notes!B2`)之前的日文件夹跳过，
   其余全部纳入（不再「首个 0 付款即停」）。跳过的文件夹逐日校验其发票都已在表内，防止「跳过」变「漏数」。
