@@ -266,9 +266,32 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 ### `full_supply_facts` v4（DN/PO + SO/生产/库存/在途/签收 + 本地 A/B/C）
 
 模块：`supply_chain_visibility/full_supply_facts.py`，schema
-`full-supply-facts/v4`，`RULE=2026-11-02.6`，
-`IMPLEMENTATION=fzh.full_supply_facts@2026-11-02.6`。发布/读取：
-`supply_chain_visibility/publication.py`（`supply-publication/v3`）。
+`full-supply-facts/v5`，`RULE=2026-11-02.7`，
+`IMPLEMENTATION=fzh.full_supply_facts@2026-11-02.7`。发布/读取：
+`supply_chain_visibility/publication.py`（`supply-publication/v4`）。目标唯一键为
+`item_code×uom×warehouse×purpose×tt_sku×branch×market×product_form`；市场与形态
+只接受 B 输入，不从商品名或单据猜测。
+
+### 1.6 正式只读刷新入口（2026-11-02）
+
+```powershell
+uv run --with pyarrow --with openpyxl python -m supply_chain_visibility.supply_snapshot_refresh `
+  --env test --all --page-size 500 --max-pages 200 `
+  --a-dataset <A.json|parquet> --b-dataset <B.json|parquet> --c-dataset <C.json|parquet> `
+  --as-of <timezone-aware-ISO> --out EN_API/out/full_supply_facts
+```
+
+执行顺序固定为：校验 A/B/C 与权威商品范围 → 只读分页采集 EN → 校验页连续性、总数、
+版本、`snapshot_id`、权限及来源状态 → 计算 → JSON/Parquet 回读与 SHA/唯一键验证 →
+原子更新 `latest.json`。中间页必须 `exhausted=false` 且 `next_offset=offset+returned`，
+末页必须 exhausted；`observed_at` 是每页采集时间，可以不同，但稳定来源水位线生成的
+`snapshot_id` 必须一致。分页截断、并发快照漂移、权限/查询失败、ABC 哈希/依赖失败、
+写盘或回读失败均保留旧 latest，并写 `last_attempt.json`。
+
+没有 ABC 时只能使用 `--no-abc --scope-json <authoritative-scope.json>`；不得从已观察到的
+DN 商品反推范围。业务事实缺失可发布为 null/unknown，但采集不完整不得发布成功快照。
+`stage_quantities` 分开记录 `actual_at`、`expected_at`、`observed_at`、
+`overlap_status` 与 `inventory_inclusion_status`；阶段数量禁止直接相加。
 ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v3`）。
 流水线：`supply_chain_visibility/supply_pipeline.py`（`supply-pipeline/v4`）。
 
@@ -449,7 +472,7 @@ filters = JSON object
 
 - **未知 filter**、**顶层误传参数**（如 `?sales_order=...` 不在 `filters` 内）直接 `ValidationError`，不再静默忽略或扩大为全量。
 - Frappe 分发注入的 `cmd` / `csrf_token` / `_` 由服务端忽略；除它们之外的其他顶层参数一律报错。
-- 当前 `implementation_version=key_test.supply_facts@2026-10-30.6`；`rule_version=2026-10-30.1`；
+- 当前 `implementation_version=key_test.supply_facts@2026-11-02.1`；`rule_version=2026-11-02.7`；
   delivery facts 使用 `schema=supply-facts/v3`、`implementation=key_test.delivery_facts@2026-10-30.2`；
   接口/分页行为变更必须 bump，混合版本继续拒绝。
 - 排序：SQL `order by so.name, soi.name`，响应 `sort=["so","so_line"]`、唯一键 `so_line`，两者必须一致。
@@ -457,6 +480,8 @@ filters = JSON object
 - `stage` 是**事实层**过滤（裁剪 `stage_balances` / `availability_schedule`），不改变行分页。
 - `limit` 默认 500、最大 2000；`offset` ≥ 0。
 - 响应新增 `applied_filters` 与 `pagination`：`limit/offset/returned/total/next_offset/next_cursor/exhausted/partial/termination_reason/sort/unique_key`。
+- 响应与 manifest 同时携带稳定 `snapshot_id`；它排除采集时间、包含查询范围、总行数及
+  EN 相关来源的最大修改水位线，用于拒绝跨页并发漂移。
 - `pagination.partial` 只表示本页被 limit 截断；`manifest.partial` 表示业务来源不完整（权限受限/通途 PO/入库/目的仓未接入）。**`exhausted=true` 时 `manifest.partial` 仍可为 true。**
 - 排序固定 `so, so_line`，唯一键 `so_line`；两页不重不漏。
 - 单 SO 请求只返回该 SO；`so_line` 已在 SQL 层限制。

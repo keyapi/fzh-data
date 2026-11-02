@@ -17,7 +17,8 @@
 - **EN 全链路实体地图**（含 4 个自定义 app 与「建了没用」的 doctype）：[docs/reference/en-supply-chain-map.md](docs/reference/en-supply-chain-map.md)。
 - **自定义 app 拓扑 / 落地链路 / 实测坑**：[docs/reference/en-custom-apps-and-deploy.md](docs/reference/en-custom-apps-and-deploy.md)。
 
-**必须记住的口径**：工序进度取**第一道工序**完成量、**不跨工序求和**；`WO.status/produced_qty` **不可信**；
+**必须记住的口径**：首工序仅是启动里程碑，**不能作为已完成生产供给**；生产供给只认
+具备资格的全工序完成证据，且不跨工序求和；`WO.status/produced_qty` **不可信**；
 `Closed ≠ 已发完`；出库按 `item_code` 匹配、退货行负数**净额抵扣**；EN 的 `po_no` 不是客户 PO。
 
 ## 3. 已落地产物（`key_test/`，既有表单/报表已生产部署；2026-10-27 同步 `c34fa53`）
@@ -67,11 +68,14 @@
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
 - 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
 
-### 6.1 full_supply_facts v4（2026-11-02，第四轮整改，RULE/IMPL 2026-11-02.6）
+### 6.1 full_supply_facts v5 与正式刷新（2026-11-02，RULE/IMPL 2026-11-02.7）
 
-- 主入口：`supply_pipeline`（`supply-pipeline/v4`）→ `runs/<run>/full_supply_facts.parquet`；
+- 离线入口：`supply_pipeline`；正式 EN 只读刷新入口：`supply_snapshot_refresh`。后者先加载
+  ABC/权威 scope，再采集分页，并校验稳定 `snapshot_id`、版本、总数、连续性和权限；任何
+  采集/发布失败保留旧 latest。
+- 输出：`runs/<run>/full_supply_facts.parquet`；
   JSON 为追溯副本；`supply_position.parquet/json` 保留独立 schema/粒度；`timeline.json`；
-  统一 `manifest.json`（`supply-publication/v3`）。
+  统一 `manifest.json`（`supply-publication/v4`）。市场/形态纳入 full facts 唯一键。
 - A/B/C（`abc-frozen/v3`）：观察量/归属量/当前可用/下单四层分开；C 必须
   join_full + source_ref + 数量 + UoM 才可归属，否则 `c_not_qualified` 且可信/当前
   均为 null；B/C 单位必须一致才可归属；naive/date-only 不算精确时间；缺身份只进

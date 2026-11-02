@@ -24,7 +24,8 @@ AS_OF = "2026-11-02T00:00:00+00:00"
 def position(over=None):
     row = {
         "item_code": "I", "uom": "个", "warehouse": "WH", "purpose": "branch",
-        "tt_sku": "S1", "branch": "B1", "dn_net_qty": 5.0,
+        "tt_sku": "S1", "branch": "B1", "market": "US",
+        "product_form": "finished", "dn_net_qty": 5.0,
         "po_completed_assumed_qty": 0.0, "open_po_qty": 0.0,
         "unresolved_qty": 0.0, "known_dn_net_qty": 5.0,
         "unknown_quantity_lines": 0, "line_count": 1,
@@ -43,7 +44,8 @@ def position(over=None):
 def abc(**over):
     row = {
         "item_code": "I", "uom": "个", "warehouse": "WH", "purpose": "branch",
-        "tt_sku": "S1", "branch": "B1", "inventory_qty": "0",
+        "tt_sku": "S1", "branch": "B1", "market": "US",
+        "product_form": "finished", "inventory_qty": "0",
         "inventory_observed_qty": "0",
         "inventory_current_available_qty": "0",
         "inventory_as_of": AS_OF, "inventory_as_of_raw": AS_OF,
@@ -111,7 +113,7 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(published["status"], "ok")
             latest = json.loads((Path(tmp) / "latest.json").read_text(encoding="utf-8"))
             manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
-            self.assertEqual(manifest["schema_version"], "supply-publication/v3")
+            self.assertEqual(manifest["schema_version"], "supply-publication/v4")
             self.assertEqual(manifest["versions"]["full_supply_facts"], SCHEMA_VERSION)
             self.assertFalse(manifest["netting_ready"])
             self.assertFalse(manifest["auto_order"])

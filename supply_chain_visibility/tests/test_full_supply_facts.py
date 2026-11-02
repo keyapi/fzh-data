@@ -12,7 +12,8 @@ from supply_chain_visibility.full_supply_facts import (
 )
 
 BASE = {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
-        "purpose": "branch", "branch": "CENTRADE", "tt_sku": "S1"}
+        "purpose": "branch", "branch": "CENTRADE", "tt_sku": "S1",
+        "market": "US", "product_form": "finished"}
 _COUNTER = itertools.count(1)
 
 
@@ -20,6 +21,7 @@ def position(**over):
     row = {
         "item_code": "SKU-1", "tt_sku": "S1", "warehouse": "WH-1",
         "purpose": "branch", "uom": "个", "branch": "CENTRADE",
+        "market": "US", "product_form": "finished",
         "dn_net_qty": 5.0, "po_completed_assumed_qty": 0.0,
         "open_po_qty": 4.0, "unresolved_qty": 0.0,
         "as_of": "2026-11-02T00:00:00+00:00",
@@ -42,6 +44,7 @@ def row_of(result, item="SKU-1"):
 def position_row(**over):
     row = {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
            "purpose": "branch", "tt_sku": "S1", "branch": "CENTRADE",
+           "market": "US", "product_form": "finished",
            "dn_net_qty": 5.0, "po_completed_assumed_qty": 0.0,
            "open_po_qty": 0.0, "unresolved_qty": 0.0,
            "as_of": "2026-11-02T00:00:00+00:00", "tranches": []}
@@ -63,6 +66,18 @@ def abc_inventory_row(**over):
 
 
 class PurposeTests(unittest.TestCase):
+    def test_market_and_product_form_are_part_of_target_identity(self):
+        result = build_full_supply_facts({"rows": []}, abc_inventory=[
+            abc_inventory_row(market="US", product_form="finished",
+                              source_ref="C:US"),
+            abc_inventory_row(market="EU", product_form="kit",
+                              source_ref="C:EU"),
+        ])
+        self.assertEqual(len(result["rows"]), 2)
+        self.assertEqual({(row["market"], row["product_form"])
+                          for row in result["rows"]},
+                         {("US", "finished"), ("EU", "kit")})
+
     def test_missing_purpose_is_unknown_not_branch(self):
         result = build_full_supply_facts({"rows": []}, inventory=[{
             "item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
@@ -111,6 +126,16 @@ class StageDateTests(unittest.TestCase):
         stages = {frag["stage"] for frag in row["stage_quantities"]}
         self.assertIn("inventory", stages)
         self.assertIn("in_production", stages)
+        production = next(frag for frag in row["stage_quantities"]
+                          if frag["stage"] == "in_production")
+        inventory = next(frag for frag in row["stage_quantities"]
+                         if frag["stage"] == "inventory")
+        self.assertEqual(production["expected_at"],
+                         "2026-11-10T00:00:00+00:00")
+        self.assertIsNone(production["actual_at"])
+        self.assertEqual(inventory["observed_at"],
+                         "2026-11-02T00:00:00+00:00")
+        self.assertEqual(inventory["inventory_inclusion_status"], "included")
 
     def test_same_stage_batches_are_both_retained(self):
         result = build_full_supply_facts(position(), production=[

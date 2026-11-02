@@ -5,6 +5,7 @@ One calculation shared by the machine batch entry and the SO human view.
 This module never writes to ERPNext and never guesses quantities or dates:
 missing evidence stays null with an explicit reason.
 """
+import hashlib
 import json
 import uuid
 from collections import defaultdict
@@ -29,8 +30,8 @@ from key_test.shipment_progress import (
 from key_test.supply_query import dn_logistic_numbers
 
 SCHEMA_VERSION = "supply-facts/v2"
-RULE_VERSION = "2026-10-30.1"
-IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-10-30.6"
+RULE_VERSION = "2026-11-02.7"
+IMPLEMENTATION_VERSION = "key_test.supply_facts@2026-11-02.1"
 
 STAGE_NOT_PLANNED = "not_planned"
 STAGE_IN_PRODUCTION = "in_production"
@@ -1003,6 +1004,42 @@ def _pagination(filters, returned, total, cursor=None):
     }
 
 
+SNAPSHOT_SOURCE_DOCTYPES = (
+    "Sales Order", "Sales Order Item", "Production Plan",
+    "Production Plan Item", "Work Order", "Job Card", "Job Card Time Log",
+    "Stock Entry", "Stock Entry Detail", "Quality Inspection",
+    "Delivery Note", "Delivery Note Item", "Shipment",
+    "Shipment Logistics Event",
+)
+
+
+def supply_snapshot_id(filters, as_of, total):
+    """Stable cross-page source watermark; excludes collection timestamps."""
+    get_value = getattr(frappe.db, "get_value", None)
+    watermarks = {}
+    for doctype in SNAPSHOT_SOURCE_DOCTYPES:
+        if get_value is None:
+            watermarks[doctype] = "watermark_api_unavailable"
+            continue
+        try:
+            value = get_value(doctype, {}, "max(modified)")
+        except Exception as exc:  # missing optional doctypes are still stable evidence
+            value = "unavailable:%s" % type(exc).__name__
+        watermarks[doctype] = _iso(value) or str(value or "")
+    scope = {key: value for key, value in filters.items()
+             if key not in ("limit", "offset")}
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "rule_version": RULE_VERSION,
+        "implementation_version": IMPLEMENTATION_VERSION,
+        "as_of": str(as_of), "scope": scope, "total": int(total),
+        "source_watermarks": watermarks,
+    }
+    return hashlib.sha256(json.dumps(
+        payload, sort_keys=True, ensure_ascii=False,
+        default=str).encode("utf-8")).hexdigest()
+
+
 def load_lines(filters):
     conditions = ["so.docstatus <= 2"]
     values = {}
@@ -1541,6 +1578,7 @@ def get_supply_facts(filters=None, **kwargs):
     observed_at = now_datetime()
     permissions = _permission_flags()
     lines, so_restricted, total_lines = load_lines(filters)
+    snapshot_id = supply_snapshot_id(filters, as_of, total_lines)
     if not lines:
         external = {
             "tongtool_po": "not_integrated",
@@ -1582,6 +1620,7 @@ def get_supply_facts(filters=None, **kwargs):
         manifest["pagination"] = pagination
         manifest["truncated"] = pagination["partial"]
         manifest["termination_reason"] = pagination["termination_reason"]
+        manifest["snapshot_id"] = snapshot_id
         return {
             "schema_version": SCHEMA_VERSION, "rule_version": RULE_VERSION,
             "implementation_version": IMPLEMENTATION_VERSION,
@@ -1589,6 +1628,7 @@ def get_supply_facts(filters=None, **kwargs):
             "availability_schedule": [], "links": [], "production_evidence": [],
             "shipment_progress": [],
             "source_status": empty_source_status,
+            "snapshot_id": snapshot_id,
             "manifest": manifest,
             "applied_filters": applied, "pagination": pagination,
         }
@@ -1800,6 +1840,7 @@ def get_supply_facts(filters=None, **kwargs):
     manifest["truncated"] = pagination["partial"]
     manifest["termination_reason"] = pagination["termination_reason"]
     manifest["partial_reasons"] = list(partial_reasons)
+    manifest["snapshot_id"] = snapshot_id
     return {
         "schema_version": SCHEMA_VERSION, "rule_version": RULE_VERSION,
         "implementation_version": IMPLEMENTATION_VERSION,
@@ -1817,6 +1858,7 @@ def get_supply_facts(filters=None, **kwargs):
         "shipment_progress": [
             row for f in facts for row in f.get("shipment_progress", [])],
         "source_status": source_status,
+        "snapshot_id": snapshot_id,
         "manifest": manifest,
         "applied_filters": applied, "pagination": pagination,
     }

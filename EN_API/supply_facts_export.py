@@ -95,9 +95,26 @@ def _paginate(base_url, key, secret, base_filters, page_size, max_pages=MAX_PAGE
     batches = []
     seen = set()
     expected_total = None
+    signature = None
     while page < max_pages:
         filters = dict(base_filters, limit=page_size, offset=offset)
         batch = _call(base_url, key, secret, filters)
+        current = {
+            "schema_version": batch.get("schema_version"),
+            "rule_version": batch.get("rule_version"),
+            "implementation_version": batch.get("implementation_version"),
+            "as_of": batch.get("as_of"),
+            "snapshot_id": batch.get("snapshot_id"),
+        }
+        if signature is None:
+            signature = current
+            missing = [name for name, value in current.items() if not value]
+            if missing:
+                raise iss.QueryError(
+                    "supply batch missing version/snapshot fields: %s"
+                    % ", ".join(missing))
+        elif current != signature:
+            raise iss.QueryError("supply batch drift/version mismatch")
         lines = batch.get("lines") or []
         for line in lines:
             line_key = line.get("so_line") or line.get("so_line_id")

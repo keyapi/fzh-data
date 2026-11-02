@@ -29,7 +29,7 @@ from supply_chain_visibility.preforecast_readiness import (
     from_workbooks,
 )
 
-SCHEMA_VERSION = "abc-frozen/v3"
+SCHEMA_VERSION = "abc-frozen/v4"
 ATTRIBUTION_VALUES = ("attributed", "partial_identity", "unattributed",
                       "uom_mismatch", "a_inactive", "b_identity_conflict",
                       "cg_pool_ambiguous", "b_multi_uom_ambiguous",
@@ -247,6 +247,8 @@ def attribute_readiness(readiness, *, as_of, max_stock_age_days,
                 "branch": branch or "",
                 "pool": pool,
                 "b_units": list(b_units),
+                "market": source.get("b_market"),
+                "product_form": source.get("b_product_form"),
                 "source_ref": source.get("c_source_ref"),
                 "qty": _qty(inventory),
                 "observed_qty": _qty(observed),
@@ -471,7 +473,7 @@ def load_frozen_abc(a_path, b_path, c_path, *, as_of, a_version, b_version,
     report = dict(attributed["report"])
     report.update({
         "schema_version": SCHEMA_VERSION,
-        "implementation_version": "fzh.abc_inputs@2026-11-02.3",
+        "implementation_version": "fzh.abc_inputs@2026-11-02.4",
         "a_input_rows": readiness["report"]["a_input_rows"],
         "a_active_items": readiness["report"]["a_active_items"],
         "b_input_rows": readiness["report"]["b_input_rows"],

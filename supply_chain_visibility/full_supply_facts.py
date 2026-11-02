@@ -26,9 +26,9 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
-SCHEMA_VERSION = "full-supply-facts/v4"
-RULE_VERSION = "2026-11-02.6"
-IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-02.6"
+SCHEMA_VERSION = "full-supply-facts/v5"
+RULE_VERSION = "2026-11-02.7"
+IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-02.7"
 QUANTITY_SCALE = 6
 
 VALID_PURPOSES = ("branch", "fba")
@@ -142,9 +142,10 @@ def _purpose(value):
     return purpose if purpose in VALID_PURPOSES else "unknown"
 
 
-def _key(item_code, uom, warehouse, purpose, tt_sku=None, branch=""):
+def _key(item_code, uom, warehouse, purpose, tt_sku=None, branch="",
+         market="", product_form=""):
     return (_text(item_code), _text(uom), _text(warehouse), _purpose(purpose),
-            _text(tt_sku), _text(branch))
+            _text(tt_sku), _text(branch), _text(market), _text(product_form))
 
 
 def _row_base(key):
@@ -157,9 +158,14 @@ def _row_base(key):
         reasons.append("tt_sku_unknown")
     if purpose == "branch" and not key[5]:
         reasons.append("branch_unknown")
+    if not key[6]:
+        reasons.append("market_unknown")
+    if not key[7]:
+        reasons.append("product_form_unknown")
     return {
         "item_code": key[0], "uom": key[1] or None, "warehouse": key[2],
         "purpose": purpose, "tt_sku": key[4] or None, "branch": key[5],
+        "market": key[6] or None, "product_form": key[7] or None,
         "pool": key[2], "scope": scope,
         **{name: None for name in QTY_FIELDS},
         "inventory_as_of": None, "inventory_as_of_raw": None,
@@ -202,7 +208,8 @@ def _add_qty(row, field, layer, qty):
 
 def _add_stage(row, stage, qty, date_value=None, date_kind=None, *,
                source_identity=None, replay=False, conflict=False,
-               identity_status=None):
+               identity_status=None, observed_at=None,
+               inventory_inclusion_status="unknown"):
     """Append a quantity/date fragment only; aggregates are handled separately."""
     if qty is None:
         return
@@ -215,6 +222,13 @@ def _add_stage(row, stage, qty, date_value=None, date_kind=None, *,
                                      "expected": "expected",
                                      "actual": "confirmed"}.get(date_kind, "unknown")),
                 "source_identity": source_identity,
+                "actual_at": (parsed.isoformat()
+                              if parsed and date_kind == "actual" else None),
+                "expected_at": (parsed.isoformat()
+                                if parsed and date_kind == "expected" else None),
+                "observed_at": _iso(observed_at),
+                "overlap_status": "conflict" if conflict else "unknown",
+                "inventory_inclusion_status": inventory_inclusion_status,
                 "replay": bool(replay), "conflict": bool(conflict),
                 "identity_status": identity_status}
     if fragment not in row["stage_quantities"]:
@@ -442,9 +456,11 @@ def _dedupe_layer(records, *, layer, source_groups, identity_groups,
     }
 
 
-def _row_for(rows, item, uom, warehouse, purpose, branch="", tt_sku=None):
+def _row_for(rows, item, uom, warehouse, purpose, branch="", tt_sku=None,
+             market="", product_form=""):
     """Exact-key attach for non-authoritative sources; never fill identity."""
-    key = _key(item, uom, warehouse, purpose, tt_sku, branch)
+    key = _key(item, uom, warehouse, purpose, tt_sku, branch,
+               market, product_form)
     return rows.setdefault(key, _row_base(key))
 
 
@@ -460,7 +476,8 @@ def _abc_identities(abc_rows):
             continue
         key = _key(item.get("item_code"), item.get("uom"),
                    item.get("warehouse"), purpose, item.get("tt_sku"),
-                   item.get("branch"))
+                   item.get("branch"), item.get("market"),
+                   item.get("product_form"))
         if key[0] and (key[4] or key[5]):
             identities.add(key)
     return identities
@@ -612,7 +629,12 @@ def _enrich_blank_position_rows(rows, abc_rows):
     for key, row in list(rows.items()):
         if row["purpose"] not in VALID_PURPOSES:
             continue
-        if row["tt_sku"] and row["branch"]:
+        identity_complete = (bool(row["tt_sku"])
+                             and (row["purpose"] != "branch"
+                                  or bool(row["branch"]))
+                             and bool(row.get("market"))
+                             and bool(row.get("product_form")))
+        if identity_complete:
             continue
         matches = [
             identity for identity in identities
@@ -621,11 +643,17 @@ def _enrich_blank_position_rows(rows, abc_rows):
             and (not row["tt_sku"] or not identity[4]
                  or identity[4] == row["tt_sku"])
             and (not row["branch"] or not identity[5]
-                 or identity[5] == row["branch"])]
+                 or identity[5] == row["branch"])
+            and (not row.get("market") or not identity[6]
+                 or identity[6] == row.get("market"))
+            and (not row.get("product_form") or not identity[7]
+                 or identity[7] == row.get("product_form"))]
         if len(matches) == 1:
             identity = matches[0]
             original_tt_sku = row["tt_sku"]
             original_branch = row["branch"]
+            original_market = row.get("market")
+            original_product_form = row.get("product_form")
             original_reasons = list(row["unknown_reasons"])
             if not row["tt_sku"] and identity[4]:
                 row["tt_sku"] = identity[4]
@@ -637,8 +665,19 @@ def _enrich_blank_position_rows(rows, abc_rows):
                 row["unknown_reasons"] = [
                     reason for reason in row["unknown_reasons"]
                     if reason != "branch_unknown"]
+            if not row.get("market") and identity[6]:
+                row["market"] = identity[6]
+                row["unknown_reasons"] = [
+                    reason for reason in row["unknown_reasons"]
+                    if reason != "market_unknown"]
+            if not row.get("product_form") and identity[7]:
+                row["product_form"] = identity[7]
+                row["unknown_reasons"] = [
+                    reason for reason in row["unknown_reasons"]
+                    if reason != "product_form_unknown"]
             attached = _key(row["item_code"], row["uom"], row["warehouse"],
-                            row["purpose"], row["tt_sku"], row["branch"])
+                            row["purpose"], row["tt_sku"], row["branch"],
+                            row.get("market"), row.get("product_form"))
             if attached == key:
                 continue
             if attached not in rows:
@@ -657,6 +696,8 @@ def _enrich_blank_position_rows(rows, abc_rows):
             if payload_conflict:
                 row["tt_sku"] = original_tt_sku
                 row["branch"] = original_branch
+                row["market"] = original_market
+                row["product_form"] = original_product_form
                 row["unknown_reasons"] = original_reasons
                 for target in (row, existing):
                     _mark_unknown(target, "dn_po",
@@ -692,6 +733,8 @@ def _enrich_blank_position_rows(rows, abc_rows):
                 # Cannot prove distinct sources: keep both rows, lose nothing.
                 row["tt_sku"] = original_tt_sku
                 row["branch"] = original_branch
+                row["market"] = original_market
+                row["product_form"] = original_product_form
                 row["unknown_reasons"] = original_reasons
                 for target in (row, existing):
                     target["unknown_reasons"] = sorted(set(
@@ -884,6 +927,20 @@ def _finalize(row):
     row.pop("_unknown_layers", set())
     row.pop("_position_tranches", None)
     fragments = row["stage_quantities"]
+    identities = defaultdict(set)
+    for fragment in fragments:
+        identity = fragment.get("source_identity")
+        if identity:
+            identities[json.dumps(identity, sort_keys=True, default=str)].add(
+                fragment.get("stage"))
+    overlap_keys = {key for key, stages in identities.items() if len(stages) > 1}
+    for fragment in fragments:
+        identity = fragment.get("source_identity")
+        if identity and json.dumps(identity, sort_keys=True,
+                                   default=str) in overlap_keys:
+            fragment["overlap_status"] = "same_identity_cross_stage"
+    if overlap_keys:
+        row["unknown_reasons"].append("same_identity_cross_stage")
     for fragment in fragments:
         if fragment["stage"] == "inventory":
             row["inventory_as_of"] = fragment["date"]
@@ -933,7 +990,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         source_report = position_result.get("report") or {}
         versions = source_report.get("source_versions") or {}
         key = _key(pos.get("item_code"), pos.get("uom"), pos.get("warehouse"),
-                   pos.get("purpose"), pos.get("tt_sku"), pos.get("branch"))
+                   pos.get("purpose"), pos.get("tt_sku"), pos.get("branch"),
+                   pos.get("market"), pos.get("product_form"))
         payload = (pos.get("dn_net_qty"), pos.get("po_completed_assumed_qty"),
                    pos.get("open_po_qty"), pos.get("unresolved_qty"))
         if key in rows:
@@ -1046,7 +1104,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
     abc_conflicted = set()
     for item in abc_rows:
         key = _key(item.get("item_code"), item.get("uom"), item.get("warehouse"),
-                   item.get("purpose"), item.get("tt_sku"), item.get("branch"))
+                   item.get("purpose"), item.get("tt_sku"), item.get("branch"),
+                   item.get("market"), item.get("product_form"))
         row = rows.setdefault(key, _row_base(key))
         touched["inventory"].append(row)
         row.setdefault("_inventory_sources", set()).add("abc")
@@ -1114,7 +1173,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
     for item in so_effective:
         row = _row_for(rows, item.get("item_code"), item.get("uom"),
                        item.get("warehouse"), item.get("purpose"),
-                       item.get("branch"), item.get("tt_sku"))
+                       item.get("branch"), item.get("tt_sku"),
+                       item.get("market"), item.get("product_form"))
         touched["so_demand"].append(row)
         if item.get("_conflict"):
             reason = item.get("_conflict_reason") or "source_payload_conflict"
@@ -1143,7 +1203,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         _add_qty(row, "so_open_qty", "so_demand", qty)
         _add_stage(row, "so_demand", qty, item.get("observed_at"), "observation",
                    source_identity=item["_source_identity"],
-                   replay=item.get("_replay_count", 1) > 1)
+                   replay=item.get("_replay_count", 1) > 1,
+                   observed_at=item.get("observed_at"))
 
     prod_effective, reconciliation["production"] = _dedupe_layer(
         production, layer="production",
@@ -1157,7 +1218,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
     for item in prod_effective:
         row = _row_for(rows, item.get("item_code"), item.get("uom"),
                        item.get("warehouse"), item.get("purpose"),
-                       item.get("branch"), item.get("tt_sku"))
+                       item.get("branch"), item.get("tt_sku"),
+                       item.get("market"), item.get("product_form"))
         touched["production"].append(row)
         if item.get("_conflict"):
             reason = item.get("_conflict_reason") or "source_payload_conflict"
@@ -1189,7 +1251,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             _add_stage(row, "in_production_estimated", qty,
                        item.get("available_date"), "expected",
                        source_identity=item["_source_identity"],
-                       replay=item.get("_replay_count", 1) > 1)
+                       replay=item.get("_replay_count", 1) > 1,
+                       observed_at=item.get("observed_at"))
             continue
         if evidence != "proven":
             _merge_source(row, "production", evidence, item.get("observed_at"),
@@ -1202,7 +1265,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         _add_qty(row, "in_production_qty", "production", qty)
         _add_stage(row, "in_production", qty, item.get("available_date"),
                    "expected", source_identity=item["_source_identity"],
-                   replay=item.get("_replay_count", 1) > 1)
+                   replay=item.get("_replay_count", 1) > 1,
+                   observed_at=item.get("observed_at"))
 
     inv_effective, reconciliation["inventory"] = _dedupe_layer(
         inventory, layer="inventory",
@@ -1215,7 +1279,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
     for item in inv_effective:
         row = _row_for(rows, item.get("item_code"), item.get("uom"),
                        item.get("warehouse"), item.get("purpose"),
-                       item.get("branch"), item.get("tt_sku"))
+                       item.get("branch"), item.get("tt_sku"),
+                       item.get("market"), item.get("product_form"))
         touched["inventory"].append(row)
         row.setdefault("_inventory_sources", set()).add("generic")
         if item.get("_conflict"):
@@ -1242,7 +1307,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         row = _row_for(rows, items[0].get("item_code"),
                        items[0].get("uom"), items[0].get("warehouse"),
                        items[0].get("purpose"), items[0].get("branch"),
-                       items[0].get("tt_sku"))
+                       items[0].get("tt_sku"), items[0].get("market"),
+                       items[0].get("product_form"))
         statuses = {_text(item.get("source_status") or "known") for item in items}
         identities = {(_text(item.get("as_of")), _qty(item.get("qty")))
                       for item in items}
@@ -1272,7 +1338,9 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                     row, "inventory", _dec(observed_item.get("qty")),
                     observed_item.get("as_of"), "observation",
                     source_identity=observed_item["_source_identity"],
-                    replay=observed_item.get("_replay_count", 1) > 1)
+                    replay=observed_item.get("_replay_count", 1) > 1,
+                    observed_at=observed_item.get("as_of"),
+                    inventory_inclusion_status="included")
 
     transit_rows = list(transit or ())
     collapsed = collapse_waybills(transit_rows)
@@ -1291,7 +1359,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
     for event in collapsed:
         row = _row_for(rows, event.get("item_code"), event.get("uom"),
                        event.get("warehouse"), event.get("purpose"),
-                       event.get("branch"), event.get("tt_sku"))
+                       event.get("branch"), event.get("tt_sku"),
+                       event.get("market"), event.get("product_form"))
         touched["in_transit"].append(row)
         qty = _dec(event.get("qty"))
         identity = event.get("source_identity") or _source_identity(
@@ -1311,7 +1380,9 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             _add_qty(row, "in_transit_qty", "in_transit", qty)
             _add_stage(row, "in_transit", qty, event.get("available_date"),
                        "expected", source_identity=identity,
-                       replay=int(event.get("_replay_count", 1)) > 1)
+                       replay=int(event.get("_replay_count", 1)) > 1,
+                       observed_at=event.get("observed_at"),
+                       inventory_inclusion_status="not_included")
 
     receipt_effective, reconciliation["receipt"] = _dedupe_layer(
         receipts, layer="receipt",
@@ -1324,7 +1395,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
     for receipt in receipt_effective:
         row = _row_for(rows, receipt.get("item_code"), receipt.get("uom"),
                        receipt.get("warehouse"), receipt.get("purpose"),
-                       receipt.get("branch"), receipt.get("tt_sku"))
+                       receipt.get("branch"), receipt.get("tt_sku"),
+                       receipt.get("market"), receipt.get("product_form"))
         touched["receipt"].append(row)
         if receipt.get("_conflict"):
             reason = (receipt.get("_conflict_reason")
@@ -1358,7 +1430,9 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             row["receipt_basis"] = "signed_assumed"
             _add_stage(row, "received", qty, signed.isoformat(), "actual",
                        source_identity=receipt["_source_identity"],
-                       replay=receipt.get("_replay_count", 1) > 1)
+                           replay=receipt.get("_replay_count", 1) > 1,
+                           observed_at=receipt.get("observed_at"),
+                           inventory_inclusion_status="unknown")
         else:
             reason = ("receipt_qty_unknown" if evidence == "proven"
                       else "receipt_" + evidence)
@@ -1405,7 +1479,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
 
     ordered = [rows[key] for key in sorted(rows)]
     keys = [_key(row["item_code"], row["uom"], row["warehouse"], row["purpose"],
-                 row["tt_sku"], row["branch"]) for row in ordered]
+                 row["tt_sku"], row["branch"], row.get("market"),
+                 row.get("product_form")) for row in ordered]
     if len(keys) != len(set(keys)):
         raise ValueError("duplicate_target_key")
     reason_counts = Counter(reason for row in ordered
@@ -1472,6 +1547,12 @@ def build_timeline(rows, *, as_of=None):
                            "date_status": fragment.get("date_status"),
                            "date_kind": fragment.get("date_kind"),
                            "date_confidence": fragment.get("date_confidence"),
+                           "actual_at": fragment.get("actual_at"),
+                           "expected_at": fragment.get("expected_at"),
+                           "observed_at": fragment.get("observed_at"),
+                           "overlap_status": fragment.get("overlap_status"),
+                           "inventory_inclusion_status": fragment.get(
+                               "inventory_inclusion_status"),
                            "source_identity": fragment.get("source_identity"),
                            "replay": fragment.get("replay", False),
                            "conflict": fragment.get("conflict", False),
@@ -1480,6 +1561,8 @@ def build_timeline(rows, *, as_of=None):
             "item_code": row["item_code"], "uom": row["uom"],
             "warehouse": row["warehouse"], "purpose": row["purpose"],
             "branch": row["branch"], "tt_sku": row["tt_sku"],
+            "market": row.get("market"),
+            "product_form": row.get("product_form"),
             "scope": row["scope"],
             "stages": stages, "next_node": row["next_node"],
             "alerts": sorted(alerts),
@@ -1523,6 +1606,8 @@ def assess_freshness(rows, *, as_of, max_age_seconds):
         out.append({"item_code": row["item_code"], "uom": row["uom"],
                     "warehouse": row["warehouse"], "purpose": row["purpose"],
                     "tt_sku": row["tt_sku"], "branch": row["branch"],
+                    "market": row.get("market"),
+                    "product_form": row.get("product_form"),
                     "problems": problems, "fresh": not problems})
     return {"rows": out,
             "summary": {"rows": len(out),

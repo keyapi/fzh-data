@@ -221,7 +221,8 @@ class SupplyFactsContractTest(unittest.TestCase):
         cls.saved = {name: sys.modules.get(name)
                      for name in ("frappe", "frappe.utils", "key_test",
                                   "key_test.supply_query",
-                                  "key_test.production_evidence")}
+                                  "key_test.production_evidence",
+                                  "key_test.shipment_progress")}
         fake = FakeFrappe()
         cls.fake = fake
         sys.modules["frappe"] = fake
@@ -247,6 +248,14 @@ class SupplyFactsContractTest(unittest.TestCase):
         cls.evidence = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.evidence)
         sys.modules["key_test.production_evidence"] = cls.evidence
+        shipment_path = root / "shipment_progress.py"
+        if not shipment_path.exists():
+            shipment_path = root / "key_test" / "key_test__shipment_progress.py"
+        spec = importlib.util.spec_from_file_location(
+            "key_test.shipment_progress", shipment_path)
+        cls.shipment_progress = importlib.util.module_from_spec(spec)
+        sys.modules["key_test.shipment_progress"] = cls.shipment_progress
+        spec.loader.exec_module(cls.shipment_progress)
         spec = importlib.util.spec_from_file_location("key_test_accept_supply_facts", facts)
         cls.facts = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(cls.facts)
@@ -993,6 +1002,20 @@ class SupplyFactsContractTest(unittest.TestCase):
         self.assertEqual(result["manifest"]["pagination"], result["pagination"])
         self.assertTrue(result["manifest"]["partial"])
         self.assertEqual(result["manifest"]["termination_reason"], "exhausted")
+        self.assertEqual(result["snapshot_id"], result["manifest"]["snapshot_id"])
+
+    def test_snapshot_id_is_stable_across_page_offsets(self):
+        first = self.facts.supply_snapshot_id(
+            {"sales_order": "SO-1", "limit": 1, "offset": 0},
+            "2026-11-02", 2)
+        second = self.facts.supply_snapshot_id(
+            {"sales_order": "SO-1", "limit": 1, "offset": 1},
+            "2026-11-02", 2)
+        self.assertEqual(first, second)
+        changed = self.facts.supply_snapshot_id(
+            {"sales_order": "SO-1", "limit": 1, "offset": 1},
+            "2026-11-02", 3)
+        self.assertNotEqual(first, changed)
 
     def _dispatch_support(self):
         path = Path(__file__).with_name("dispatch_support.py")
@@ -1083,7 +1106,7 @@ class SupplyFactsContractTest(unittest.TestCase):
 
     def test_implementation_version_bumped_for_interface_change(self):
         self.assertEqual(self.facts.IMPLEMENTATION_VERSION,
-                         "key_test.supply_facts@2026-10-30.6")
+                         "key_test.supply_facts@2026-11-02.1")
 
     def test_manifest_carries_rule_and_implementation_versions(self):
         self.fake.so_rows = []

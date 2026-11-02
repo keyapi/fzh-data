@@ -7,6 +7,12 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-11-02
+- 接管 Claude 中断的正式刷新实现：修复中间页 exhausted 误判，新增 supply 稳定来源水位线
+  `snapshot_id` 与跨页漂移拒绝；ABC/权威 scope 必须先于 DN 采集，禁止从已观察交付反推
+  范围；首工序不再进入生产供给；在途/签收数量改取互斥 `stage_balances`，不复制运单数量；
+  Windows 并发锁与首次失败记录受控。`full-supply-facts/v5` 将 market/product_form 纳入唯一键，
+  阶段片段分开 actual/expected/observed 时间并披露重叠/库存包含状态；发布版本
+  `supply-publication/v4`。生产未部署，真实 ABC/受限用户/规模验收仍 pending。
 - 第四轮整改（基线 68533017）：分配契约改为计量闭环——实际量必须等于 `allocated_qty`、同源 `source_qty` 声明一致、按 allocation 身份幂等去重后不得超容量，且同目标多分配同样校验；覆盖 SO/生产/库存/签收/物流五层。DN/PO 物理身份收敛为 instance+DN+DN Item，创建审计/PO 号只作关系证据；PO 作废重建与审计重放不复制数量，行内/行间部分重叠集合均按物理明细求并集，载荷冲突或明细不能解释聚合量时全部 DN/PO 聚合量 unknown。版本 `full-supply-facts/v4`、RULE/IMPL `2026-11-02.6`；完整依赖 403 passed / 17 subtests，最小依赖 354 passed / 49 skipped / 17 subtests。真实 A/B/C 工作簿验收仍 pending。
 - 第三轮整改（基线 719b4d8c）：C 资格约束归属/当前可用（`join_full`+`source_ref`+数量+UoM，no_join→`c_not_qualified`）；ABC 身份补齐不再覆盖已有 DN/PO 键（不同已证来源合并、同源重放、无法证明显式 `abc_identity_key_conflict`）；来源身份与目标归属分离（同一 WO/SO 行/签收/库存/运单跨 branch/仓/用途且无 allocation 容量证明→`source_target_conflict`，物流同规则）；reader 每次按读取时间重算行级 freshness（新文件头不掩盖旧行）；冻结输入缺失/变更/复制失败终止发布并保留旧 latest；业务 partial 与分页截断分离（合法 partial 不拒收、`partial_reason=business_partial`，截断仍拒收）。版本 `full-supply-facts/v4`、`abc-frozen/v3`、`supply-publication/v3`、`supply-pipeline/v4`；391 passed / 13 subtests（PyArrow+openpyxl）。真实 A/B/C 工作簿验收仍 pending。
 - 第二轮整改（基线 6ead348c）：ABC 单位资格（B/C 不一致/多单位不升级归属）、时间证明（naive/date-only 不当前可用、同日未来识别）、观察/归属/下单三层分离；非权威来源不再填补缺失身份（任意输入顺序结果一致）；每层稳定来源身份去重/冲突/重放（生产/SO/库存/签收）；物流按 DN 明细+运单+完整身份分组，无法分配保持 unknown；reader 纳入动态来源缺时间与行级时效，`allow_stale` 显式生效；输入契约区分混版/截断/业务 partial，来源状态保守聚合，manifest 补 A/B/C 版本/依赖/哈希；冻结输入副本+`--replay-run`（空格/中文路径、源文件删除、字节校验、内容 SHA 稳定）。361 passed / 8 subtests（base 环境另计）；真实 A/B/C 仍 pending。

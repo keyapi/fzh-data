@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fzh-data.local/schemas/abc-datasets.schema.json",
+  "title": "abc-datasets/v1",
+  "description": "Versioned A/B/C structured dataset envelope. Parquet datasets store rows in .parquet and the remaining fields in <stem>.manifest.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "dataset_version", "source", "row_count", "sha256", "rows"],
+  "properties": {
+    "schema_version": {"const": "abc-datasets/v1"},
+    "dataset_version": {"type": "string", "minLength": 1},
+    "source": {"type": "string", "minLength": 1},
+    "observed_at": {"type": "string"},
+    "as_of": {"type": "string"},
+    "row_count": {"type": "integer", "minimum": 0},
+    "sha256": {"type": "string", "pattern": "^[0-9a-fA-F]{64}$"},
+    "dependency_versions": {"type": "object"},
+    "rows": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/aRow"},
+          {"$ref": "#/$defs/bRow"},
+          {"$ref": "#/$defs/cRow"}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "aRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_code", "active", "role", "inclusion_reason"],
+      "properties": {
+        "item_code": {"type": "string", "minLength": 1},
+        "active": {"type": "boolean"},
+        "role": {"type": "string", "minLength": 1},
+        "inclusion_reason": {"type": ["string", "null"]}
+      }
+    },
+    "bRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_code", "tt_sku", "market", "branch", "product_form",
+                   "uom", "netting_gate", "blockers", "demand_row"],
+      "properties": {
+        "item_code": {"type": "string", "minLength": 1},
+        "tt_sku": {"type": ["string", "null"]},
+        "market": {"type": ["string", "null"]},
+        "branch": {"type": ["string", "null"]},
+        "destination_pool": {"type": ["string", "null"]},
+        "warehouse": {"type": ["string", "null"]},
+        "product_form": {"type": ["string", "null"]},
+        "purpose": {"type": ["string", "null"]},
+        "channel": {"type": ["string", "null"]},
+        "uom": {"type": "string", "minLength": 1},
+        "source_ref": {"type": ["string", "null"]},
+        "evidence": {"type": ["string", "null"]},
+        "netting_gate": {"type": ["string", "null"]},
+        "blockers": {"type": ["string", "array", "null"]},
+        "demand_row": {"type": "boolean"},
+        "pool": {"type": ["string", "null"]}
+      }
+    },
+    "cRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item_code", "pool", "uom", "qty", "source_ref", "snapshot_id",
+                   "join_class", "b_version", "b_hash"],
+      "properties": {
+        "item_code": {"type": "string", "minLength": 1},
+        "pool": {"type": "string", "minLength": 1},
+        "uom": {"type": "string", "minLength": 1},
+        "qty": {"type": ["number", "null"], "minimum": 0},
+        "source_ref": {"type": "string", "minLength": 1},
+        "snapshot_id": {"type": "string", "minLength": 1},
+        "observed_at": {"type": "string"},
+        "as_of": {"type": "string"},
+        "join_class": {"type": "string", "minLength": 1},
+        "b_version": {"type": "string", "minLength": 1},
+        "b_hash": {"type": "string", "minLength": 1},
+        "demand_eligibility": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

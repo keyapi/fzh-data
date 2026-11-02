@@ -70,6 +70,10 @@ def _stock_date(value):
             return None
 
 
+def _text(value):
+    return "" if value is None else str(value).strip()
+
+
 def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_days,
                      b_version=None, c_declared_b_version=None):
     """Preserve A/B/C qualifications separately; matching facts do not approve netting."""
@@ -130,6 +134,14 @@ def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_d
             if any(r.get(k) for k in ("warehouse", "branch", "purpose", "tt_sku"))
         }, key=lambda value: tuple(str(part or "") for part in value))
         identity_conflict = len(target_rows) > 1
+        markets = sorted({_text(r.get("market")) for r in b
+                          if _text(r.get("market"))})
+        forms = sorted({_text(r.get("product_form")) for r in b
+                        if _text(r.get("product_form"))})
+        market = markets[0] if len(markets) == 1 else None
+        product_form = forms[0] if len(forms) == 1 else None
+        market_conflict = len(markets) > 1
+        form_conflict = len(forms) > 1
         warehouse = target_rows[0][0] if len(target_rows) == 1 else None
         branch = target_rows[0][1] if len(target_rows) == 1 else None
         purpose = target_rows[0][2] if len(target_rows) == 1 else None
@@ -160,6 +172,10 @@ def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_d
             reasons.append("b_purpose_invalid")
         if identity_conflict:
             reasons.append("b_identity_conflict")
+        if market_conflict:
+            reasons.append("b_market_conflict")
+        if form_conflict:
+            reasons.append("b_product_form_conflict")
         if not c:
             reasons.append("c_uncovered_not_zero")
         elif not c_qualified:
@@ -187,6 +203,9 @@ def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_d
                      "b_blockers": sorted({str(r["blockers"]) for r in b if r.get("blockers")}),
                      "b_warehouse": warehouse, "b_branch": branch,
                      "b_purpose": purpose, "b_tt_sku": tt_sku,
+                     "b_market": market, "b_product_form": product_form,
+                     "b_market_conflict": market_conflict,
+                     "b_product_form_conflict": form_conflict,
                      "b_identity_conflict": identity_conflict,
                      "b_target_identities": [
                          {"warehouse": part[0], "branch": part[1],

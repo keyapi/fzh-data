@@ -39,10 +39,12 @@ from supply_chain_visibility.supply_position import (
     position_table,
 )
 
-PUBLICATION_SCHEMA = "supply-publication/v3"
-FULL_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch")
+PUBLICATION_SCHEMA = "supply-publication/v4"
+FULL_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
+            "market", "product_form")
 FULL_STRING_COLUMNS = (
-    "item_code", "uom", "warehouse", "purpose", "tt_sku", "branch", "pool",
+    "item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
+    "market", "product_form", "pool",
     "scope", "coverage", "next_node", "inventory_as_of_raw",
     "inventory_time_status", "inventory_freshness",
     "inventory_observed_uom", "inventory_inclusion_status",
@@ -577,7 +579,7 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
             dataset="full_supply_facts", role="primary",
             schema_version=FULL_SCHEMA, rule_version=FULL_RULE,
             implementation_version=FULL_IMPLEMENTATION,
-            grain="item_code×uom×warehouse×purpose×tt_sku×branch",
+            grain="item_code×uom×warehouse×purpose×tt_sku×branch×market×product_form",
             unique_key=FULL_KEY, rows=len(full_result["rows"]),
             sha256=files["full_supply_facts.parquet"],
             source_versions=source_versions, source_hashes=source_hashes,
@@ -600,7 +602,7 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
             dataset="full_supply_facts", role="trace",
             schema_version=FULL_SCHEMA, rule_version=FULL_RULE,
             implementation_version=FULL_IMPLEMENTATION,
-            grain="item_code×uom×warehouse×purpose×tt_sku×branch",
+            grain="item_code×uom×warehouse×purpose×tt_sku×branch×market×product_form",
             unique_key=FULL_KEY, rows=len(full_result["rows"]),
             sha256=files["full_supply_facts.json"],
             source_versions=source_versions, source_hashes=source_hashes,
@@ -662,7 +664,7 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
             file="timeline.json", fmt="json", dataset="timeline",
             role="trace", schema_version=FULL_SCHEMA, rule_version=FULL_RULE,
             implementation_version=FULL_IMPLEMENTATION,
-            grain="item_code×uom×warehouse×purpose×tt_sku×branch",
+            grain="item_code×uom×warehouse×purpose×tt_sku×branch×market×product_form",
             unique_key=FULL_KEY, rows=len(timeline_rows),
             sha256=files["timeline.json"],
             source_versions=source_versions, source_hashes=source_hashes,
@@ -764,9 +766,16 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
     return manifest
 
 
+def _attempt_payload(core, metadata):
+    payload = dict(metadata or {})
+    payload.update(core)
+    return payload
+
+
 def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
             rerun_argv=None, rerun_template=None, effective_args=None,
-            abc_report=None, max_age_seconds=900, freshness=None):
+            abc_report=None, max_age_seconds=900, freshness=None,
+            extra_manifest=None, attempt_metadata=None):
     """Write a verified run and only then switch latest.json."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -820,6 +829,8 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
             rerun_argv=rerun_argv, rerun_template=rerun_template,
             effective_args=effective_args, frozen_inputs=frozen_inputs,
             max_age_seconds=max_age_seconds, abc_report=abc_report)
+        if extra_manifest:
+            manifest.update(extra_manifest)
         _write_json(tmp_dir / "manifest.json", manifest)
         manifest_sha256 = _sha256(tmp_dir / "manifest.json")
         # Full readback and cross-format verification before publishing.
@@ -844,10 +855,11 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
         _write_json(latest_tmp, pointer)
         latest_tmp.replace(out / "latest.json")
         try:
-            _write_json_atomic(out / "last_attempt.json", {
+            _write_json_atomic(out / "last_attempt.json", _attempt_payload({
                 "status": "succeeded", "run_id": run_id,
                 "run_dir": str(run_dir),
-                "attempted_at": datetime.now(timezone.utc).isoformat()})
+                "attempted_at": datetime.now(timezone.utc).isoformat()},
+                attempt_metadata))
         except OSError:
             pass
         return {"status": "ok", "run_dir": str(run_dir), "manifest": manifest}
@@ -866,10 +878,11 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
             if not referenced:
                 shutil.rmtree(run_dir, ignore_errors=True)
         try:
-            _write_json_atomic(out / "last_attempt.json", {
+            _write_json_atomic(out / "last_attempt.json", _attempt_payload({
                 "status": "failed", "error": str(exc)[:500],
                 "error_type": type(exc).__name__,
-                "attempted_at": datetime.now(timezone.utc).isoformat()})
+                "attempted_at": datetime.now(timezone.utc).isoformat()},
+                attempt_metadata))
         except OSError:
             pass
         raise
@@ -1014,6 +1027,11 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
                 "refresh_status": refresh_status,
                 "manifest": manifest, "latest": latest,
                 "last_attempt": last_attempt,
+                "refresh_stage": last_attempt.get("stage"),
+                "collection_status": (last_attempt.get("collection_status")
+                                      or manifest.get("collection_status")),
+                "business_unknown": (last_attempt.get("business_unknown")
+                                     or manifest.get("business_unknown") or []),
                 "freshness": freshness, "row_level": row_level,
                 "publish_row_level": publish_row_level,
                 "partial_reason": (manifest.get("partial_reason")

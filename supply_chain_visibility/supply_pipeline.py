@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from supply_chain_visibility.abc_inputs import load_frozen_abc
+from supply_chain_visibility.abc_datasets import load_abc_datasets
 from supply_chain_visibility.full_supply_facts import build_full_supply_facts
 from supply_chain_visibility.publication import publish, read_publication, source_freshness
 from supply_chain_visibility.supply_position import assemble_input, build_position
@@ -350,6 +351,9 @@ def main(argv=None):
     parser.add_argument("--a-workbook")
     parser.add_argument("--b-workbook")
     parser.add_argument("--c-workbook")
+    parser.add_argument("--a-dataset")
+    parser.add_argument("--b-dataset")
+    parser.add_argument("--c-dataset")
     parser.add_argument("--a-version")
     parser.add_argument("--b-version")
     parser.add_argument("--c-version")
@@ -392,8 +396,13 @@ def main(argv=None):
     if not args.as_of:
         parser.error("--as-of is required unless --inspect")
     abc_flags = [args.a_workbook, args.b_workbook, args.c_workbook]
+    dataset_flags = [args.a_dataset, args.b_dataset, args.c_dataset]
     if any(abc_flags) and not all(abc_flags):
         parser.error("--a-workbook/--b-workbook/--c-workbook must be provided together")
+    if any(dataset_flags) and not all(dataset_flags):
+        parser.error("--a-dataset/--b-dataset/--c-dataset must be provided together")
+    if all(abc_flags) and all(dataset_flags):
+        parser.error("structured ABC datasets and workbooks are mutually exclusive")
     if all(abc_flags) and not all((args.a_version, args.b_version, args.c_version)):
         parser.error("--a-version/--b-version/--c-version are required with A/B/C")
 
@@ -405,7 +414,16 @@ def main(argv=None):
         approved_items = _rows(args.approved_items_json, "items")
         abc_result = None
         abc_inventory = []
-        if all(abc_flags):
+        if all(dataset_flags):
+            abc_result = load_abc_datasets(
+                args.a_dataset, args.b_dataset, args.c_dataset,
+                as_of=_as_date(args.as_of),
+                max_stock_age_days=args.max_stock_age_days,
+                as_of_time=args.as_of,
+                c_declared_b_version=args.c_declared_b_version)
+            abc_inventory = abc_result["inventory"]
+            approved_items = list(approved_items or []) + abc_result["approved_items"]
+        elif all(abc_flags):
             expected = {}
             for letter, digest, count in (
                     ("a", args.a_sha256, args.a_rows),

@@ -201,6 +201,9 @@ class ExportPaginationTest(unittest.TestCase):
         end = min(offset + limit, total)
         lines = [{"so": "SO-1", "so_line": "SOI-%05d" % i} for i in range(offset, end)]
         return {
+            "schema_version": "supply-facts/v2",
+            "rule_version": "r", "implementation_version": "i",
+            "as_of": "2026-11-02", "snapshot_id": "snap-%s" % total,
             "lines": lines, "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [],
             "manifest": {
@@ -323,6 +326,14 @@ class ExportPaginationTest(unittest.TestCase):
         first = self._batch_page(501, 0, 500)
         second = self._batch_page(501, 500, 500)
         second["pagination"]["total"] = 502
+        with mock.patch.object(self.exporter, "_call", side_effect=[first, second]):
+            with self.assertRaises(self.exporter.iss.QueryError):
+                self.exporter._paginate("base", "k", "s", {}, 500)
+
+    def test_paginate_rejects_supply_snapshot_drift(self):
+        first = self._batch_page(501, 0, 500)
+        second = self._batch_page(501, 500, 500)
+        second["snapshot_id"] = "changed"
         with mock.patch.object(self.exporter, "_call", side_effect=[first, second]):
             with self.assertRaises(self.exporter.iss.QueryError):
                 self.exporter._paginate("base", "k", "s", {}, 500)
@@ -477,6 +488,9 @@ class ProductionEvidenceExportTest(unittest.TestCase):
         end = min(offset + limit, total)
         lines = [{"so": "SO-1", "so_line": "SOI-%05d" % i} for i in range(offset, end)]
         return {
+            "schema_version": "supply-facts/v2", "rule_version": "v1",
+            "implementation_version": "impl-v1", "as_of": "2026-10-29",
+            "snapshot_id": "production-snapshot-%s" % total,
             "lines": lines, "stage_balances": [], "milestones": [],
             "availability_schedule": [], "links": [],
             "production_evidence": [self._pe_line("SOI-%05d" % i)
@@ -852,6 +866,9 @@ class AutoLinkTest(unittest.TestCase):
 
     def test_auto_links_drive_export_without_hand_written_links(self):
         page = {
+            "schema_version": "supply-facts/v2", "rule_version": "v1",
+            "implementation_version": "impl-v1", "as_of": "2026-10-29",
+            "snapshot_id": "auto-link-snapshot",
             "lines": [{"so": "SO-1", "so_line": "SOI-1"}],
             "stage_balances": [{
                 "stage": "signed_pending_tongtool_receipt", "batch_key": "DN-1",
