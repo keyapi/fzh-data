@@ -57,9 +57,11 @@ def abc(**over):
 
 def inputs(*extra):
     base = [{
-        "role": "mapping", "source": "approved_b", "path": "m.json",
-        "sha256": "a" * 64, "rows": 1, "version": "Bv6r10", "as_of": None,
+        "role": "mapping", "source": "approved_b", "path": None,
+        "sha256": None, "rows": 1, "version": "Bv6r10", "as_of": None,
         "observed_at": None, "status": "provided",
+        "version_status": "provided", "time_status": "missing",
+        "completeness": "complete", "temporal": False,
         "required_for_closure": False, "reason": None,
     }]
     return base + list(extra)
@@ -77,16 +79,22 @@ class PublicationTests(unittest.TestCase):
             pos = position()
             full = build_full_supply_facts(pos, abc_inventory=[abc()],
                                            as_of=AS_OF, max_age_seconds=900)
+            mapping_file = Path(tmp) / "mapping.json"
+            mapping_file.write_text("{}", encoding="utf-8")
+            test_inputs = inputs()
+            test_inputs[0].update(
+                path=str(mapping_file),
+                sha256=hashlib.sha256(mapping_file.read_bytes()).hexdigest())
             published = publish(tmp, full_result=full, position_result=pos,
-                                inputs=inputs(), pipeline_as_of=AS_OF,
+                                inputs=test_inputs, pipeline_as_of=AS_OF,
                                 rerun_argv=["python", "-m", "supply_chain_visibility.supply_pipeline",
-                                            "--delivery-json", "d.json",
+                                            "--mapping-json", str(mapping_file),
                                             "--out", tmp],
                                 max_age_seconds=900)
             self.assertEqual(published["status"], "ok")
             latest = json.loads((Path(tmp) / "latest.json").read_text(encoding="utf-8"))
             manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
-            self.assertEqual(manifest["schema_version"], "supply-publication/v1")
+            self.assertEqual(manifest["schema_version"], "supply-publication/v2")
             self.assertEqual(manifest["versions"]["full_supply_facts"], SCHEMA_VERSION)
             self.assertFalse(manifest["netting_ready"])
             self.assertFalse(manifest["auto_order"])
@@ -103,7 +111,9 @@ class PublicationTests(unittest.TestCase):
                     self.assertIn(key, entry, name)
                 self.assertEqual(dataset_sha(latest["run_dir"], name),
                                  entry["sha256"], name)
-            self.assertIn("--delivery-json", manifest["rerun"]["command"])
+            self.assertIn("--replay-run", manifest["rerun"]["command"])
+            self.assertIn("{run_dir}", " ".join(manifest["rerun"]["argv"]))
+            self.assertIn("{out}", " ".join(manifest["rerun"]["argv"]))
             table = pq.read_table(Path(latest["run_dir"]) / "full_supply_facts.parquet")
             self.assertTrue(table.schema.equals(full_schema()))
             self.assertEqual(table.num_rows, 1)
@@ -360,6 +370,95 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(
                 published["manifest"]["output_summary"]["full_supply_facts_rows"],
                 2000)
+
+
+    def test_dynamic_missing_time_is_not_healthy(self):
+        dynamic = {
+            "role": "inventory", "path": None, "sha256": None, "rows": 1,
+            "version": "v1", "version_status": "provided",
+            "as_of": None, "observed_at": None, "time_status": "missing",
+            "completeness": "complete", "temporal": True,
+            "status": "provided", "required_for_closure": False,
+            "reason": None}
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            publish(tmp, full_result=full, position_result=pos,
+                    inputs=inputs(dynamic), pipeline_as_of=AS_OF,
+                    max_age_seconds=900)
+            state = read_publication(tmp, as_of=AS_OF,
+                                     max_age_seconds=900)
+            self.assertEqual(state["status"], "stale")
+            self.assertFalse(state["readable"])
+            self.assertIn("unknown_source_time:inventory",
+                          state["warnings"])
+            self.assertTrue(any(source["role"] == "inventory"
+                                for source in state["freshness"]["sources"]))
+            readable = read_publication(tmp, as_of=AS_OF,
+                                        max_age_seconds=900,
+                                        allow_stale=True)
+            self.assertTrue(readable["readable"])
+
+    def test_old_snapshot_is_not_healthy(self):
+        fresh = {
+            "role": "inventory", "path": None, "sha256": None, "rows": 1,
+            "version": "v1", "version_status": "provided",
+            "as_of": "2026-11-02T00:00:00+00:00",
+            "observed_at": "2026-11-02T00:00:00+00:00",
+            "time_status": "provided", "completeness": "complete",
+            "temporal": True, "status": "provided",
+            "required_for_closure": False, "reason": None}
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            publish(tmp, full_result=full, position_result=pos,
+                    inputs=inputs(fresh), pipeline_as_of=AS_OF,
+                    max_age_seconds=900)
+            state = read_publication(
+                tmp, as_of="2026-12-02T00:00:00+00:00",
+                max_age_seconds=900)
+            self.assertEqual(state["status"], "stale")
+            self.assertFalse(state["readable"])
+
+    def test_row_level_unknown_forces_stale(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            pos["report"] = {}
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            fresh = {
+                "role": "delivery", "path": None, "sha256": None, "rows": 1,
+                "version": "v1", "version_status": "provided",
+                "as_of": AS_OF, "observed_at": AS_OF,
+                "time_status": "provided", "completeness": "complete",
+                "temporal": True, "status": "provided",
+                "required_for_closure": True, "reason": None}
+            publish(tmp, full_result=full, position_result=pos,
+                    inputs=inputs(fresh), pipeline_as_of=AS_OF,
+                    max_age_seconds=900)
+            state = read_publication(tmp, as_of=AS_OF,
+                                     max_age_seconds=900)
+            self.assertEqual(state["status"], "stale")
+            self.assertTrue(any("row_level_freshness_issues" in warning
+                                for warning in state["warnings"]))
+
+    def test_allow_stale_does_not_unlock_corrupted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            publish(tmp, full_result=full, position_result=pos,
+                    inputs=inputs(), pipeline_as_of=AS_OF)
+            latest = json.loads((Path(tmp) / "latest.json").read_text(encoding="utf-8"))
+            path = Path(latest["run_dir"]) / "full_supply_facts.parquet"
+            path.write_bytes(path.read_bytes() + b"x")
+            state = read_publication(tmp, as_of=AS_OF,
+                                     max_age_seconds=900,
+                                     allow_stale=True)
+            self.assertEqual(state["status"], "corrupted")
+            self.assertFalse(state["readable"])
 
 
 if __name__ == "__main__":

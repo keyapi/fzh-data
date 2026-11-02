@@ -67,14 +67,18 @@
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
 - 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
 
-### 6.1 full_supply_facts v2（2026-11-02）
+### 6.1 full_supply_facts v3（2026-11-02）
 
 - 主入口：`supply_pipeline` → `runs/<run>/full_supply_facts.parquet`；JSON 为追溯副本；
   `supply_position.parquet/json` 保留独立 schema/粒度；`timeline.json`；统一 `manifest.json`。
-- A/B/C：`abc_inputs.load_frozen_abc`；A 目标集合、B 身份权威、C 库存观测；缺维度
-  null/unknown、C 无 B 待核、真零保留、陈旧不当前可用、CG 池不复制、B/C 版本冲突显式。
+- A/B/C：`abc_inputs.load_frozen_abc`；观察量/归属量/当前可用量三层分开；B/C 单位必须一致才可归属；naive/date-only 不算精确时间；缺身份只进未归属池；CG 池不复制；B/C 版本冲突显式。
 - 类型：数量 `decimal128(38,6)`（JSON 规范化字符串），时间 UTC timestamp（date-only/naive
   保留 raw、不假定 UTC）；JSON/Parquet 逐字段回读一致；空表固定 schema；重复键拒收。
+来源身份：每层稳定键去重/冲突/重放，`sources`/片段保留可下钻身份；物流按完整业务身份。
 - 失败保护：不创建成功 run、不切 latest、`last_attempt.json` failed；reader 识别
   healthy/stale/partial/corrupted/incompatible/refresh-failed。
+- 冻结输入复制到 `run_dir/inputs/`；`--replay-run <run_dir> --out <new_out>` 校验字节后复跑，
+  支持空格/中文路径，业务内容 SHA 稳定。
+- 输入契约：混版缺版本页/截断/未 exhausted 分别拒收或显式 partial；
+  业务 partial 与分页截断用 `partial_reason` 区分；来源状态保守聚合。
 - **真实 A/B/C 冻结工作簿验收 pending**（本机暂不可用，未用合成数据冒充）。

@@ -184,17 +184,31 @@ Parquet按显式schema写入，空结果也有schema；数量nullable，复杂�
 单次通途只读查询未返回并已停止等待，没有重试或创建真实PO。
 这些结果验证缺证据路径，不能替代真实正向闭环、受限HTTP或生产规模验收。
 
-### 2026-11-02 full_supply_facts v2 统一发布（ABC 接入）
+### 2026-11-02 full_supply_facts v3 统一发布（ABC/单位/时间/复跑）
 
 `supply_pipeline` 现在把 `supply_position`、`full_supply_facts`、`timeline` 放进**同一次
 版本发布**：`full_supply_facts.parquet` 是主消费入口，JSON 为追溯副本；`supply_position`
 保留自己的 schema/粒度，不并入 full facts。发布前逐文件回读、SHA、schema、唯一键与
 JSON/Parquet 逐字段一致校验；失败不切 `latest.json`。reader 返回
-`healthy/stale/partial/corrupted/incompatible_version/refresh_failed_using_previous`。
+`healthy/stale/partial/corrupted/incompatible_version/refresh_failed_using_previous`，
+并用 `allow_stale` 显式控制是否可读。
 
-本地冻结 A/B/C 通过 `abc_inputs.load_frozen_abc` 接入：A 目标集合、B 身份权威
-（UOM/仓池/branch/purpose/tt_sku，缺列 null + reason）、C 库存观测（真零保留、陈旧保留
-观察值但不当前可用、C 无 B 待核、CG 池不复制到多个 branch）。B/C 版本关系显式检查。
+本地冻结 A/B/C 通过 `abc_inputs.load_frozen_abc` 接入：
+- **观察/归属/下单三层分开**：`inventory_observed_qty`（C 原始数量+单位）、
+  `attribution_status`/`inventory_qty`（B 单位/身份资格）、
+  `inventory_current_available_qty`/`order_eligibility`（时间证明+B 门禁）。
+- B/C 单位不一致或缺失 → `uom_mismatch`，观察量保留但归属/当前可用为 null；
+  同商品同池多个 B 单位分别保留去向，不压成空单位行。
+- date-only/naive 不算精确时间；`inventory_time_proven=false`，当前可用量 null；
+  同日未来时间按精确 as_of 识别。
+- 缺 branch/tt_sku 的非权威来源只进未归属池；B/A 显式身份只有在完整候选唯一时
+  才填补 DN/PO 空维度；任意输入排列结果一致。
+- 每层按稳定来源身份去重：同身份同载荷只计一次；同身份异载荷显式冲突；
+  缺身份保持 unknown；物流按 DN 明细+运单+完整业务身份分组。
+- 输入契约：混版页、截断/未 exhausted、缺版本/时间分别显式处理；业务 partial 与
+  分页截断用 `partial_reason` 区分；来源状态保守聚合。
+- 冻结输入复制到 `run_dir/inputs/`，`--replay-run <run_dir> --out <new_out>` 校验字节后
+  复跑；支持空格/中文路径；业务内容 SHA 稳定。
 
 真实 A/B/C 工作簿当前不可用，故**真实链路验收 pending**；无合成数据冒充。
-拿到后运行完整命令（见 `supply-facts-contract.md` 的 v2 节）。
+拿到后运行完整命令（见 `supply-facts-contract.md` 的 v3 节）。

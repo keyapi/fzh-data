@@ -80,18 +80,24 @@ class PipelineTests(unittest.TestCase):
             "--audit-json", self._write(root, "audit.json", audit or _audit()),
             "--status-json", self._write(root, "status.json", _status("3")),
             "--inventory-json", self._write(root, "inventory.json",
-                                            {"inventory": [{
+                                            {"schema_version": "local/v1",
+                                             "observed_at": AS_OF,
+                                             "inventory": [{
                                                 "item_code": "SKU-1", "uom": "个",
                                                 "warehouse": "WH-1",
                                                 "purpose": "branch",
-                                                "branch": "CENTRADE", "qty": 8,
+                                                "branch": "", "tt_sku": "S1",
+                                                "source_ref": "ST-1", "qty": 8,
                                                 "as_of": AS_OF}]}),
             "--so-json", self._write(root, "so.json",
-                                     {"balances": [{"item_code": "SKU-1",
+                                     {"schema_version": "local/v1",
+                                      "observed_at": AS_OF,
+                                      "balances": [{"item_code": "SKU-1",
                                                     "uom": "个",
                                                     "warehouse": "WH-1",
                                                     "purpose": "branch",
-                                                    "branch": "CENTRADE",
+                                                    "branch": "", "tt_sku": "S1",
+                                                    "source_ref": "SO-1",
                                                     "so_open_qty": 6}]}),
             "--as-of", AS_OF, "--out", out]
 
@@ -108,7 +114,8 @@ class PipelineTests(unittest.TestCase):
             self.assertFalse(manifest["auto_order"])
             facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
                                .read_text(encoding="utf-8"))
-            row = next(r for r in facts if r["item_code"] == "SKU-1")
+            row = next(r for r in facts if r["item_code"] == "SKU-1"
+                       and r["tt_sku"] == "S1")
             self.assertEqual(row["po_completed_assumed_qty"], "5")
             self.assertEqual(row["inventory_qty"], "8")
             self.assertEqual(row["so_open_qty"], "6")
@@ -145,7 +152,8 @@ class PipelineTests(unittest.TestCase):
             latest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
             facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
                                .read_text(encoding="utf-8"))
-            row = next(r for r in facts if r["item_code"] == "SKU-1")
+            row = next(r for r in facts if r["item_code"] == "SKU-1"
+                       and r["tt_sku"] == "S1")
             self.assertEqual(row["po_completed_assumed_qty"], "0")
 
     def test_success_after_failure_clears_stale_failure_marker(self):
@@ -226,6 +234,193 @@ class PipelineTests(unittest.TestCase):
             attempt = json.loads((out / "last_attempt.json").read_text(encoding="utf-8"))
             self.assertEqual(attempt["status"], "failed")
 
+    def test_missing_version_page_with_versioned_page_fails(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "in"
+            root.mkdir()
+            out = Path(td) / "out"
+            versioned = _audit()
+            versioned["schema_version"] = "supply-facts/v1"
+            unversioned = _audit()
+            args = [
+                "--delivery-json", self._write(root, "delivery.json", _delivery()),
+                "--mapping-json", self._write(root, "mapping.json", _mappings()),
+                "--audit-json", self._write(root, "audit-a.json", versioned),
+                "--audit-json", self._write(root, "audit-b.json", unversioned),
+                "--status-json", self._write(root, "status.json", _status("3")),
+                "--as-of", AS_OF, "--out", str(out)]
+            with patch("builtins.print"):
+                self.assertEqual(main(args), 1)
+            self.assertFalse((out / "latest.json").exists())
+            attempt = json.loads((out / "last_attempt.json").read_text(encoding="utf-8"))
+            self.assertIn("missing_version", attempt["error"])
+
+    def test_truncated_optional_input_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "in"
+            root.mkdir()
+            out = Path(td) / "out"
+            inventory = {"schema_version": "local/v1", "observed_at": AS_OF,
+                         "truncated": True,
+                         "inventory": [{"item_code": "SKU-1", "uom": "个",
+                                        "warehouse": "WH-1",
+                                        "purpose": "branch", "tt_sku": "S1",
+                                        "source_ref": "ST-1", "qty": 8,
+                                        "as_of": AS_OF}]}
+            args = [
+                "--delivery-json", self._write(root, "delivery.json", _delivery()),
+                "--mapping-json", self._write(root, "mapping.json", _mappings()),
+                "--audit-json", self._write(root, "audit.json", _audit()),
+                "--status-json", self._write(root, "status.json", _status("3")),
+                "--inventory-json", self._write(root, "inventory.json", inventory),
+                "--as-of", AS_OF, "--out", str(out)]
+            with patch("builtins.print"):
+                self.assertEqual(main(args), 1)
+            attempt = json.loads((out / "last_attempt.json").read_text(encoding="utf-8"))
+            self.assertIn("input_truncated:inventory", attempt["error"])
+
+    def test_incomplete_input_contract_marks_layer_unknown(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "in"
+            root.mkdir()
+            out = Path(td) / "out"
+            inventory = {"inventory": [{"item_code": "SKU-1", "uom": "个",
+                                        "warehouse": "WH-1",
+                                        "purpose": "branch", "tt_sku": "S1",
+                                        "source_ref": "ST-1", "qty": 8,
+                                        "as_of": AS_OF}]}
+            args = [
+                "--delivery-json", self._write(root, "delivery.json", _delivery()),
+                "--mapping-json", self._write(root, "mapping.json", _mappings()),
+                "--audit-json", self._write(root, "audit.json", _audit()),
+                "--status-json", self._write(root, "status.json", _status("3")),
+                "--inventory-json", self._write(root, "inventory.json", inventory),
+                "--as-of", AS_OF, "--out", str(out)]
+            with patch("builtins.print"):
+                self.assertEqual(main(args), 0)
+            latest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
+            self.assertIn("inventory", manifest["input_summary"]["contract_incomplete"])
+            self.assertTrue(manifest["output_summary"]["partial"])
+            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+                               .read_text(encoding="utf-8"))
+            row = next(r for r in facts if r["item_code"] == "SKU-1")
+            self.assertIsNone(row["inventory_qty"])
+            self.assertIn("source_contract_incomplete", row["unknown_reasons"])
+
+    def test_partial_audit_pagination_keeps_dn_facts_partial(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "in"
+            root.mkdir()
+            out = Path(td) / "out"
+            audit = _audit()
+            audit["pagination"] = {"limit": 50, "offset": 0, "returned": 1,
+                                   "total": 2, "exhausted": False,
+                                   "partial": True}
+            args = [
+                "--delivery-json", self._write(root, "delivery.json", _delivery()),
+                "--mapping-json", self._write(root, "mapping.json", _mappings()),
+                "--audit-json", self._write(root, "audit.json", audit),
+                "--status-json", self._write(root, "status.json", _status("3")),
+                "--as-of", AS_OF, "--out", str(out)]
+            with patch("builtins.print"):
+                self.assertEqual(main(args), 0)
+            latest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
+            audit_entry = next(item for item in manifest["inputs"]
+                               if item["role"].startswith("audit"))
+            self.assertTrue(audit_entry["truncated"])
+            self.assertEqual(audit_entry["completeness"], "partial")
+            self.assertIn("pagination_not_exhausted",
+                          audit_entry["partial_reason"])
+            self.assertTrue(manifest["output_summary"]["partial"])
+            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+                               .read_text(encoding="utf-8"))
+            row = next(r for r in facts if r["tt_sku"] == "S1")
+            self.assertEqual(row["dn_net_qty"], "5")
+            self.assertEqual(row["source_status"]["dn_po"], "partial")
+
+    def test_empty_collection_with_contract_is_legal(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "in"
+            root.mkdir()
+            out = Path(td) / "out"
+            inventory = {"schema_version": "local/v1", "observed_at": AS_OF,
+                         "inventory": []}
+            args = [
+                "--delivery-json", self._write(root, "delivery.json", _delivery()),
+                "--mapping-json", self._write(root, "mapping.json", _mappings()),
+                "--audit-json", self._write(root, "audit.json", _audit()),
+                "--status-json", self._write(root, "status.json", _status("3")),
+                "--inventory-json", self._write(root, "inventory.json", inventory),
+                "--as-of", AS_OF, "--out", str(out)]
+            with patch("builtins.print"):
+                self.assertEqual(main(args), 0)
+            latest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
+            self.assertNotIn("inventory",
+                             manifest["input_summary"]["contract_incomplete"])
+
+    def test_frozen_replay_with_spaces_and_chinese_paths(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "含 空格 目录" / "in"
+            root.mkdir(parents=True)
+            out = Path(td) / "含 空格 目录" / "out"
+            args = self._args(root, str(out))
+            with patch("builtins.print"):
+                self.assertEqual(main(args), 0)
+            latest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
+            run_dir = Path(latest["run_dir"])
+            manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertIn("--replay-run", manifest["rerun"]["command"])
+            self.assertEqual(manifest["rerun"]["effective_args"]["as_of"], AS_OF)
+            self.assertEqual(
+                manifest["rerun"]["effective_args"]["max_age_seconds"], 900)
+            self.assertEqual(
+                manifest["rerun"]["effective_args"]["max_stock_age_days"], 1)
+            frozen = [item for item in manifest["inputs"]
+                      if item.get("frozen_path")]
+            self.assertTrue(frozen)
+            for item in frozen:
+                path = run_dir / item["frozen_path"]
+                self.assertTrue(path.is_file())
+                self.assertEqual(
+                    hashlib.sha256(path.read_bytes()).hexdigest(),
+                    item["frozen_sha256"])
+            original_sha = hashlib.sha256(
+                (run_dir / "full_supply_facts.json").read_bytes()).hexdigest()
+            # Original inputs disappear; the frozen copies must still replay.
+            for item in manifest["inputs"]:
+                if item.get("path"):
+                    Path(item["path"]).unlink(missing_ok=True)
+            replay_out = Path(td) / "含 空格 目录" / "replay"
+            with patch("builtins.print"):
+                self.assertEqual(main(["--replay-run", str(run_dir),
+                                       "--out", str(replay_out)]), 0)
+            replay_latest = json.loads((replay_out / "latest.json")
+                                       .read_text(encoding="utf-8"))
+            replay_sha = hashlib.sha256(
+                (Path(replay_latest["run_dir"]) / "full_supply_facts.json")
+                .read_bytes()).hexdigest()
+            self.assertEqual(original_sha, replay_sha)
+
+    def test_replay_rejects_tampered_frozen_input(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "in"
+            root.mkdir()
+            out = Path(td) / "out"
+            with patch("builtins.print"):
+                self.assertEqual(main(self._args(root, str(out))), 0)
+            latest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
+            run_dir = Path(latest["run_dir"])
+            manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+            target = next(item for item in manifest["inputs"]
+                          if item.get("frozen_path"))
+            (run_dir / target["frozen_path"]).write_bytes(b"tampered")
+            with patch("builtins.print"):
+                self.assertEqual(main(["--replay-run", str(run_dir),
+                                       "--out", str(Path(td) / "replay")]), 1)
+
     def test_inspect_reads_healthy_publication(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td) / "in"
@@ -280,6 +475,8 @@ class PipelineTests(unittest.TestCase):
             args = self._args(root, str(out))
             index = args.index("--inventory-json")
             del args[index:index + 2]
+            index = args.index("--so-json")
+            del args[index:index + 2]
             args += ["--a-workbook", str(a), "--b-workbook", str(b),
                      "--c-workbook", str(c), "--a-version", "A1",
                      "--b-version", "v6r10", "--c-version", "v14",
@@ -292,11 +489,19 @@ class PipelineTests(unittest.TestCase):
             self.assertTrue({"A", "B", "C"}.issubset(roles))
             facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
                                .read_text(encoding="utf-8"))
-            skilled = next(r for r in facts if r["item_code"] == "SKU-1")
+            skilled = next(r for r in facts if r["item_code"] == "SKU-1"
+                           and r["tt_sku"] == "S1")
             self.assertEqual(skilled["inventory_qty"], "0")
             self.assertEqual(skilled["inventory_freshness"], "stale")
             self.assertIsNone(skilled["inventory_current_available_qty"])
             self.assertTrue(any(r["item_code"] == "A-ONLY" for r in facts))
+            abc_versions = manifest["datasets"][
+                "full_supply_facts.parquet"]["source_versions"]["ABC"]
+            self.assertEqual(abc_versions["B"]["version"], "v6r10")
+            self.assertEqual(abc_versions["C"]["version"], "v14")
+            self.assertEqual(abc_versions["version_relation"], "match")
+            self.assertIn(abc_versions["c_dependency_source"],
+                          ("cli", "workbook"))
             # Windows GBK consoles must not fail on the success line.
             out2 = Path(td) / "out2"
             command = list(args)

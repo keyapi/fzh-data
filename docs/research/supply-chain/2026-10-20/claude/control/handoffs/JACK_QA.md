@@ -406,6 +406,23 @@ pending（未用合成数据冒充）；真实 POD/签收字段来源；人工�
 接口规模；受限用户真实 HTTP；真实通途状态/创建。未合并 main、未部署生产、未创建真实
 PO、未改 key_test/delivery_plan。PR #318 保持 draft。
 
+### [W1-FULL-FACTS-V3-2026-11-02] 第二轮 P1/P2 整改（基线 6ead348c）
+
+| 问题 | 修复 | 反例/结果 |
+|---|---|---|
+| A/B/C 单位不一致仍当前可用 | B 必须单单位且等于 C UOM；不一致/缺失/多单位只保留观察量与去向，`inventory_qty/current` 为 null | B=BOX、C=EA、qty 10 → `uom_mismatch`，observed=10/EA，attributed/current null；多 B 单位逐单位保留去向 |
+| naive 库存时间仍 fresh/current | 精确时间才 `time_proven`；date-only/naive → `unknown_time`；同日未来按精确 as_of → `future`；current 需 time_proven+fresh | 23:59 naive、同日未来、旧日期均不 current |
+| 缺身份按顺序归分公司 | 非权威来源只精确键挂接；B/A 显式身份仅在完整候选唯一时填补；多候选 `target_key_ambiguous` | 缺 branch 10/A 2/B 3 任意排列均 `""=10,A=2,B=3`；ABC 逆序一致 |
+| 来源重放翻倍、片段去重 | 每层稳定来源键（单据/明细/批次+业务身份）；同身份同载荷一次、异载荷 conflict、缺身份 unknown；片段保留身份 | WO-1×2 qty5 → 5/1 片段；5+6 → null+conflict；不同 WO 各留 |
+| 物流跨完整键丢记录 | 按 DN 明细+运单+完整业务身份分组；同运单多仓/多 branch 各自保留；无法分配 unknown+候选 | 同运单双仓/双 branch 各 2 行；多运单/多分配 qty null |
+| reader 旧产物缺时间仍 healthy | 动态来源缺时间不跳过；reader 重算来源时效并纳入行级 stale/unknown/future；`allow_stale` 生效 | 缺时间动态来源、一个月后读取均 stale/readable=false；corrupted 永远不可读 |
+| 输入完整性与追溯 | 混版缺版本页拒绝；SO/生产/库存/在途/签收截断拒收；缺版本/时间标 incomplete；业务 partial 与分页截断用 `partial_reason`；来源状态保守聚合；sources/片段带 source_identity；manifest `source_versions.ABC` 含版本/SHA/依赖 | 缺版本页 1 页拒绝；truncated 输入拒收；inventory 缺契约 → 层 unknown；ABC 版本/哈希入 manifest；C 依赖冲突/多标记拒绝 |
+| 冻结复跑 | 输入复制到 `run_dir/inputs/`；`--replay-run` 校验字节后复跑；PowerShell 命令；保存 effective args | 空格/中文路径、原文件删除仍可复跑；篡改冻结输入拒绝；业务内容 SHA 稳定 |
+
+测试：PyArrow+openpyxl **361 passed / 8 subtests**；base 环境另计。真实 A/B/C 工作簿仍
+不可用，真实链路验收 pending，未用合成数据冒充。未部署生产、未创建真实 PO、未改
+key_test/delivery_plan。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

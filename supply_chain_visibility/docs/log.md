@@ -7,6 +7,7 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-11-02
+- 第二轮整改（基线 6ead348c）：ABC 单位资格（B/C 不一致/多单位不升级归属）、时间证明（naive/date-only 不当前可用、同日未来识别）、观察/归属/下单三层分离；非权威来源不再填补缺失身份（任意输入顺序结果一致）；每层稳定来源身份去重/冲突/重放（生产/SO/库存/签收）；物流按 DN 明细+运单+完整身份分组，无法分配保持 unknown；reader 纳入动态来源缺时间与行级时效，`allow_stale` 显式生效；输入契约区分混版/截断/业务 partial，来源状态保守聚合，manifest 补 A/B/C 版本/依赖/哈希；冻结输入副本+`--replay-run`（空格/中文路径、源文件删除、字节校验、内容 SHA 稳定）。361 passed / 8 subtests（base 环境另计）；真实 A/B/C 仍 pending。
 - full_supply_facts 升到 v2：新增本地 A/B/C 归因（A 目标集合、B 身份权威、C 库存观测；缺维度 null/unknown、C 无 B 待核、真零保留、陈旧不当前可用、CG 池不复制、B/C 版本冲突显式）；新增统一发布 `publication.py`（`full_supply_facts.parquet` 主入口 + JSON 追溯 + 独立 `supply_position` + timeline + manifest/latest），显式 decimal128(38,6)/UTC timestamp schema、JSON/Parquet 逐字段回读、空表固定 schema、重复键拒收、失败不切 latest，新增 reader 状态机与 `--inspect`。322 项测试 + 5 子测试通过（base 环境 297 passed / 21 skipped）。真实 A/B/C 冻结工作簿本机不可用，真实链路验收 pending，未用合成数据冒充。
 - 复审Jack 4928fc35后补4个反例：最终供给表保留DN/PO待核实原因及真实来源时点，拒绝显式SKU冲突，补齐分公司后同步查找键，成功重跑清除旧失败状态。含PyArrow全量288项、5子测试通过。42条真实历史DN回放保留516件历史净交付、当前PO完成供给0、待核实1组；缺创建审计/PO状态/B映射，不冒称真实正向验收。当前连接可读测试审计记录0；通途只读请求未返回，停止等待且未重试。
 - 核对Jack f8a7a72b/2a4d903新交付，消费器兼容刷新器statuses/raw_status并拒绝冲突别名；本地与上游新增32例联合验证276项、5子测试通过。缺用途默认分公司与跨阶段日期冲突已复现并交回Jack，未将helper测试当成EN全链上线验收。

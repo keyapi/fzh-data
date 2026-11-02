@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Full supply facts: purpose strictness, stage dates, unknown, POD, waybills."""
 
+import itertools
 import unittest
 
 from supply_chain_visibility.full_supply_facts import (
@@ -12,6 +13,7 @@ from supply_chain_visibility.full_supply_facts import (
 
 BASE = {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
         "purpose": "branch", "branch": "CENTRADE", "tt_sku": "S1"}
+_COUNTER = itertools.count(1)
 
 
 def position(**over):
@@ -29,6 +31,7 @@ def position(**over):
 def layer(**over):
     row = dict(BASE)
     row.update(over)
+    row.setdefault("source_ref", "SRC-%d" % next(_COUNTER))
     return row
 
 
@@ -101,15 +104,45 @@ class StageDateTests(unittest.TestCase):
         self.assertEqual(row["available_date"], "2026-11-10T00:00:00+00:00")
         self.assertNotIn("date_conflict", row["unknown_reasons"])
 
-    def test_equal_dates_dedupe_to_one_fragment(self):
+    def test_different_source_identities_keep_both_fragments(self):
         result = build_full_supply_facts(position(), production=[
             layer(qty=3, evidence_status="proven",
-                  available_date="2026-11-10T00:00:00+00:00"),
+                  available_date="2026-11-10T00:00:00+00:00", source_ref="WO-1"),
             layer(qty=3, evidence_status="proven",
-                  available_date="2026-11-10T00:00:00+00:00")])
-        fragments = [frag for frag in row_of(result)["stage_quantities"]
+                  available_date="2026-11-10T00:00:00+00:00", source_ref="WO-2")])
+        row = row_of(result)
+        self.assertEqual(row["in_production_qty"], "6")
+        fragments = [frag for frag in row["stage_quantities"]
+                     if frag["stage"] == "in_production"]
+        self.assertEqual(len(fragments), 2)
+
+    def test_same_source_replay_is_counted_once(self):
+        result = build_full_supply_facts(position(), production=[
+            layer(qty=3, evidence_status="proven", source_ref="WO-1"),
+            layer(qty=3, evidence_status="proven", source_ref="WO-1")])
+        row = row_of(result)
+        self.assertEqual(row["in_production_qty"], "3")
+        fragments = [frag for frag in row["stage_quantities"]
                      if frag["stage"] == "in_production"]
         self.assertEqual(len(fragments), 1)
+        self.assertTrue(fragments[0]["replay"])
+
+    def test_same_source_different_payload_is_conflict(self):
+        result = build_full_supply_facts(position(), production=[
+            layer(qty=3, evidence_status="proven", source_ref="WO-1"),
+            layer(qty=4, evidence_status="proven", source_ref="WO-1")])
+        row = row_of(result)
+        self.assertIsNone(row["in_production_qty"])
+        self.assertIn("source_payload_conflict", row["unknown_reasons"])
+
+    def test_missing_source_identity_is_not_summed_as_known(self):
+        result = build_full_supply_facts(position(), production=[
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "purpose": "branch", "branch": "CENTRADE", "tt_sku": "S1",
+             "qty": 5, "evidence_status": "proven"}])
+        row = row_of(result)
+        self.assertIsNone(row["in_production_qty"])
+        self.assertIn("source_identity_missing", row["unknown_reasons"])
 
     def test_estimated_date_is_expected_not_actual(self):
         result = build_full_supply_facts(position(), production=[layer(
@@ -153,14 +186,23 @@ class DemandSupplyTests(unittest.TestCase):
         self.assertIsNone(base["inventory_qty"])
 
     def test_filled_branch_key_is_not_reused_for_other_branch(self):
-        result = build_full_supply_facts(position(branch=""), production=[{
-            "item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
-            "purpose": "branch", "branch": "CENTRADE", "qty": 3, "evidence_status": "proven"}],
-            inventory=[{"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
-                        "purpose": "branch", "branch": "DANEEY", "qty": 8}])
-        self.assertEqual(len(result["rows"]), 2)
-        base = next(r for r in result["rows"] if r["branch"] == "CENTRADE")
-        self.assertIsNone(base["inventory_qty"])
+        result = build_full_supply_facts(
+            position(branch=""),
+            production=[{"item_code": "SKU-1", "uom": "个",
+                         "warehouse": "WH-1", "purpose": "branch",
+                         "branch": "CENTRADE", "qty": 3,
+                         "evidence_status": "proven", "source_ref": "WO-1"}],
+            inventory=[{"item_code": "SKU-1", "uom": "个",
+                        "warehouse": "WH-1", "purpose": "branch",
+                        "branch": "DANEEY", "qty": 8,
+                        "source_ref": "ST-1"}])
+        self.assertEqual(len(result["rows"]), 3)
+        centrade = next(r for r in result["rows"] if r["branch"] == "CENTRADE")
+        daney = next(r for r in result["rows"] if r["branch"] == "DANEEY")
+        self.assertIsNone(centrade["inventory_qty"])
+        self.assertEqual(centrade["in_production_qty"], "3")
+        self.assertIsNone(daney["in_production_qty"])
+        self.assertEqual(daney["inventory_qty"], "8")
     def test_so_balance_is_demand_not_production(self):
         result = build_full_supply_facts(
             position(), so_balances=[layer(so_open_qty=6)])
@@ -210,22 +252,31 @@ class DemandSupplyTests(unittest.TestCase):
         self.assertEqual(row["coverage"], "approved_item_without_evidence")
         self.assertIn("no_observed_supply_or_demand", row["unknown_reasons"])
 
-    def test_source_branch_enriches_position_row(self):
+    def test_non_authoritative_source_does_not_fill_blank_branch(self):
         result = build_full_supply_facts(
-            position(branch=""), inventory=[layer(qty=5, brand=None,
-                                                  as_of="2026-11-02T00:00:00+00:00")
-                                            ])
-        row = row_of(result)
-        self.assertEqual(row["branch"], "CENTRADE")
+            position(branch=""),
+            inventory=[layer(qty=5, as_of="2026-11-02T00:00:00+00:00")])
+        self.assertEqual(len(result["rows"]), 2)
+        blank = next(r for r in result["rows"] if r["branch"] == "")
+        explicit = next(r for r in result["rows"] if r["branch"] == "CENTRADE")
+        self.assertEqual(blank["dn_net_qty"], "5")
+        self.assertIsNone(blank["inventory_qty"])
+        self.assertIsNone(explicit["dn_net_qty"])
+        self.assertEqual(explicit["inventory_qty"], "5")
 
-    def test_source_without_tt_sku_attaches_to_position_row(self):
+    def test_source_without_tt_sku_does_not_attach_to_position_row(self):
         result = build_full_supply_facts(
             position(), inventory=[{"item_code": "SKU-1", "uom": "个",
                                     "warehouse": "WH-1", "purpose": "branch",
                                     "branch": "CENTRADE", "qty": 5,
+                                    "source_ref": "ST-1",
                                     "as_of": "2026-11-02T00:00:00+00:00"}])
-        self.assertEqual(len(result["rows"]), 1)
-        self.assertEqual(row_of(result)["inventory_qty"], "5")
+        self.assertEqual(len(result["rows"]), 2)
+        position_row = next(r for r in result["rows"] if r["tt_sku"] == "S1")
+        self.assertIsNone(position_row["inventory_qty"])
+        unassigned = next(r for r in result["rows"]
+                          if r["tt_sku"] is None and r["inventory_qty"] == "5")
+        self.assertIn("tt_sku_unknown", unassigned["unknown_reasons"])
 
 
 class ReceiptAndWaybillTests(unittest.TestCase):
@@ -381,12 +432,10 @@ class V2ContractTests(unittest.TestCase):
         self.assertEqual(len(result["rows"]), 3)
         blank = next(row for row in result["rows"] if row["branch"] == "")
         self.assertIn("branch_unknown", blank["unknown_reasons"])
+        self.assertIn("target_key_ambiguous", blank["unknown_reasons"])
         self.assertEqual(
             sorted(row["branch"] for row in result["rows"]
                    if row["inventory_qty"] is not None), ["B1", "B2"])
-        for row in result["rows"]:
-            if row["branch"] in ("B1", "B2"):
-                self.assertIn("target_key_ambiguous", row["unknown_reasons"])
 
     def test_abc_inventory_attaches_only_to_exact_key(self):
         result = build_full_supply_facts(
@@ -445,6 +494,223 @@ class V2ContractTests(unittest.TestCase):
         self.assertEqual(observed[0]["inventory_observed_qty"], "9")
         self.assertTrue(all(row["inventory_qty"] is None
                             for row in result["rows"]))
+
+
+class IdentityAndReplayTests(unittest.TestCase):
+    def _three(self, layer_name):
+        common = {"item_code": "I", "uom": "个", "warehouse": "WH",
+                  "purpose": "branch", "tt_sku": "S1"}
+        if layer_name == "so":
+            return [
+                {**common, "branch": "", "so_open_qty": 10,
+                 "source_ref": "SO-0"},
+                {**common, "branch": "A", "so_open_qty": 2,
+                 "source_ref": "SO-A"},
+                {**common, "branch": "B", "so_open_qty": 3,
+                 "source_ref": "SO-B"}]
+        if layer_name == "inventory":
+            return [
+                {**common, "branch": "", "qty": 10, "source_ref": "ST-0",
+                 "as_of": "2026-11-02T00:00:00+00:00"},
+                {**common, "branch": "A", "qty": 2, "source_ref": "ST-A",
+                 "as_of": "2026-11-02T00:00:00+00:00"},
+                {**common, "branch": "B", "qty": 3, "source_ref": "ST-B",
+                 "as_of": "2026-11-02T00:00:00+00:00"}]
+        if layer_name == "receipt":
+            return [
+                {**common, "branch": "", "qty": 10, "source_ref": "RC-0",
+                 "signed_at": "2026-11-02T00:00:00+00:00"},
+                {**common, "branch": "A", "qty": 2, "source_ref": "RC-A",
+                 "signed_at": "2026-11-02T00:00:00+00:00"},
+                {**common, "branch": "B", "qty": 3, "source_ref": "RC-B",
+                 "signed_at": "2026-11-02T00:00:00+00:00"}]
+        return [
+            {**common, "branch": "", "qty": 10, "source_ref": "WO-0",
+             "evidence_status": "proven"},
+            {**common, "branch": "A", "qty": 2, "source_ref": "WO-A",
+             "evidence_status": "proven"},
+            {**common, "branch": "B", "qty": 3, "source_ref": "WO-B",
+             "evidence_status": "proven"}]
+
+    def test_missing_identity_stays_unassigned_in_any_order(self):
+        import itertools
+        for layer_name in ("so", "inventory", "receipt", "production"):
+            for order in itertools.permutations(self._three(layer_name)):
+                kwargs = {("so_balances" if layer_name == "so" else layer_name):
+                          list(order)}
+                if layer_name == "receipt":
+                    kwargs = {"receipts": list(order)}
+                result = build_full_supply_facts({"rows": []}, **kwargs)
+                rows = {row["branch"]: row for row in result["rows"]}
+                self.assertEqual(set(rows), {"", "A", "B"}, layer_name)
+                field = {"so": "so_open_qty", "inventory": "inventory_qty",
+                         "receipt": "received_qty",
+                         "production": "in_production_qty"}[layer_name]
+                self.assertEqual(rows[""][field], "10", layer_name)
+                self.assertEqual(rows["A"][field], "2", layer_name)
+                self.assertEqual(rows["B"][field], "3", layer_name)
+
+    def test_authoritative_abc_identity_is_order_independent(self):
+        pos = position(branch="")
+        abc_rows = [
+            {**BASE, "branch": "A", "inventory_qty": "2",
+             "inventory_observed_qty": "2",
+             "inventory_current_available_qty": None,
+             "inventory_as_of": "2026-11-02T00:00:00+00:00",
+             "inventory_as_of_raw": "2026-11-02T00:00:00+00:00",
+             "inventory_time_status": "known", "inventory_time_proven": True,
+             "inventory_freshness": "fresh",
+             "attribution_status": "attributed", "abc_identity_source": "B",
+             "source_status": "known", "reasons": [],
+             "coverage": "abc_inventory"},
+            {**BASE, "branch": "B", "inventory_qty": "3",
+             "inventory_observed_qty": "3",
+             "inventory_current_available_qty": None,
+             "inventory_as_of": "2026-11-02T00:00:00+00:00",
+             "inventory_as_of_raw": "2026-11-02T00:00:00+00:00",
+             "inventory_time_status": "known", "inventory_time_proven": True,
+             "inventory_freshness": "fresh",
+             "attribution_status": "attributed", "abc_identity_source": "B",
+             "source_status": "known", "reasons": [],
+             "coverage": "abc_inventory"}]
+        outputs = []
+        for rows in (abc_rows, list(reversed(abc_rows))):
+            result = build_full_supply_facts(pos, abc_inventory=rows)
+            outputs.append(sorted(
+                (row["branch"], row["inventory_qty"]) for row in result["rows"]))
+        self.assertEqual(outputs[0], outputs[1])
+        self.assertEqual(outputs[0], [("", None), ("A", "2"), ("B", "3")])
+
+    def test_source_identity_is_traceable(self):
+        result = build_full_supply_facts(position(), production=[
+            layer(qty=5, evidence_status="proven", source_ref="WO-1")])
+        row = row_of(result)
+        identities = [source.get("source_identity")
+                      for source in row["sources"]
+                      if source.get("layer") == "production"]
+        self.assertTrue(any(identity.get("source_ref") == "WO-1"
+                            and identity.get("item_code") == "SKU-1"
+                            for identity in identities))
+        fragments = [fragment for fragment in row["stage_quantities"]
+                     if fragment["stage"] == "in_production"]
+        self.assertEqual(fragments[0]["source_identity"]["source_ref"], "WO-1")
+        self.assertEqual(fragments[0]["source_identity"]["item_code"], "SKU-1")
+
+    def test_conservative_status_does_not_let_known_overwrite_unavailable(self):
+        result = build_full_supply_facts(position(), so_balances=[
+            layer(so_open_qty=None, source_status="unavailable",
+                  source_ref="SO-1"),
+            layer(so_open_qty=5, source_status="known", source_ref="SO-2")])
+        row = row_of(result)
+        self.assertEqual(row["source_status"]["so_demand"], "unavailable")
+        self.assertIsNone(row["so_open_qty"])
+
+    def test_layer_replay_and_conflict_matrix(self):
+        cases = {
+            "so": (
+                [{"item_code": "I", "uom": "个", "warehouse": "WH",
+                  "purpose": "branch", "branch": "A", "tt_sku": "S1",
+                  "so_open_qty": 5, "source_ref": "SRC-1"}],
+                "so_balances", "so_open_qty"),
+            "inventory": (
+                [{"item_code": "I", "uom": "个", "warehouse": "WH",
+                  "purpose": "branch", "branch": "A", "tt_sku": "S1",
+                  "qty": 5, "source_ref": "ST-1",
+                  "as_of": "2026-11-02T00:00:00+00:00"}],
+                "inventory", "inventory_qty"),
+            "receipt": (
+                [{"item_code": "I", "uom": "个", "warehouse": "WH",
+                  "purpose": "branch", "branch": "A", "tt_sku": "S1",
+                  "qty": 5, "receipt_id": "RC-1",
+                  "signed_at": "2026-11-02T00:00:00+00:00"}],
+                "receipts", "received_qty"),
+        }
+        for layer, (records, keyword, field) in cases.items():
+            with self.subTest(layer=layer):
+                replayed = build_full_supply_facts(
+                    {"rows": []}, **{keyword: records + records})
+                row = replayed["rows"][0]
+                self.assertEqual(row[field], "5", layer)
+                conflicted = build_full_supply_facts(
+                    {"rows": []},
+                    **{keyword: [records[0], dict(records[0], **{
+                        "so_open_qty" if layer == "so" else "qty": 6})]})
+                row = conflicted["rows"][0]
+                self.assertIsNone(row[field], layer)
+                self.assertIn("source_payload_conflict",
+                              row["unknown_reasons"], layer)
+
+    def test_logistics_keeps_same_waybill_with_different_warehouse(self):
+        events = [
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
+             "warehouse": "WH-A"},
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
+             "warehouse": "WH-B"}]
+        out = collapse_waybills(events)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(sorted(row["warehouse"] for row in out),
+                         ["WH-A", "WH-B"])
+        self.assertTrue(all(row["qty"] == 5 for row in out))
+
+    def test_logistics_keeps_same_waybill_with_different_branch(self):
+        events = [
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
+             "branch": "A"},
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
+             "branch": "B"}]
+        out = collapse_waybills(events)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(sorted(row["branch"] for row in out), ["A", "B"])
+
+    def test_logistics_multi_waybill_is_unknown_and_order_independent(self):
+        events = [
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5},
+            {**BASE, "delivery_note": "DN-1", "waybill": "W2", "qty": 5}]
+        first = collapse_waybills(events)
+        second = collapse_waybills(list(reversed(events)))
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 1)
+        self.assertIsNone(first[0]["qty"])
+        self.assertEqual(first[0]["reason"],
+                         "multi_waybill_allocation_unknown")
+
+    def test_logistics_replay_and_conflict(self):
+        replay = [
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5},
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5}]
+        self.assertEqual(len(collapse_waybills(replay)), 1)
+        conflict = [
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5},
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 6}]
+        out = collapse_waybills(conflict)
+        self.assertEqual(len(out), 1)
+        self.assertIsNone(out[0]["qty"])
+        self.assertEqual(out[0]["reason"],
+                         "duplicate_waybill_quantity_conflict")
+
+    def test_logistics_same_waybill_two_dn_lines_is_kept(self):
+        events = [
+            {**BASE, "delivery_note": "DN-1", "delivery_note_item": "L1",
+             "waybill": "W1", "qty": 5, "warehouse": "WH-A"},
+            {**BASE, "delivery_note": "DN-1", "delivery_note_item": "L2",
+             "waybill": "W1", "qty": 5, "warehouse": "WH-B"}]
+        out = collapse_waybills(events)
+        self.assertEqual(len(out), 2)
+
+    def test_logistics_unallocated_waybill_over_two_warehouses_is_unknown(self):
+        events = [
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
+             "warehouse": ""},
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
+             "warehouse": "WH-A"},
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
+             "warehouse": "WH-B"}]
+        out = collapse_waybills(events)
+        ambiguous = [row for row in out
+                     if row.get("reason") == "multi_assignment_allocation_unknown"]
+        self.assertEqual(len(ambiguous), 1)
+        self.assertIsNone(ambiguous[0]["qty"])
+        self.assertEqual(len(ambiguous[0]["candidates"]), 2)
 
 
 if __name__ == "__main__":

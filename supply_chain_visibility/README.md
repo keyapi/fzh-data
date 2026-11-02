@@ -28,8 +28,8 @@
 - `supply_chain_visibility/po_status_refresh.py` —— PO 状态批量刷新（去重、10/批、断点、未查询显式）。
 - `supply_chain_visibility/abc_inputs.py` —— 本地冻结 A/B/C 归因：A 目标集合、B 身份权威、C 库存观测；缺维度 null/unknown、CG 池不复制、版本关系显式。
 - `supply_chain_visibility/publication.py` —— 统一发布/读取：`full_supply_facts.parquet`（主）+ JSON（追溯）+ `supply_position`（独立 schema）+ `timeline` + manifest/latest；回读/SHA/schema/唯一键校验，失败不切换。
-- `supply_chain_visibility/supply_pipeline.py` —— 可执行离线链路：保存 API + 可选 A/B/C→创建清单→PO 状态→#323 消费器→full_supply_facts v2/Timeline→Parquet/JSON 统一 manifest（失败保留旧版，`--inspect` 只读查看）。
-- `supply_chain_visibility/full_supply_facts.py` —— full-supply-facts/v2：DN/PO + SO/生产/库存/在途/签收 + A/B/C，数量 Decimal、时间 UTC/未知、阶段片段、重复键拒收、跨层不求和（预测未接）；含 FBA/分公司过滤、多运单不复制数量、POD 不作为签收。
+- `supply_chain_visibility/supply_pipeline.py` —— 可执行离线链路：保存 API + 可选 A/B/C→创建清单→PO 状态→#323 消费器→full_supply_facts v3/Timeline→Parquet/JSON 统一 manifest（失败保留旧版，`--inspect` 只读查看，`--replay-run` 冻结复跑）。
+- `supply_chain_visibility/full_supply_facts.py` —— full-supply-facts/v3：DN/PO + SO/生产/库存/在途/签收 + A/B/C，观察/归属/下单三层、B/C 单位资格、时间证明、稳定来源身份去重/冲突、阶段片段、重复键拒收、跨层不求和（预测未接）；含 FBA/分公司过滤、多运单不复制数量、POD 不作为签收。
 
 ## 关键事实（先读，避免重复踩坑）
 

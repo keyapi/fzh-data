@@ -13,7 +13,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import shlex
 import shutil
 import tempfile
 import time
@@ -39,23 +38,26 @@ from supply_chain_visibility.supply_position import (
     position_table,
 )
 
-PUBLICATION_SCHEMA = "supply-publication/v1"
+PUBLICATION_SCHEMA = "supply-publication/v2"
 FULL_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch")
 FULL_STRING_COLUMNS = (
     "item_code", "uom", "warehouse", "purpose", "tt_sku", "branch", "pool",
     "scope", "coverage", "next_node", "inventory_as_of_raw",
     "inventory_time_status", "inventory_freshness",
-    "inventory_inclusion_status", "attribution_status", "abc_identity_source",
+    "inventory_observed_uom", "inventory_inclusion_status",
+    "attribution_status", "abc_identity_source", "order_eligibility",
     "receipt_basis",
     "available_date_raw", "available_date_time_status", "date_confidence",
     "available_date_kind",
 )
 FULL_DECIMAL_COLUMNS = tuple(QTY_FIELDS)
 FULL_TIME_COLUMNS = ("inventory_as_of", "available_date")
-FULL_JSON_LIST_COLUMNS = ("stage_quantities", "unknown_reasons", "sources", "alerts")
+FULL_JSON_LIST_COLUMNS = ("stage_quantities", "unknown_reasons", "sources",
+                          "alerts", "b_units", "order_blockers")
 FULL_JSON_DICT_COLUMNS = ("source_status",)
 FULL_BOOL_COLUMNS = ("forecast_connected", "netting_ready", "auto_order",
-                     "inventory_current_available")
+                     "inventory_current_available", "inventory_time_proven")
+FULL_INT_COLUMNS = ("inventory_date_age_days",)
 
 POSITION_STRING_COLUMNS = ("item_code", "tt_sku", "warehouse", "purpose", "uom",
                            "as_of", "mapping_version", "inventory_inclusion_status",
@@ -112,6 +114,86 @@ def _write_json_atomic(path, payload):
     os.replace(temporary, path)
 
 
+def _safe_name(value):
+    text = "".join(ch if ch.isalnum() or ch in "-_." else "_"
+                   for ch in str(value))
+    return text[:60] or "input"
+
+
+def _freeze_inputs(inputs, tmp_dir):
+    """Copy every provided input into the run's private immutable inputs/."""
+    frozen_dir = Path(tmp_dir) / "inputs"
+    frozen_dir.mkdir(parents=True, exist_ok=True)
+    mapping = {}
+    frozen = []
+    for index, item in enumerate(inputs or ()):
+        path = item.get("path")
+        if not path or item.get("status") == "not_provided":
+            continue
+        source = Path(path)
+        if not source.is_file():
+            item["status"] = "failed"
+            item["reason"] = "input_missing_at_publish"
+            continue
+        suffix = source.suffix or ".bin"
+        name = "%02d_%s%s" % (index, _safe_name(item.get("role")), suffix)
+        destination = frozen_dir / name
+        shutil.copy2(source, destination)
+        digest = _sha256(destination)
+        if item.get("sha256") and digest != item["sha256"]:
+            raise CorruptedPublication("input changed while freezing: " + str(path))
+        item["frozen_path"] = "inputs/" + name
+        item["frozen_sha256"] = digest
+        item["frozen_size"] = destination.stat().st_size
+        mapping[os.path.normcase(os.path.abspath(str(source)))] = (
+            "{run_dir}/inputs/" + name)
+        frozen.append({"role": item.get("role"), "original_path": str(path),
+                       "frozen_path": "inputs/" + name, "sha256": digest})
+    return mapping, frozen
+
+
+def _freeze_argv(argv, mapping, out_value):
+    if not argv:
+        return None
+    frozen = []
+    replace_out = False
+    for arg in argv:
+        if replace_out:
+            frozen.append("{out}")
+            replace_out = False
+            continue
+        if arg == "--out":
+            frozen.append(arg)
+            replace_out = True
+            continue
+        key = os.path.normcase(os.path.abspath(str(arg)))
+        frozen.append(mapping.get(key, arg))
+    return frozen
+
+
+def _ps_quote(value):
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _resolved_template(argv, run_dir, out):
+    if not argv:
+        return None
+    return [part.replace("{run_dir}", str(run_dir)).replace("{out}", str(out))
+            for part in argv]
+
+
+def _powershell_command(argv, run_dir, out):
+    resolved = _resolved_template(argv, run_dir, out)
+    if not resolved:
+        return None
+    args = list(resolved)
+    if args and (args[0].endswith("supply_pipeline.py")
+                 or args[0].endswith("supply_pipeline")):
+        args = args[1:]
+    return "python -m supply_chain_visibility.supply_pipeline " + " ".join(
+        _ps_quote(arg) for arg in args)
+
+
 def canonical_full_row(row):
     out = {}
     for name in FULL_STRING_COLUMNS:
@@ -122,6 +204,9 @@ def canonical_full_row(row):
         out[name] = _iso(row.get(name))
     for name in FULL_BOOL_COLUMNS:
         out[name] = bool(row.get(name))
+    for name in FULL_INT_COLUMNS:
+        value = row.get(name)
+        out[name] = None if value is None else int(value)
     for name in FULL_JSON_LIST_COLUMNS:
         out[name] = _json_copy(row.get(name) or [])
     for name in FULL_JSON_DICT_COLUMNS:
@@ -140,6 +225,7 @@ def full_schema():
         *[(name, pa.decimal128(38, 6)) for name in FULL_DECIMAL_COLUMNS],
         *[(name, pa.timestamp("us", tz="UTC")) for name in FULL_TIME_COLUMNS],
         *[(name, pa.bool_()) for name in FULL_BOOL_COLUMNS],
+        *[(name, pa.int64()) for name in FULL_INT_COLUMNS],
         *[(name, pa.string()) for name in
           (*FULL_JSON_LIST_COLUMNS, *FULL_JSON_DICT_COLUMNS)],
     ])
@@ -162,6 +248,9 @@ def _full_record(row):
         record[name] = datetime.fromisoformat(value) if value else None
     for name in FULL_BOOL_COLUMNS:
         record[name] = bool(row.get(name))
+    for name in FULL_INT_COLUMNS:
+        value = row.get(name)
+        record[name] = None if value is None else int(value)
     for name in (*FULL_JSON_LIST_COLUMNS, *FULL_JSON_DICT_COLUMNS):
         record[name] = json.dumps(row.get(name), ensure_ascii=False,
                                   sort_keys=True)
@@ -185,6 +274,8 @@ def _canonical_from_parquet(record):
             out[name] = value.astimezone(timezone.utc).isoformat()
     for name in FULL_BOOL_COLUMNS:
         out[name] = bool(record.get(name))
+    for name in FULL_INT_COLUMNS:
+        out[name] = record.get(name)
     for name in FULL_JSON_LIST_COLUMNS:
         raw = record.get(name)
         out[name] = json.loads(raw) if raw else []
@@ -338,10 +429,10 @@ def source_freshness(inputs, *, as_of, max_age_seconds):
     for item in inputs or ():
         if item.get("status") == "not_provided":
             continue
-        value = item.get("observed_at") or item.get("as_of")
-        if value is None:
-            # Static reference inputs (A/B/mapping) carry no freshness clock.
+        if item.get("temporal") is False:
+            # Static reference inputs (mapping / A / B / approved items).
             continue
+        value = item.get("observed_at") or item.get("as_of")
         parsed, raw, time_status = _time_parts(value)
         status = "unknown"
         age = None
@@ -353,10 +444,16 @@ def source_freshness(inputs, *, as_of, max_age_seconds):
                 status = "stale"
             else:
                 status = "fresh"
+        if item.get("status") in ("partial", "failed", "truncated",
+                                  "incomplete"):
+            status = "unknown"
         sources.append({"role": item.get("role") or item.get("path"),
                         "time": parsed.isoformat() if parsed else raw,
                         "time_status": time_status, "age_seconds": age,
-                        "status": status})
+                        "status": status,
+                        "input_status": item.get("status"),
+                        "version_status": item.get("version_status"),
+                        "completeness": item.get("completeness")})
     if any(source["status"] in ("stale", "future") for source in sources):
         overall = "stale"
     elif any(source["status"] == "unknown" for source in sources):
@@ -366,9 +463,11 @@ def source_freshness(inputs, *, as_of, max_age_seconds):
     return {"status": overall, "sources": sources}
 
 
-def build_manifest(*, run_id, pipeline_as_of, inputs, full_result,
+def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
                    position_result, position_rows, timeline_rows,
-                   files, freshness, rerun_argv, max_age_seconds):
+                   files, freshness, rerun_argv, rerun_template,
+                   effective_args, frozen_inputs, max_age_seconds,
+                   abc_report=None):
     full_summary = full_result["summary"]
     position_report = position_result.get("report") or {}
     observed_values = []
@@ -378,12 +477,36 @@ def build_manifest(*, run_id, pipeline_as_of, inputs, full_result,
             observed_values.append(parsed)
     observed_at = max(observed_values).isoformat() if observed_values else None
     stale = freshness.get("status") != "fresh"
+    abc_versions = {}
+    for item in inputs or ():
+        if item.get("role") in ("A", "B", "C"):
+            abc_versions[item["role"]] = {
+                "version": item.get("version"),
+                "sha256": item.get("sha256"),
+                "row_count": item.get("rows"),
+                "as_of": item.get("as_of"),
+                "time_status": item.get("time_status"),
+            }
+    if abc_report:
+        abc_versions.update({
+            "version_relation": abc_report.get("version_relation"),
+            "b_version": abc_report.get("b_version"),
+            "c_declared_b_version": abc_report.get("c_declared_b_version"),
+            "c_dependency_source": abc_report.get("c_dependency_source"),
+            "input_rows_total": abc_report.get("input_rows_total"),
+            "a_input_rows": abc_report.get("a_input_rows"),
+            "a_active_items": abc_report.get("a_active_items"),
+            "b_input_rows": abc_report.get("b_input_rows"),
+            "b_unique_item_pool": abc_report.get("b_unique_item_pool"),
+            "c_input_rows": abc_report.get("c_input_rows"),
+        })
     source_versions = {
         "delivery": (position_report.get("source_versions") or {}),
         "position_rule_version": POSITION_RULE,
         "position_implementation_version": POSITION_IMPLEMENTATION,
         "full_facts_rule_version": FULL_RULE,
         "full_facts_implementation_version": FULL_IMPLEMENTATION,
+        "ABC": abc_versions,
     }
     source_hashes = {item.get("role", "input"): item.get("sha256")
                      for item in inputs or () if item.get("sha256")}
@@ -392,8 +515,16 @@ def build_manifest(*, run_id, pipeline_as_of, inputs, full_result,
     closure_missing = [item.get("role") for item in inputs or ()
                        if item.get("required_for_closure")
                        and item.get("status") == "not_provided"]
+    version_unknown = [item.get("role") for item in inputs or ()
+                       if item.get("temporal") is not False
+                       and item.get("status") != "not_provided"
+                       and item.get("version_status") == "missing"]
+    contract_incomplete = [item.get("role") for item in inputs or ()
+                           if item.get("completeness") in ("partial",
+                                                           "incomplete")]
     partial = bool(full_summary.get("unknown_rows")) or bool(failed_inputs) \
-        or bool(closure_missing)
+        or bool(closure_missing) or bool(version_unknown) \
+        or bool(contract_incomplete)
     position_unknown_rows = sum(
         1 for row in position_rows
         if row.get("unknown_quantity_lines")
@@ -439,6 +570,7 @@ def build_manifest(*, run_id, pipeline_as_of, inputs, full_result,
                    "decimal_scale": 6,
                    "time_columns": list(FULL_TIME_COLUMNS),
                    "time_timezone": "UTC",
+                   "int_columns": list(FULL_INT_COLUMNS),
                    "json_columns": list(FULL_JSON_LIST_COLUMNS
                                         + FULL_JSON_DICT_COLUMNS),
                    "null_policy": "null means unknown; zero is a separate value"}),
@@ -460,6 +592,7 @@ def build_manifest(*, run_id, pipeline_as_of, inputs, full_result,
                    "decimal_scale": 6,
                    "time_columns": list(FULL_TIME_COLUMNS),
                    "time_timezone": "UTC",
+                   "int_columns": list(FULL_INT_COLUMNS),
                    "json_columns": list(FULL_JSON_LIST_COLUMNS
                                         + FULL_JSON_DICT_COLUMNS),
                    "null_policy": "null means unknown; zero is a separate value"}),
@@ -548,6 +681,9 @@ def build_manifest(*, run_id, pipeline_as_of, inputs, full_result,
                          if item.get("status") != "not_provided"],
             "not_provided": [item.get("role") for item in inputs or ()
                              if item.get("status") == "not_provided"],
+            "version_unknown": version_unknown,
+            "contract_incomplete": contract_incomplete,
+            "frozen_inputs": frozen_inputs,
         },
         "output_summary": {
             "full_supply_facts_rows": len(full_result["rows"]),
@@ -559,9 +695,13 @@ def build_manifest(*, run_id, pipeline_as_of, inputs, full_result,
             "unknown_rows": full_summary.get("unknown_rows"),
             "unknown_reason_distribution":
                 full_summary.get("unknown_reason_distribution"),
+            "source_reconciliation": full_summary.get("source_reconciliation"),
+            "layer_status": full_summary.get("layer_status"),
             "partial": partial,
             "closure_missing_inputs": closure_missing,
             "failed_inputs": failed_inputs,
+            "version_unknown_inputs": version_unknown,
+            "contract_incomplete_inputs": contract_incomplete,
             "cross_layer_total": None,
         },
         "freshness": freshness,
@@ -575,8 +715,14 @@ def build_manifest(*, run_id, pipeline_as_of, inputs, full_result,
              "type": "derived_from"},
         ],
         "rerun": {
-            "argv": list(rerun_argv) if rerun_argv else None,
-            "command": _rerun_command(rerun_argv),
+            "argv": list(rerun_template) if rerun_template else None,
+            "command": (("python -m supply_chain_visibility.supply_pipeline "
+                         "--replay-run %s --out %s"
+                         % (_ps_quote(run_dir),
+                            _ps_quote(Path(run_dir).parent.parent / "replay")))
+                        if rerun_template else None),
+            "effective_args": effective_args or {},
+            "frozen_inputs": frozen_inputs or [],
         },
         "versions": {
             "publication": PUBLICATION_SCHEMA,
@@ -591,19 +737,9 @@ def build_manifest(*, run_id, pipeline_as_of, inputs, full_result,
     return manifest
 
 
-def _rerun_command(argv):
-    if not argv:
-        return None
-    args = list(argv)
-    if args and (args[0].endswith("supply_pipeline.py")
-                 or args[0].endswith("supply_pipeline")):
-        args = args[1:]
-    return "python -m supply_chain_visibility.supply_pipeline " + " ".join(
-        shlex.quote(arg) for arg in args)
-
-
 def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
-            rerun_argv=None, max_age_seconds=900, freshness=None):
+            rerun_argv=None, rerun_template=None, effective_args=None,
+            abc_report=None, max_age_seconds=900, freshness=None):
     """Write a verified run and only then switch latest.json."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
@@ -645,12 +781,18 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
         files["supply_position.parquet"] = _sha256(position_path)
         freshness = freshness or source_freshness(
             inputs, as_of=pipeline_as_of, max_age_seconds=max_age_seconds)
+        if full_result.get("freshness") and "row_level" not in freshness:
+            freshness["row_level"] = full_result["freshness"]["summary"]
+        frozen_map, frozen_inputs = _freeze_inputs(inputs, tmp_dir)
+        rerun_template = _freeze_argv(rerun_argv, frozen_map, out)
         manifest = build_manifest(
-            run_id=run_id, pipeline_as_of=pipeline_as_of, inputs=inputs,
-            full_result=full_result, position_result=position_result,
-            position_rows=position_rows, timeline_rows=timeline_rows,
-            files=files, freshness=freshness, rerun_argv=rerun_argv,
-            max_age_seconds=max_age_seconds)
+            run_id=run_id, run_dir=run_dir, pipeline_as_of=pipeline_as_of,
+            inputs=inputs, full_result=full_result,
+            position_result=position_result, position_rows=position_rows,
+            timeline_rows=timeline_rows, files=files, freshness=freshness,
+            rerun_argv=rerun_argv, rerun_template=rerun_template,
+            effective_args=effective_args, frozen_inputs=frozen_inputs,
+            max_age_seconds=max_age_seconds, abc_report=abc_report)
         _write_json(tmp_dir / "manifest.json", manifest)
         manifest_sha256 = _sha256(tmp_dir / "manifest.json")
         # Full readback and cross-format verification before publishing.
@@ -807,6 +949,11 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
             warnings.append("stale_sources:" + ",".join(sorted(stale_sources)))
         if unknown_sources:
             warnings.append("unknown_source_time:" + ",".join(sorted(unknown_sources)))
+        row_level = freshness.get("row_level") or {}
+        row_issues = sum(int(row_level.get(key) or 0) for key in
+                         ("stale", "unknown", "future"))
+        if row_issues:
+            warnings.append("row_level_freshness_issues:%s" % row_issues)
         last_attempt = {}
         attempt_path = root / "last_attempt.json"
         if attempt_path.is_file():
@@ -816,7 +963,7 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
         partial = bool((manifest.get("output_summary") or {}).get("partial"))
         if partial:
             warnings.append("manifest_partial")
-        if stale_sources or unknown_sources:
+        if stale_sources or unknown_sources or row_issues:
             # Unknown/naive/date-only source time is never treated as fresh.
             status = "stale"
         elif partial:
@@ -825,18 +972,25 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
             status = "refresh_failed_using_previous"
         else:
             status = "healthy"
-        return {"status": status, "warnings": warnings,
+        readable = (status == "healthy" or
+                    (allow_stale and status in ("stale", "partial",
+                                                "refresh_failed_using_previous")))
+        if not readable:
+            warnings.append("read_refused_use_allow_stale")
+        return {"status": status, "readable": readable,
+                "warnings": warnings,
                 "refresh_status": refresh_status,
                 "manifest": manifest, "latest": latest,
                 "last_attempt": last_attempt,
+                "freshness": freshness, "row_level": row_level,
                 "full_chain_ready": False,
                 "forecast_connected": False,
                 "netting_ready": False,
                 "rows": (manifest.get("output_summary") or {}).get(
                     "full_supply_facts_rows")}
     except IncompatiblePublication as exc:
-        return {"status": "incompatible_version", "warnings": [str(exc)],
-                "full_chain_ready": False}
+        return {"status": "incompatible_version", "readable": False,
+                "warnings": [str(exc)], "full_chain_ready": False}
     except Exception as exc:  # noqa: BLE001
-        return {"status": "corrupted", "warnings": [str(exc)[:500]],
-                "full_chain_ready": False}
+        return {"status": "corrupted", "readable": False,
+                "warnings": [str(exc)[:500]], "full_chain_ready": False}

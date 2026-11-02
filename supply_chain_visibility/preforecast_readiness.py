@@ -145,7 +145,7 @@ def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_d
             reasons.append("a_missing_or_inactive")
         if not owner:
             reasons.append("b_missing_same_product_pool")
-        if not unit_match:
+        if (b or c) and not unit_match:
             reasons.append("b_c_uom_missing_or_mismatch")
         if owner:
             if not warehouse:
@@ -240,17 +240,16 @@ def _sheet(path, name, required):
         book.close()
 
 
-def _find_declared_b_version(rows):
-    """Read an explicit dependency marker; never infer it from similarity."""
+def _find_declared_b_versions(rows):
+    """Collect every explicit dependency marker; never take the first silently."""
     import re
+    found = set()
     for row in rows:
         for key, value in row.items():
             text = "" if value is None else str(value)
             if ("B" in str(key) or "依赖" in str(key)) and "v" in text:
-                match = re.search(r"v\d+r\d+", text)
-                if match:
-                    return match.group(0)
-    return None
+                found.update(re.findall(r"v\d+r\d+", text))
+    return found
 
 
 def from_workbooks(a_path, b_path, c_path, *, as_of, max_stock_age_days,
@@ -281,11 +280,23 @@ def from_workbooks(a_path, b_path, c_path, *, as_of, max_stock_age_days,
     stock = [{"item_code": r["product_id"], "pool": r["pool"], "uom": r["canonical_uom"],
               "qty": r["可发供给"], "join_class": r["join_class"], "source_ref": r["source_ref"],
               "as_of": r["as_of"], "demand_eligibility": r["demand_eligibility"]} for r in c]
-    declared = c_declared_b_version or _find_declared_b_version(c)
+    workbook_versions = _find_declared_b_versions(c)
+    if len(workbook_versions) > 1:
+        raise ValueError("c_dependency_ambiguous:" + ",".join(sorted(workbook_versions)))
+    workbook_declared = next(iter(workbook_versions), None)
+    cli_declared = _declared_version(c_declared_b_version)
+    if cli_declared and workbook_declared and cli_declared != workbook_declared:
+        raise ValueError("c_dependency_conflict:%s!=%s"
+                         % (cli_declared, workbook_declared))
+    declared = cli_declared or workbook_declared
+    dependency_source = ("cli" if cli_declared else
+                         ("workbook" if workbook_declared else "none"))
     result = assess_readiness(universe, attribution, stock, as_of=as_of,
                               max_stock_age_days=max_stock_age_days,
                               b_version=b_version,
                               c_declared_b_version=declared)
+    result["report"]["c_dependency_source"] = dependency_source
+    result["report"]["c_workbook_declared_b_version"] = workbook_declared
     result["report"]["inputs"] = [{"path": str(p), "sha256": hashlib.sha256(Path(p).read_bytes()).hexdigest()}
                                    for p in (a_path, b_path, c_path)]
     return result

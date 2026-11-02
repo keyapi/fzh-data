@@ -16,4 +16,4 @@ tags: [supply-chain-visibility, reference]
 | 菲号（Tracking Number）语义与「工单→菲号→工序卡」层级 | [en-tracking-number-semantics.md](en-tracking-number-semantics.md) |
 | EN「已生产」口径：工单入库 vs 工序卡报工（生产实测） | [en-produced-qty-vs-jobcard.md](en-produced-qty-vs-jobcard.md) |
 | EN 自定义 app 拓扑与「改单据/报表」落地链路 | [en-custom-apps-and-deploy.md](en-custom-apps-and-deploy.md) |
-| 供应事实与数量—日期契约 v1 + full facts v2 发布/reader/ABC | [supply-facts-contract.md](supply-facts-contract.md) |
+| 供应事实与数量—日期契约 v1 + full facts v3 发布/reader/ABC/复跑 | [supply-facts-contract.md](supply-facts-contract.md) |
