@@ -231,6 +231,38 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 仓/客户/关联/物流/退货状态均参与；排除 observed_at，无变更重跑稳定，任一业务判定变化
 都会改变 ID；混版本、漂移、重复键、写盘失败不创建 run、不切 latest。
 
+### `supply_position`（第二批，PO 创建清单 × 状态 → 消费表）
+
+模块：`supply_chain_visibility/supply_position.py`，schema `supply-position/v1`，
+规则/实现版本 `2026-11-02.1`。导出器参数：`--po-manifests-json`、
+`--po-statuses-json`、`--inventory-positions-json`、`--demand-positions-json`。
+
+**行粒度**：`item_code × uom × warehouse × scope(in_house/external_fba) × branch × batch_key`，
+一阶段一行；不跨批次或日期求和，全局不输出跨商品数量总和。
+
+| 阶段 | 含义 |
+|---|---|
+| `po_open` | 状态 0，按创建清单 included 行计入开放供应 |
+| `po_partial_allocation_unknown` | 状态 1/2，qty=null，禁止按 SKU 分摊 |
+| `po_completed` | 状态 3，只关闭 included 行；不声称逐件实收 |
+| `po_voided` | 状态 4，贡献 0 |
+| `po_status_unknown` | 未知码/来源错误/未查询 |
+| `po_in_snapshot` | 库存快照声明已包含该 PO，贡献 0，避免双计 |
+| `dn_goods_unclosed` | mapping_failed / outcome_pending / error，PO 完成也不关闭 |
+| `on_hand` | 库存快照；来源不可用时 qty=null + `inventory_source_unavailable` |
+| `received_proven` / `receipt_unproven` | 有结构化纳入证明才计 receipt |
+| `demand` | 需求；来源不可用时 qty=null |
+
+**要点**
+- 全部到货只关闭 included 行；遗漏行保持 unknown 并继续提示。
+- 部分到货不分摊；状态来源错误不当“没有供给”。
+- 历史 PO 无创建清单 → 列入 `legacy`（`no_creation_audit_manifest`），不伪造行，不阻塞其他商品。
+- PO 完成晚于库存快照 → `post_snapshot_completion` + `completed_not_in_snapshot` 显式标记。
+- `net.rows` 提供 on_hand/po_open/in_transit/demand 与 net_min/net_max 分键结果，供主线 A/B/C/D 净额；最终 `replenishment_decisions` 仍由主线负责。
+
+**PO 状态刷新**：`po_status_refresh.refresh_po_statuses` 按 10 个/批、可断点续跑；
+`rate_limited/partial/missing` 一律记 `unqueried`，不以 partial 当成功；SKU→PO 先去重。
+
 ### `manifest`
 
 `schema_version=supply-facts/v3`（并保留 `supply_facts_schema_version` 与
