@@ -67,7 +67,7 @@
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
 - 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
 
-### 6.1 full_supply_facts v4（2026-11-02，第三轮整改）
+### 6.1 full_supply_facts v4（2026-11-02，第四轮整改，RULE/IMPL 2026-11-02.6）
 
 - 主入口：`supply_pipeline`（`supply-pipeline/v4`）→ `runs/<run>/full_supply_facts.parquet`；
   JSON 为追溯副本；`supply_position.parquet/json` 保留独立 schema/粒度；`timeline.json`；
@@ -81,7 +81,12 @@
   `abc_inventory_key_conflict`。
 - 来源身份与目标归属分开：同一物理来源跨 branch/仓/用途且无
   `allocation_id`+`allocated_qty`+`source_qty` 容量证明 → `source_target_conflict`；
-  物流同 DN 明细+商品/UOM+运单跨目标同样 unknown；合法分配才允许拆分。
+  物流同 DN 明细+商品/UOM+运单跨目标同样 unknown；合法分配还要求实际量严格等于
+  allocated_qty、同源容量声明一致、按 allocation 身份去重后不超容量；同目标内也执行。
+  allocation 同载荷重放只计一次，冲突标 `source_allocation_conflict`。
+- DN/PO 物理身份只含 instance+DN+DN Item；创建审计/PO 号/状态桶属于关系证据。
+  PO 作废重建不复制 DN 数量，部分重叠按物理明细并集；同物理明细载荷冲突时 DN/PO
+  聚合量全部 unknown（`dn_physical_payload_conflict`）。
 - 类型：数量 `decimal128(38,6)`（JSON 规范化字符串），时间 UTC timestamp（date-only/naive
   保留 raw、不假定 UTC）；JSON/Parquet 逐字段回读一致；空表固定 schema；重复键拒收。
 - 失败保护：不创建成功 run、不切 latest、`last_attempt.json` failed；reader 识别

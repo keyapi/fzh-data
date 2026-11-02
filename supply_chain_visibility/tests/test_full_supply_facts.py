@@ -568,6 +568,118 @@ class AbcIdentityCollisionTests(unittest.TestCase):
             self.assertEqual(row["dn_net_qty"], "10")
             self.assertEqual(row["po_completed_assumed_qty"], "1")
 
+    def test_rekey_same_dn_line_with_rebuilt_po_is_counted_once(self):
+        blank = position_row(
+            branch="", dn_net_qty=10, po_completed_assumed_qty=10,
+            tranches=[{"delivery_note": "DN-A", "dn_item": "A-1",
+                       "qty": 10, "bucket": "po_completed_assumed_qty",
+                       "creation": "OLD", "po_code": "PO-OLD"}])
+        explicit = position_row(
+            branch="CENTRADE", dn_net_qty=10, po_completed_assumed_qty=10,
+            tranches=[{"delivery_note": "DN-A", "dn_item": "A-1",
+                       "qty": 10, "bucket": "po_completed_assumed_qty",
+                       "creation": "NEW", "po_code": "PO-NEW"}])
+        result = self._build([blank, explicit], [abc_inventory_row()])
+        row = result["rows"][0]
+        self.assertEqual(row["dn_net_qty"], "10")
+        self.assertEqual(row["po_completed_assumed_qty"], "10")
+        relationships = [source["evidence"] for source in row["sources"]
+                         if source.get("layer") == "dn_line"]
+        self.assertEqual({item["creation"] for item in relationships},
+                         {"OLD", "NEW"})
+
+    def test_same_target_same_dn_line_rebuilt_po_preserves_relationships(self):
+        first = position_row(
+            dn_net_qty=10, po_completed_assumed_qty=10,
+            tranches=[{"delivery_note": "DN-A", "dn_item": "A-1",
+                       "qty": 10, "bucket": "po_completed_assumed_qty",
+                       "creation": "OLD", "po_code": "PO-OLD"}])
+        second = position_row(
+            dn_net_qty=10, po_completed_assumed_qty=10,
+            tranches=[{"delivery_note": "DN-A", "dn_item": "A-1",
+                       "qty": 10, "bucket": "po_completed_assumed_qty",
+                       "creation": "NEW", "po_code": "PO-NEW"}])
+        result = self._build([first, second], [])
+        row = result["rows"][0]
+        self.assertEqual(row["dn_net_qty"], "10")
+        evidence = [source["evidence"] for source in row["sources"]
+                    if source.get("layer") == "dn_line"]
+        self.assertEqual({item["po_code"] for item in evidence},
+                         {"PO-OLD", "PO-NEW"})
+
+    def test_same_position_row_dn_line_replay_is_counted_once(self):
+        replayed = position_row(
+            dn_net_qty=20, po_completed_assumed_qty=20,
+            tranches=[
+                {"delivery_note": "DN-A", "dn_item": "A-1",
+                 "qty": 10, "bucket": "po_completed_assumed_qty",
+                 "creation": "OLD", "po_code": "PO-OLD"},
+                {"delivery_note": "DN-A", "dn_item": "A-1",
+                 "qty": 10, "bucket": "po_completed_assumed_qty",
+                 "creation": "OLD", "po_code": "PO-OLD"}])
+        row = self._build([replayed], [])["rows"][0]
+        self.assertEqual(row["dn_net_qty"], "10")
+        self.assertEqual(row["po_completed_assumed_qty"], "10")
+        self.assertEqual(len([source for source in row["sources"]
+                              if source.get("layer") == "dn_line"]), 1)
+
+    def test_same_position_row_dn_line_payload_conflict_is_unknown(self):
+        conflicted = position_row(
+            dn_net_qty=22, po_completed_assumed_qty=22,
+            tranches=[
+                {"delivery_note": "DN-A", "dn_item": "A-1",
+                 "qty": 10, "bucket": "po_completed_assumed_qty"},
+                {"delivery_note": "DN-A", "dn_item": "A-1",
+                 "qty": 12, "bucket": "po_completed_assumed_qty"}])
+        row = self._build([conflicted], [])["rows"][0]
+        self.assertIn("dn_physical_payload_conflict", row["unknown_reasons"])
+        for field in ("dn_net_qty", "po_completed_assumed_qty",
+                      "open_po_qty", "unresolved_qty"):
+            self.assertIsNone(row[field])
+
+    def test_rekey_same_dn_line_quantity_conflict_keeps_both_unknown(self):
+        blank = position_row(
+            branch="", dn_net_qty=10,
+            tranches=[{"delivery_note": "DN-A", "dn_item": "A-1",
+                       "qty": 10, "bucket": "unresolved_qty"}])
+        explicit = position_row(
+            branch="CENTRADE", dn_net_qty=12,
+            tranches=[{"delivery_note": "DN-A", "dn_item": "A-1",
+                       "qty": 12, "bucket": "unresolved_qty"}])
+        result = self._build([blank, explicit], [abc_inventory_row()])
+        self.assertEqual(len(result["rows"]), 2)
+        self.assertTrue(all("dn_physical_payload_conflict" in row["unknown_reasons"]
+                            for row in result["rows"]))
+        for row in result["rows"]:
+            self.assertIsNone(row["dn_net_qty"])
+            self.assertIsNone(row["po_completed_assumed_qty"])
+            self.assertIsNone(row["open_po_qty"])
+            self.assertIsNone(row["unresolved_qty"])
+
+    def test_rekey_partially_overlapping_dn_lines_counts_union(self):
+        blank = position_row(
+            branch="", dn_net_qty=20, po_completed_assumed_qty=20,
+            tranches=[
+                {"delivery_note": "DN-A", "dn_item": "A-1", "qty": 10,
+                 "bucket": "po_completed_assumed_qty", "creation": "OLD"},
+                {"delivery_note": "DN-B", "dn_item": "B-1", "qty": 10,
+                 "bucket": "po_completed_assumed_qty", "creation": "C-B"}])
+        explicit = position_row(
+            branch="CENTRADE", dn_net_qty=20, po_completed_assumed_qty=20,
+            tranches=[
+                {"delivery_note": "DN-A", "dn_item": "A-1", "qty": 10,
+                 "bucket": "po_completed_assumed_qty", "creation": "NEW"},
+                {"delivery_note": "DN-C", "dn_item": "C-1", "qty": 10,
+                 "bucket": "po_completed_assumed_qty", "creation": "C-C"}])
+        result = self._build([blank, explicit], [abc_inventory_row()])
+        row = result["rows"][0]
+        self.assertEqual(row["dn_net_qty"], "30")
+        self.assertEqual(row["po_completed_assumed_qty"], "30")
+        identities = {source["source_identity"]["dn_item"]
+                      for source in row["sources"]
+                      if source.get("layer") == "dn_line"}
+        self.assertEqual(identities, {"A-1", "B-1", "C-1"})
+
     def test_rekey_without_source_proof_keeps_both_rows_unknown(self):
         blank = position_row(branch="", dn_net_qty=10)
         explicit = position_row(branch="CENTRADE", dn_net_qty=5)
@@ -693,6 +805,56 @@ class SourceTargetIdentityTests(unittest.TestCase):
         self.assertNotIn("source_target_conflict",
                          rows["B"]["unknown_reasons"])
 
+    def test_allocation_quantity_must_equal_measured_quantity(self):
+        records = [
+            {**BASE, "branch": "A", "qty": 100, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-1", "allocated_qty": 2, "source_qty": 5},
+            {**BASE, "branch": "B", "qty": 100, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-2", "allocated_qty": 3, "source_qty": 5}]
+        result = build_full_supply_facts({"rows": []}, production=records)
+        for row in result["rows"]:
+            self.assertIsNone(row["in_production_qty"])
+            self.assertIn("source_allocation_conflict", row["unknown_reasons"])
+
+    def test_allocation_replay_is_idempotent(self):
+        records = [
+            {**BASE, "branch": "A", "qty": 2, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-1", "allocated_qty": 2, "source_qty": 5},
+            {**BASE, "branch": "B", "qty": 3, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-2", "allocated_qty": 3, "source_qty": 5}]
+        for payload in (records + [dict(records[0])],
+                        list(reversed(records + [dict(records[0])]))):
+            result = build_full_supply_facts({"rows": []}, production=payload)
+            self.assertEqual({row["branch"]: row["in_production_qty"]
+                              for row in result["rows"]}, {"A": "2", "B": "3"})
+
+    def test_allocation_source_capacity_must_be_consistent(self):
+        records = [
+            {**BASE, "branch": "A", "qty": 2, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-1", "allocated_qty": 2, "source_qty": 5},
+            {**BASE, "branch": "B", "qty": 3, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-2", "allocated_qty": 3, "source_qty": 6}]
+        result = build_full_supply_facts({"rows": []}, production=records)
+        self.assertTrue(all(row["in_production_qty"] is None
+                            for row in result["rows"]))
+
+    def test_multiple_allocations_to_same_target_are_validated(self):
+        records = [
+            {**BASE, "branch": "A", "qty": 2, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-1", "allocated_qty": 2, "source_qty": 5},
+            {**BASE, "branch": "A", "qty": 3, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-2", "allocated_qty": 3, "source_qty": 5}]
+        result = build_full_supply_facts({"rows": []}, production=records)
+        self.assertEqual(result["rows"][0]["in_production_qty"], "5")
+
     def test_allocated_split_over_capacity_is_conflict(self):
         records = [
             {**BASE, "branch": "A", "qty": 4, "evidence_status": "proven",
@@ -704,7 +866,7 @@ class SourceTargetIdentityTests(unittest.TestCase):
         result = build_full_supply_facts({"rows": []}, production=records)
         for row in result["rows"]:
             self.assertIsNone(row["in_production_qty"])
-            self.assertIn("source_target_conflict", row["unknown_reasons"])
+            self.assertIn("source_allocation_conflict", row["unknown_reasons"])
 
     def test_allocated_split_without_source_qty_is_conflict(self):
         records = [
@@ -803,6 +965,40 @@ class IdentityAndReplayTests(unittest.TestCase):
                 (row["branch"], row["inventory_qty"]) for row in result["rows"]))
         self.assertEqual(outputs[0], outputs[1])
         self.assertEqual(outputs[0], [("", None), ("A", "2"), ("B", "3")])
+
+    def test_allocation_contract_is_shared_by_all_quantity_layers(self):
+        common = {"item_code": "I", "uom": "个", "warehouse": "WH",
+                  "purpose": "branch", "tt_sku": "S1",
+                  "source_ref": "PHYSICAL-1", "source_qty": 5}
+        cases = {
+            "so": ("so_balances", "so_open_qty", "so_open_qty", {}),
+            "production": ("production", "qty", "in_production_qty",
+                           {"evidence_status": "proven"}),
+            "inventory": ("inventory", "qty", "inventory_qty",
+                          {"as_of": "2026-11-02T00:00:00+00:00"}),
+            "receipt": ("receipts", "qty", "received_qty",
+                        {"signed_at": "2026-11-02T00:00:00+00:00"}),
+        }
+        for name, (argument, input_field, output_field, extra) in cases.items():
+            with self.subTest(layer=name):
+                a = {**common, **extra, "branch": "A", input_field: 2,
+                     "allocation_id": "AL-1", "allocated_qty": 2}
+                b = {**common, **extra, "branch": "B", input_field: 3,
+                     "allocation_id": "AL-2", "allocated_qty": 3}
+                kwargs = {argument: [a, b, dict(a)]}
+                result = build_full_supply_facts({"rows": []}, **kwargs)
+                self.assertEqual({row["branch"]: row[output_field]
+                                  for row in result["rows"]},
+                                 {"A": "2", "B": "3"})
+                bad = dict(a)
+                bad[input_field] = 100
+                kwargs = {argument: [bad, b]}
+                result = build_full_supply_facts({"rows": []}, **kwargs)
+                self.assertTrue(all(row[output_field] is None
+                                    for row in result["rows"]))
+                self.assertTrue(all("source_allocation_conflict"
+                                    in row["unknown_reasons"]
+                                    for row in result["rows"]))
 
     def test_source_identity_is_traceable(self):
         result = build_full_supply_facts(position(), production=[
@@ -927,8 +1123,24 @@ class IdentityAndReplayTests(unittest.TestCase):
              "allocated_qty": 3, "source_qty": 5}]
         out = collapse_waybills(events)
         self.assertEqual(len(out), 2)
-        self.assertEqual(sorted(row["qty"] for row in out), [2, 3])
+        self.assertEqual(sorted(row["qty"] for row in out), ["2", "3"])
         self.assertTrue(all("reason" not in row for row in out))
+
+    def test_logistics_allocation_is_measured_and_idempotent(self):
+        events = [
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 2,
+             "warehouse": "WH-A", "allocation_id": "AL-1",
+             "allocated_qty": 2, "source_qty": 5},
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 3,
+             "warehouse": "WH-B", "allocation_id": "AL-2",
+             "allocated_qty": 3, "source_qty": 5}]
+        out = collapse_waybills(events + [dict(events[0])])
+        self.assertEqual(sorted(row["qty"] for row in out), ["2", "3"])
+        bad = [dict(events[0], qty=100), events[1]]
+        out = collapse_waybills(bad)
+        self.assertEqual(len(out), 1)
+        self.assertIsNone(out[0]["qty"])
+        self.assertEqual(out[0]["reason"], "source_allocation_conflict")
 
     def test_logistics_same_waybill_two_dn_lines_is_kept(self):
         events = [

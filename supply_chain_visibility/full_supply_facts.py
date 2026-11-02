@@ -27,8 +27,8 @@ from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
 SCHEMA_VERSION = "full-supply-facts/v4"
-RULE_VERSION = "2026-11-02.5"
-IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-02.5"
+RULE_VERSION = "2026-11-02.6"
+IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-02.6"
 QUANTITY_SCALE = 6
 
 VALID_PURPOSES = ("branch", "fba")
@@ -244,11 +244,28 @@ def _source_identity(identity_fields, values):
             if value not in (None, "")}
 
 
-def _allocation_proof(records):
-    """Return allocation_id -> record when the split is capacity-proven."""
+def _allocation_proof(records, *, quantity_field, payload_fields,
+                      identity_groups):
+    """Validate and deduplicate an explicit allocation ledger.
+
+    Allocation metadata is a measurement contract, not an annotation beside
+    the real quantity.  Every row must declare one stable allocation id, the
+    measured quantity must equal ``allocated_qty``, every row must agree on
+    the physical source capacity, and the deduplicated allocation sum may not
+    exceed that capacity.
+    """
+    # ``line_id`` is often a normal source-line identity.  It becomes an
+    # allocation id only when an allocation contract is otherwise present.
+    allocation_fields = ("allocation_id", "allocated_qty",
+                         "source_qty", "total_qty")
+    if not any(any(record.get(field) not in (None, "")
+                   for field in allocation_fields) for record in records):
+        return {"status": "absent", "records": [], "replayed": 0}
     allocations = {}
-    total = Decimal(0)
-    source_qty = None
+    signatures = {}
+    replay_counts = defaultdict(int)
+    source_quantities = set()
+    replayed = 0
     for record in records:
         allocation_id = _text(record.get("allocation_id")
                               or record.get("line_id"))
@@ -256,17 +273,45 @@ def _allocation_proof(records):
         declared = _dec(record.get("source_qty"))
         if declared is None:
             declared = _dec(record.get("total_qty"))
-        if not allocation_id or allocated is None or declared is None:
-            return None
+        measured = _dec(record.get(quantity_field))
+        if (not allocation_id or allocated is None or declared is None
+                or measured is None or measured != allocated):
+            return {"status": "invalid", "records": [], "replayed": 0}
+        target = tuple(
+            next((_text(record.get(field)) for field in group
+                  if _text(record.get(field))), "")
+            for group in identity_groups)
+        signature = (
+            target,
+            tuple(_payload_key(record.get(field)) for field in payload_fields),
+            _payload_key(allocated), _payload_key(declared))
         if allocation_id in allocations:
-            return None
-        allocations[allocation_id] = record
-        total += allocated
-        source_qty = declared if source_qty is None else min(source_qty,
-                                                            declared)
-    if source_qty is None or total > source_qty:
-        return None
-    return allocations
+            if signatures[allocation_id] != signature:
+                return {"status": "invalid", "records": [], "replayed": 0}
+            replayed += 1
+            replay_counts[allocation_id] += 1
+            continue
+        item = dict(record)
+        item[quantity_field] = _qty(allocated)
+        item.update({"_allocation_id": allocation_id,
+                     "_allocated_qty": _qty(allocated),
+                     "_replay_count": 1})
+        allocations[allocation_id] = item
+        signatures[allocation_id] = signature
+        source_quantities.add(declared)
+    if len(source_quantities) != 1:
+        return {"status": "invalid", "records": [], "replayed": 0}
+    capacity = next(iter(source_quantities))
+    total = sum((_dec(item["_allocated_qty"]) for item in allocations.values()),
+                Decimal(0))
+    if total > capacity:
+        return {"status": "invalid", "records": [], "replayed": 0}
+    for allocation_id, count in replay_counts.items():
+        allocations[allocation_id]["_replay_count"] += count
+    return {"status": "valid",
+            "records": [allocations[key] for key in sorted(allocations)],
+            "replayed": replayed, "source_qty": _qty(capacity),
+            "allocated_qty": _qty(total)}
 
 
 def _dedupe_layer(records, *, layer, source_groups, identity_groups,
@@ -313,20 +358,33 @@ def _dedupe_layer(records, *, layer, source_groups, identity_groups,
                             for field in payload_fields)
             if payload not in payloads:
                 payloads.append(payload)
-        allocations = (_allocation_proof(items)
-                       if len(by_target) > 1 else None)
-        if allocations is not None:
-            splits += len(allocations)
-            for record in items:
-                allocation_id = _text(record.get("allocation_id")
-                                      or record.get("line_id"))
+        allocation = _allocation_proof(
+            items, quantity_field=payload_fields[0],
+            payload_fields=payload_fields, identity_groups=identity_groups)
+        if allocation["status"] == "valid":
+            splits += len(allocation["records"])
+            replayed += allocation["replayed"]
+            for record in allocation["records"]:
+                allocation_id = record["_allocation_id"]
                 merged = dict(record)
                 merged.update({
                     "_source_identity": dict(source_identity,
                                              allocation_id=allocation_id),
-                    "_allocation_id": allocation_id,
-                    "_allocated_qty": record.get("allocated_qty"),
-                    "_split": True, "_replay_count": 1})
+                    "_split": len(allocation["records"]) > 1})
+                effective.append(merged)
+            continue
+        if allocation["status"] == "invalid":
+            conflicts += 1
+            if len(by_target) > 1:
+                target_conflicts += 1
+            for target_values, target_items in sorted(by_target.items()):
+                merged = dict(target_items[0])
+                merged.update({
+                    "_conflict": True,
+                    "_conflict_reason": "source_allocation_conflict",
+                    "_records": target_items,
+                    "_conflict_candidates": items,
+                    "_source_identity": source_identity})
                 effective.append(merged)
             continue
         if len(by_target) > 1:
@@ -424,6 +482,92 @@ def _position_source_identities(row):
     return identities
 
 
+def _position_tranche_identity(tranche):
+    delivery_note = _text(tranche.get("delivery_note"))
+    dn_item = _text(tranche.get("dn_item")
+                    or tranche.get("delivery_note_item"))
+    if not delivery_note or not dn_item:
+        return None
+    return (_text(tranche.get("instance")), delivery_note, dn_item)
+
+
+def _position_tranche_payload(tranche):
+    return (_qty(tranche.get("qty"), signed=True),
+            _text(tranche.get("bucket")))
+
+
+def _position_tranche_map(row):
+    mapped = {}
+    for tranche in row.get("_position_tranches") or ():
+        identity = _position_tranche_identity(tranche)
+        if identity is None:
+            return None
+        payload = _position_tranche_payload(tranche)
+        if identity in mapped and _position_tranche_payload(mapped[identity]) != payload:
+            return None
+        mapped.setdefault(identity, tranche)
+    return mapped or None
+
+
+def _position_totals(tranches):
+    totals = {"dn_net_qty": Decimal(0),
+              "po_completed_assumed_qty": Decimal(0),
+              "open_po_qty": Decimal(0), "unresolved_qty": Decimal(0)}
+    for tranche in tranches:
+        qty = _dec(tranche.get("qty"), signed=True)
+        bucket = _text(tranche.get("bucket"))
+        if qty is None or bucket not in totals or bucket == "dn_net_qty":
+            return None
+        totals["dn_net_qty"] += qty
+        totals[bucket] += qty
+    return totals
+
+
+def _position_tranches_cover(row, mapped):
+    totals = _position_totals(mapped.values()) if mapped else None
+    if totals is None:
+        return False
+    for field, value in totals.items():
+        actual = _dec(row.get(field), signed=(field == "dn_net_qty"))
+        if actual is None or actual != value:
+            return False
+    return True
+
+
+def _position_tranche_sequence_covers(row, tranches):
+    totals = _position_totals(tranches) if tranches else None
+    if totals is None:
+        return False
+    return all(
+        _dec(row.get(field), signed=(field == "dn_net_qty")) == value
+        for field, value in totals.items())
+
+
+def _rebuild_position_from_tranches(row, mapped):
+    totals = _position_totals(mapped.values())
+    if totals is None:
+        raise ValueError("position tranche coverage lost")
+    for field, value in totals.items():
+        row[field] = _qty(value, signed=(field == "dn_net_qty"))
+    row["_position_tranches"] = [mapped[key] for key in sorted(mapped)]
+    row["stage_quantities"] = [
+        fragment for fragment in row.get("stage_quantities") or ()
+        if fragment.get("stage") not in ("po_completed_assumed", "po_open")]
+    for identity, tranche in sorted(mapped.items()):
+        bucket = _text(tranche.get("bucket"))
+        stage = {"po_completed_assumed_qty": "po_completed_assumed",
+                 "open_po_qty": "po_open"}.get(bucket)
+        if stage:
+            _add_stage(
+                row, stage, _dec(tranche.get("qty"), signed=True),
+                tranche.get("_position_as_of") if stage == "po_completed_assumed"
+                else None,
+                "observation" if stage == "po_completed_assumed" else None,
+                source_identity={"instance": identity[0],
+                                 "delivery_note": identity[1],
+                                 "dn_item": identity[2]})
+
+
 def _merge_unique(existing, incoming):
     seen = {}
     for item in list(existing or ()) + list(incoming or ()):
@@ -502,6 +646,33 @@ def _enrich_blank_position_rows(rows, abc_rows):
                 rows[attached] = row
                 continue
             existing = rows[attached]
+            blank_tranches = _position_tranche_map(row)
+            existing_tranches = _position_tranche_map(existing)
+            overlap = (set(blank_tranches or ())
+                       & set(existing_tranches or ()))
+            payload_conflict = any(
+                _position_tranche_payload(blank_tranches[identity])
+                != _position_tranche_payload(existing_tranches[identity])
+                for identity in overlap)
+            if payload_conflict:
+                row["tt_sku"] = original_tt_sku
+                row["branch"] = original_branch
+                row["unknown_reasons"] = original_reasons
+                for target in (row, existing):
+                    _mark_unknown(target, "dn_po",
+                                  "dn_physical_payload_conflict")
+                    target["unresolved_qty"] = None
+                continue
+            if (blank_tranches and existing_tranches
+                    and _position_tranches_cover(row, blank_tranches)
+                    and _position_tranches_cover(existing, existing_tranches)):
+                union = dict(existing_tranches)
+                for identity, tranche in blank_tranches.items():
+                    union.setdefault(identity, tranche)
+                _merge_position_evidence(existing, row)
+                _rebuild_position_from_tranches(existing, union)
+                del rows[key]
+                continue
             blank_sources = _position_source_identities(row)
             existing_sources = _position_source_identities(existing)
             same_payload = all(
@@ -577,7 +748,25 @@ def _event_sort_key(event):
 
 def collapse_waybills(events: Iterable[dict]) -> list[dict]:
     """Dedupe logistics by full business identity, not DN×item×UOM only."""
-    events = list(events)
+    raw_events = list(events)
+    raw_physical_groups = defaultdict(list)
+    for event in raw_events:
+        raw_physical_groups[_waybill_physical_identity(event)].append(event)
+    events = []
+    invalid_allocations = set()
+    target_groups = tuple((field,) for field in WAYBILL_TARGET_FIELDS)
+    for physical, group in sorted(raw_physical_groups.items()):
+        allocation = _allocation_proof(
+            group, quantity_field="qty",
+            payload_fields=("qty", "available_date", "observed_at",
+                            "source_status"),
+            identity_groups=target_groups)
+        if allocation["status"] == "valid":
+            events.extend(allocation["records"])
+        else:
+            events.extend(group)
+            if allocation["status"] == "invalid":
+                invalid_allocations.add(physical)
     by_identity = defaultdict(list)
     physical_groups = defaultdict(list)
     for event in events:
@@ -603,6 +792,13 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
             buckets[_text(item.get("waybill") or item.get("shipment"))].append(item)
         for waybill, raw_group in sorted(buckets.items()):
             group = sorted(raw_group, key=_event_sort_key)
+            if group and all(item.get("_allocation_id") for item in group):
+                for item in group:
+                    kept = dict(item)
+                    kept["source_identity"] = dict(
+                        identity_dict, allocation_id=item["_allocation_id"])
+                    out.append(kept)
+                continue
             payloads = []
             for item in group:
                 payload = (_payload_key(item.get("qty")),
@@ -628,11 +824,29 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
     # choose one; a capacity-proven allocation is the only legal split.
     for physical, group_events in sorted(physical_groups.items()):
         identities = {_waybill_identity(event) for event in group_events}
+        waybill = physical[-1]
+        if physical in invalid_allocations:
+            out = [item for item in out
+                   if not (_text(item.get("waybill") or item.get("shipment"))
+                           == waybill
+                           and _waybill_identity(item) in identities)]
+            base = sorted(group_events, key=_event_sort_key)[0]
+            base_identity = _waybill_identity(base)
+            merged = dict(base)
+            merged.update({
+                "qty": None, "qty_status": "unknown",
+                "reason": "source_allocation_conflict",
+                "candidates": [dict(item) for item in group_events],
+                "source_identity": _source_identity(
+                    WAYBILL_IDENTITY_FIELDS, base_identity),
+                "_replay_count": 1})
+            out.append(merged)
+            continue
         if len(identities) <= 1:
             continue
-        if _allocation_proof(group_events) is not None:
+        if physical not in invalid_allocations and all(
+                event.get("_allocation_id") for event in group_events):
             continue
-        waybill = physical[-1]
         explicit = _explicit_target_identities(identities)
         if not explicit:
             continue
@@ -668,6 +882,7 @@ def _pod_evidence(receipt):
 
 def _finalize(row):
     row.pop("_unknown_layers", set())
+    row.pop("_position_tranches", None)
     fragments = row["stage_quantities"]
     for fragment in fragments:
         if fragment["stage"] == "inventory":
@@ -715,20 +930,50 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
     reconciliation = {}
     abc_rows = list(abc_inventory or ())
     for pos in position_result.get("rows") or []:
+        source_report = position_result.get("report") or {}
+        versions = source_report.get("source_versions") or {}
         key = _key(pos.get("item_code"), pos.get("uom"), pos.get("warehouse"),
                    pos.get("purpose"), pos.get("tt_sku"), pos.get("branch"))
         payload = (pos.get("dn_net_qty"), pos.get("po_completed_assumed_qty"),
                    pos.get("open_po_qty"), pos.get("unresolved_qty"))
         if key in rows:
-            existing = tuple(rows[key].get(field) for field in
+            existing_row = rows[key]
+            existing = tuple(existing_row.get(field) for field in
                              ("dn_net_qty", "po_completed_assumed_qty",
                               "open_po_qty", "unresolved_qty"))
             if existing != tuple(_qty(value, signed=(index == 0))
                                  for index, value in enumerate(payload)):
                 raise ValueError("duplicate_target_key")
+            incoming = [dict(tranche, _position_as_of=pos.get("as_of"))
+                        for tranche in pos.get("tranches") or ()]
+            existing_map = _position_tranche_map(existing_row)
+            incoming_probe = {"_position_tranches": incoming}
+            incoming_map = _position_tranche_map(incoming_probe)
+            if ((existing_map is None) != (incoming_map is None)
+                    or (existing_map is not None
+                        and (set(existing_map) != set(incoming_map)
+                             or any(_position_tranche_payload(existing_map[item])
+                                    != _position_tranche_payload(incoming_map[item])
+                                    for item in existing_map)))):
+                raise ValueError("duplicate_target_key_source_conflict")
+            for tranche in pos.get("tranches") or ():
+                _merge_source(
+                    existing_row, "dn_line", "known",
+                    versions.get("observed_at") or versions.get("as_of"),
+                    source_identity={
+                        "instance": tranche.get("instance"),
+                        "delivery_note": tranche.get("delivery_note"),
+                        "dn_item": tranche.get("dn_item")},
+                    evidence={"creation": tranche.get("creation"),
+                              "po_code": tranche.get("po_code"),
+                              "bucket": tranche.get("bucket"),
+                              "qty": _qty(tranche.get("qty"), signed=True)})
             continue
         row = rows.setdefault(key, _row_base(key))
         touched["dn_po"].append(row)
+        row["_position_tranches"] = [
+            dict(tranche, _position_as_of=pos.get("as_of"))
+            for tranche in pos.get("tranches") or ()]
         row["dn_net_qty"] = _qty(pos.get("dn_net_qty"), signed=True)
         row["po_completed_assumed_qty"] = _qty(pos.get("po_completed_assumed_qty"))
         row["open_po_qty"] = _qty(pos.get("open_po_qty"))
@@ -738,20 +983,22 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             _mark_unknown(row, "dn_po", "dn_po_quantity_unknown")
         if "po_in_snapshot" in (pos.get("reasons") or []):
             row["inventory_inclusion_status"] = "po_in_snapshot"
-        source_report = position_result.get("report") or {}
-        versions = source_report.get("source_versions") or {}
         # Position.as_of is calculation time, not the time the DN was observed.
         _merge_source(row, "dn_po", "known",
                       versions.get("observed_at") or versions.get("as_of"))
         for tranche in pos.get("tranches") or []:
+            physical_identity = {
+                "instance": tranche.get("instance"),
+                "delivery_note": tranche.get("delivery_note"),
+                "dn_item": tranche.get("dn_item")}
             _merge_source(
                 row, "dn_line", "known",
                 versions.get("observed_at") or versions.get("as_of"),
-                source_identity={
-                    "delivery_note": tranche.get("delivery_note"),
-                    "dn_item": tranche.get("dn_item"),
-                    "creation": tranche.get("creation"),
-                    "po_code": tranche.get("po_code")})
+                source_identity=physical_identity,
+                evidence={"creation": tranche.get("creation"),
+                          "po_code": tranche.get("po_code"),
+                          "bucket": tranche.get("bucket"),
+                          "qty": _qty(tranche.get("qty"), signed=True)})
         unresolved = _dec(pos.get("unresolved_qty"))
         pending = (unresolved is None or unresolved > 0 or pos.get("unknown_quantity_lines")
                    or pos.get("return_review_lines"))
@@ -764,10 +1011,32 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                             if t.get("po_code")}):
             _merge_source(row, "po_status", "known", observations.get(code),
                           source_identity={"po_code": code})
-        _add_stage(row, "po_completed_assumed",
-                   _dec(pos.get("po_completed_assumed_qty")),
-                   pos.get("as_of"), "observation")
-        _add_stage(row, "po_open", _dec(pos.get("open_po_qty")), None, None)
+        tranche_map = _position_tranche_map(row)
+        raw_tranches = row.get("_position_tranches") or ()
+        measured_tranches = bool(raw_tranches) and all(
+            _dec(tranche.get("qty"), signed=True) is not None
+            and _text(tranche.get("bucket")) in {
+                "po_completed_assumed_qty", "open_po_qty", "unresolved_qty"}
+            for tranche in raw_tranches)
+        # Tranches are the physical DN ledger.  When the aggregate was built
+        # from exact replays, rebuild it from the physical union; when the
+        # tranches conflict or do not explain the aggregate, retain sources
+        # but do not publish a numeric DN/PO total.
+        if measured_tranches and tranche_map and (
+                _position_tranches_cover(row, tranche_map)
+                or (len(raw_tranches) > len(tranche_map)
+                    and _position_tranche_sequence_covers(row, raw_tranches))):
+            _rebuild_position_from_tranches(row, tranche_map)
+        elif measured_tranches:
+            reason = ("dn_physical_payload_conflict" if tranche_map is None
+                      else "dn_tranche_coverage_mismatch")
+            _mark_unknown(row, "dn_po", reason)
+            row["unresolved_qty"] = None
+        else:
+            _add_stage(row, "po_completed_assumed",
+                       _dec(pos.get("po_completed_assumed_qty")),
+                       pos.get("as_of"), "observation")
+            _add_stage(row, "po_open", _dec(pos.get("open_po_qty")), None, None)
 
     # A/B identity is applied before any non-authoritative source, so order
     # cannot make a blank row adopt the first arriving branch.

@@ -266,8 +266,8 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 ### `full_supply_facts` v4（DN/PO + SO/生产/库存/在途/签收 + 本地 A/B/C）
 
 模块：`supply_chain_visibility/full_supply_facts.py`，schema
-`full-supply-facts/v4`，`RULE=2026-11-02.5`，
-`IMPLEMENTATION=fzh.full_supply_facts@2026-11-02.5`。发布/读取：
+`full-supply-facts/v4`，`RULE=2026-11-02.6`，
+`IMPLEMENTATION=fzh.full_supply_facts@2026-11-02.6`。发布/读取：
 `supply_chain_visibility/publication.py`（`supply-publication/v3`）。
 ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v3`）。
 流水线：`supply_chain_visibility/supply_pipeline.py`（`supply-pipeline/v4`）。
@@ -328,8 +328,12 @@ ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v3`）。
   `item_code`+`uom`；`warehouse`/`branch`/`purpose`/`tt_sku` 只是目标归属。
   同一物理来源跨目标出现且无分配证明 → `source_target_conflict`，每个目标行数量
   null；不得仅因目标键不同输出两份确定供应。
-- 合法拆分必须提供 `allocation_id`（或 `line_id`）+ `allocated_qty` + `source_qty`，
-  且分配总量 ≤ 来源量；超容量、重复分配或缺少容量证明 → 冲突。
+- 合法拆分必须提供 `allocation_id`（或 `line_id`）+ `allocated_qty` + `source_qty`；
+  行内实际数量必须严格等于 `allocated_qty`，同一物理来源的 `source_qty` 声明必须一致，
+  按 allocation 身份去重后的分配总量不得超过来源量。相同 allocation 同载荷重放只计一次；
+  同 allocation 异载荷、实际量与分配量不一致、容量声明冲突、超容量或缺证明均标
+  `source_allocation_conflict` 并将该来源的聚合量降为 null。该校验同样适用于同一目标内
+  的多条 allocation，不能靠落入同一目标绕过。
 - 每层定义稳定来源键：
   - SO：`source_ref`/`so+so_line` + 商品/UOM；
   - 生产：`source_ref`/`work_order|wo|name` + 商品/UOM；
@@ -340,6 +344,13 @@ ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v3`）。
   同身份异载荷 → `source_payload_conflict`，数量 null，保留每个候选片段；
   不同身份即使数量/日期相同也各自保留。
 - 缺来源身份 → `source_identity_missing`，汇总数量 unknown，不宣称可靠去重。
+- DN/PO 的物理交付身份固定为 `instance + Delivery Note + Delivery Note Item`；
+  创建审计、通途 PO 号和状态桶属于关系证据，不得进入物理身份。相同 DN 明细因 PO
+  作废重建或审计重放再次出现时只计一次并保留全部关系证据；部分重叠集合按物理明细
+  求并集。相同物理 DN 明细数量/状态桶冲突时标 `dn_physical_payload_conflict`，相关
+  DN/PO 聚合量全部为 null，不得选择旧值或新值。
+  上述规则也适用于单个 position 行内部：同一物理明细同载荷重放按并集重建聚合量；
+  行内载荷冲突或明细不能完整解释聚合量时保留来源、聚合量降为 null。
 - 物流同一运单跨多个 DN 行/目的仓/分公司 → 无分配证明时数量 null +
   `multi_waybill_allocation_unknown`/`multi_assignment_allocation_unknown` + 候选；
   冲突不取第一条作为代表归属；具备分配证明才允许拆分。

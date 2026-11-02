@@ -438,6 +438,22 @@ key_test/delivery_plan。
 不可用，真实链路验收 pending，未用合成数据冒充。未部署生产、未创建真实 PO、未改
 key_test/delivery_plan。PR #318 保持 draft。
 
+### [W1-FULL-FACTS-V4-ALLOC-2026-11-02] 分配计量与 DN 实物防重
+
+| 问题 | 修复 | 反例/结果 |
+|---|---|---|
+| 分配证明与实际数量脱节 | allocation 必须带身份、分配量、来源容量；实际量严格等于分配量；同源容量声明一致；幂等去重后不超容量；同目标内也校验 | source=5、allocation=2+3、实际=100+100 → 两行 unknown；2+3 重放仍为 2+3；容量 5/6 冲突 |
+| 分配重放被误判冲突 | 相同 allocation 身份+载荷只计一次；同身份异载荷才冲突 | A2/B3 重放后仍为总量 5，输入顺序不影响结果 |
+| PO 作废重建复制 DN 供应 | DN/PO 物理身份固定为 instance+DN+DN Item；creation/PO 号只作关系证据；部分重叠集合求物理并集 | 同 DN 行 OLD/NEW PO → 数量只计一次、两条关系均保留；A+B 与 A+C → A+B+C，不计 A 两次 |
+| 同物理 DN 明细载荷冲突仍残留数字 | 标 `dn_physical_payload_conflict`，DN/PO 四个聚合量全部 null，原始来源证据保留 | 同 DN 行 10/12 → 两行均 unknown，不选择任一数量 |
+| 单行内部 DN 明细重放/冲突 | 同一 position 行也按物理明细去重；原聚合由重放构成则按并集重建，载荷冲突或覆盖不完整则聚合量 unknown | 同行 A10+A10、聚合20 → A10；同行 A10+A12 → unknown |
+
+真实 A/B/C 工作簿、受限用户 HTTP、真实 POD/通途和生产部署仍 pending；本轮未用合成
+结果冒充真实验收，未创建真实 PO，未改 key_test/delivery_plan。
+
+验证：完整依赖 **403 passed / 17 subtests**；最小依赖 **354 passed / 49 skipped /
+17 subtests**。`git diff --check`、995 文件凭证扫描与四类 diff 凭证模式均通过。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

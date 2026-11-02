@@ -212,7 +212,10 @@ JSON/Parquet 逐字段一致校验；失败不切 `latest.json`。reader 返回
 - 每层按物理来源身份去重：来源身份 = source_ref/WO/单据明细 + 商品/UOM，目标仓/
   分支/用途不构成新来源；同身份同载荷只计一次，同身份异载荷显式冲突；
   同一来源跨目标且无 `allocation_id`+`allocated_qty`+`source_qty` 容量证明 →
-  `source_target_conflict`；缺身份保持 unknown。
+  `source_target_conflict`；合法 allocation 的实际量必须等于 allocated_qty，同源 source_qty
+  必须一致，按 allocation 身份去重后不得超容量；同目标内同样校验，重放幂等，冲突为
+  `source_allocation_conflict`。DN/PO 以 instance+DN+DN Item 为物理身份，PO 作废重建
+  只增加关系证据，不重复供应；缺身份保持 unknown。
 - 输入契约：混版页拒绝；**分页截断**（truncated/未 exhausted/pagination.partial）
   拒收；**合法业务 partial**（分页已 exhausted）不拒收，该层汇总 unknown、已证片段
   保留，`partial_reason=business_partial` 透出 manifest/reader；来源状态保守聚合。
