@@ -423,6 +423,21 @@ PO、未改 key_test/delivery_plan。PR #318 保持 draft。
 不可用，真实链路验收 pending，未用合成数据冒充。未部署生产、未创建真实 PO、未改
 key_test/delivery_plan。
 
+### [W1-FULL-FACTS-V4-2026-11-02] 第三轮 P1/P2 整改（基线 719b4d8c）
+
+| 问题 | 修复 | 反例/结果 |
+|---|---|---|
+| C 资格不足仍归属/当前可用 | C 必须 `join_full`+`source_ref`+数量+UoM；否则 `c_not_qualified`，可信/当前均为 null；原因与数值不得矛盾 | no_join/join_partial/缺 source_ref、qty 10 → observed=10，attributed/current null，order blocked |
+| ABC 补齐覆盖已有 DN 行 | 命中已有目标键禁止覆盖：不同已证 DN 明细来源合并求和；同源重放去重；无法证明保留两行 + `abc_identity_key_conflict`；同键 ABC 库存冲突 + `abc_inventory_key_conflict` | branch 空 DN10 + B1 DN5 + ABC 唯一 B1：有明细证明 → B1 DN15 且两段来源/片段；无证明 → 两行保留；正逆序一致 |
+| 同一 WO 被复制成 A/B 两份供应 | 来源身份=source_ref/WO/明细+商品/UOM，目标维度不构成新来源；跨目标无分配证明 → `source_target_conflict`；合法拆分需 allocation_id+allocated_qty+source_qty 且总量≤来源量 | WO-1/A/B qty5 → 两行 qty null；AL-1/2+AL-2/3 source_qty5 → A2/B3；4+3>5 → 冲突 |
+| reader 沿用发布时行级时效 | 每次读取按当前时间从行 `sources[].observed_at` 重算；文件头新不掩盖旧行；allow_stale 只影响可读 | 发布 fresh、一月后 stale；文件 fresh + 行旧 → stale；篡改 manifest row_level 仍 stale |
+| 冻结输入缺失仍发布成功 | 非 not_provided 输入缺失/无 path/内容变更/复制失败 → 终止发布、保留旧 latest、无成功 run；provided_count==frozen_count | 删除/篡改/复制失败均拒绝且 latest 不变；真 not_provided 可选 |
+| 业务 partial 被当分页截断 | 分页截断（truncated/未 exhausted/pagination.partial）拒收；合法业务 partial 不拒收，层汇总 unknown、片段保留，`partial_reason=business_partial` 透出 manifest/reader | production partial+exhausted → CLI 0，in_production null 但片段 4 保留；truncated → 拒收且 latest 不切换 |
+
+测试：PyArrow+openpyxl **391 passed / 13 subtests**；base 环境另计。真实 A/B/C 工作簿仍
+不可用，真实链路验收 pending，未用合成数据冒充。未部署生产、未创建真实 PO、未改
+key_test/delivery_plan。PR #318 保持 draft。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

@@ -191,24 +191,37 @@ Parquet按显式schema写入，空结果也有schema；数量nullable，复杂�
 保留自己的 schema/粒度，不并入 full facts。发布前逐文件回读、SHA、schema、唯一键与
 JSON/Parquet 逐字段一致校验；失败不切 `latest.json`。reader 返回
 `healthy/stale/partial/corrupted/incompatible_version/refresh_failed_using_previous`，
-并用 `allow_stale` 显式控制是否可读。
+并用 `allow_stale` 显式控制是否可读；行级 freshness 每次读取按当前时间重算。
 
-本地冻结 A/B/C 通过 `abc_inputs.load_frozen_abc` 接入：
-- **观察/归属/下单三层分开**：`inventory_observed_qty`（C 原始数量+单位）、
-  `attribution_status`/`inventory_qty`（B 单位/身份资格）、
-  `inventory_current_available_qty`/`order_eligibility`（时间证明+B 门禁）。
+本地冻结 A/B/C 通过 `abc_inputs.load_frozen_abc` 接入（`abc-frozen/v3`，
+`full-supply-facts/v4`，`supply-publication/v3`，`supply-pipeline/v4`）：
+- **观察/归属/当前可用/下单四层分开**：`inventory_observed_qty`（C 原始数量+单位）、
+  `attribution_status`/`inventory_qty`（B 单位/身份资格 + C join_full/source_ref/数量）、
+  `inventory_current_available_qty`/`current_available_eligible`（时间证明）、
+  `order_eligibility`（B 门禁）。
+- C 未通过 `join_full`（no_join/其他未批准 join_class）或缺 `source_ref`/数量/单位
+  → `c_not_qualified`：观察量保留，可信归属与当前可用均为 null，即使原因已报
+  `c_not_qualified_for_netting` 也不得同时保留可信数量。
 - B/C 单位不一致或缺失 → `uom_mismatch`，观察量保留但归属/当前可用为 null；
   同商品同池多个 B 单位分别保留去向，不压成空单位行。
 - date-only/naive 不算精确时间；`inventory_time_proven=false`，当前可用量 null；
   同日未来时间按精确 as_of 识别。
 - 缺 branch/tt_sku 的非权威来源只进未归属池；B/A 显式身份只有在完整候选唯一时
-  才填补 DN/PO 空维度；任意输入排列结果一致。
-- 每层按稳定来源身份去重：同身份同载荷只计一次；同身份异载荷显式冲突；
-  缺身份保持 unknown；物流按 DN 明细+运单+完整业务身份分组。
-- 输入契约：混版页、截断/未 exhausted、缺版本/时间分别显式处理；业务 partial 与
-  分页截断用 `partial_reason` 区分；来源状态保守聚合。
-- 冻结输入复制到 `run_dir/inputs/`，`--replay-run <run_dir> --out <new_out>` 校验字节后
-  复跑；支持空格/中文路径；业务内容 SHA 稳定。
+  才填补 DN/PO 空维度；命中已有目标键不得覆盖（不同已证来源合并、同源重放去重、
+  无法证明保留两行并标 `abc_identity_key_conflict`）；任意输入排列结果一致。
+- 每层按物理来源身份去重：来源身份 = source_ref/WO/单据明细 + 商品/UOM，目标仓/
+  分支/用途不构成新来源；同身份同载荷只计一次，同身份异载荷显式冲突；
+  同一来源跨目标且无 `allocation_id`+`allocated_qty`+`source_qty` 容量证明 →
+  `source_target_conflict`；缺身份保持 unknown。
+- 输入契约：混版页拒绝；**分页截断**（truncated/未 exhausted/pagination.partial）
+  拒收；**合法业务 partial**（分页已 exhausted）不拒收，该层汇总 unknown、已证片段
+  保留，`partial_reason=business_partial` 透出 manifest/reader；来源状态保守聚合。
+- 冻结输入复制到 `run_dir/inputs/` 并校验 SHA；已参与计算的输入缺失/变更/复制失败
+  终止发布且不切 latest，只有 `not_provided` 才是可选缺失；
+  `--replay-run <run_dir> --out <new_out>` 校验字节后复跑；支持空格/中文路径；
+  业务内容 SHA 稳定。
+- reader 每次按本次读取时间从行 `sources[].observed_at` 重算行级 freshness，
+  文件头新不能掩盖旧行；`allow_stale` 只影响可读许可，不改变 freshness 状态。
 
 真实 A/B/C 工作簿当前不可用，故**真实链路验收 pending**；无合成数据冒充。
 拿到后运行完整命令（见 `supply-facts-contract.md` 的 v3 节）。

@@ -6,12 +6,16 @@ observation time. Missing dimensions stay null/unknown with an explicit reason.
 No value is inferred from item_code, source warehouse, customer or names, and a
 physical CG pool is never copied into multiple branch pools.
 
-Three distinct layers are kept apart:
+Three distinct quantity layers plus order eligibility are kept apart:
 
 * ``inventory_observed_qty`` / ``inventory_observed_uom``: what C observed;
-* ``attribution_status`` / ``inventory_qty``: whether B can attribute it;
-* ``inventory_current_available_qty`` / ``order_eligibility``: whether the
-  attribution is time-proven and the B order gates are open.
+* ``attribution_status`` / ``inventory_qty``: whether B can attribute it and C
+  passed its join qualification (join_full + source_ref + UoM + quantity);
+* ``inventory_current_available_qty``: whether the attribution is time-proven;
+* ``order_eligibility`` / ``order_blockers``: whether the B order gates are open.
+
+A reason that reports ineligibility can never leave a trusted or current
+available quantity behind.
 """
 from __future__ import annotations
 
@@ -25,11 +29,11 @@ from supply_chain_visibility.preforecast_readiness import (
     from_workbooks,
 )
 
-SCHEMA_VERSION = "abc-frozen/v2"
+SCHEMA_VERSION = "abc-frozen/v3"
 ATTRIBUTION_VALUES = ("attributed", "partial_identity", "unattributed",
                       "uom_mismatch", "a_inactive", "b_identity_conflict",
                       "cg_pool_ambiguous", "b_multi_uom_ambiguous",
-                      "version_conflict", "a_only")
+                      "version_conflict", "a_only", "c_not_qualified")
 FRESHNESS_VALUES = ("fresh", "stale", "future", "unknown_time")
 
 
@@ -192,13 +196,22 @@ def attribute_readiness(readiness, *, as_of, max_stock_age_days,
         multi_uom = len(b_units) > 1
         identity_conflict = b_conflict or len(identities) > 1
         version_conflict = "c_declared_b_version_mismatch" in reasons
-        join_full = (source.get("c_join_class") == "join_full"
-                     and bool(source.get("c_source_ref")) and bool(uom))
+        declared_qualified = source.get("inventory_qualified")
+        c_qualified = (bool(declared_qualified)
+                       if declared_qualified is not None else
+                       bool(source.get("c_join_class") == "join_full"
+                            and source.get("c_source_ref") and uom and pool
+                            and observed_qty is not None))
         blockers = _order_blockers(
             source, a_active=a_active, unit_match=unit_match,
             multi_uom=multi_uom, b_conflict=b_conflict,
             version_conflict=version_conflict, time_proven=time_proven,
             fresh=fresh, has_c=has_c)
+        if has_c and not c_qualified:
+            reasons.append("c_not_qualified_for_netting")
+            blockers.add("c_not_qualified")
+            if not source.get("c_source_ref"):
+                reasons.append("c_source_ref_missing")
         if has_c and observed_qty is None:
             reasons.append("c_quantity_unknown")
         if has_c and not time_proven:
@@ -249,7 +262,11 @@ def attribute_readiness(readiness, *, as_of, max_stock_age_days,
                 "inventory_freshness": fresh,
                 "source_status": ("known" if observed is not None
                                   else ("unknown" if has_c else "missing")),
+                "observed_status": ("observed" if observed is not None
+                                    else ("unknown" if has_c else "missing")),
                 "attribution_status": attribution,
+                "attribution_eligible": attribution == "attributed",
+                "current_available_eligible": False,
                 "inventory_trusted": attribution == "attributed",
                 "abc_identity_source": "B" if owner else ("C" if has_c else "A"),
                 "order_eligibility": "blocked" if blockers else "unknown",
@@ -328,6 +345,8 @@ def attribute_readiness(readiness, *, as_of, max_stock_age_days,
             attribution = "version_conflict"
         elif not has_c:
             attribution = "partial_identity"
+        elif not c_qualified:
+            attribution = "c_not_qualified"
         elif not unit_match:
             attribution = "uom_mismatch"
         elif not (warehouse and purpose in VALID_PURPOSES
@@ -346,6 +365,8 @@ def attribute_readiness(readiness, *, as_of, max_stock_age_days,
         if (attribution == "attributed" and time_proven
                 and fresh == "fresh" and inventory_qty is not None):
             row["inventory_current_available_qty"] = _qty(inventory_qty)
+        row["current_available_eligible"] = (
+            row["inventory_current_available_qty"] is not None)
         if not has_c:
             row["reasons"] = sorted(set(row["reasons"] + ["c_uncovered_not_zero"]))
         if attribution == "partial_identity":
@@ -450,7 +471,7 @@ def load_frozen_abc(a_path, b_path, c_path, *, as_of, a_version, b_version,
     report = dict(attributed["report"])
     report.update({
         "schema_version": SCHEMA_VERSION,
-        "implementation_version": "fzh.abc_inputs@2026-11-02.2",
+        "implementation_version": "fzh.abc_inputs@2026-11-02.3",
         "a_input_rows": readiness["report"]["a_input_rows"],
         "a_active_items": readiness["report"]["a_active_items"],
         "b_input_rows": readiness["report"]["b_input_rows"],

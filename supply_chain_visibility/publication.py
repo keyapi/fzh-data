@@ -29,6 +29,7 @@ from supply_chain_visibility.full_supply_facts import (
     _iso,
     _qty,
     _time_parts,
+    assess_freshness,
 )
 from supply_chain_visibility.supply_position import (
     IMPLEMENTATION_VERSION as POSITION_IMPLEMENTATION,
@@ -38,7 +39,7 @@ from supply_chain_visibility.supply_position import (
     position_table,
 )
 
-PUBLICATION_SCHEMA = "supply-publication/v2"
+PUBLICATION_SCHEMA = "supply-publication/v3"
 FULL_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch")
 FULL_STRING_COLUMNS = (
     "item_code", "uom", "warehouse", "purpose", "tt_sku", "branch", "pool",
@@ -121,27 +122,44 @@ def _safe_name(value):
 
 
 def _freeze_inputs(inputs, tmp_dir):
-    """Copy every provided input into the run's private immutable inputs/."""
+    """Copy every participating input into the run's private immutable inputs/.
+
+    ``not_provided`` inputs are optional sources that never took part. Anything
+    else participated in the computation, so a missing path, a missing file, a
+    changed digest or a copy failure aborts the publication before latest.json
+    can switch.
+    """
     frozen_dir = Path(tmp_dir) / "inputs"
     frozen_dir.mkdir(parents=True, exist_ok=True)
     mapping = {}
     frozen = []
     for index, item in enumerate(inputs or ()):
-        path = item.get("path")
-        if not path or item.get("status") == "not_provided":
+        if item.get("status") == "not_provided":
             continue
+        path = item.get("path")
+        role = item.get("role")
+        if not path:
+            raise CorruptedPublication(
+                "provided input has no path: " + str(role))
         source = Path(path)
         if not source.is_file():
-            item["status"] = "failed"
-            item["reason"] = "input_missing_at_publish"
-            continue
+            raise CorruptedPublication(
+                "input missing at publish: %s %s" % (role, source))
+        source_digest = _sha256(source)
+        if item.get("sha256") and source_digest != item["sha256"]:
+            raise CorruptedPublication(
+                "input changed while freezing: " + str(path))
         suffix = source.suffix or ".bin"
-        name = "%02d_%s%s" % (index, _safe_name(item.get("role")), suffix)
+        name = "%02d_%s%s" % (index, _safe_name(role), suffix)
         destination = frozen_dir / name
         shutil.copy2(source, destination)
         digest = _sha256(destination)
+        if digest != source_digest:
+            raise CorruptedPublication(
+                "input copy mismatch: " + str(path))
         if item.get("sha256") and digest != item["sha256"]:
-            raise CorruptedPublication("input changed while freezing: " + str(path))
+            raise CorruptedPublication(
+                "input changed while freezing: " + str(path))
         item["frozen_path"] = "inputs/" + name
         item["frozen_sha256"] = digest
         item["frozen_size"] = destination.stat().st_size
@@ -522,6 +540,9 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
     contract_incomplete = [item.get("role") for item in inputs or ()
                            if item.get("completeness") in ("partial",
                                                            "incomplete")]
+    partial_reasons = sorted({
+        reason for item in inputs or ()
+        for reason in (item.get("partial_reason") or [])})
     partial = bool(full_summary.get("unknown_rows")) or bool(failed_inputs) \
         or bool(closure_missing) or bool(version_unknown) \
         or bool(contract_incomplete)
@@ -671,6 +692,7 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
         "netting_ready": False,
         "auto_order": False,
         "publish_status": "succeeded",
+        "partial_reason": partial_reasons,
         "max_age_seconds": max_age_seconds,
         "inputs": inputs,
         "input_summary": {
@@ -684,6 +706,10 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
             "version_unknown": version_unknown,
             "contract_incomplete": contract_incomplete,
             "frozen_inputs": frozen_inputs,
+            "provided_count": sum(
+                1 for item in inputs or ()
+                if item.get("status") != "not_provided"),
+            "frozen_count": len(frozen_inputs),
         },
         "output_summary": {
             "full_supply_facts_rows": len(full_result["rows"]),
@@ -698,6 +724,7 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
             "source_reconciliation": full_summary.get("source_reconciliation"),
             "layer_status": full_summary.get("layer_status"),
             "partial": partial,
+            "partial_reason": partial_reasons,
             "closure_missing_inputs": closure_missing,
             "failed_inputs": failed_inputs,
             "version_unknown_inputs": version_unknown,
@@ -949,7 +976,12 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
             warnings.append("stale_sources:" + ",".join(sorted(stale_sources)))
         if unknown_sources:
             warnings.append("unknown_source_time:" + ",".join(sorted(unknown_sources)))
-        row_level = freshness.get("row_level") or {}
+        publish_row_level = freshness.get("row_level") or {}
+        # Row freshness is recomputed against THIS read time; the publish-time
+        # snapshot is never trusted and a fresh file header cannot mask it.
+        row_level = assess_freshness(
+            full_json_rows, as_of=as_of,
+            max_age_seconds=max_age_seconds)["summary"]
         row_issues = sum(int(row_level.get(key) or 0) for key in
                          ("stale", "unknown", "future"))
         if row_issues:
@@ -983,6 +1015,10 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
                 "manifest": manifest, "latest": latest,
                 "last_attempt": last_attempt,
                 "freshness": freshness, "row_level": row_level,
+                "publish_row_level": publish_row_level,
+                "partial_reason": (manifest.get("partial_reason")
+                                   or (manifest.get("output_summary") or {})
+                                   .get("partial_reason") or []),
                 "full_chain_ready": False,
                 "forecast_connected": False,
                 "netting_ready": False,

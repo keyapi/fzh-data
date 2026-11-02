@@ -13,6 +13,7 @@ from unittest.mock import patch
 from pathlib import Path
 
 from supply_chain_visibility.supply_pipeline import main
+from supply_chain_visibility.publication import read_publication
 from warehouse_restock.delivery_facts_adapter import _scope_hash
 
 AS_OF = "2026-11-02T10:00:00+00:00"
@@ -51,7 +52,9 @@ def _audit(lines=True):
             "pagination": {"limit": 50, "offset": 0, "returned": 1, "total": 1,
                            "exhausted": True, "partial": False, "next_offset": None},
             "creations": [{"name": "TPO-1", "delivery_note": "DN-1",
-                           "status": "confirmed", "purchase_order_code": "PO-1",
+                           "status": "confirmed",
+                           "confirmed_at": AS_OF,
+                           "purchase_order_code": "PO-1",
                            "lines": ([{"dn_item": "DNI-1", "item_code": "SKU-1",
                                        "qty": 5, "uom": "个", "tt_sku": "S1",
                                        "outcome": "included",
@@ -278,6 +281,87 @@ class PipelineTests(unittest.TestCase):
                 self.assertEqual(main(args), 1)
             attempt = json.loads((out / "last_attempt.json").read_text(encoding="utf-8"))
             self.assertIn("input_truncated:inventory", attempt["error"])
+
+    def test_business_partial_is_not_pagination_truncation(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "in"
+            root.mkdir()
+            out = Path(td) / "out"
+            production = {
+                "schema_version": "local/v1", "observed_at": AS_OF,
+                "partial": True,
+                "pagination": {"exhausted": True, "partial": False},
+                "production": [{
+                    "item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+                    "purpose": "branch", "branch": "", "tt_sku": "S1",
+                    "source_ref": "WO-1", "qty": 4,
+                    "evidence_status": "proven", "available_date": AS_OF}]}
+            args = self._args(root, str(out))
+            self._write(root, "delivery.json",
+                        {**_delivery(), "observed_at": AS_OF})
+            args += ["--production-json",
+                     self._write(root, "production.json", production)]
+            with patch("builtins.print"):
+                self.assertEqual(main(args), 0)
+            latest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
+            self.assertIn("business_partial",
+                          manifest["output_summary"]["partial_reason"])
+            self.assertEqual(
+                manifest["output_summary"]["layer_status"].get("production"),
+                "partial")
+            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+                               .read_text(encoding="utf-8"))
+            row = next(item for item in facts if item["tt_sku"] == "S1")
+            self.assertIsNone(row["in_production_qty"])
+            self.assertEqual(row["dn_net_qty"], "5")
+            stages = [fragment for fragment in row["stage_quantities"]
+                      if fragment["stage"] == "in_production"]
+            self.assertEqual([fragment["qty"] for fragment in stages], ["4"])
+            state = read_publication(str(out), as_of=AS_OF,
+                                     max_age_seconds=900)
+            self.assertIn("manifest_partial", state["warnings"])
+            self.assertIn("business_partial", state["partial_reason"])
+            allowed = read_publication(str(out), as_of=AS_OF,
+                                       max_age_seconds=900, allow_stale=True)
+            self.assertTrue(allowed["readable"])
+            self.assertIn("business_partial", state["partial_reason"])
+
+    def test_pagination_truncation_still_rejects_and_keeps_latest(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "in"
+            root.mkdir()
+            out = Path(td) / "out"
+            with patch("builtins.print"):
+                self.assertEqual(main(self._args(root, str(out))), 0)
+            before = (out / "latest.json").read_text(encoding="utf-8")
+            runs_before = len(list((out / "runs").iterdir()))
+            for flag in ({"truncated": True},
+                         {"pagination": {"exhausted": False,
+                                         "partial": False}}):
+                production = {
+                    "schema_version": "local/v1", "observed_at": AS_OF,
+                    "production": [{
+                        "item_code": "SKU-1", "uom": "个",
+                        "warehouse": "WH-1", "purpose": "branch",
+                        "branch": "", "tt_sku": "S1",
+                        "source_ref": "WO-1", "qty": 4,
+                        "evidence_status": "proven",
+                        "available_date": AS_OF}]}
+                production.update(flag)
+                args = self._args(root, str(out)) + [
+                    "--production-json", self._write(
+                        root, "production.json", production)]
+                with patch("builtins.print"):
+                    self.assertEqual(main(args), 1)
+                self.assertEqual((out / "latest.json")
+                                 .read_text(encoding="utf-8"), before)
+                self.assertEqual(len(list((out / "runs").iterdir())),
+                                 runs_before)
+                attempt = json.loads((out / "last_attempt.json")
+                                     .read_text(encoding="utf-8"))
+                self.assertIn("input_truncated:production",
+                              attempt["error"])
 
     def test_incomplete_input_contract_marks_layer_unknown(self):
         with tempfile.TemporaryDirectory() as td:

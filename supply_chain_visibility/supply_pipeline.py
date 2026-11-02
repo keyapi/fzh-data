@@ -20,7 +20,7 @@ from supply_chain_visibility.full_supply_facts import build_full_supply_facts
 from supply_chain_visibility.publication import publish, read_publication, source_freshness
 from supply_chain_visibility.supply_position import assemble_input, build_position
 
-SCHEMA_VERSION = "supply-pipeline/v3"
+SCHEMA_VERSION = "supply-pipeline/v4"
 MAPPING_STUB = {"source": "not_provided", "version": "unknown", "rows": []}
 
 
@@ -151,21 +151,31 @@ def _contract(payload, *, role, key, reject_truncation):
         raise ValueError("input_missing_rows:" + role)
     pagination = payload.get("pagination") or {}
     partial_reason = []
-    if payload.get("partial") is True:
+    business_partial = payload.get("partial") is True
+    if business_partial:
         partial_reason.append("business_partial")
+    pagination_truncated = False
     if pagination.get("exhausted") is False:
         partial_reason.append("pagination_not_exhausted")
+        pagination_truncated = True
+    if pagination.get("partial") is True:
+        partial_reason.append("pagination_partial")
+        pagination_truncated = True
     if payload.get("truncated") is True:
         partial_reason.append("truncated_flag")
-    truncated = bool(partial_reason)
-    if truncated and reject_truncation:
+        pagination_truncated = True
+    if pagination_truncated and reject_truncation:
         raise ValueError("input_truncated:" + role)
     version = payload.get("schema_version") or payload.get("version")
     as_of = payload.get("as_of")
     observed_at = payload.get("observed_at")
-    completeness = "partial" if truncated else "complete"
-    if not version or not (as_of or observed_at):
-        completeness = "incomplete" if completeness == "complete" else completeness
+    incomplete = not version or not (as_of or observed_at)
+    if business_partial or pagination_truncated:
+        completeness = "partial"
+    elif incomplete:
+        completeness = "incomplete"
+    else:
+        completeness = "complete"
     return {
         "rows": rows,
         "version": version,
@@ -174,7 +184,9 @@ def _contract(payload, *, role, key, reject_truncation):
         "observed_at": observed_at,
         "time_status": "provided" if (as_of or observed_at) else "missing",
         "completeness": completeness,
-        "truncated": truncated,
+        "truncated": pagination_truncated,
+        "business_partial": business_partial,
+        "incomplete": incomplete,
         "partial_reason": partial_reason,
     }
 
@@ -293,8 +305,10 @@ def _build_inputs(args, delivery, audits, statuses, mapping_path,
             continue
         contract = _contract(payload, role=role, key=key,
                              reject_truncation=True)
-        if contract["completeness"] != "complete":
+        if contract["incomplete"] or contract["truncated"]:
             layer_status[ROLE_LAYER[role]] = "incomplete"
+        elif contract["business_partial"]:
+            layer_status[ROLE_LAYER[role]] = "partial"
         inputs.append(_input_entry(
             role, path, rows=len(contract["rows"]),
             version=contract["version"],

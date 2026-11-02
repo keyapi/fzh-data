@@ -117,5 +117,24 @@ J5展示同商品不同仓以及无预测仍可查催单；J6验证源修改/断
   冻结输入副本 + `--replay-run` 跨平台复跑。
 - v3 追加：B/C 单位资格、精确时间证明、观察/归属/下单三层、稳定来源身份去重/冲突、
   非权威来源不得填补缺失身份、物流完整身份分组、输入契约与 partial/truncated 区分。
+
+## 2026-11-02 full facts v4 第三轮收口
+
+- **四层资格**：观察事实 / 归属资格 / 当前可用 / 下单资格；C 必须
+  join_full + source_ref + 数量 + UoM，否则 `c_not_qualified`，可信与当前可用均为
+  null；原因已报不合格时不得同时保留可信数量。
+- **禁止身份覆盖**：ABC 补齐命中已有 DN/PO 键时，不同已证明细来源合并求和、同源重放
+  去重、无法证明保留两行并标 `abc_identity_key_conflict`；同键 ABC 库存冲突标
+  `abc_inventory_key_conflict`。
+- **来源 vs 目标**：来源身份 = source_ref/WO/单据明细 + 商品/UOM；同一物理来源跨
+  branch/仓/用途且无 allocation 容量证明 → `source_target_conflict`，不得输出两份
+  确定供应；物流同物理组同规则。
+- **reader**：每次读取按当前时间重算行级 freshness，文件头新不能掩盖旧行；
+  allow_stale 只影响可读许可。
+- **冻结输入**：非 not_provided 输入缺失/变更/复制失败终止发布并保留旧 latest。
+- **业务 partial**：分页已 exhausted 的 partial 不拒收，该层汇总 unknown、已证片段
+  保留，`partial_reason=business_partial`；分页截断仍拒收。
+- 版本：`full-supply-facts/v4`、`abc-frozen/v3`、`supply-publication/v3`、
+  `supply-pipeline/v4`；真实 A/B/C 工作簿验收仍 pending。
 - **真实 A/B/C 冻结工作簿当前不可用，真实链路验收 pending**；不以合成数据冒充。
   D 预测仍未接入；`forecast_connected/netting_ready/auto_order=false`。

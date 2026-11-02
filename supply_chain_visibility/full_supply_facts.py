@@ -26,9 +26,9 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
-SCHEMA_VERSION = "full-supply-facts/v3"
-RULE_VERSION = "2026-11-02.4"
-IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-02.4"
+SCHEMA_VERSION = "full-supply-facts/v4"
+RULE_VERSION = "2026-11-02.5"
+IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-02.5"
 QUANTITY_SCALE = 6
 
 VALID_PURPOSES = ("branch", "fba")
@@ -244,12 +244,40 @@ def _source_identity(identity_fields, values):
             if value not in (None, "")}
 
 
+def _allocation_proof(records):
+    """Return allocation_id -> record when the split is capacity-proven."""
+    allocations = {}
+    total = Decimal(0)
+    source_qty = None
+    for record in records:
+        allocation_id = _text(record.get("allocation_id")
+                              or record.get("line_id"))
+        allocated = _dec(record.get("allocated_qty"))
+        declared = _dec(record.get("source_qty"))
+        if declared is None:
+            declared = _dec(record.get("total_qty"))
+        if not allocation_id or allocated is None or declared is None:
+            return None
+        if allocation_id in allocations:
+            return None
+        allocations[allocation_id] = record
+        total += allocated
+        source_qty = declared if source_qty is None else min(source_qty,
+                                                            declared)
+    if source_qty is None or total > source_qty:
+        return None
+    return allocations
+
+
 def _dedupe_layer(records, *, layer, source_groups, identity_groups,
                   payload_fields):
     """Collapse replay, surface conflicts and keep missing identity unknown.
 
-    ``source_groups`` identify the document/line/batch. Business dimensions are
-    added to the identity but do not replace a missing source reference.
+    ``source_groups`` identify the physical document/line/batch and are grouped
+    together with item_code/uom. Business dimensions (warehouse/branch/purpose/
+    tt_sku) are target attribution, never source identity: a physical source
+    cannot become two supplies merely by being claimed by two targets. A split
+    is legal only with allocation_id + allocated_qty and a capacity proof.
     """
     groups = defaultdict(list)
     missing = []
@@ -258,38 +286,86 @@ def _dedupe_layer(records, *, layer, source_groups, identity_groups,
             next((_text(record.get(field)) for field in group
                   if _text(record.get(field))), "")
             for group in source_groups)
-        values = tuple(
+        target_values = tuple(
             next((_text(record.get(field)) for field in group
                   if _text(record.get(field))), "")
             for group in identity_groups)
         if not any(source_values):
             missing.append(record)
         else:
-            groups[values].append(record)
+            physical = source_values + (_text(record.get("item_code")),
+                                        _text(record.get("uom")))
+            groups[physical].append((target_values, record))
     effective = []
-    replayed = conflicts = 0
-    for values, items in sorted(groups.items()):
+    replayed = conflicts = splits = target_conflicts = 0
+    for physical, entries in sorted(groups.items()):
+        source_identity = {
+            group[0]: value for group, value in
+            zip(tuple(source_groups) + (("item_code",), ("uom",)),
+                physical) if value}
+        items = [record for _, record in entries]
+        by_target = defaultdict(list)
+        for target_values, record in entries:
+            by_target[target_values].append(record)
         payloads = []
-        for item in items:
-            payload = tuple(_payload_key(item.get(field))
+        for record in items:
+            payload = tuple(_payload_key(record.get(field))
                             for field in payload_fields)
             if payload not in payloads:
                 payloads.append(payload)
-        identity = {group[0]: value for group, value in
-                    zip(identity_groups, values) if value}
+        allocations = (_allocation_proof(items)
+                       if len(by_target) > 1 else None)
+        if allocations is not None:
+            splits += len(allocations)
+            for record in items:
+                allocation_id = _text(record.get("allocation_id")
+                                      or record.get("line_id"))
+                merged = dict(record)
+                merged.update({
+                    "_source_identity": dict(source_identity,
+                                             allocation_id=allocation_id),
+                    "_allocation_id": allocation_id,
+                    "_allocated_qty": record.get("allocated_qty"),
+                    "_split": True, "_replay_count": 1})
+                effective.append(merged)
+            continue
+        if len(by_target) > 1:
+            conflicts += 1
+            target_conflicts += 1
+            for target_values, target_items in sorted(by_target.items()):
+                merged = dict(target_items[0])
+                merged.update({
+                    "_conflict": True,
+                    "_conflict_reason": "source_target_conflict",
+                    "_records": target_items,
+                    "_conflict_candidates": items,
+                    "_source_identity": source_identity})
+                effective.append(merged)
+            continue
         if len(payloads) > 1:
             conflicts += 1
-            record = dict(items[0])
-            record.update({"_conflict": True, "_records": items,
-                           "_source_identity": identity})
-            effective.append(record)
-        else:
-            if len(items) > 1:
-                replayed += len(items) - 1
-            merged = dict(items[0])
-            merged.update({"_source_identity": identity,
-                           "_replay_count": len(items)})
+            target_values, target_items = next(iter(by_target.items()))
+            merged = dict(target_items[0])
+            merged.update({
+                "_conflict": True,
+                "_conflict_reason": "source_payload_conflict",
+                "_records": target_items,
+                "_conflict_candidates": items,
+                "_source_identity": source_identity})
             effective.append(merged)
+            continue
+        target_values, target_items = next(iter(by_target.items()))
+        if len(target_items) > 1:
+            replayed += len(target_items) - 1
+        merged = dict(target_items[0])
+        merged.update({
+            "_source_identity": dict(source_identity,
+                                     **_source_identity(
+                                         tuple(group[0] for group in
+                                               identity_groups),
+                                         target_values)),
+            "_replay_count": len(target_items)})
+        effective.append(merged)
     for record in missing:
         item = dict(record)
         item["_identity_missing"] = True
@@ -301,6 +377,8 @@ def _dedupe_layer(records, *, layer, source_groups, identity_groups,
         "identities": len(groups),
         "replayed": replayed,
         "conflicts": conflicts,
+        "target_conflicts": target_conflicts,
+        "split_allocations": splits,
         "missing_identity": len(missing),
         "effective_rows": len(effective),
     }
@@ -330,8 +408,62 @@ def _abc_identities(abc_rows):
     return identities
 
 
+def _position_source_identities(row):
+    identities = set()
+    for source in row.get("sources") or ():
+        if source.get("layer") != "dn_line":
+            continue
+        identity = source.get("source_identity")
+        if not identity:
+            continue
+        values = tuple(sorted((str(key), _text(value))
+                              for key, value in identity.items()
+                              if value not in (None, "")))
+        if values:
+            identities.add(values)
+    return identities
+
+
+def _merge_unique(existing, incoming):
+    seen = {}
+    for item in list(existing or ()) + list(incoming or ()):
+        seen[json.dumps(item, sort_keys=True, default=str)] = item
+    return [seen[key] for key in sorted(seen)]
+
+
+def _merge_position_evidence(target, source):
+    target["sources"] = _merge_unique(target.get("sources"),
+                                      source.get("sources"))
+    target["stage_quantities"] = _merge_unique(
+        target.get("stage_quantities"), source.get("stage_quantities"))
+    target["unknown_reasons"] = sorted(set(
+        list(target.get("unknown_reasons") or ())
+        + list(source.get("unknown_reasons") or ())))
+    layers = set(target.get("_unknown_layers") or ())
+    layers |= set(source.get("_unknown_layers") or ())
+    if layers:
+        target["_unknown_layers"] = layers
+
+
+def _merge_position_quantities(target, source):
+    left = _dec(target.get("dn_net_qty"), signed=True)
+    right = _dec(source.get("dn_net_qty"), signed=True)
+    target["dn_net_qty"] = (None if left is None or right is None
+                            else _qty(left + right, signed=True))
+    for field in ("po_completed_assumed_qty", "open_po_qty", "unresolved_qty"):
+        left = _dec(target.get(field))
+        right = _dec(source.get(field))
+        target[field] = (None if left is None or right is None
+                         else _qty(left + right))
+
+
 def _enrich_blank_position_rows(rows, abc_rows):
-    """Fill blank DN/PO identity only if the *complete* B candidate set agrees."""
+    """Fill blank DN/PO identity only if the *complete* B candidate set agrees.
+
+    When a rekey would land on an existing row, never overwrite it: proven
+    distinct sources are summed, an exact replay is deduplicated, and an
+    unprovable collision keeps both rows marked for review.
+    """
     identities = _abc_identities(abc_rows)
     for key, row in list(rows.items()):
         if row["purpose"] not in VALID_PURPOSES:
@@ -348,6 +480,9 @@ def _enrich_blank_position_rows(rows, abc_rows):
                  or identity[5] == row["branch"])]
         if len(matches) == 1:
             identity = matches[0]
+            original_tt_sku = row["tt_sku"]
+            original_branch = row["branch"]
+            original_reasons = list(row["unknown_reasons"])
             if not row["tt_sku"] and identity[4]:
                 row["tt_sku"] = identity[4]
                 row["unknown_reasons"] = [
@@ -360,15 +495,46 @@ def _enrich_blank_position_rows(rows, abc_rows):
                     if reason != "branch_unknown"]
             attached = _key(row["item_code"], row["uom"], row["warehouse"],
                             row["purpose"], row["tt_sku"], row["branch"])
-            if attached != key:
+            if attached == key:
+                continue
+            if attached not in rows:
                 del rows[key]
                 rows[attached] = row
+                continue
+            existing = rows[attached]
+            blank_sources = _position_source_identities(row)
+            existing_sources = _position_source_identities(existing)
+            same_payload = all(
+                row.get(field) == existing.get(field)
+                for field in ("dn_net_qty", "po_completed_assumed_qty",
+                              "open_po_qty", "unresolved_qty"))
+            if (blank_sources and existing_sources
+                    and blank_sources == existing_sources and same_payload):
+                _merge_position_evidence(existing, row)
+                del rows[key]
+            elif (blank_sources and existing_sources
+                  and not (blank_sources & existing_sources)):
+                _merge_position_evidence(existing, row)
+                _merge_position_quantities(existing, row)
+                del rows[key]
+            else:
+                # Cannot prove distinct sources: keep both rows, lose nothing.
+                row["tt_sku"] = original_tt_sku
+                row["branch"] = original_branch
+                row["unknown_reasons"] = original_reasons
+                for target in (row, existing):
+                    target["unknown_reasons"] = sorted(set(
+                        target["unknown_reasons"]
+                        + ["abc_identity_key_conflict"]))
         elif len(matches) > 1:
             row["unknown_reasons"].append("target_key_ambiguous")
 
 
 WAYBILL_IDENTITY_FIELDS = ("delivery_note", "delivery_note_item", "item_code",
                            "uom", "warehouse", "branch", "purpose", "tt_sku")
+WAYBILL_PHYSICAL_FIELDS = ("delivery_note", "delivery_note_item", "item_code",
+                           "uom")
+WAYBILL_TARGET_FIELDS = ("warehouse", "branch", "purpose", "tt_sku")
 
 
 def _waybill_identity(event):
@@ -382,6 +548,28 @@ def _waybill_identity(event):
     return tuple(values)
 
 
+def _waybill_physical_identity(event):
+    values = []
+    for field in WAYBILL_PHYSICAL_FIELDS:
+        if field == "delivery_note_item":
+            values.append(_text(event.get("delivery_note_item")
+                                or event.get("dn_item")))
+        else:
+            values.append(_text(event.get(field)))
+    values.append(_text(event.get("waybill") or event.get("shipment")))
+    return tuple(values)
+
+
+def _explicit_target_identities(identities):
+    """Candidates that fill every target dimension that actually varies."""
+    varying = [
+        index for index in range(len(WAYBILL_TARGET_FIELDS))
+        if len({identity[4 + index] for identity in identities}) > 1]
+    return sorted(
+        identity for identity in identities
+        if all(identity[4 + index] for index in varying))
+
+
 def _event_sort_key(event):
     return (_text(event.get("waybill") or event.get("shipment")),
             json.dumps(event, sort_keys=True, ensure_ascii=False, default=str))
@@ -391,13 +579,10 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
     """Dedupe logistics by full business identity, not DN×item×UOM only."""
     events = list(events)
     by_identity = defaultdict(list)
+    physical_groups = defaultdict(list)
     for event in events:
         by_identity[_waybill_identity(event)].append(event)
-    waybill_identities = defaultdict(set)
-    for event in events:
-        waybill = _text(event.get("waybill") or event.get("shipment"))
-        if waybill:
-            waybill_identities[waybill].add(_waybill_identity(event))
+        physical_groups[_waybill_physical_identity(event)].append(event)
     out = []
     for identity, raw_items in sorted(by_identity.items()):
         items = sorted(raw_items, key=_event_sort_key)
@@ -438,35 +623,34 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
                                "candidates": [dict(item) for item in group],
                                "source_identity": identity_dict})
                 out.append(merged)
-    # A waybill with an empty dimension cannot be split over several explicit
-    # destinations; keep the observation but do not choose one.
-    for event in events:
-        identity = _waybill_identity(event)
-        waybill = _text(event.get("waybill") or event.get("shipment"))
-        if not waybill:
+    # One physical shipment/line cannot be claimed by several targets merely
+    # because warehouse/branch/purpose differ. Keep the observation but do not
+    # choose one; a capacity-proven allocation is the only legal split.
+    for physical, group_events in sorted(physical_groups.items()):
+        identities = {_waybill_identity(event) for event in group_events}
+        if len(identities) <= 1:
             continue
-        identities = waybill_identities[waybill]
-        warehouses = {item[4] for item in identities if item[4]}
-        branches = {item[5] for item in identities if item[5]}
-        ambiguous = ((not identity[4] and len(warehouses) > 1)
-                     or (not identity[5] and len(branches) > 1))
-        if ambiguous:
-            explicit = {item for item in identities
-                        if (identity[4] or item[4])
-                        and (identity[5] or item[5])}
-            out = [item for item in out
-                   if not (_waybill_identity(item) == identity
-                           and _text(item.get("waybill")
-                                     or item.get("shipment")) == waybill)]
-            merged = dict(event)
-            merged.update({
-                "qty": None, "qty_status": "unknown",
-                "reason": "multi_assignment_allocation_unknown",
-                "candidates": [_source_identity(WAYBILL_IDENTITY_FIELDS, item)
-                               for item in sorted(explicit)],
-                "source_identity": _source_identity(WAYBILL_IDENTITY_FIELDS,
-                                                    identity)})
-            out.append(merged)
+        if _allocation_proof(group_events) is not None:
+            continue
+        waybill = physical[-1]
+        explicit = _explicit_target_identities(identities)
+        if not explicit:
+            continue
+        out = [item for item in out
+               if not (_text(item.get("waybill") or item.get("shipment"))
+                       == waybill
+                       and _waybill_identity(item) in identities)]
+        base = sorted(group_events, key=_event_sort_key)[0]
+        merged = dict(base)
+        merged.update({
+            "qty": None, "qty_status": "unknown",
+            "reason": "multi_assignment_allocation_unknown",
+            "candidates": [_source_identity(WAYBILL_IDENTITY_FIELDS, item)
+                           for item in explicit],
+            "source_identity": _source_identity(
+                WAYBILL_IDENTITY_FIELDS, _waybill_identity(base)),
+            "_replay_count": 1})
+        out.append(merged)
     return sorted(out, key=lambda item: (
         _waybill_identity(item), _text(item.get("waybill")
                                        or item.get("shipment"))))
@@ -510,12 +694,14 @@ def _contract_unknown(layer_status, layer, rows):
     status = (layer_status or {}).get(layer)
     if status not in ("incomplete", "partial", "unavailable"):
         return
+    reason = ("source_business_partial" if status == "partial"
+              else "source_contract_incomplete")
     for row in rows:
-        _merge_source(row, layer, status, reason="source_contract_incomplete")
+        _merge_source(row, layer, status, reason=reason)
         if layer == "dn_po":
             row["source_status"]["dn_po"] = "partial"
             continue
-        _mark_unknown(row, layer, "source_contract_incomplete")
+        _mark_unknown(row, layer, reason)
         if layer == "production":
             row["in_production_estimated_qty"] = None
 
@@ -587,12 +773,24 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
     # cannot make a blank row adopt the first arriving branch.
     _enrich_blank_position_rows(rows, abc_rows)
 
+    abc_seen = {}
+    abc_conflicted = set()
     for item in abc_rows:
         key = _key(item.get("item_code"), item.get("uom"), item.get("warehouse"),
                    item.get("purpose"), item.get("tt_sku"), item.get("branch"))
         row = rows.setdefault(key, _row_base(key))
         touched["inventory"].append(row)
         row.setdefault("_inventory_sources", set()).add("abc")
+        payload = (item.get("inventory_observed_qty"), item.get("inventory_qty"),
+                   item.get("inventory_current_available_qty"),
+                   item.get("inventory_as_of_raw"),
+                   item.get("attribution_status"))
+        conflict = (key in abc_conflicted
+                    or (key in abc_seen and abc_seen[key] != payload))
+        if conflict:
+            abc_conflicted.add(key)
+        else:
+            abc_seen.setdefault(key, payload)
         row["attribution_status"] = item.get("attribution_status")
         row["abc_identity_source"] = item.get("abc_identity_source")
         row["b_units"] = list(item.get("b_units") or [])
@@ -607,13 +805,19 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         observed = _dec(item.get("inventory_observed_qty"))
         inventory_qty = _dec(item.get("inventory_qty"))
         current = _dec(item.get("inventory_current_available_qty"))
-        row["inventory_observed_qty"] = _qty(item.get("inventory_observed_qty"))
-        row["inventory_qty"] = _qty(item.get("inventory_qty"))
-        row["inventory_current_available_qty"] = _qty(
-            item.get("inventory_current_available_qty"))
-        status = _text(item.get("source_status") or "unknown")
+        row["inventory_observed_qty"] = (
+            None if conflict else _qty(item.get("inventory_observed_qty")))
+        row["inventory_qty"] = (
+            None if conflict else _qty(item.get("inventory_qty")))
+        row["inventory_current_available_qty"] = (
+            None if conflict else _qty(item.get("inventory_current_available_qty")))
+        status = "conflict" if conflict else _text(
+            item.get("source_status") or "unknown")
+        reason = ("abc_inventory_key_conflict" if conflict
+                  else ("" if inventory_qty is not None
+                        else "inventory_not_attributed"))
         _merge_source(row, "inventory", status, item.get("inventory_as_of"),
-                      "" if inventory_qty is not None else "inventory_not_attributed",
+                      reason,
                       source_identity={"source_ref": item.get("source_ref"),
                                        "item_code": item.get("item_code"),
                                        "pool": item.get("pool")})
@@ -621,12 +825,13 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             _add_stage(row, "inventory", observed, item.get("inventory_as_of_raw"),
                        "observation",
                        source_identity={"source_ref": item.get("source_ref")})
-        for reason in item.get("reasons") or []:
-            if reason not in row["unknown_reasons"]:
-                row["unknown_reasons"].append(reason)
+        for reason_text in item.get("reasons") or []:
+            if reason_text not in row["unknown_reasons"]:
+                row["unknown_reasons"].append(reason_text)
         if item.get("coverage") and item.get("coverage") != "abc_inventory":
             row["coverage"] = item.get("coverage")
-        if current is None and status == "known" and observed is not None:
+        if (not conflict and current is None and status == "known"
+                and observed is not None):
             row["unknown_reasons"].append("inventory_not_current_available")
 
     so_effective, reconciliation["so_demand"] = _dedupe_layer(
@@ -643,10 +848,11 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                        item.get("branch"), item.get("tt_sku"))
         touched["so_demand"].append(row)
         if item.get("_conflict"):
+            reason = item.get("_conflict_reason") or "source_payload_conflict"
             _merge_source(row, "so_demand", "conflict",
                           source_identity=item["_source_identity"],
-                          reason="source_payload_conflict")
-            _mark_unknown(row, "so_demand", "source_payload_conflict")
+                          reason=reason)
+            _mark_unknown(row, "so_demand", reason)
             for record in item["_records"]:
                 _add_stage(row, "so_demand", _dec(record.get("so_open_qty")),
                            record.get("observed_at"), "observation",
@@ -685,10 +891,11 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                        item.get("branch"), item.get("tt_sku"))
         touched["production"].append(row)
         if item.get("_conflict"):
+            reason = item.get("_conflict_reason") or "source_payload_conflict"
             _merge_source(row, "production", "conflict",
                           source_identity=item["_source_identity"],
-                          reason="source_payload_conflict")
-            _mark_unknown(row, "production", "source_payload_conflict")
+                          reason=reason)
+            _mark_unknown(row, "production", reason)
             for record in item["_records"]:
                 _add_stage(row, "in_production", _dec(record.get("qty")),
                            record.get("available_date"), "expected",
@@ -743,10 +950,11 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         touched["inventory"].append(row)
         row.setdefault("_inventory_sources", set()).add("generic")
         if item.get("_conflict"):
+            reason = item.get("_conflict_reason") or "source_payload_conflict"
             _merge_source(row, "inventory", "conflict",
                           source_identity=item["_source_identity"],
-                          reason="source_payload_conflict")
-            _mark_unknown(row, "inventory", "source_payload_conflict")
+                          reason=reason)
+            _mark_unknown(row, "inventory", reason)
             for record in item["_records"]:
                 _add_stage(row, "inventory", _dec(record.get("qty")),
                            record.get("as_of"), "observation",
@@ -760,7 +968,7 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                        item.get("as_of"), "observation",
                        identity_status="missing")
             continue
-        inventory_groups[id(row)].append(item)
+        inventory_groups[(id(row), item.get("_allocation_id"))].append(item)
     for items in inventory_groups.values():
         row = _row_for(rows, items[0].get("item_code"),
                        items[0].get("uom"), items[0].get("warehouse"),
@@ -850,10 +1058,12 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                        receipt.get("branch"), receipt.get("tt_sku"))
         touched["receipt"].append(row)
         if receipt.get("_conflict"):
+            reason = (receipt.get("_conflict_reason")
+                      or "source_payload_conflict")
             _merge_source(row, "receipt", "conflict",
                           source_identity=receipt["_source_identity"],
-                          reason="source_payload_conflict")
-            _mark_unknown(row, "receipt", "source_payload_conflict")
+                          reason=reason)
+            _mark_unknown(row, "receipt", reason)
             for record in receipt["_records"]:
                 evidence, signed = _pod_evidence(record)
                 _add_stage(row, "received", _dec(record.get("qty")),
@@ -1027,7 +1237,10 @@ def assess_freshness(rows, *, as_of, max_age_seconds):
     out = []
     for row in rows:
         problems = []
-        for source in row.get("sources") or ():
+        sources = list(row.get("sources") or ())
+        if not sources:
+            problems.append({"layer": None, "status": "unknown"})
+        for source in sources:
             observed = _aware(source.get("observed_at"))
             if observed is None:
                 problems.append({"layer": source.get("layer"),

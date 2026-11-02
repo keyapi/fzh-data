@@ -57,14 +57,30 @@ def abc(**over):
 
 def inputs(*extra):
     base = [{
-        "role": "mapping", "source": "approved_b", "path": None,
-        "sha256": None, "rows": 1, "version": "Bv6r10", "as_of": None,
-        "observed_at": None, "status": "provided",
+        "role": "mapping", "source": "not_provided", "path": None,
+        "sha256": None, "rows": 0, "version": "Bv6r10", "as_of": None,
+        "observed_at": None, "status": "not_provided",
         "version_status": "provided", "time_status": "missing",
         "completeness": "complete", "temporal": False,
-        "required_for_closure": False, "reason": None,
+        "required_for_closure": False, "reason": "no_approved_mapping",
     }]
     return base + list(extra)
+
+
+def write_input(tmp, role, *, observed_at=None, as_of=None, **over):
+    path = Path(tmp) / ("%s-input.json" % role)
+    path.write_text("{}", encoding="utf-8")
+    entry = {
+        "role": role, "source": "file", "path": str(path),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "rows": 1,
+        "version": "v1", "version_status": "provided",
+        "as_of": as_of, "observed_at": observed_at,
+        "time_status": ("provided" if (as_of or observed_at) else "missing"),
+        "completeness": "complete", "temporal": True, "status": "provided",
+        "required_for_closure": False, "reason": None,
+    }
+    entry.update(over)
+    return entry
 
 
 def dataset_sha(root, name):
@@ -83,7 +99,8 @@ class PublicationTests(unittest.TestCase):
             mapping_file.write_text("{}", encoding="utf-8")
             test_inputs = inputs()
             test_inputs[0].update(
-                path=str(mapping_file),
+                path=str(mapping_file), status="provided",
+                source="approved_b",
                 sha256=hashlib.sha256(mapping_file.read_bytes()).hexdigest())
             published = publish(tmp, full_result=full, position_result=pos,
                                 inputs=test_inputs, pipeline_as_of=AS_OF,
@@ -94,7 +111,7 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(published["status"], "ok")
             latest = json.loads((Path(tmp) / "latest.json").read_text(encoding="utf-8"))
             manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
-            self.assertEqual(manifest["schema_version"], "supply-publication/v2")
+            self.assertEqual(manifest["schema_version"], "supply-publication/v3")
             self.assertEqual(manifest["versions"]["full_supply_facts"], SCHEMA_VERSION)
             self.assertFalse(manifest["netting_ready"])
             self.assertFalse(manifest["auto_order"])
@@ -248,6 +265,174 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(attempt["status"], "failed")
             self.assertIn("disk full", attempt["error"])
 
+    def test_reader_recomputes_row_freshness_after_time_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            publish(tmp, full_result=full, position_result=pos,
+                    inputs=inputs(write_input(tmp, "inventory",
+                                              observed_at=AS_OF)),
+                    pipeline_as_of=AS_OF, max_age_seconds=900)
+            healthy = read_publication(tmp, as_of=AS_OF,
+                                       max_age_seconds=900)
+            self.assertEqual(healthy["status"], "healthy", healthy["warnings"])
+            later = read_publication(tmp, as_of="2026-12-02T00:00:00+00:00",
+                                     max_age_seconds=900)
+            self.assertEqual(later["status"], "stale")
+            self.assertFalse(later["readable"])
+            self.assertGreaterEqual(later["row_level"]["stale"], 1)
+            self.assertTrue(any("row_level_freshness_issues" in warning
+                                for warning in later["warnings"]))
+            allowed = read_publication(
+                tmp, as_of="2026-12-02T00:00:00+00:00",
+                max_age_seconds=900, allow_stale=True)
+            self.assertTrue(allowed["readable"])
+            self.assertEqual(allowed["status"], "stale")
+
+    def test_new_file_header_does_not_mask_old_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            old_inventory = {
+                "item_code": "I", "uom": "个", "warehouse": "WH",
+                "purpose": "branch", "branch": "B1", "tt_sku": "S1",
+                "qty": 8, "source_ref": "ST-OLD",
+                "as_of": "2026-10-01T00:00:00+00:00"}
+            full = build_full_supply_facts(
+                pos, abc_inventory=[abc()], inventory=[old_inventory],
+                as_of=AS_OF, max_age_seconds=900)
+            publish(tmp, full_result=full, position_result=pos,
+                    inputs=inputs(write_input(tmp, "inventory",
+                                              observed_at=AS_OF)),
+                    pipeline_as_of=AS_OF, max_age_seconds=900)
+            state = read_publication(tmp, as_of=AS_OF, max_age_seconds=900)
+            self.assertEqual(state["freshness"]["status"], "fresh")
+            self.assertEqual(state["status"], "stale")
+            self.assertGreaterEqual(state["row_level"]["stale"], 1)
+
+    def test_row_level_missing_time_is_stale_at_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            pos["report"] = {}
+            full = build_full_supply_facts(pos, as_of=AS_OF,
+                                           max_age_seconds=900)
+            publish(tmp, full_result=full, position_result=pos,
+                    inputs=inputs(write_input(tmp, "delivery",
+                                              observed_at=AS_OF)),
+                    pipeline_as_of=AS_OF, max_age_seconds=900)
+            state = read_publication(tmp, as_of=AS_OF, max_age_seconds=900)
+            self.assertEqual(state["status"], "stale")
+            self.assertGreaterEqual(state["row_level"]["unknown"], 1)
+
+    def test_reader_ignores_publish_time_row_level_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            publish(tmp, full_result=full, position_result=pos,
+                    inputs=inputs(write_input(tmp, "inventory",
+                                              observed_at=AS_OF)),
+                    pipeline_as_of=AS_OF, max_age_seconds=900)
+            latest_path = Path(tmp) / "latest.json"
+            latest = json.loads(latest_path.read_text(encoding="utf-8"))
+            manifest_path = Path(latest["manifest"])
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["freshness"]["row_level"] = {
+                "rows": 1, "fresh": 0, "stale": 0, "unknown": 0, "future": 0}
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            latest["manifest_sha256"] = hashlib.sha256(
+                manifest_path.read_bytes()).hexdigest()
+            latest_path.write_text(json.dumps(latest), encoding="utf-8")
+            state = read_publication(
+                tmp, as_of="2026-12-02T00:00:00+00:00", max_age_seconds=900)
+            self.assertEqual(state["status"], "stale")
+            self.assertGreaterEqual(state["row_level"]["stale"], 1)
+
+    def test_missing_provided_input_aborts_and_keeps_previous(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            entry = write_input(tmp, "inventory", observed_at=AS_OF)
+            first = publish(tmp, full_result=full, position_result=pos,
+                            inputs=inputs(entry), pipeline_as_of=AS_OF,
+                            max_age_seconds=900)
+            manifest = json.loads(
+                (Path(first["run_dir"]) / "manifest.json")
+                .read_text(encoding="utf-8"))
+            summary = manifest["input_summary"]
+            self.assertEqual(summary["provided_count"], summary["frozen_count"])
+            self.assertGreaterEqual(summary["frozen_count"], 1)
+            before = (Path(tmp) / "latest.json").read_text(encoding="utf-8")
+            runs_before = len(list((Path(tmp) / "runs").iterdir()))
+            Path(entry["path"]).unlink()
+            with self.assertRaises(CorruptedPublication) as ctx:
+                publish(tmp, full_result=full, position_result=pos,
+                        inputs=inputs(entry), pipeline_as_of=AS_OF,
+                        max_age_seconds=900)
+            self.assertIn("input missing at publish", str(ctx.exception))
+            self.assertEqual((Path(tmp) / "latest.json")
+                             .read_text(encoding="utf-8"), before)
+            self.assertEqual(len(list((Path(tmp) / "runs").iterdir())),
+                             runs_before)
+            attempt = json.loads((Path(tmp) / "last_attempt.json")
+                                 .read_text(encoding="utf-8"))
+            self.assertEqual(attempt["status"], "failed")
+
+    def test_provided_input_without_path_aborts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            entry = write_input(tmp, "inventory", observed_at=AS_OF)
+            entry["path"] = None
+            with self.assertRaises(CorruptedPublication) as ctx:
+                publish(tmp, full_result=full, position_result=pos,
+                        inputs=inputs(entry), pipeline_as_of=AS_OF)
+            self.assertIn("no path", str(ctx.exception))
+            self.assertFalse((Path(tmp) / "latest.json").exists())
+
+    def test_changed_input_aborts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            entry = write_input(tmp, "inventory", observed_at=AS_OF)
+            Path(entry["path"]).write_text('{"changed": true}',
+                                           encoding="utf-8")
+            with self.assertRaises(CorruptedPublication) as ctx:
+                publish(tmp, full_result=full, position_result=pos,
+                        inputs=inputs(entry), pipeline_as_of=AS_OF)
+            self.assertIn("changed while freezing", str(ctx.exception))
+            self.assertFalse((Path(tmp) / "latest.json").exists())
+
+    def test_copy_failure_aborts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            entry = write_input(tmp, "inventory", observed_at=AS_OF)
+            with patch("supply_chain_visibility.publication.shutil.copy2",
+                       side_effect=OSError("permission denied")):
+                with self.assertRaises(OSError):
+                    publish(tmp, full_result=full, position_result=pos,
+                            inputs=inputs(entry), pipeline_as_of=AS_OF)
+            self.assertFalse((Path(tmp) / "latest.json").exists())
+
+    def test_not_provided_input_is_optional(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = position()
+            full = build_full_supply_facts(pos, abc_inventory=[abc()],
+                                           as_of=AS_OF, max_age_seconds=900)
+            publish(tmp, full_result=full, position_result=pos,
+                    inputs=inputs(), pipeline_as_of=AS_OF)
+            latest = json.loads((Path(tmp) / "latest.json")
+                                .read_text(encoding="utf-8"))
+            manifest = json.loads(Path(latest["manifest"])
+                                  .read_text(encoding="utf-8"))
+            self.assertEqual(manifest["input_summary"]["provided_count"], 0)
+            self.assertEqual(manifest["input_summary"]["frozen_count"], 0)
+
     def test_reader_states(self):
         def make(tmp, **kwargs):
             pos = kwargs.pop("pos", position())
@@ -263,19 +448,14 @@ class PublicationTests(unittest.TestCase):
                                               max_age_seconds=900)["status"],
                              "healthy")
         with tempfile.TemporaryDirectory() as tmp:
-            make(tmp, inputs=inputs({
-                "role": "inventory", "path": "i.json", "sha256": "b" * 64,
-                "rows": 1, "version": "v1",
-                "as_of": "2026-10-01T00:00:00+00:00", "status": "provided",
-                "required_for_closure": False}))
+            make(tmp, inputs=inputs(write_input(
+                tmp, "inventory", as_of="2026-10-01T00:00:00+00:00")))
             self.assertEqual(read_publication(tmp, as_of=AS_OF,
                                               max_age_seconds=60)["status"],
                              "stale")
         with tempfile.TemporaryDirectory() as tmp:
-            make(tmp, inputs=inputs({
-                "role": "inventory", "path": "i.json", "sha256": "b" * 64,
-                "rows": 1, "version": "v1", "as_of": "2026-10-28",
-                "status": "provided", "required_for_closure": False}))
+            make(tmp, inputs=inputs(write_input(
+                tmp, "inventory", as_of="2026-10-28")))
             self.assertEqual(read_publication(tmp, as_of=AS_OF,
                                               max_age_seconds=60)["status"],
                              "stale")
@@ -373,14 +553,8 @@ class PublicationTests(unittest.TestCase):
 
 
     def test_dynamic_missing_time_is_not_healthy(self):
-        dynamic = {
-            "role": "inventory", "path": None, "sha256": None, "rows": 1,
-            "version": "v1", "version_status": "provided",
-            "as_of": None, "observed_at": None, "time_status": "missing",
-            "completeness": "complete", "temporal": True,
-            "status": "provided", "required_for_closure": False,
-            "reason": None}
         with tempfile.TemporaryDirectory() as tmp:
+            dynamic = write_input(tmp, "inventory")
             pos = position()
             full = build_full_supply_facts(pos, abc_inventory=[abc()],
                                            as_of=AS_OF, max_age_seconds=900)
@@ -401,15 +575,10 @@ class PublicationTests(unittest.TestCase):
             self.assertTrue(readable["readable"])
 
     def test_old_snapshot_is_not_healthy(self):
-        fresh = {
-            "role": "inventory", "path": None, "sha256": None, "rows": 1,
-            "version": "v1", "version_status": "provided",
-            "as_of": "2026-11-02T00:00:00+00:00",
-            "observed_at": "2026-11-02T00:00:00+00:00",
-            "time_status": "provided", "completeness": "complete",
-            "temporal": True, "status": "provided",
-            "required_for_closure": False, "reason": None}
         with tempfile.TemporaryDirectory() as tmp:
+            fresh = write_input(
+                tmp, "inventory", as_of="2026-11-02T00:00:00+00:00",
+                observed_at="2026-11-02T00:00:00+00:00")
             pos = position()
             full = build_full_supply_facts(pos, abc_inventory=[abc()],
                                            as_of=AS_OF, max_age_seconds=900)
@@ -428,13 +597,8 @@ class PublicationTests(unittest.TestCase):
             pos["report"] = {}
             full = build_full_supply_facts(pos, abc_inventory=[abc()],
                                            as_of=AS_OF, max_age_seconds=900)
-            fresh = {
-                "role": "delivery", "path": None, "sha256": None, "rows": 1,
-                "version": "v1", "version_status": "provided",
-                "as_of": AS_OF, "observed_at": AS_OF,
-                "time_status": "provided", "completeness": "complete",
-                "temporal": True, "status": "provided",
-                "required_for_closure": True, "reason": None}
+            fresh = write_input(tmp, "delivery", observed_at=AS_OF,
+                                required_for_closure=True)
             publish(tmp, full_result=full, position_result=pos,
                     inputs=inputs(fresh), pipeline_as_of=AS_OF,
                     max_age_seconds=900)

@@ -229,6 +229,71 @@ class AttributionTests(unittest.TestCase):
         self.assertIsNone(out["inventory_current_available_qty"])
         self.assertIn("identity_partial", out["reasons"])
 
+    def test_c_no_join_keeps_observation_but_not_attribution(self):
+        row = base(c_join_class="no_join",
+                   reasons=["c_not_qualified_for_netting"])
+        out = attribute([row])["rows"][0]
+        self.assertEqual(out["inventory_observed_qty"], "10")
+        self.assertEqual(out["inventory_observed_uom"], "个")
+        self.assertIsNone(out["inventory_qty"])
+        self.assertIsNone(out["inventory_current_available_qty"])
+        self.assertEqual(out["attribution_status"], "c_not_qualified")
+        self.assertFalse(out["attribution_eligible"])
+        self.assertFalse(out["current_available_eligible"])
+        self.assertEqual(out["order_eligibility"], "blocked")
+        self.assertIn("c_not_qualified_for_netting", out["reasons"])
+
+    def test_c_partial_join_is_not_qualified(self):
+        row = base(c_join_class="join_partial")
+        out = attribute([row])["rows"][0]
+        self.assertEqual(out["inventory_observed_qty"], "10")
+        self.assertIsNone(out["inventory_qty"])
+        self.assertIsNone(out["inventory_current_available_qty"])
+        self.assertEqual(out["attribution_status"], "c_not_qualified")
+
+    def test_c_join_full_without_source_ref_is_not_qualified(self):
+        row = base(c_source_ref=None)
+        out = attribute([row])["rows"][0]
+        self.assertEqual(out["inventory_observed_qty"], "10")
+        self.assertIsNone(out["inventory_qty"])
+        self.assertIsNone(out["inventory_current_available_qty"])
+        self.assertEqual(out["attribution_status"], "c_not_qualified")
+        self.assertIn("c_source_ref_missing", out["reasons"])
+
+    def test_reported_ineligibility_reason_cannot_upgrade_quantity(self):
+        row = base(c_join_class="no_join",
+                   reasons=["c_not_qualified_for_netting"])
+        out = attribute([row])["rows"][0]
+        self.assertEqual(out["order_eligibility"], "blocked")
+        self.assertIsNone(out["inventory_qty"])
+        self.assertIsNone(out["inventory_current_available_qty"])
+
+    def test_all_attribution_gates_also_block_current_available(self):
+        cases = {
+            "a_inactive": base(a_active=False,
+                               reasons=["a_missing_or_inactive"]),
+            "b_identity_conflict": base(b_identity_conflict=True,
+                                        reasons=["b_identity_conflict"]),
+            "uom_mismatch": base(canonical_uom="EA", b_units=["BOX"]),
+            "version_conflict": base(
+                reasons=["c_declared_b_version_mismatch"]),
+            "no_join": base(c_join_class="no_join"),
+        }
+        for name, row in cases.items():
+            with self.subTest(name=name):
+                out = attribute([row])["rows"][0]
+                self.assertIsNone(out["inventory_qty"], name)
+                self.assertIsNone(out["inventory_current_available_qty"], name)
+                self.assertFalse(out["attribution_eligible"], name)
+                self.assertFalse(out["current_available_eligible"], name)
+
+    def test_four_layer_eligibility_fields_are_explicit(self):
+        out = attribute([base()])["rows"][0]
+        self.assertEqual(out["observed_status"], "observed")
+        self.assertTrue(out["attribution_eligible"])
+        self.assertTrue(out["current_available_eligible"])
+        self.assertEqual(out["order_eligibility"], "unknown")
+
 
 def _write_workbooks(tmp, *, with_target=True, conflict_alias=False,
                      c_dependency="v6r9", c_dependency2=None):

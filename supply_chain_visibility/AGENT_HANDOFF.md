@@ -67,18 +67,33 @@
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
 - 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
 
-### 6.1 full_supply_facts v3（2026-11-02）
+### 6.1 full_supply_facts v4（2026-11-02，第三轮整改）
 
-- 主入口：`supply_pipeline` → `runs/<run>/full_supply_facts.parquet`；JSON 为追溯副本；
-  `supply_position.parquet/json` 保留独立 schema/粒度；`timeline.json`；统一 `manifest.json`。
-- A/B/C：`abc_inputs.load_frozen_abc`；观察量/归属量/当前可用量三层分开；B/C 单位必须一致才可归属；naive/date-only 不算精确时间；缺身份只进未归属池；CG 池不复制；B/C 版本冲突显式。
+- 主入口：`supply_pipeline`（`supply-pipeline/v4`）→ `runs/<run>/full_supply_facts.parquet`；
+  JSON 为追溯副本；`supply_position.parquet/json` 保留独立 schema/粒度；`timeline.json`；
+  统一 `manifest.json`（`supply-publication/v3`）。
+- A/B/C（`abc-frozen/v3`）：观察量/归属量/当前可用/下单四层分开；C 必须
+  join_full + source_ref + 数量 + UoM 才可归属，否则 `c_not_qualified` 且可信/当前
+  均为 null；B/C 单位必须一致才可归属；naive/date-only 不算精确时间；缺身份只进
+  未归属池；CG 池不复制；B/C 版本冲突显式。
+- 身份补齐命中已有 DN/PO 目标键时禁止覆盖：不同已证 DN 明细来源合并求和、同源重放
+  去重、无法证明两行保留并标 `abc_identity_key_conflict`；同 ABC 键库存载荷冲突标
+  `abc_inventory_key_conflict`。
+- 来源身份与目标归属分开：同一物理来源跨 branch/仓/用途且无
+  `allocation_id`+`allocated_qty`+`source_qty` 容量证明 → `source_target_conflict`；
+  物流同 DN 明细+商品/UOM+运单跨目标同样 unknown；合法分配才允许拆分。
 - 类型：数量 `decimal128(38,6)`（JSON 规范化字符串），时间 UTC timestamp（date-only/naive
   保留 raw、不假定 UTC）；JSON/Parquet 逐字段回读一致；空表固定 schema；重复键拒收。
-来源身份：每层稳定键去重/冲突/重放，`sources`/片段保留可下钻身份；物流按完整业务身份。
 - 失败保护：不创建成功 run、不切 latest、`last_attempt.json` failed；reader 识别
   healthy/stale/partial/corrupted/incompatible/refresh-failed。
-- 冻结输入复制到 `run_dir/inputs/`；`--replay-run <run_dir> --out <new_out>` 校验字节后复跑，
-  支持空格/中文路径，业务内容 SHA 稳定。
-- 输入契约：混版缺版本页/截断/未 exhausted 分别拒收或显式 partial；
-  业务 partial 与分页截断用 `partial_reason` 区分；来源状态保守聚合。
+- reader 每次按本次读取时间从行 `sources[].observed_at` 重算行级 freshness；文件级与
+  行级任一 stale/unknown/future 即 stale，新文件头不能掩盖旧行；`allow_stale` 只影响
+  可读许可。
+- 冻结输入：所有非 `not_provided` 输入必须成功复制并校验 SHA（provided_count ==
+  frozen_count）；缺失/变更/复制失败终止发布并保留旧 latest。只有 not_provided 是
+  可选缺失。`--replay-run <run_dir> --out <new_out>` 校验字节后复跑，支持空格/中文
+  路径，业务内容 SHA 稳定。
+- 输入契约：混版缺版本页/分页截断/未 exhausted 拒收；合法业务 partial 不拒收，
+  该层汇总 unknown、已证片段保留，`partial_reason=business_partial` 透出 manifest/
+  reader；来源状态保守聚合。
 - **真实 A/B/C 冻结工作簿验收 pending**（本机暂不可用，未用合成数据冒充）。

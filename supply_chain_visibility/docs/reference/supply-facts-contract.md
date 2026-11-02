@@ -263,13 +263,14 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 **PO 状态刷新**：`po_status_refresh.refresh_po_statuses` 按 10 个/批、可断点续跑；
 `rate_limited/partial/missing` 一律记 `unqueried`，不以 partial 当成功；SKU→PO 先去重。
 
-### `full_supply_facts` v3（DN/PO + SO/生产/库存/在途/签收 + 本地 A/B/C）
+### `full_supply_facts` v4（DN/PO + SO/生产/库存/在途/签收 + 本地 A/B/C）
 
 模块：`supply_chain_visibility/full_supply_facts.py`，schema
-`full-supply-facts/v3`，`RULE=2026-11-02.4`，
-`IMPLEMENTATION=fzh.full_supply_facts@2026-11-02.4`。发布/读取：
-`supply_chain_visibility/publication.py`（`supply-publication/v2`）。
-ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v2`）。
+`full-supply-facts/v4`，`RULE=2026-11-02.5`，
+`IMPLEMENTATION=fzh.full_supply_facts@2026-11-02.5`。发布/读取：
+`supply_chain_visibility/publication.py`（`supply-publication/v3`）。
+ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v3`）。
+流水线：`supply_chain_visibility/supply_pipeline.py`（`supply-pipeline/v4`）。
 
 **主消费入口是 `full_supply_facts.parquet`；JSON 是逐行追溯副本；
 `supply_position` 是同一次发布中的独立数据集，schema/粒度不同。**
@@ -282,12 +283,18 @@ ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v2`）。
   多个候选保持未归属并标 `target_key_ambiguous`。
 - 缺失身份的数量留在未归属池（branch/tt_sku 为空），标明原因；不得因“当前只有一个
   候选”被后续来源认领。SO/生产/库存/签收/ABC 输入任意排列，业务结果一致。
+- ABC 补齐命中**已有目标键**时禁止覆盖：不同已证 DN 明细来源合并求和并保留两段来源/
+  时间片段；同源重放去重；无法证明则两行都保留并标 `abc_identity_key_conflict`。
+  同一 ABC 键的库存载荷冲突标 `abc_inventory_key_conflict`，可信/当前数量清空，
+  原始观察片段保留。
 
-#### A/B/C 三层资格（不可混同）
+#### A/B/C 四层资格（不可混同）
 
-1. **观察事实**：`inventory_observed_qty` + `inventory_observed_uom` 始终保留 C 的原始
-   数量与单位；真零保留 0。
-2. **归属资格**：`attribution_status` / `inventory_qty` / `inventory_trusted`。
+1. **观察事实**：`inventory_observed_qty` + `inventory_observed_uom` +
+   `observed_status` 始终保留 C 的原始数量与单位；真零保留 0。
+2. **归属资格**：`attribution_status` / `attribution_eligible` / `inventory_qty` /
+   `inventory_trusted`。C 必须 `join_class=join_full`、有 `source_ref`、有 UoM 与数量；
+   否则 `c_not_qualified`，`inventory_qty=null`（即使 B 身份完整）。
    - B 必须同时给出 UOM；B/C 单位不一致或缺失 → `uom_mismatch`，观察量保留，
      `inventory_qty=null`、当前可用量 null。
    - 同商品同池多个 B 单位 → 每个 B 单位保留独立去向行；C 观察量只出现一次；
@@ -297,9 +304,13 @@ ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v2`）。
      以上都不得升级为 `inventory_qty`。
    - 同一物理 CG 池被多个 branch 认领 → 每个身份一行、数量 null；另生成唯一池级
      未归因行承载观察量 + `cg_pool_shared_by_multiple_attributions`。
-3. **下单资格**：`order_eligibility`（blocked/unknown）+ `order_blockers`，保留 B 原
+3. **当前可用**：`inventory_current_available_qty` / `current_available_eligible`
+   仅在**归属资格成立 + 时间已证 + fresh（非 future）**时给出。
+4. **下单资格**：`order_eligibility`（blocked/unknown）+ `order_blockers`，保留 B 原
    `可进净额`/限制原因、独立需求、C 资格、时间证明、单位冲突等阻断依据。
    `netting_ready=false`、`auto_order=false` 恒成立；当前库存可观测不等于允许下单。
+   原因中已报告不合格（如 `c_not_qualified_for_netting`）时，不得同时保留可信或
+   当前可用数量。
 
 #### 时间证明与当前可用
 
@@ -313,22 +324,28 @@ ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v2`）。
 
 #### 来源身份、重放与冲突
 
+- **来源身份与目标归属分开**：来源身份 = `source_ref`/`work_order`/单据明细 +
+  `item_code`+`uom`；`warehouse`/`branch`/`purpose`/`tt_sku` 只是目标归属。
+  同一物理来源跨目标出现且无分配证明 → `source_target_conflict`，每个目标行数量
+  null；不得仅因目标键不同输出两份确定供应。
+- 合法拆分必须提供 `allocation_id`（或 `line_id`）+ `allocated_qty` + `source_qty`，
+  且分配总量 ≤ 来源量；超容量、重复分配或缺少容量证明 → 冲突。
 - 每层定义稳定来源键：
-  - SO：`source_ref`/`so+so_line` + 商品/仓/用途身份；
-  - 生产：`source_ref`/`work_order|wo|name` + 商品/仓/用途身份；
-  - 库存：`source_ref`/`snapshot_id` + 商品/仓/用途身份；
-  - 签收：`source_ref`/`receipt_id`/`shipment` + 商品/仓/用途身份；
-  - 物流：DN 明细 + Shipment/运单 + 完整业务身份 + 分配证据。
+  - SO：`source_ref`/`so+so_line` + 商品/UOM；
+  - 生产：`source_ref`/`work_order|wo|name` + 商品/UOM；
+  - 库存：`source_ref`/`snapshot_id` + 商品/UOM；
+  - 签收：`source_ref`/`receipt_id`/`shipment` + 商品/UOM；
+  - 物流：DN 明细 + 商品/UOM + Shipment/运单；目标仓/分公司/用途不同不构成新来源。
 - 同身份同载荷 → 重放只计一次（`stage_quantities[].replay=true`）；
   同身份异载荷 → `source_payload_conflict`，数量 null，保留每个候选片段；
   不同身份即使数量/日期相同也各自保留。
 - 缺来源身份 → `source_identity_missing`，汇总数量 unknown，不宣称可靠去重。
-- 物流同一运单跨多个 DN 行/目的仓/分公司 → 各自保留；无法分配 → 数量 null +
+- 物流同一运单跨多个 DN 行/目的仓/分公司 → 无分配证明时数量 null +
   `multi_waybill_allocation_unknown`/`multi_assignment_allocation_unknown` + 候选；
-  冲突不取第一条作为代表归属。
+  冲突不取第一条作为代表归属；具备分配证明才允许拆分。
 - `sources[]` 与 `stage_quantities[]` 携带 `source_identity`（单据/明细/批次/仓/分支等），
   可下钻到具体 WO/DN/C 记录；`summary.source_reconciliation` 给出每层
-  输入行/身份数/重放/冲突/缺身份/有效行。
+  输入行/物理身份数/重放/冲突/目标冲突/合法分配/缺身份/有效行。
 
 #### 发布、manifest 与 reader
 
@@ -346,18 +363,22 @@ ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v2`）。
   time_status/completeness/truncated/partial_reason/temporal/status/
   required_for_closure/reason；`input_summary` 区分 provided/not_provided/
   version_unknown/contract_incomplete 与冻结输入副本。
-- 动态业务来源缺时间 → freshness unknown（不被当作静态参考跳过）；reader 重新按
-  保存的原始来源时间计算，并纳入行级 stale/unknown/future；一个月后读取旧快照不会是
-  healthy。`allow_stale` 仅在显式放行时使 stale/partial/refresh-failed 可读；
-  corrupted/incompatible 永远不可读。
+- 动态业务来源缺时间 → freshness unknown（不被当作静态参考跳过）；reader 每次读取都
+  按**本次读取时间**从已校验事实行的 `sources[].observed_at` 重算行级
+  stale/unknown/future，不沿用发布时的 `row_level` 快照；文件级时间与行级时间任一
+  stale/unknown/future → `stale`，新文件头不能掩盖旧业务行。一个月后读取旧快照不会
+  是 healthy。`allow_stale` 仅在显式放行时使 stale/partial/refresh-failed 可读，
+  不改变 freshness 状态；corrupted/incompatible 永远不可读。
 
 #### 输入完整性契约
 
 - 多页 audit/status：**缺版本页 + 有版本页直接拒绝**（`mixed_input_versions:*:missing_version`）。
-- SO/生产/库存/在途/签收：必须为对象且含行数组；显式 `truncated=true`、
-  `partial=true` 或分页未 exhausted → 拒收（`input_truncated:<role>`）。
-  缺版本/时间 → `completeness=incomplete`，该层汇总数量 unknown、观察片段保留、
-  manifest `partial=true`；不得包装成完整快照。
+- SO/生产/库存/在途/签收：必须为对象且含行数组；**真正的分页截断**
+  （`truncated=true`、`pagination.exhausted=false`、`pagination.partial=true`）→
+  拒收（`input_truncated:<role>`）。**合法业务 partial**（`partial=true` 且分页已
+  exhausted）→ 不拒收：该层已知片段与来源保留、汇总数量 unknown，manifest/
+  `output_summary`/reader 的 `partial_reason` 含 `business_partial`，其他独立层照常输出。
+  缺版本/时间 → `completeness=incomplete`，该层汇总 unknown，不得包装成完整快照。
 - audit/status 分页 partial → 保留事实但标 partial（`partial_reason` 区分
   `pagination_not_exhausted`/`business_partial`/`truncated_flag`），DN 数量不被清空。
 - 来源状态保守聚合：unavailable/conflict/partial 不会被后到的 known 覆盖。
@@ -367,8 +388,12 @@ ABC 归因：`supply_chain_visibility/abc_inputs.py`（`abc-frozen/v2`）。
 
 #### 冻结输入与复跑
 
-- 发布时把所有已提供输入复制到 `run_dir/inputs/`，记录 `frozen_path`/`frozen_sha256`；
-  源文件后续修改/删除不影响冻结副本。
+- 发布时把所有**参与计算**的输入（非 `not_provided`）复制到 `run_dir/inputs/`，记录
+  `frozen_path`/`frozen_sha256`/`frozen_size`；`provided_count` 必须等于
+  `frozen_count`，否则不能声明可复跑。
+- 已参与计算的输入在冻结时缺失、provided 但无 path、解析后内容改变、复制/权限失败
+  → **终止发布**，保留旧 `latest.json`，不留下成功 run；只有 `not_provided` 才是
+  “本来没有的可选来源”。源文件后续修改/删除不影响已冻结副本。
 - manifest `rerun.argv` 使用 `{run_dir}`/`{out}` 模板；`rerun.command` 是可直接执行的
   PowerShell 命令（`--replay-run`）；`rerun.effective_args` 含默认参数与版本。
 - `python -m supply_chain_visibility.supply_pipeline --replay-run <run_dir> --out <new_out>`

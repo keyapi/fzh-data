@@ -39,6 +39,29 @@ def row_of(result, item="SKU-1"):
     return next(r for r in result["rows"] if r["item_code"] == item)
 
 
+def position_row(**over):
+    row = {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+           "purpose": "branch", "tt_sku": "S1", "branch": "CENTRADE",
+           "dn_net_qty": 5.0, "po_completed_assumed_qty": 0.0,
+           "open_po_qty": 0.0, "unresolved_qty": 0.0,
+           "as_of": "2026-11-02T00:00:00+00:00", "tranches": []}
+    row.update(over)
+    return row
+
+
+def abc_inventory_row(**over):
+    row = {**BASE, "inventory_qty": "0", "inventory_observed_qty": "0",
+           "inventory_current_available_qty": "0",
+           "inventory_as_of": "2026-11-02T00:00:00+00:00",
+           "inventory_as_of_raw": "2026-11-02T00:00:00+00:00",
+           "inventory_time_status": "known", "inventory_time_proven": True,
+           "inventory_freshness": "fresh", "attribution_status": "attributed",
+           "abc_identity_source": "B", "source_status": "known",
+           "reasons": [], "coverage": "abc_inventory", "source_ref": "ST:1"}
+    row.update(over)
+    return row
+
+
 class PurposeTests(unittest.TestCase):
     def test_missing_purpose_is_unknown_not_branch(self):
         result = build_full_supply_facts({"rows": []}, inventory=[{
@@ -496,6 +519,206 @@ class V2ContractTests(unittest.TestCase):
                             for row in result["rows"]))
 
 
+class AbcIdentityCollisionTests(unittest.TestCase):
+    def _build(self, positions, abc_rows):
+        return build_full_supply_facts(
+            {"rows": positions,
+             "report": {"source_versions": {
+                 "observed_at": "2026-11-02T00:00:00+00:00"}}},
+            abc_inventory=abc_rows)
+
+    def test_rekey_merges_distinct_proven_sources(self):
+        blank = position_row(
+            branch="", dn_net_qty=10, po_completed_assumed_qty=1,
+            tranches=[{"delivery_note": "DN-A", "dn_item": "A-1"}])
+        explicit = position_row(
+            branch="CENTRADE", dn_net_qty=5, po_completed_assumed_qty=2,
+            tranches=[{"delivery_note": "DN-B", "dn_item": "B-1"}])
+        outputs = []
+        for rows in ([blank, explicit], [explicit, blank]):
+            result = self._build(rows, [abc_inventory_row()])
+            self.assertEqual(len(result["rows"]), 1)
+            row = result["rows"][0]
+            outputs.append((row["branch"], row["dn_net_qty"],
+                            row["po_completed_assumed_qty"],
+                            sorted(source["source_identity"]["delivery_note"]
+                                   for source in row["sources"]
+                                   if source.get("layer") == "dn_line")))
+            stages = [fragment for fragment in row["stage_quantities"]
+                      if fragment["stage"] == "po_completed_assumed"]
+            self.assertEqual(sorted(fragment["qty"] for fragment in stages),
+                             ["1", "2"])
+        self.assertEqual(outputs[0], outputs[1])
+        self.assertEqual(outputs[0][0], "CENTRADE")
+        self.assertEqual(outputs[0][1], "15")
+        self.assertEqual(outputs[0][2], "3")
+        self.assertEqual(outputs[0][3], ["DN-A", "DN-B"])
+
+    def test_rekey_same_source_replay_is_counted_once(self):
+        blank = position_row(
+            branch="", dn_net_qty=10, po_completed_assumed_qty=1,
+            tranches=[{"delivery_note": "DN-A", "dn_item": "A-1"}])
+        explicit = position_row(
+            branch="CENTRADE", dn_net_qty=10, po_completed_assumed_qty=1,
+            tranches=[{"delivery_note": "DN-A", "dn_item": "A-1"}])
+        for rows in ([blank, explicit], [explicit, blank]):
+            result = self._build(rows, [abc_inventory_row()])
+            self.assertEqual(len(result["rows"]), 1)
+            row = result["rows"][0]
+            self.assertEqual(row["dn_net_qty"], "10")
+            self.assertEqual(row["po_completed_assumed_qty"], "1")
+
+    def test_rekey_without_source_proof_keeps_both_rows_unknown(self):
+        blank = position_row(branch="", dn_net_qty=10)
+        explicit = position_row(branch="CENTRADE", dn_net_qty=5)
+        outputs = []
+        for rows in ([blank, explicit], [explicit, blank]):
+            result = self._build(rows, [abc_inventory_row()])
+            self.assertEqual(len(result["rows"]), 2)
+            actual = sorted((row["branch"], row["dn_net_qty"])
+                            for row in result["rows"])
+            self.assertEqual(actual, [("", "10"), ("CENTRADE", "5")])
+            self.assertTrue(all("abc_identity_key_conflict"
+                                in row["unknown_reasons"]
+                                for row in result["rows"]))
+            outputs.append(actual)
+        self.assertEqual(outputs[0], outputs[1])
+
+    def test_conflicting_inventory_payload_for_same_abc_key_is_unknown(self):
+        result = build_full_supply_facts(
+            {"rows": []},
+            abc_inventory=[abc_inventory_row(),
+                           abc_inventory_row(inventory_qty="5",
+                                             inventory_observed_qty="5")])
+        row = result["rows"][0]
+        self.assertIsNone(row["inventory_qty"])
+        self.assertIsNone(row["inventory_current_available_qty"])
+        self.assertIn("abc_inventory_key_conflict", row["unknown_reasons"])
+
+
+class SourceTargetIdentityTests(unittest.TestCase):
+    def test_same_work_order_across_branches_is_one_source_conflict(self):
+        records = [
+            layer(branch="A", qty=5, evidence_status="proven",
+                  source_ref="WO-1", work_order="WO-1"),
+            layer(branch="B", qty=5, evidence_status="proven",
+                  source_ref="WO-1", work_order="WO-1")]
+        outputs = []
+        for order in (records, list(reversed(records))):
+            result = build_full_supply_facts({"rows": []}, production=order)
+            rows = {row["branch"]: row for row in result["rows"]}
+            self.assertEqual(set(rows), {"A", "B"})
+            for row in result["rows"]:
+                self.assertIsNone(row["in_production_qty"])
+                self.assertIn("source_target_conflict",
+                              row["unknown_reasons"])
+            outputs.append(sorted((row["branch"], row["in_production_qty"])
+                                  for row in result["rows"]))
+        self.assertEqual(outputs[0], outputs[1])
+
+    def test_same_so_line_across_branches_is_conflict(self):
+        records = [
+            layer(branch="A", so_open_qty=5, source_ref="SO-1", so_line="L1"),
+            layer(branch="B", so_open_qty=5, source_ref="SO-1", so_line="L1")]
+        outputs = []
+        for order in (records, list(reversed(records))):
+            result = build_full_supply_facts({"rows": []}, so_balances=order)
+            self.assertEqual(len(result["rows"]), 2)
+            for row in result["rows"]:
+                self.assertIsNone(row["so_open_qty"])
+                self.assertIn("source_target_conflict", row["unknown_reasons"])
+            outputs.append(sorted((row["branch"], row["so_open_qty"])
+                                  for row in result["rows"]))
+        self.assertEqual(outputs[0], outputs[1])
+
+    def test_same_receipt_across_branches_is_conflict(self):
+        records = [
+            layer(branch="A", qty=5, source_ref="RC-1",
+                  signed_at="2026-11-02T00:00:00+00:00"),
+            layer(branch="B", qty=5, source_ref="RC-1",
+                  signed_at="2026-11-02T00:00:00+00:00")]
+        outputs = []
+        for order in (records, list(reversed(records))):
+            result = build_full_supply_facts({"rows": []}, receipts=order)
+            self.assertEqual(len(result["rows"]), 2)
+            for row in result["rows"]:
+                self.assertIsNone(row["received_qty"])
+                self.assertIn("source_target_conflict", row["unknown_reasons"])
+            outputs.append(sorted((row["branch"], row["received_qty"])
+                                  for row in result["rows"]))
+        self.assertEqual(outputs[0], outputs[1])
+
+    def test_same_inventory_snapshot_across_branches_is_conflict(self):
+        records = [
+            layer(branch="A", qty=5, source_ref="ST-1", snapshot_id="S1",
+                  as_of="2026-11-02T00:00:00+00:00"),
+            layer(branch="B", qty=5, source_ref="ST-1", snapshot_id="S1",
+                  as_of="2026-11-02T00:00:00+00:00")]
+        outputs = []
+        for order in (records, list(reversed(records))):
+            result = build_full_supply_facts({"rows": []}, inventory=order)
+            self.assertEqual(len(result["rows"]), 2)
+            for row in result["rows"]:
+                self.assertIsNone(row["inventory_qty"])
+                self.assertIn("source_target_conflict", row["unknown_reasons"])
+            outputs.append(sorted((row["branch"], row["inventory_qty"])
+                                  for row in result["rows"]))
+        self.assertEqual(outputs[0], outputs[1])
+
+    def test_same_work_order_different_items_are_distinct(self):
+        records = [
+            layer(item_code="I1", qty=5, evidence_status="proven",
+                  source_ref="WO-1", work_order="WO-1"),
+            layer(item_code="I2", qty=7, evidence_status="proven",
+                  source_ref="WO-1", work_order="WO-1")]
+        result = build_full_supply_facts({"rows": []}, production=records)
+        qty = {row["item_code"]: row["in_production_qty"]
+               for row in result["rows"]}
+        self.assertEqual(qty, {"I1": "5", "I2": "7"})
+
+    def test_allocated_split_with_capacity_proof_is_allowed(self):
+        records = [
+            {**BASE, "branch": "A", "qty": 2, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-1", "allocated_qty": 2, "source_qty": 5},
+            {**BASE, "branch": "B", "qty": 3, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-2", "allocated_qty": 3, "source_qty": 5}]
+        result = build_full_supply_facts({"rows": []}, production=records)
+        rows = {row["branch"]: row for row in result["rows"]}
+        self.assertEqual(rows["A"]["in_production_qty"], "2")
+        self.assertEqual(rows["B"]["in_production_qty"], "3")
+        self.assertNotIn("source_target_conflict",
+                         rows["A"]["unknown_reasons"])
+        self.assertNotIn("source_target_conflict",
+                         rows["B"]["unknown_reasons"])
+
+    def test_allocated_split_over_capacity_is_conflict(self):
+        records = [
+            {**BASE, "branch": "A", "qty": 4, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-1", "allocated_qty": 4, "source_qty": 5},
+            {**BASE, "branch": "B", "qty": 3, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-2", "allocated_qty": 3, "source_qty": 5}]
+        result = build_full_supply_facts({"rows": []}, production=records)
+        for row in result["rows"]:
+            self.assertIsNone(row["in_production_qty"])
+            self.assertIn("source_target_conflict", row["unknown_reasons"])
+
+    def test_allocated_split_without_source_qty_is_conflict(self):
+        records = [
+            {**BASE, "branch": "A", "qty": 2, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-1", "allocated_qty": 2},
+            {**BASE, "branch": "B", "qty": 3, "evidence_status": "proven",
+             "source_ref": "WO-9", "work_order": "WO-9",
+             "allocation_id": "AL-2", "allocated_qty": 3}]
+        result = build_full_supply_facts({"rows": []}, production=records)
+        for row in result["rows"]:
+            self.assertIsNone(row["in_production_qty"])
+
+
 class IdentityAndReplayTests(unittest.TestCase):
     def _three(self, layer_name):
         common = {"item_code": "I", "uom": "个", "warehouse": "WH",
@@ -640,27 +863,33 @@ class IdentityAndReplayTests(unittest.TestCase):
                 self.assertIn("source_payload_conflict",
                               row["unknown_reasons"], layer)
 
-    def test_logistics_keeps_same_waybill_with_different_warehouse(self):
+    def test_logistics_same_waybill_different_warehouse_is_unknown(self):
         events = [
             {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
              "warehouse": "WH-A"},
             {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
              "warehouse": "WH-B"}]
         out = collapse_waybills(events)
-        self.assertEqual(len(out), 2)
-        self.assertEqual(sorted(row["warehouse"] for row in out),
+        self.assertEqual(len(out), 1)
+        self.assertIsNone(out[0]["qty"])
+        self.assertEqual(out[0]["reason"], "multi_assignment_allocation_unknown")
+        self.assertEqual(sorted(candidate["warehouse"]
+                                for candidate in out[0]["candidates"]),
                          ["WH-A", "WH-B"])
-        self.assertTrue(all(row["qty"] == 5 for row in out))
 
-    def test_logistics_keeps_same_waybill_with_different_branch(self):
+    def test_logistics_same_waybill_different_branch_is_unknown(self):
         events = [
             {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
              "branch": "A"},
             {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 5,
              "branch": "B"}]
         out = collapse_waybills(events)
-        self.assertEqual(len(out), 2)
-        self.assertEqual(sorted(row["branch"] for row in out), ["A", "B"])
+        self.assertEqual(len(out), 1)
+        self.assertIsNone(out[0]["qty"])
+        self.assertEqual(out[0]["reason"], "multi_assignment_allocation_unknown")
+        self.assertEqual(sorted(candidate["branch"]
+                                for candidate in out[0]["candidates"]),
+                         ["A", "B"])
 
     def test_logistics_multi_waybill_is_unknown_and_order_independent(self):
         events = [
@@ -687,6 +916,19 @@ class IdentityAndReplayTests(unittest.TestCase):
         self.assertIsNone(out[0]["qty"])
         self.assertEqual(out[0]["reason"],
                          "duplicate_waybill_quantity_conflict")
+
+    def test_logistics_allocation_proof_allows_split(self):
+        events = [
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 2,
+             "warehouse": "WH-A", "allocation_id": "AL-1",
+             "allocated_qty": 2, "source_qty": 5},
+            {**BASE, "delivery_note": "DN-1", "waybill": "W1", "qty": 3,
+             "warehouse": "WH-B", "allocation_id": "AL-2",
+             "allocated_qty": 3, "source_qty": 5}]
+        out = collapse_waybills(events)
+        self.assertEqual(len(out), 2)
+        self.assertEqual(sorted(row["qty"] for row in out), [2, 3])
+        self.assertTrue(all("reason" not in row for row in out))
 
     def test_logistics_same_waybill_two_dn_lines_is_kept(self):
         events = [
