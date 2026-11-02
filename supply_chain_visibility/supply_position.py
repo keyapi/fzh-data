@@ -20,6 +20,8 @@ from warehouse_restock.delivery_facts_adapter import validate_delivery_snapshot,
 
 
 VERSION = "supply-position/v1"
+RULE_VERSION = "2026-11-02.1"
+IMPLEMENTATION_VERSION = "fzh.supply_position@2026-11-02.1"
 QUANTITIES = ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty", "unresolved_qty")
 
 
@@ -390,7 +392,7 @@ def _publish_position(result, out):
     # renaming an open directory is unreliable on Windows (Arrow/indexers).
     staging = root / ("snapshot-" + token)
     staging.mkdir()
-    table = _position_table(result)
+    table = position_table(result)
     file = staging / "supply_position.parquet"
     pq.write_table(table, file, compression="zstd")
     if not pq.read_table(file).equals(table):
@@ -410,7 +412,7 @@ def _publish_position(result, out):
     return final
 
 
-def _position_table(result):
+def position_table(result):
     import pyarrow as pa
 
     schema = pa.schema([
@@ -430,6 +432,9 @@ def _position_table(result):
         record["tranches_json"] = json.dumps(row["tranches"], ensure_ascii=False, allow_nan=False)
         records.append(record)
     return pa.Table.from_pylist(records, schema=schema)
+
+
+_position_table = position_table  # backward-compatible alias
 
 
 def read_position(out, *, as_of, max_age_seconds, allow_stale=False):
@@ -468,7 +473,7 @@ def read_position(out, *, as_of, max_age_seconds, allow_stale=False):
     # Read the bytes whose hash was checked, avoiding a second-path-read race.
     import pyarrow as pa
     table = pq.read_table(pa.BufferReader(data_bytes))
-    expected = _position_table(result)
+    expected = position_table(result)
     def decoded_records(source):
         records = source.to_pylist()
         for record in records:

@@ -129,6 +129,7 @@ class StageDateTests(unittest.TestCase):
         row = row_of(result)
         self.assertEqual(row["available_date_kind"], "actual")
         self.assertEqual(row["date_confidence"], "confirmed")
+        self.assertEqual(row["receipt_basis"], "signed_assumed")
 
 
 class DemandSupplyTests(unittest.TestCase):
@@ -139,7 +140,7 @@ class DemandSupplyTests(unittest.TestCase):
         row = row_of(result)
         self.assertIn("creation_lines_not_exported", row["unknown_reasons"])
         self.assertEqual(row["source_status"]["dn_po"], "partial")
-        self.assertEqual(row["unresolved_qty"], 5)
+        self.assertEqual(row["unresolved_qty"], "5")
         self.assertEqual(row["next_node"], "manual_review_unknown")
         self.assertFalse(result["freshness"]["rows"][0]["fresh"])
 
@@ -200,7 +201,7 @@ class DemandSupplyTests(unittest.TestCase):
 
     def test_independent_dn_row_is_preserved(self):
         result = build_full_supply_facts(position(dn_net_qty=7.0))
-        self.assertEqual(row_of(result)["dn_net_qty"], 7.0)
+        self.assertEqual(row_of(result)["dn_net_qty"], "7")
 
     def test_approved_item_without_evidence_is_listed(self):
         result = build_full_supply_facts({"rows": []},
@@ -293,6 +294,157 @@ class TimelineFreshnessTests(unittest.TestCase):
         result = build_full_supply_facts({"rows": rows})
         self.assertEqual(len(result["rows"]), 2000)
         self.assertIsNone(result["summary"]["global_qty_total"])
+        self.assertIsNone(result["summary"]["cross_layer_total"])
+
+
+class V2ContractTests(unittest.TestCase):
+    def test_duplicate_position_target_key_is_rejected(self):
+        row = {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+               "purpose": "branch", "tt_sku": "S1", "branch": "CENTRADE",
+               "dn_net_qty": 5, "po_completed_assumed_qty": 0,
+               "open_po_qty": 0, "unresolved_qty": 0}
+        with self.assertRaises(ValueError) as ctx:
+            build_full_supply_facts({"rows": [row, dict(row, dn_net_qty=6)]})
+        self.assertIn("duplicate_target_key", str(ctx.exception))
+        replay = build_full_supply_facts({"rows": [row, dict(row)]})
+        self.assertEqual(len(replay["rows"]), 1)
+
+    def test_uom_purpose_and_tt_sku_are_separate_keys(self):
+        rows = [
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "purpose": "branch", "tt_sku": "S1", "branch": "B1"},
+            {"item_code": "SKU-1", "uom": "套", "warehouse": "WH-1",
+             "purpose": "branch", "tt_sku": "S1", "branch": "B1"},
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "purpose": "fba", "tt_sku": "S1", "branch": "B1"},
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "purpose": "branch", "tt_sku": "S2", "branch": "B1"},
+        ]
+        result = build_full_supply_facts({"rows": rows})
+        self.assertEqual(len(result["rows"]), 4)
+        self.assertEqual(result["summary"]["duplicate_keys"], 0)
+
+    def test_missing_audit_and_status_still_emit_supply_facts(self):
+        result = build_full_supply_facts(
+            {"rows": []},
+            so_balances=[layer(so_open_qty=6)],
+            inventory=[layer(qty=8, as_of="2026-11-02T00:00:00+00:00")])
+        row = row_of(result)
+        self.assertEqual(row["so_open_qty"], "6")
+        self.assertEqual(row["inventory_qty"], "8")
+        self.assertIsNone(row["po_completed_assumed_qty"])
+
+    def test_layers_are_never_summed_and_overlap_is_flagged(self):
+        result = build_full_supply_facts(
+            position(po_completed_assumed_qty=5.0, dn_net_qty=5.0),
+            inventory=[layer(qty=8, as_of="2026-11-02T00:00:00+00:00")])
+        row = row_of(result)
+        self.assertEqual(row["po_completed_assumed_qty"], "5")
+        self.assertEqual(row["inventory_qty"], "8")
+        self.assertIn("possible_po_inventory_overlap", row["unknown_reasons"])
+        self.assertIsNone(result["summary"]["global_qty_total"])
+        self.assertIsNone(result["summary"]["cross_layer_total"])
+
+    def test_abc_explicit_branch_enriches_blank_position_branch(self):
+        abc_row = {**BASE, "inventory_qty": "0",
+                   "inventory_observed_qty": "0",
+                   "inventory_current_available_qty": "0",
+                   "inventory_as_of": "2026-11-02T00:00:00+00:00",
+                   "inventory_as_of_raw": "2026-11-02T00:00:00+00:00",
+                   "inventory_time_status": "known",
+                   "inventory_freshness": "fresh",
+                   "attribution_status": "attributed",
+                   "abc_identity_source": "B", "source_status": "known",
+                   "reasons": [], "coverage": "abc_inventory"}
+        result = build_full_supply_facts(position(branch=""),
+                                         abc_inventory=[abc_row])
+        self.assertEqual(len(result["rows"]), 1)
+        row = row_of(result)
+        self.assertEqual(row["branch"], "CENTRADE")
+        self.assertEqual(row["inventory_qty"], "0")
+
+    def test_conflicting_abc_branch_claims_do_not_enrich_blank_row(self):
+        def abc_row(branch, qty):
+            return {**BASE, "branch": branch, "inventory_qty": qty,
+                    "inventory_observed_qty": qty,
+                    "inventory_current_available_qty": None,
+                    "inventory_as_of": "2026-11-02T00:00:00+00:00",
+                    "inventory_as_of_raw": "2026-11-02T00:00:00+00:00",
+                    "inventory_time_status": "known",
+                    "inventory_freshness": "fresh",
+                    "attribution_status": "attributed",
+                    "abc_identity_source": "B", "source_status": "known",
+                    "reasons": [], "coverage": "abc_inventory"}
+        result = build_full_supply_facts(
+            position(branch=""), abc_inventory=[
+                abc_row("B1", "1"), abc_row("B2", "2")])
+        self.assertEqual(len(result["rows"]), 3)
+        blank = next(row for row in result["rows"] if row["branch"] == "")
+        self.assertIn("branch_unknown", blank["unknown_reasons"])
+        self.assertEqual(
+            sorted(row["branch"] for row in result["rows"]
+                   if row["inventory_qty"] is not None), ["B1", "B2"])
+        for row in result["rows"]:
+            if row["branch"] in ("B1", "B2"):
+                self.assertIn("target_key_ambiguous", row["unknown_reasons"])
+
+    def test_abc_inventory_attaches_only_to_exact_key(self):
+        result = build_full_supply_facts(
+            position(), abc_inventory=[{
+                **BASE, "inventory_qty": "0",
+                "inventory_observed_qty": "0",
+                "inventory_current_available_qty": "0",
+                "inventory_as_of": "2026-11-02T00:00:00+00:00",
+                "inventory_as_of_raw": "2026-11-02T00:00:00+00:00",
+                "inventory_time_status": "known",
+                "inventory_freshness": "fresh",
+                "attribution_status": "attributed",
+                "abc_identity_source": "B", "source_status": "known",
+                "reasons": [], "coverage": "abc_inventory"}])
+        self.assertEqual(len(result["rows"]), 1)
+        self.assertEqual(row_of(result)["inventory_qty"], "0")
+        self.assertTrue(row_of(result)["inventory_current_available"])
+        other = build_full_supply_facts(
+            position(), abc_inventory=[{
+                **BASE, "tt_sku": "OTHER", "inventory_qty": "0",
+                "inventory_observed_qty": "0",
+                "inventory_current_available_qty": None,
+                "inventory_as_of": None,
+                "inventory_as_of_raw": "2026-10-28",
+                "inventory_time_status": "date_only",
+                "inventory_freshness": "stale",
+                "attribution_status": "attributed",
+                "abc_identity_source": "B", "source_status": "known",
+                "reasons": [], "coverage": "abc_inventory"}])
+        self.assertEqual(len(other["rows"]), 2)
+        base_row = next(row for row in other["rows"] if row["tt_sku"] == "S1")
+        self.assertIsNone(base_row["inventory_qty"])
+
+    def test_cg_pool_rows_are_not_double_counted(self):
+        first = {**BASE, "branch": "B1", "inventory_qty": None,
+                 "inventory_observed_qty": None,
+                 "inventory_current_available_qty": None,
+                 "inventory_as_of": None, "inventory_as_of_raw": "2026-10-28",
+                 "inventory_time_status": "date_only",
+                 "inventory_freshness": "stale",
+                 "attribution_status": "cg_pool_ambiguous",
+                 "abc_identity_source": "B", "source_status": "known",
+                 "reasons": ["cg_pool_allocation_unknown"],
+                 "coverage": "abc_cg_pool_identity"}
+        second = {**first, "branch": "B2"}
+        pooled = {**first, "branch": "", "tt_sku": None,
+                  "inventory_observed_qty": "9",
+                  "reasons": ["cg_pool_allocation_unknown",
+                              "cg_pool_shared_by_multiple_attributions"],
+                  "coverage": "abc_cg_pool_unattributed"}
+        result = build_full_supply_facts({"rows": []},
+                                         abc_inventory=[first, second, pooled])
+        observed = [row for row in result["rows"]
+                    if row["inventory_observed_qty"] is not None]
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0]["inventory_observed_qty"], "9")
+        self.assertTrue(all(row["inventory_qty"] is None
+                            for row in result["rows"]))
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-11-02
+- full_supply_facts 升到 v2：新增本地 A/B/C 归因（A 目标集合、B 身份权威、C 库存观测；缺维度 null/unknown、C 无 B 待核、真零保留、陈旧不当前可用、CG 池不复制、B/C 版本冲突显式）；新增统一发布 `publication.py`（`full_supply_facts.parquet` 主入口 + JSON 追溯 + 独立 `supply_position` + timeline + manifest/latest），显式 decimal128(38,6)/UTC timestamp schema、JSON/Parquet 逐字段回读、空表固定 schema、重复键拒收、失败不切 latest，新增 reader 状态机与 `--inspect`。322 项测试 + 5 子测试通过（base 环境 297 passed / 21 skipped）。真实 A/B/C 冻结工作簿本机不可用，真实链路验收 pending，未用合成数据冒充。
 - 复审Jack 4928fc35后补4个反例：最终供给表保留DN/PO待核实原因及真实来源时点，拒绝显式SKU冲突，补齐分公司后同步查找键，成功重跑清除旧失败状态。含PyArrow全量288项、5子测试通过。42条真实历史DN回放保留516件历史净交付、当前PO完成供给0、待核实1组；缺创建审计/PO状态/B映射，不冒称真实正向验收。当前连接可读测试审计记录0；通途只读请求未返回，停止等待且未重试。
 - 核对Jack f8a7a72b/2a4d903新交付，消费器兼容刷新器statuses/raw_status并拒绝冲突别名；本地与上游新增32例联合验证276项、5子测试通过。缺用途默认分公司与跨阶段日期冲突已复现并交回Jack，未将helper测试当成EN全链上线验收。
 - 核对Claude PR306与A FINAL/B v6r10/C v14冻结文件，新增不依赖D的接入资格工具：2135个C键全部保留、1631键具备ABC接入基础；旧库存不冒充当前。形成J1–J6的Jack EN侧实施/验收计划，库存刷新与供给接口不等D。

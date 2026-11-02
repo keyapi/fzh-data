@@ -2,8 +2,8 @@
 okf: v0.1
 type: Reference
 title: DN与PO状态汇总为单张供应消费表
-date: 2026-10-30
-status: offline-consumer-implemented-not-full-chain
+date: 2026-11-02
+status: consumer + full facts v2 unified publication implemented; real A/B/C pending
 tags: [supply-position, parquet, po-creation, handoff]
 ---
 
@@ -98,11 +98,11 @@ purpose, evidence`。purpose为 `branch/fba/unknown`；同DN/行只能一条映�
 `dn_item, item_code, qty, uom, tt_sku, outcome, contribution_qty`。
 不同原行合并到同一货品时，只统计各原行贡献，不重复使用merged_qty_total。
 
-**上游实际缺口**：截至delivery_plan `f4c95f1`，
-`get_purchase_creation_status`背后的`get_creation_audit`返回创建元数据与events，
-未返回lines。因此不能直接将该响应当作完整输入。需Jack提供有DN读取权限约束的
-完整审计导出（含delivery_note与lines、分页完整性），或由获授权导出器提供完整文档。
-缺失时本工具保留 `creation_lines_not_exported`，不访问受限子表绕过权限。
+**上游现状**：delivery_plan `feature/po-creation-audit@2a4d903` 的
+`get_creation_audit`/`get_purchase_creation_audit` 已返回 `lines`（含 `dn_item/item_code/
+qty/uom/tt_sku/outcome/contribution_qty`）与分页覆盖。仍需同事提供**真实 DN 的私有保存
+响应**；本地暂无可读的真实审计/PO 状态样例。缺失时本工具保留
+`creation_lines_not_exported` / `po_*_unknown`，不访问受限子表绕过权限。
 
 ### po_statuses
 
@@ -183,3 +183,18 @@ Parquet按显式schema写入，空结果也有schema；数量nullable，复杂�
 当前连接可读范围的测试创建审计及带PO分公司DN均为0；本地缺测试REST凭证；
 单次通途只读查询未返回并已停止等待，没有重试或创建真实PO。
 这些结果验证缺证据路径，不能替代真实正向闭环、受限HTTP或生产规模验收。
+
+### 2026-11-02 full_supply_facts v2 统一发布（ABC 接入）
+
+`supply_pipeline` 现在把 `supply_position`、`full_supply_facts`、`timeline` 放进**同一次
+版本发布**：`full_supply_facts.parquet` 是主消费入口，JSON 为追溯副本；`supply_position`
+保留自己的 schema/粒度，不并入 full facts。发布前逐文件回读、SHA、schema、唯一键与
+JSON/Parquet 逐字段一致校验；失败不切 `latest.json`。reader 返回
+`healthy/stale/partial/corrupted/incompatible_version/refresh_failed_using_previous`。
+
+本地冻结 A/B/C 通过 `abc_inputs.load_frozen_abc` 接入：A 目标集合、B 身份权威
+（UOM/仓池/branch/purpose/tt_sku，缺列 null + reason）、C 库存观测（真零保留、陈旧保留
+观察值但不当前可用、C 无 B 待核、CG 池不复制到多个 branch）。B/C 版本关系显式检查。
+
+真实 A/B/C 工作簿当前不可用，故**真实链路验收 pending**；无合成数据冒充。
+拿到后运行完整命令（见 `supply-facts-contract.md` 的 v2 节）。

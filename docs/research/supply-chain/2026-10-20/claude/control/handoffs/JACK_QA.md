@@ -389,6 +389,23 @@ channel: docs/jack-w1-channel
 
 口径更正：scope hash 重算只证明内容完整一致，**不证明权威清单已注入**；权威业务 scope 仍为 pending。
 
+### [W1-FULL-FACTS-V2-2026-11-02] 完整供应快照收口：ABC 接入 + Parquet 主入口
+
+按 PR #318 最新评论（2026-11-02）继续，未把真实 PO 样例设为前置：
+
+| 项 | 交付 |
+|---|---|
+| full_supply_facts | v2（`full-supply-facts/v2`，RULE/IMPL `2026-11-02.3`）：唯一键 `item_code×uom×warehouse×purpose×tt_sku×branch`；重复键拒收；数量 Decimal 字符串 / Parquet `decimal128(38,6)`；时间 UTC timestamp，date-only/naive 不假定 UTC；跨层不求和；PO 完成 + 库存重叠显式提示 |
+| A/B/C | 新增 `abc_inputs.py`，复用 `preforecast_readiness` 读取/哈希/去向；A 目标集合、B 身份权威（可选目标键列；缺列 null + reason；同义列冲突失败）、C 库存观测（join_full 才计入；C 无 B 待核；真零保留；陈旧保留观察值但不当前可用；CG 池不复制到多个 branch；B/C 版本冲突显式） |
+| 发布 | 新增 `publication.py`：一个 run 目录 = `full_supply_facts.parquet`（主）+ JSON（追溯）+ `supply_position.parquet/json`（独立 schema/粒度）+ `timeline.json` + 统一 `manifest.json`；输入清单/SHA/版本/as_of/行数、每数据集 schema/grain/unique_key/rows/sha/freshness/stats/relations、复跑命令 |
+| 校验 | JSON/Parquet 逐字段回读、schema、行数、唯一键、SHA；空表固定 schema；失败/截断/混版/重复键/写盘/回读失败不建成功 run、不切 latest；reader 返回 healthy/stale/partial/corrupted/incompatible/refresh-failed |
+| 测试 | PyArrow+openpyxl 全量 **322 passed / 5 subtests**；base 环境 **297 passed / 21 skipped**；新增 ABC 12 项、发布/reader 11 项、v2 规则 6 项、pipeline 3 项 |
+
+**仍未验证（不得写成通过）**：真实 A/B/C 冻结工作簿本机暂不可用，真实链路验收
+pending（未用合成数据冒充）；真实 POD/签收字段来源；人工页面/报表；50/200/500 实际
+接口规模；受限用户真实 HTTP；真实通途状态/创建。未合并 main、未部署生产、未创建真实
+PO、未改 key_test/delivery_plan。PR #318 保持 draft。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

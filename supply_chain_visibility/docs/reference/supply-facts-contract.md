@@ -1,10 +1,10 @@
 ---
 okf: v0.1
 type: Reference
-title: 供应事实与数量—日期契约 v1 实现（批量入口 + 人工视图）
-date: 2026-10-27
+title: 供应事实与数量—日期契约 v1 + full facts v2 发布/reader/ABC
+date: 2026-11-02
 owner: claude-worker
-status: 测试站已部署并完成功能验收；权限待验；生产未部署
+status: full facts v2 本地实现与测试完成；真实 A/B/C 与受限 HTTP 待验；生产未部署
 tags: [supply-chain, replenishment, facts, manifest, so-chain]
 ---
 
@@ -263,32 +263,111 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 **PO 状态刷新**：`po_status_refresh.refresh_po_statuses` 按 10 个/批、可断点续跑；
 `rate_limited/partial/missing` 一律记 `unqueried`，不以 partial 当成功；SKU→PO 先去重。
 
-### `full_supply_facts`（J3–J5，DN/PO + SO/生产/库存/在途/签收）
+### `full_supply_facts` v2（DN/PO + SO/生产/库存/在途/签收 + 本地 A/B/C）
 
-模块：`supply_chain_visibility/full_supply_facts.py`，schema `full-supply-facts/v1`。
+模块：`supply_chain_visibility/full_supply_facts.py`，schema
+`full-supply-facts/v2`，`RULE=2026-11-02.3`，
+`IMPLEMENTATION=fzh.full_supply_facts@2026-11-02.3`。发布/读取模块：
+`supply_chain_visibility/publication.py`（`supply-publication/v1`）。
 
-- 输入：`supply_position` 消费器输出 + 保存的 SO 余额、生产证据、库存快照、在途、签收/POD、批准商品全集。
-- 输出：按 `item×uom×warehouse×purpose×tt_sku×branch` 一行，字段含
-  `dn_net_qty / po_completed_assumed_qty / open_po_qty / unresolved_qty /
-  so_open_qty / in_production_qty / in_production_estimated_qty /
-  inventory_qty / in_transit_qty / received_qty`、可用日期与置信度、逐源 observed_at、未知原因。
-- 规则：用途只接受批准映射的 `branch/fba`；缺失、`unknown`、非法值一律 `unknown` + `purpose_unknown`，
-  不默认分公司/FBA，也不进 in_house 过滤。
-- SO 余额只作需求，不计已证生产；estimated 生产单列；未知/来源不可用保持 null；
-  独立 DN 行保留；批准商品无证据也列一行（`approved_item_without_evidence`）。
-- 日期按阶段保留：`inventory_as_of` 仅为库存观测；生产/在途/签收分别保留 `date_kind`
-  （expected/actual），同阶段多批（如 11/10 与 11/20）都保留，不压成唯一日期；
-  跨阶段日期不判冲突；预计日期不与实绩混用。
-- POD 上传日不作签收日，仅 `signed_at` 计入 `received_qty`；
-  同一 DN 多运单不复制整单数量（`multi_waybill_allocation_unknown`）。
-- `build_timeline` 按阶段输出节点与 `forecast_connected=false`，不产生建议量。
-- 可执行链路：`python -m supply_chain_visibility.supply_pipeline --delivery-json ... --mapping-json ...
-  --audit-json ... --status-json ... [--so-json/--production-json/--inventory-json/--transit-json/--receipt-json]
-  --as-of ... --out ...`；输出 `runs/<run>/` + `manifest.json` + `latest.json`，失败写
-  `last_attempt.json` 且不切换 latest。
-- `assess_freshness(as_of, max_age_seconds)` 逐源标记 stale/unknown/future；
-  过期或来源时间未知不作为新鲜数据。
-- 所有行 `netting_ready=false`、`auto_order=false`；最终补货建议由主线完成。
+**主消费入口是 `full_supply_facts.parquet`；`full_supply_facts.json` 是逐行追溯副本；
+`supply_position` 是同一次发布中的独立数据集，schema/粒度不同，不能混为同表。**
+
+- 输入：`supply_position` 消费器输出 + 保存的 SO 余额、生产证据、库存快照、在途、
+  签收/POD、批准商品全集 + 本地冻结 A/B/C（`abc_inputs.py`）。
+- 唯一键：`item_code × uom × warehouse × purpose × tt_sku × branch`；重复目标键直接失败，
+  不做最后写入覆盖。缺失维度在键中为空、行内 null/unknown 并给 reason。
+- 数量契约：JSON 为规范化 decimal 字符串；Parquet 为 `decimal128(38,6)`；超过 6 位小数
+  直接失败（`quantity_scale_exceeds_contract`）；null 与 0 严格不同。时间契约：
+  Parquet `timestamp('us', tz='UTC')`；只有带 offset/Z 的来源进入 typed 列，date-only/naive
+  保留 `*_raw` 并标 `date_only/naive`，**不假定 UTC**。
+- 字段：`dn_net_qty / po_completed_assumed_qty / open_po_qty / unresolved_qty /
+  so_open_qty / in_production_qty / in_production_estimated_qty / inventory_qty /
+  inventory_observed_qty / inventory_current_available_qty / in_transit_qty /
+  received_qty`，以及 `inventory_freshness / inventory_time_status /
+  attribution_status / abc_identity_source / inventory_inclusion_status`、
+  阶段片段、逐源 observed_at、未知原因。`received_qty` 带 `receipt_basis=signed_assumed`，
+  表示“已签收、待通途入库”，不是通途实收；PO 完成仍是 `po_completed_assumed_qty` 假设。
+- 规则：用途只接受批准映射的 `branch/fba`；缺失/unknown/非法一律 unknown + reason，
+  不默认分公司/FBA。SO 余额只作需求；estimated 不并入 proven；未知/来源不可用保持 null。
+  独立 DN 行保留；A 活跃商品缺 B/C/审计/PO 状态仍输出。
+- 阶段：`inventory_as_of` 仅为库存观测；生产/在途/签收分别保留 `date_kind`
+  （expected/actual），同阶段多批都保留；跨阶段不判冲突；预计不转实绩。
+  **各层不生成合计**（`global_qty_total=null`、`cross_layer_total=null`），
+  PO 完成 + 库存同时存在且含入状态未知 → `possible_po_inventory_overlap`。
+- POD 上传日不作签收日，仅 `signed_at` 计入 `received_qty`；同一 DN 多运单不复制数量。
+- 所有行 `forecast_connected=false / netting_ready=false / auto_order=false`；
+  D 预测未接入，不产生建议补货量或“无需补货”。
+
+#### 本地 A/B/C 边界
+
+- A 只定义获批目标集合；活跃商品全部保留。
+- B 是 UOM、仓池/目的仓、branch、purpose、tt_sku 的权威输入。可选列别名：
+  `目的仓/目标仓/warehouse/仓库`、`branch/分公司`、`purpose/用途`、
+  `tt_sku/通途SKU`；同一维度多个别名值冲突直接失败（`b_target_alias_conflict`），
+  **缺列即 null + `b_missing_<dim>`**，不从 `美国责任方` 推断 branch，不把未知目的仓
+  回退来源仓。C 的 `pool` 在无显式目的仓时作为仓池键。
+- C 是 `product_id × pool × canonical_uom` 的库存数量与观测时间。只有
+  `join_class=join_full` 且 B 身份可用时进入 `inventory_qty`；C 无 B 时保留
+  `inventory_observed_qty`、`inventory_qty=null` + `c_without_b_attribution`；
+  真零保留 0；陈旧保留观察值 + `inventory_freshness=stale`、
+  `inventory_current_available_qty=null`。
+- 同一物理 CG 池被多个 branch/purpose/tt_sku 认领：每个身份 `inventory_qty=null` +
+  `cg_pool_allocation_unknown`；另生成**唯一一条**池级未归因行承载观测数量 +
+  `cg_pool_shared_by_multiple_attributions`，绝不复制进多个分公司池。
+- 版本关系：`--b-version` 与 `--c-declared-b-version`（或工作簿显式声明）不一致 →
+  `c_declared_b_version_mismatch`，C 库存不可信，不静默通过。
+- 输入契约：A/B/C 各自 `source/version/sha256/row_count/as_of`；支持
+  `--a-sha256/--b-sha256/--c-sha256` 与 `--a-rows/--b-rows/--c-rows` 期望值，
+  不匹配即失败；重复 C 身份异载荷、未知 A 活跃分类、冲突 B 同义列均拒收。
+
+#### 发布目录与统一 manifest
+
+每次成功 run 输出到 `runs/<run-*/`：
+
+- `full_supply_facts.parquet`（主）、`full_supply_facts.json`（追溯）
+- `supply_position.parquet` / `supply_position.json`（独立 schema/粒度）
+- `timeline.json`
+- `manifest.json`
+
+manifest 顶层：`run_id / pipeline_as_of / inputs[] / input_summary /
+output_summary / freshness / datasets / relations / rerun / versions`，
+并固定 `forecast_connected=false / netting_ready=false / auto_order=false /
+cross_layer_total=null`。`datasets` 每个文件声明：file/format/dataset/role/
+schema_version/rule_version/implementation_version/grain/unique_key/rows/sha256/
+source_versions/source_hashes/as_of/observed_at/freshness/stale/stats/relations，
+以及 decimal/time/json 列与 null 口径。`inputs[]` 每个来源声明
+role/path/sha256/rows/version/as_of/observed_at/status/required_for_closure/reason；
+未提供 audit/PO 状态/mapping 时显式 `not_provided`，输出仍保留 DN/SO/库存事实，
+manifest `partial=true`。`rerun.command` 可直接复跑。
+
+#### 原子发布与 reader
+
+- 所有文件先写临时目录；全部回读、SHA、schema、唯一键、JSON/Parquet 逐字段一致后才
+  改名 run 目录并原子替换 `latest.json`。失败/截断/混版/重复键/写盘/回读失败：
+  不创建成功 run、不切旧 latest、`last_attempt.json` 记录 failed 与原因。
+- `read_publication(out, as_of, max_age_seconds)` 返回
+  `healthy / stale / partial / corrupted / incompatible_version /
+  refresh_failed_using_previous`；freshness 按来源 observed_at/as_of 计算，
+  不用生成时间冒充；date-only/naive 来源视为非新鲜。CLI：
+  `python -m supply_chain_visibility.supply_pipeline --inspect --out ... --as-of ... --max-age-seconds ...`。
+
+#### 可执行链路
+
+```bash
+uv run --with pyarrow --with openpyxl python -m supply_chain_visibility.supply_pipeline \
+  --delivery-json ... [--mapping-json ...] \
+  [--audit-json ...] [--status-json ...] \
+  [--so-json/--production-json/--inventory-json/--transit-json/--receipt-json] \
+  [--a-workbook ... --b-workbook ... --c-workbook \
+   --a-version ... --b-version ... --c-version [--c-declared-b-version ...]] \
+  --as-of <aware> --out <private>
+```
+
+**真实 A/B/C 链路验收仍 pending**：本机冻结工作簿暂不可用；不得用合成数据冒充。
+拿到 A/B/C 后按上面的完整命令跑一次，并报告 A/B/C 版本/SHA/as_of/行数、完整目标键数、
+输出行数、A 缺 B、B 缺 C、C 无 B、stale、unknown 分布、隔离结果、N→M 去向、
+JSON/Parquet 一致性、latest 失败保护与复跑命令。
 
 ### `manifest`
 

@@ -99,3 +99,20 @@ J1覆盖included/排除/映射失败/未知/作废重建；J2覆盖0/1/2/3/4、�
 J3覆盖未下生产、已生产未出库、独立DN、多运单、历史parent变化；
 J5展示同商品不同仓以及无预测仍可查催单；J6验证源修改/断页/损坏/失败不发布。
 新接口与报表代码先测试和冻结评审；合并/生产部署/业务写入仍需原有授权。
+
+## 2026-11-02 full facts v2 的 A/B/C 接入（本轮）
+
+- 复用 `preforecast_readiness.py` 的读取/哈希/去向对账；新增可选的 B 目标键列
+  （`目的仓/目标仓/warehouse/仓库`、`branch/分公司`、`purpose/用途`、
+  `tt_sku/通途SKU`）。同一维度多个别名值冲突直接失败，不静默取首值。
+- 新增 `abc_inputs.py`：A 活跃商品全集、B 身份权威、C 库存观测 → full facts
+  的 strict 库存行。缺字段保持 null/unknown + reason；C 无 B 待核；真零保留；
+  陈旧保留观察值但不当前可用；同一 CG 物理池被多个 branch 认领时不复制数量，
+  另生成唯一池级未归因行。
+- B/C 版本关系：`--b-version` 与 `--c-declared-b-version`（或工作簿声明）不一致
+  显式 `c_declared_b_version_mismatch`，C 库存不可信。
+- A/B/C 输入契约包含 source/version/sha256/row_count/as_of；支持期望哈希/行数校验。
+- 发布：`full_supply_facts.parquet` 主入口 + JSON 追溯 + 独立 `supply_position`
+  + timeline + 统一 manifest；JSON/Parquet 逐字段回读、重复键拒收、失败不切 latest。
+- **真实 A/B/C 冻结工作簿当前不可用，真实链路验收 pending**；不以合成数据冒充。
+  D 预测仍未接入；`forecast_connected/netting_ready/auto_order=false`。

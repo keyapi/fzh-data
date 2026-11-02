@@ -11,6 +11,21 @@ from pathlib import Path
 import uuid
 
 
+# Optional B target-key columns. Missing columns stay null/unknown; never infer
+# them from item_code, source warehouse, customer or names.
+B_WAREHOUSE_ALIASES = ("目的仓", "目标仓", "warehouse", "仓库")
+B_BRANCH_ALIASES = ("branch", "分公司")
+B_PURPOSE_ALIASES = ("purpose", "用途")
+B_TT_SKU_ALIASES = ("tt_sku", "通途SKU", "通途sku", "产品SKU")
+B_TARGET_ALIASES = {
+    "warehouse": B_WAREHOUSE_ALIASES,
+    "branch": B_BRANCH_ALIASES,
+    "purpose": B_PURPOSE_ALIASES,
+    "tt_sku": B_TT_SKU_ALIASES,
+}
+VALID_PURPOSES = ("branch", "fba")
+
+
 def _number(value):
     if value is None or isinstance(value, bool):
         return None
@@ -19,6 +34,23 @@ def _number(value):
     except (ValueError, TypeError):
         return None
     return value if math.isfinite(value) and value >= 0 else None
+
+
+def _pick(row, aliases):
+    """Return one explicit alias value; conflicting aliases fail closed."""
+    values = sorted({
+        str(row.get(name)).strip()
+        for name in aliases
+        if row.get(name) is not None and str(row.get(name)).strip()
+    })
+    if len(values) > 1:
+        raise ValueError("b_target_alias_conflict:" + ",".join(aliases))
+    return values[0] if values else None
+
+
+def _declared_version(value):
+    text = None if value is None else str(value).strip()
+    return text or None
 
 
 def _stock_date(value):
@@ -38,11 +70,18 @@ def _stock_date(value):
             return None
 
 
-def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_days):
+def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_days,
+                     b_version=None, c_declared_b_version=None):
     """Preserve A/B/C qualifications separately; matching facts do not approve netting."""
     today = date.fromisoformat(as_of)
     if type(max_stock_age_days) is not int or max_stock_age_days < 0:
         raise ValueError("max_stock_age_days must be a non-negative integer")
+    b_version = _declared_version(b_version)
+    c_declared_b_version = _declared_version(c_declared_b_version)
+    if b_version and c_declared_b_version:
+        version_relation = "match" if b_version == c_declared_b_version else "mismatch"
+    else:
+        version_relation = "unknown"
     a_by_item = {}
     for row in universe:
         item = row["item_code"]
@@ -85,6 +124,22 @@ def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_d
                            and c.get("source_ref") and qty is not None and uom and pool)
         unit_match = bool(uom and units and units == [uom])
         compatible = active and owner and c_qualified and unit_match
+        target_rows = sorted({
+            (r.get("warehouse"), r.get("branch"), r.get("purpose"), r.get("tt_sku"))
+            for r in b
+            if any(r.get(k) for k in ("warehouse", "branch", "purpose", "tt_sku"))
+        }, key=lambda value: tuple(str(part or "") for part in value))
+        identity_conflict = len(target_rows) > 1
+        warehouse = target_rows[0][0] if len(target_rows) == 1 else None
+        branch = target_rows[0][1] if len(target_rows) == 1 else None
+        purpose = target_rows[0][2] if len(target_rows) == 1 else None
+        tt_sku = target_rows[0][3] if len(target_rows) == 1 else None
+        if purpose is not None and purpose not in VALID_PURPOSES:
+            purpose = None
+            purpose_invalid = True
+        else:
+            purpose_invalid = False
+        version_trusted = version_relation != "mismatch"
         reasons = []
         if not active:
             reasons.append("a_missing_or_inactive")
@@ -92,10 +147,25 @@ def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_d
             reasons.append("b_missing_same_product_pool")
         if not unit_match:
             reasons.append("b_c_uom_missing_or_mismatch")
+        if owner:
+            if not warehouse:
+                reasons.append("b_missing_warehouse")
+            if not branch:
+                reasons.append("b_missing_branch")
+            if not purpose and not purpose_invalid:
+                reasons.append("b_missing_purpose")
+            if not tt_sku:
+                reasons.append("b_missing_tt_sku")
+        if purpose_invalid:
+            reasons.append("b_purpose_invalid")
+        if identity_conflict:
+            reasons.append("b_identity_conflict")
         if not c:
             reasons.append("c_uncovered_not_zero")
         elif not c_qualified:
             reasons.append("c_not_qualified_for_netting")
+        if version_relation == "mismatch":
+            reasons.append("c_declared_b_version_mismatch")
         stock_date = _stock_date(c.get("as_of")) if c else None
         if c and c.get("as_of") and stock_date is None:
             reasons.append("inventory_source_time_invalid")
@@ -114,16 +184,28 @@ def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_d
                      "a_active": active, "a_role": a.get("role"),
                      "b_attribution_available": owner, "b_evidence_rows": len(b),
                      "b_units": units, "b_netting_gates": gates,
-                     "b_blockers": sorted({r["blockers"] for r in b if r.get("blockers")}),
+                     "b_blockers": sorted({str(r["blockers"]) for r in b if r.get("blockers")}),
+                     "b_warehouse": warehouse, "b_branch": branch,
+                     "b_purpose": purpose, "b_tt_sku": tt_sku,
+                     "b_identity_conflict": identity_conflict,
+                     "b_target_identities": [
+                         {"warehouse": part[0], "branch": part[1],
+                          "purpose": part[2], "tt_sku": part[3]}
+                         for part in target_rows],
                      "inventory_qualified": c_qualified,
-                     "inventory_qty": qty if c_qualified else None,
-                     "inventory_observed_qty": qty, "c_join_class": c.get("join_class") if c else None,
+                     "inventory_trusted": bool(c_qualified and version_trusted),
+                     "inventory_qty": qty if c_qualified and version_trusted else None,
+                     "inventory_observed_qty": qty,
+                     "inventory_qty_raw": None if not c else c.get("qty"),
+                     "c_join_class": c.get("join_class") if c else None,
                      "c_source_ref": c.get("source_ref") if c else None,
                      "inventory_as_of": stock_date.isoformat() if stock_date else None,
+                     "inventory_as_of_raw": None if not c else c.get("as_of"),
                      "inventory_age_days": age, "inventory_refresh_needed": needs_refresh,
-                     "abc_contract_compatible": bool(compatible),
-                     "current_abc_ready": bool(compatible and not needs_refresh),
-                     "independent_demand_candidate": bool(compatible and demand),
+                     "abc_contract_compatible": bool(compatible and version_trusted),
+                     "current_abc_ready": bool(compatible and version_trusted
+                                               and not needs_refresh),
+                     "independent_demand_candidate": bool(compatible and version_trusted and demand),
                      "d_forecast_status": "not_integrated", "e_supply_status": "not_integrated",
                      "netting_ready": False, "auto_order": False, "reasons": reasons})
     return {"schema_version": "preforecast-readiness/v1", "as_of": as_of, "rows": rows,
@@ -137,6 +219,9 @@ def assess_readiness(universe, attribution, inventory, *, as_of, max_stock_age_d
                        "current_abc_ready": sum(r["current_abc_ready"] for r in rows),
                        "independent_demand_candidates": sum(r["independent_demand_candidate"] for r in rows),
                        "reasons": dict(Counter(reason for r in rows for reason in r["reasons"])),
+                       "b_version": b_version,
+                       "c_declared_b_version": c_declared_b_version,
+                       "version_relation": version_relation,
                        "max_stock_age_days": max_stock_age_days,
                        "quantity_not_summed_across_forms_or_pools": True,
                        "netting_ready": False}}
@@ -155,7 +240,21 @@ def _sheet(path, name, required):
         book.close()
 
 
-def from_workbooks(a_path, b_path, c_path, *, as_of, max_stock_age_days):
+def _find_declared_b_version(rows):
+    """Read an explicit dependency marker; never infer it from similarity."""
+    import re
+    for row in rows:
+        for key, value in row.items():
+            text = "" if value is None else str(value)
+            if ("B" in str(key) or "依赖" in str(key)) and "v" in text:
+                match = re.search(r"v\d+r\d+", text)
+                if match:
+                    return match.group(0)
+    return None
+
+
+def from_workbooks(a_path, b_path, c_path, *, as_of, max_stock_age_days,
+                   b_version=None, c_declared_b_version=None):
     """Adapter for frozen A FINAL / B v6r10 / C v14; never rewrites their rules."""
     a = _sheet(a_path, "活跃宇宙", ["EN物料", "角色", "活跃分类"])
     b = _sheet(b_path, "主表", ["产品键", "地区", "美国责任方", "UOM_单位", "是否需求行", "可进净额", "限制原因"])
@@ -173,12 +272,20 @@ def from_workbooks(a_path, b_path, c_path, *, as_of, max_stock_age_days):
         pool = "波兰" if r["地区"] == "PL" else (
             r["美国责任方"] if r["地区"] == "US" and r["美国责任方"] in {"美东USNJ", "美中USTX"} else None)
         attribution.append({"item_code": r["产品键"], "pool": pool, "uom": r["UOM_单位"],
+                            "warehouse": _pick(r, B_WAREHOUSE_ALIASES),
+                            "branch": _pick(r, B_BRANCH_ALIASES),
+                            "purpose": _pick(r, B_PURPOSE_ALIASES),
+                            "tt_sku": _pick(r, B_TT_SKU_ALIASES),
                             "demand_row": r["是否需求行"] == "Y", "netting_gate": r["可进净额"],
                             "blockers": r["限制原因"]})
     stock = [{"item_code": r["product_id"], "pool": r["pool"], "uom": r["canonical_uom"],
               "qty": r["可发供给"], "join_class": r["join_class"], "source_ref": r["source_ref"],
               "as_of": r["as_of"], "demand_eligibility": r["demand_eligibility"]} for r in c]
-    result = assess_readiness(universe, attribution, stock, as_of=as_of, max_stock_age_days=max_stock_age_days)
+    declared = c_declared_b_version or _find_declared_b_version(c)
+    result = assess_readiness(universe, attribution, stock, as_of=as_of,
+                              max_stock_age_days=max_stock_age_days,
+                              b_version=b_version,
+                              c_declared_b_version=declared)
     result["report"]["inputs"] = [{"path": str(p), "sha256": hashlib.sha256(Path(p).read_bytes()).hexdigest()}
                                    for p in (a_path, b_path, c_path)]
     return result
@@ -191,15 +298,25 @@ def publish_readiness(result, out):
     root.mkdir(parents=True)
     records = []
     for row in result["rows"]:
-        records.append({k: json.dumps(v, ensure_ascii=False) if isinstance(v, list) else v
-                        for k, v in row.items()})
+        record = {}
+        for key, value in row.items():
+            if isinstance(value, list):
+                record[key] = json.dumps(value, ensure_ascii=False)
+            elif key == "inventory_qty_raw" and value is not None:
+                record[key] = str(value)
+            else:
+                record[key] = value
+        records.append(record)
     schema = pa.schema([
         *[(k, pa.string()) for k in ("item_code", "pool", "canonical_uom", "a_role",
             "b_units", "b_netting_gates", "b_blockers", "c_join_class", "c_source_ref",
-            "inventory_as_of", "d_forecast_status", "e_supply_status", "reasons")],
+            "b_warehouse", "b_branch", "b_purpose", "b_tt_sku", "inventory_qty_raw",
+            "b_target_identities", "inventory_as_of", "inventory_as_of_raw",
+            "d_forecast_status", "e_supply_status", "reasons")],
         ("b_evidence_rows", pa.int64()), ("inventory_age_days", pa.int64()),
         ("inventory_qty", pa.float64()), ("inventory_observed_qty", pa.float64()),
-        *[(k, pa.bool_()) for k in ("a_active", "b_attribution_available", "inventory_qualified",
+        *[(k, pa.bool_()) for k in ("a_active", "b_attribution_available",
+            "b_identity_conflict", "inventory_qualified", "inventory_trusted",
             "inventory_refresh_needed", "abc_contract_compatible", "current_abc_ready",
             "independent_demand_candidate", "netting_ready", "auto_order")]])
     table = pa.Table.from_pylist(records, schema=schema)
@@ -220,9 +337,13 @@ def main():
     for flag in ("a", "b", "c", "out", "as-of"):
         parser.add_argument("--" + flag, required=True)
     parser.add_argument("--max-stock-age-days", type=int, required=True)
+    parser.add_argument("--b-version")
+    parser.add_argument("--c-declared-b-version")
     args = parser.parse_args()
     result = from_workbooks(args.a, args.b, args.c, as_of=args.as_of,
-                            max_stock_age_days=args.max_stock_age_days)
+                            max_stock_age_days=args.max_stock_age_days,
+                            b_version=args.b_version,
+                            c_declared_b_version=args.c_declared_b_version)
     root = publish_readiness(result, args.out)
     print(json.dumps({"directory": str(root), "report": result["report"]}, ensure_ascii=False))
 

@@ -66,3 +66,15 @@
 - 本地入口：`EN_API/supply_facts_export.py`（JSON + Excel + sha256 + `latest.json` 原子指针；失败不覆盖最后成功版本）。
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
 - 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
+
+### 6.1 full_supply_facts v2（2026-11-02）
+
+- 主入口：`supply_pipeline` → `runs/<run>/full_supply_facts.parquet`；JSON 为追溯副本；
+  `supply_position.parquet/json` 保留独立 schema/粒度；`timeline.json`；统一 `manifest.json`。
+- A/B/C：`abc_inputs.load_frozen_abc`；A 目标集合、B 身份权威、C 库存观测；缺维度
+  null/unknown、C 无 B 待核、真零保留、陈旧不当前可用、CG 池不复制、B/C 版本冲突显式。
+- 类型：数量 `decimal128(38,6)`（JSON 规范化字符串），时间 UTC timestamp（date-only/naive
+  保留 raw、不假定 UTC）；JSON/Parquet 逐字段回读一致；空表固定 schema；重复键拒收。
+- 失败保护：不创建成功 run、不切 latest、`last_attempt.json` failed；reader 识别
+  healthy/stale/partial/corrupted/incompatible/refresh-failed。
+- **真实 A/B/C 冻结工作簿验收 pending**（本机暂不可用，未用合成数据冒充）。
