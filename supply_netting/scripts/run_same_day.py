@@ -179,6 +179,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--allow-optional-failure", action="store_true",
                     help="动作层失败时仍保留已成功产物（默认失败即整体失败）")
     ap.add_argument("--test-count", type=int, default=None)
+    ap.add_argument("--decision-date", default="2026-10-29",
+                    help="决策日；默认沿用历史包口径 2026-10-29（只影响标注与文件名，"
+                         "不参与数量计算）")
     ap.add_argument("--force", action="store_true", help="允许替换已存在的冻结快照/同号输出")
     ap.add_argument("--dry-run", action="store_true", help="只做校验与计划，不执行")
     return ap
@@ -310,6 +313,7 @@ def main(argv=None) -> int:
                    "--sku-map", args.sku_map, "--out", str(decision_dir)]
         if args.test_count:
             argv_dp += ["--test-count", str(args.test_count)]
+        argv_dp += ["--decision-date", args.decision_date]
         supersedes = previous.get("decision_pack")
         if supersedes:
             argv_dp += ["--supersedes", supersedes]
@@ -349,9 +353,10 @@ def main(argv=None) -> int:
                 if value:
                     argv_pack += [flag, value]
             _call_main(action_inputs_module, argv_pack)
-            _call_main(decision_join, ["--wide", str(decision_dir / "decision_pack_2026-10-29.parquet"),
+            _call_main(decision_join, ["--wide", str(decision_dir / f"decision_pack_{args.decision_date}.parquet"),
                                        "--pack", str(pack_dir / "conditional_decision_pack.csv"),
-                                       "--out", str(actions_dir)])
+                                       "--out", str(actions_dir),
+                                       "--decision-date", args.decision_date])
             return dict(path=str(actions_dir),
                         action_inputs=str(pack_dir),
                         outputs={p.name: _sha(p) for p in sorted(actions_dir.iterdir())

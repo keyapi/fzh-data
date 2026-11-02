@@ -37,6 +37,10 @@ DEST_UNKNOWN = "不可算"
 DEST_VERIFY = "待核"
 DESTINATIONS = (DEST_SUGGEST, DEST_NONE, DEST_UNKNOWN, DEST_VERIFY)
 
+# 决策日：默认沿用 2026-10-29（历史包口径）。换批次时用 --decision-date 覆盖，
+# 只影响 manifest 标注与产物文件名，**不参与任何数量计算**。
+DECISION_DATE = "2026-10-29"
+
 GAP_TODAY_NOTE = "净额视界末（netting_horizon_end）的累计未满足量，不是某一天的缺口"
 EVIDENCE_KNOWN = "known"
 EVIDENCE_UNKNOWN = "unknown"
@@ -47,10 +51,16 @@ VALUE_MEASURED_ZERO = "measured_zero"
 VALUE_UNKNOWN = "unknown"
 VALUE_NOT_COVERED = "not_covered"
 
-DISCLAIMER = (
-    "条件情景，不是采购指令。缺口基于 2026-10-26 库存快照与 2026-10-29 起的预测窗口；"
+DISCLAIMER_TEMPLATE = (
+    "条件情景，不是采购指令。缺口基于 {snapshot} 库存快照与 {decision_date} 起的预测窗口；"
     "在途/PO 无 ETA、未履约 SO 未接入、预测只覆盖通过资格的销售键；不得当作当前全量缺口。"
 )
+
+
+def _disclaimer(snapshot: str, decision_date: str) -> str:
+    """免责声明必须指向**本包实际用的**快照与决策日，不得沿用别的批次。"""
+    return DISCLAIMER_TEMPLATE.format(snapshot=snapshot or "(未知)",
+                                      decision_date=decision_date)
 GAP_DATE_NOTE = "桶边界（首个含缺口桶的起点），不是精确缺货日；精确到日需桶内时序证据"
 COUNTERFACTUAL_NOTE = (
     "反事实量：假设无 ETA 的条件供应在缺口前全部可用时的补货下限；"
@@ -550,7 +560,7 @@ def _reconcile(result: pd.DataFrame, input_keys: pd.DataFrame, inputs: Inputs,
 
 def manifest(inputs: Inputs, stats: dict, *, out_dir: Path, data_cutoff: str,
              code: dict, supersedes: str | None = None, fixes: list | None = None,
-             test_count: int | None = None) -> dict:
+             test_count: int | None = None, decision_date: str = DECISION_DATE) -> dict:
     supersedes_info = None
     if supersedes:
         previous = Path(supersedes)
@@ -563,7 +573,7 @@ def manifest(inputs: Inputs, stats: dict, *, out_dir: Path, data_cutoff: str,
     return dict(
         schema_version="replenishment-decision-pack-v1",
         generated_at=datetime.now(timezone.utc).isoformat(),
-        decision_date="2026-10-29",
+        decision_date=decision_date,
         data_cutoff=data_cutoff,
         previous_report_date="2026-10-27",
         usage_scope="人工审核候选；不得直接生成采购单，也不代表供应功能验收",
@@ -607,8 +617,10 @@ def manifest(inputs: Inputs, stats: dict, *, out_dir: Path, data_cutoff: str,
         coverage=stats,
         fixes=fix_list,
         test_count=test_count,
-        limits=[DISCLAIMER,
-                "历史订单全部早于 as_of，净额需求来自预测；as_of 到预测起点 2.779 天无需求数据",
+        limits=[_disclaimer(str((inputs.manifest.get("timing") or {}).get("snapshot_date") or ""),
+                            decision_date),
+                f"历史订单全部早于 as_of，净额需求来自预测；as_of 到预测起点 "
+                f"{inputs.forecast_meta.get('gap_from_as_of_days')} 天无需求数据",
                 "在途/通途 PO 无逐行 ETA，r5 已证到货全桶为 0；条件供应不能直接抵缺口",
                 "qty_low_counterfactual 假定条件供应在缺口前可用，属反事实量，未获 ETA/资格证据前不可采用",
                 "未履约 SO 未接入；工厂 SO 管线不在本包",
@@ -656,14 +668,15 @@ def _strict_json(payload) -> str:
     return text
 
 
-def write_outputs(result: pd.DataFrame, stats: dict, doc: dict, out_dir: Path) -> dict:
+def write_outputs(result: pd.DataFrame, stats: dict, doc: dict, out_dir: Path,
+                  decision_date: str = DECISION_DATE) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
-    parquet = out_dir / "decision_pack_2026-10-29.parquet"
+    parquet = out_dir / f"decision_pack_{decision_date}.parquet"
     result.to_parquet(parquet, index=False, compression="zstd")
 
     records = [{k: _json_safe(v) for k, v in record.items()}
                for record in result.to_dict("records")]
-    json_path = out_dir / "decision_pack_2026-10-29.json"
+    json_path = out_dir / f"decision_pack_{decision_date}.json"
     json_path.write_text(_strict_json(records), encoding="utf-8")
 
     excluded_rows = stats["source_ledger"].get("forecast_excluded_rows") or []
@@ -672,7 +685,7 @@ def write_outputs(result: pd.DataFrame, stats: dict, doc: dict, out_dir: Path) -
                  columns=["raw_sku", "raw_warehouse", "raw_uom", "reason", "raw_block_reason"]
                  ).to_csv(excluded_path, index=False, encoding="utf-8-sig")
 
-    xlsx = out_dir / "decision_pack_2026-10-29.xlsx"
+    xlsx = out_dir / f"decision_pack_{decision_date}.xlsx"
     _workbook(result, stats, doc, xlsx, excluded_rows)
     doc["outputs"] = dict(parquet=str(parquet), json=str(json_path), xlsx=str(xlsx),
                           forecast_source_excluded=str(excluded_path))
@@ -742,6 +755,8 @@ def build_parser() -> argparse.ArgumentParser:
                         default="D:/Work/fzh-order-store/en-demand-v1/supply-netting/decision-pack-2026-10-29",
                         help="原包目录（只读取哈希，不覆盖）")
     parser.add_argument("--test-count", type=int, default=None)
+    parser.add_argument("--decision-date", default=DECISION_DATE,
+                        help="决策日（只影响 manifest 标注与产物文件名，不参与数量计算）")
     parser.add_argument("--out", required=True)
     return parser
 
@@ -759,8 +774,9 @@ def main(argv=None) -> int:
                    data_cutoff=str((inputs.manifest.get("inputs", {})
                                     .get("demand_netting", {}) or {}).get("date_max") or ""),
                    code=_git_meta(), supersedes=args.supersedes,
-                   test_count=args.test_count)
-    outputs = write_outputs(result, stats, doc, Path(args.out))
+                   test_count=args.test_count, decision_date=args.decision_date)
+    outputs = write_outputs(result, stats, doc, Path(args.out),
+                            decision_date=args.decision_date)
     print(json.dumps({k: stats[k] for k in ("universe_keys", "destinations", "scenarios_by_uom",
                                             "reconciliation_ok", "source_ledger")},
                      ensure_ascii=False, indent=1))

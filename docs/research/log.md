@@ -7,6 +7,33 @@ description: docs/research 目录变更历史
 
 # 变更日志
 
+## 2026-10-29
+
+- **新增**: [2026-10-29-direct-ship-and-dual-warehouse.md](2026-10-29-direct-ship-and-dual-warehouse.md) — 两处业务更正：① 美东/美中不是调拨，改为「跨仓直接发货（需确认可售/退货品质）」；CMPR-194 改为「美中 2 个可直接履约，剩余 2 仍缺」；② 归属表 v6 加双仓销售（2026 双仓 25 个、实质 11 个），实质双仓的归属/建议改为按两仓分别补/核，少量双仓写备注，新增 sheet 11_双仓销售。产物 `46近端缺口_调拨候选_2026-10-28_v3.csv` + `美国与波兰仓库归属_2026-10-28_v6.xlsx`；v5 保留；只读。
+
+- **新增**: [2026-10-29-48-key-decision-draft.md](2026-10-29-48-key-decision-draft.md) — 48 待定量的人工决策草稿（DRAFT）：按设计稿 5 列（商品/仓/角色·现状·系统决定·时间与后果·人只确认）逐行写；47 行近端、1 行非近端；表内可同国调拨 0；8 行近零（97 目标）其中 3 行两窗口近零；SS 仅 8 行应用；最晚下单日 48/48 已过；标注 DRAFT/未验收/非采购量。产物 `analysis/48待定量_人工决策草稿_2026-10-29.xlsx` + 说明；脚本 `scripts/build_decision_draft_48.py`；只读。
+
+
+
+
+## 2026-10-28
+
+- **v2（口径修正）**: 近端调拨候选按复审 F1–F3 修正 —— 去掉对已净额 Q97/旧参考的重复扣库存（CMKTR-140 保留 124.269、CMPR-194 调后仍缺 2；参考合计 407.220、调后 405.220）；拆两列（长窗 Q97 / 旧35天净缺口）并逐行标口径；跨洲排除供给 7 行披露（含 DM-100-YELLOW 美中 PO/在途各 123，不相加不抵扣）。48 行覆盖不变；产物 `*_v2.csv` + 报告 v2；只读。
+
+- **新增**: [2026-10-28-near-gap-transfer-candidates.md](2026-10-28-near-gap-transfer-candidates.md) — 近端缺口调拨候选：53 v3 近端兜底 48 行（46 行 10/26 起 + 2 行 11/02 起），仅 `KS0002-CMPR-194-GINGER` 可从美中调 2；47 行无可调（15 美东同国无货源 + 32 波兰不可跨洲）；潜在改配（开放 PO/在途）0；源库存按 (仓,SKU) 只分配一次、他仓供给不抵扣；产物 `analysis/46近端缺口_调拨候选_2026-10-28.csv` + 报告；只读。
+
+- **v2（口径小修，数量未变）**: 48 键 97/157 原型按复审 F1–F5 修正 —— F1 写明 2.779 天需求盲区未估算；F2 σ 改称「历史销量波动代理」、SS 标政策情景未校准；F3 近零分窗口（97 目标 8 行、157 目标 3 行）；F4 表头/备注 98/161→102/158；F5 汇总改全精度（Q157 662.26、波兰 249.23）并标舍入差。逐行数量与 v1 完全一致；产物 `*_v2.csv` + `报告_v2.md`；脚本 `scripts/h48_prototype_97_157_v2.py`。
+
+- **新增**: [2026-10-28-48-key-97-157-prototype.md](2026-10-28-48-key-97-157-prototype.md) — 48 个「可补单—待定量」键的 97/157 天原型。需求只用真实预测曲线（forecast r4 → run-2026-10-26-r6 的 27 个周桶）积分，**不按旧 35 天比例放大**；因曲线是周桶，**精确第 97/157 天不可算（0 行）**，按项目既定「桶结束 ≥ 目标」取 w14/w22（102/158 天）给出 48 行；SO 管线全 0 无需去重；IP=10-28 同仓已证可发+已证未到货（未证不抵扣）；SS 政策 A1.5×/95%、B1.0×/90%、C1.0×/85% 只在 σ>0 的 8 行应用，其余标未应用；Q 合计 97 目标 441.82 / 157 目标 662.25，需求 356.52/551.83（旧 35 天 116，比值 3.07×/4.76×，逐键中位 2.06）；充分度 可算 40/部分 8（预测近零 Q<1）/不足 0；最晚下单日 48/48 已过。产物 `analysis/48待定量_97_157_原型_2026-10-28.csv` + 报告；脚本 `scripts/h48_prototype_97_157.py`；全程只读。
+
+- **v3（v2 复审 accept-with-findings 小修）**: PO↔DN 匹配只改 5 项、匹配结果不变（27 首选与 v2 全等，9/9 正式链接仍 rank1）。P2#1 非正式推荐改标「候选建议→DN-…（未正式登记）」，「本DN」只留正式（18→v2 报告误写19 已更正）；P2#2 FBA 增加「全部明客码均为 FBA」分支，mixed/unknown 不算 FBA（+3 测试）；P2#3 exception 每条带 uom/qty_by_uom/role/aliases_raw_all，JSON 删跨单位 dn_qty_total 改 dn_qty_by_uom（个38,422/套83,805/件100，recon 个22,565），不做套/件换算；P3#4 边界改 32 FBA(含5取消)+3 非FBA取消+28=63，敏感性改「27首选不变，部分分值与低位排序变化」（DN-00089 第3位变化）；P3#5 新增 aliases_raw_all 保留 `删除` 前缀原始别名。产物 `*_v3.csv/json` + `PO_DN候选匹配报告_2026-10-28_v3.md`；测试 17 passed；全程只读。
+
+- **v2（复审 reject 后重做）**: PO↔DN 候选匹配修复 F1–F5 —— F1 正式归属改用 EN `custom_tongtool_purchase_order` 只读导出（`scripts/en_dn_po_field_export.py`，带 manifest/sha256，不再硬编码），评分前排除他人正式占用的 PO，`official_owner`/`proposed_owner` 分列，非正式推荐不再写「本DN」，采纳对做逐 SKU `alloc_qty` 分配；F2 `qty_fit` 改逐 SKU 绝对差（测试覆盖 DN(10,90) vs PO(90,10) 反例 = 0）；F3 多别名 63 行/518 件/9 DN，渠道规则解析 28 行/271 件、隔离 35 行/247 件，不挑别名抬分；F4 反查与 PO 别名统一清 `删除`（DN-00086 恢复 10/10、141=141）；F5 通途 PO 补拉改 `scripts/tongtool_po_pull.py` 带分页 manifest（7/25–8/26 = 2 页 113 行，修正 v1 只取 100 行漏 PO021712），「7/26–8/25」改述为「查询窗口返回 0 行」。**业务规则并入**：纯内胆 ND# DN 与 FBA DN → 「不建PO/无需匹配」，属预期正常；DN-26-00068 由「无候选」改判纯内胆。结果：28 DN = 正式链接 9（多出 DN-26-00114→PO021742）/ 有候选 18 / 纯内胆 1 / FBA 0 / 无候选 0，9 张正式链接全部 rank 1（8 张已知样例仍全中）。产物 `*_v2.csv/json` + `PO_DN候选匹配报告_2026-10-28_v2.md` + exception companion（322 行）；测试 `tests/po_dn_match/test_po_dn_v2.py` 8 passed。全程只读。
+
+- **新增**: [2026-10-28-po-dn-candidate-matching.md](2026-10-28-po-dn-candidate-matching.md) — PO↔DN 候选匹配（只读）。8/1 起 28 张 DN / 2,589 行里 8 张有 EN 正式链接 `custom_tongtool_purchase_order`；其余 20 张做候选：**19 张给出候选、1 张（DN-26-00068）无候选**；8 张已确认样例 **8/8 复现为 rank 1**。口径：PO 日期用 `createdDate`、窗口双向 ±90 天（实测同日 12 / PO 晚于 DN 15 / 早于 0）、SKU 去 `-Foam/-Cover` 后缀归一、DN 无客户码行按 item_code 反查 `sku_item`（2,310/2,589 可解析，279 行为材料/组件）；数量按 SKU 逐行对账（337 行：302 全等、35 不等且全部 PO>DN）。关键发现：8/26 集中建的 PO021704–021712 是 8/4–8/21 六张 DN 的**回溯建单**；7/26–8/25 通途无任何 PO（只读 API 确认）；PO021743 本地快照缺失，已只读补拉。产出 `D:/Work/fzh-order-store/analysis/po_dn_candidate_links_2026-10-28.csv`、`po_dn_sku_recon_2026-10-28.csv`、`PO_DN候选匹配报告_2026-10-28.md`（本地，不入库）；脚本 `scripts/po_dn_candidate_match.py`。未改 EN / 通途、未 push。
+
+- **新增**: [2026-10-28-wayfair-cg-source-map.md](2026-10-28-wayfair-cg-source-map.md) — Wayfair CG（Castlegate）仓来源归类，worker E 交付给 YTQ 核对。口径：8/1–10/28 自发货订单里 `warehouse=WayfairCG-*`（account `WFCastleGateUS`），GS（8/1–9/30，CG 单到 9/18）+ EN（8/26–10/26）合并 593 单 / 677 件 / 49 SKU；来源仓判定用「窗口内该 SKU 在美东池/美中池的出库路径」，旁证为 8-07 与 10-23 两池库存。结果 26 SKU 美东 / 23 SKU 美中 / 0 无法判断（强 45、中 4）；Wayfair dropship NJ(美东)/TX(美中) 位置信息 39/39 与判定一致、0 冲突。**关键限制**：通途库存变动 API 仅 7 天，回查不到 8–9 月调拨单 → 来源是推断不是凭证；订单侧 CG 仓只有 Cranbury，McDonough/Perris/PortWentworth/Romeoville 只在 Wayfair 库存表出现。产物 `D:/Work/fzh-order-store/analysis/wf-cg-source-map-2026-10-28.xlsx`（本地，不入库）；脚本 `scripts/wf_cg_source_map.py`。退货例外按 SKU 标候选（22 个 SKU 有窗口退货仓出库），未扣减件数。
+
 ## 2026-09-21
 
 - **新增**: [2026-09-21-sellfox-amazon-settlement-reports.md](2026-09-21-sellfox-amazon-settlement-reports.md) — 赛狐 API 拉 Amazon 账期报表的可行性与覆盖度实测。起点是「财务报税要各账号 Amazon 账期报表，现在只能拿 PDF 自己算」。结论：**能拉，但只有「插件获取报告」一条路，且 API 不可触发抓取**。赛狐侧三条路径实测分工：①`亚马逊原报告`（`report/center/add.json`）是**赛狐服务端生成**，报告类型枚举里**没有账期/结算**；②`自定义报表`（`custom/report/*`）是赛狐自建分析表，非 Amazon 结算文件；③`插件获取报告`（`report/center/task/getPlugPageList.json`）**唯一含账期**，靠浏览器插件在账号登录态下抓回存 COS，接口是**纯读**。旁证：`创建报告任务` 的 `reportType` 只支持 `PRODUCT_SALE_REPORT` 一个值 ⇒ 抓取只能在 UI 侧发生。

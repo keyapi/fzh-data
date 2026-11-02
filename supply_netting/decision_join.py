@@ -309,6 +309,8 @@ def main(argv=None) -> int:
     parser.add_argument("--wide", required=True)
     parser.add_argument("--pack", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--decision-date", default="2026-10-29",
+                        help="决策日（只影响产物文件名，不参与任何计算）")
     parser.add_argument("--previous", default=None,
                         help="上一版 actions 目录（仅记录 lineage，不读其数据）")
     parser.add_argument("--baseline-actions", default=None,
@@ -325,9 +327,9 @@ def main(argv=None) -> int:
     baseline = pd.read_parquet(args.baseline_actions) if args.baseline_actions else None
     merged, stats = join_actions(wide, pack, baseline=baseline)
 
-    parquet_path = out_dir / "decision_pack_2026-10-29_actions.parquet"
-    csv_path = out_dir / "decision_pack_2026-10-29_actions.csv"
-    xlsx_path = out_dir / "decision_pack_2026-10-29_actions.xlsx"
+    parquet_path = out_dir / f"decision_pack_{args.decision_date}_actions.parquet"
+    csv_path = out_dir / f"decision_pack_{args.decision_date}_actions.csv"
+    xlsx_path = out_dir / f"decision_pack_{args.decision_date}_actions.xlsx"
     merged.to_parquet(parquet_path, index=False)
     merged.to_csv(csv_path, index=False, encoding="utf-8-sig")
     with pd.ExcelWriter(xlsx_path, engine="openpyxl") as writer:
