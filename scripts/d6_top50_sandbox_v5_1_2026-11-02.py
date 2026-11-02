@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""D6 v4 全量补货沙盒（只读）。
+"""D6 v6 全量补货沙盒（只读）。
 
 相对 v3 的变化
 1) 范围扩到全量 1,853 个需求键；另列 307 policy_excluded 行。
@@ -8,7 +8,7 @@
 3) CG：按 SKU owner 把 CG 库存作为 USNJ/USTX 分支的缓冲抵扣（cg_buffer_credit），
    生成任何 CG 仓补货建议；CG 池 178 键只作 observation；CG 库存/销量单列。
 4) ETA 用实测分布：SO→DN 按 customer/role；头程用 shipment_segments；
-   bootstrap 组合 production+head-haul，输出 p50（期望）与 p90（95% 规划）。
+   同池真实样本阶段独立情景；在途/待发采用未知货龄完整头程情景。
 5) 成品 MOQ=n/a（自有绍兴工厂），按个取整；只有原料用 moq_items_21。
 6) 输出：全量动作 + Top50 + 动作汇总 + 证据/未知 + CG 记录 + 决策日志 + 自检。
 
@@ -22,6 +22,7 @@ import hashlib
 import json
 import math
 import platform
+import re
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -29,10 +30,23 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from supply_netting.replenishment_actions import (  # noqa: E402
+    horizon_net_need,
+    bootstrap_independent_route,
+    unknown_age_transit_days,
+    production_samples_for_pool_role,
+    route_candidates_for_pool,
+    select_route_candidate,
+    select_snapshot_date,
+    split_actions,
+)
+from supply_netting.leadtime_evidence import production_leadtime_rows  # noqa: E402
+
 B = "D:/Work/fzh-order-store"
 BA = f"{B}/analysis"
-RULE_VERSION = "D6-v5.1-2026-11-02"
-AS_OF = date(2026, 10, 28)
+RULE_VERSION = "D6-v6-2026-11-02"
+AS_OF = date(2026, 11, 2)
 LEAD_DAYS = 50
 H_MAIN, H_SENS = 97, 157
 KEYS = ["product_id", "pool", "physical_form", "canonical_uom"]
@@ -82,12 +96,17 @@ def boot(a, b, seed=42, n=3000):
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="D6 v4 全量补货沙盒（只读）")
+    global AS_OF
+    ap = argparse.ArgumentParser(description="D6 v6 全量补货沙盒（只读）")
     ap.add_argument("--d1b", default=f"{BA}/D_资格与契约_D1b_v2_3_2026-11-02.xlsx")
-    ap.add_argument("--d3b", default=f"{BA}/D_历史归一与回测_D3b_v3_2_2026-11-02.xlsx")
-    ap.add_argument("--d5", default=f"{BA}/D_概率与服务_D5_v3_1_2026-11-02.xlsx")
+    ap.add_argument("--d3b", default=f"{BA}/codex-repair-20261102/"
+                    "D_历史归一与回测_D3b_v3_4_2026-11-02.xlsx")
+    ap.add_argument("--d5", default=f"{BA}/codex-repair-20261102/D5v6_2-full/"
+                    "D_概率与服务_D5_v6_2026-11-02.xlsx")
     ap.add_argument("--d2b", default=f"{BA}/D_删失需求估计_D2b_v2_2026-11-02.xlsx")
     ap.add_argument("--d5b", default=f"{BA}/D_季节促销_D5b_v2_2026-11-02.xlsx")
+    ap.add_argument("--as-of", type=date.fromisoformat, default=AS_OF,
+                    help="审计日 YYYY-MM-DD；库存只使用不晚于该日的快照")
     ap.add_argument("--d4", default=f"{BA}/D_层级一致性_D4_v2_2026-11-02.xlsx")
     ap.add_argument("--c14", default=f"{BA}/通途库存_A337_v14_2026-10-30.xlsx")
     ap.add_argument("--b10", default=f"{BA}/仓库归属_A337_v6r10_2026-10-30.xlsx")
@@ -103,14 +122,16 @@ def main(argv=None) -> int:
     ap.add_argument("--en-stock", default=f"{B}/en_stock.parquet")
     ap.add_argument("--po-open", default=f"{BA}/po_open_receipt_queue_2026-10-28.csv")
     ap.add_argument("--orders", default=f"{B}/orders_unified.parquet")
-    ap.add_argument("--out-xlsx", default=f"{BA}/D_Top50沙盒_D6_v5_1_2026-11-02.xlsx")
-    ap.add_argument("--out-report", default=f"{BA}/D_Top50沙盒_D6_v5_1_2026-11-02_报告.md")
-    ap.add_argument("--manifest", default=f"{BA}/D_Top50沙盒_D6_v5_1_2026-11-02.manifest.json")
+    ap.add_argument("--out-xlsx", default=f"{BA}/D_Top50沙盒_D6_v6_2026-11-02.xlsx")
+    ap.add_argument("--out-report", default=f"{BA}/D_Top50沙盒_D6_v6_2026-11-02_报告.md")
+    ap.add_argument("--manifest", default=f"{BA}/D_Top50沙盒_D6_v6_2026-11-02.manifest.json")
+    ap.add_argument("--decisions", default=f"{BA}/D6_DECISIONS_D6_v6_2026-11-02.md")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
+    AS_OF = args.as_of
 
     inputs = {}
-    for k, v in (("D1B_V2_3", args.d1b), ("D3B_V3_2", args.d3b), ("D5_V3_1", args.d5),
+    for k, v in (("D1B_V2_3", args.d1b), ("D3B_V3_4", args.d3b), ("D5_V6_2", args.d5),
                  ("D2B_V2", args.d2b), ("D5B_V2", args.d5b), ("D4_V2", args.d4),
                  ("C14", args.c14), ("B_R10", args.b10), ("LEADTIME", args.leadtime),
                  ("DN_ROWS", args.dn_rows), ("SHIPMENTS", args.shipments),
@@ -132,7 +153,14 @@ def main(argv=None) -> int:
     d1b_keys = (d1b[KEYS + ["decision_state", "coverage_status", "market_pool_match"]]
                 .drop_duplicates(KEYS))
     c14 = pd.read_excel(args.c14, sheet_name="4_可发供给").drop_duplicates(KEYS)
-    cg = pd.read_excel(args.c14, sheet_name="23_CG库存池")
+    c14_date_match = re.search(r"\d{4}-\d{2}-\d{2}", Path(args.c14).name)
+    cg_snapshot = c14_date_match.group(0) if c14_date_match else None
+    cg_snapshot_status = ("未知（来源日期不明）" if cg_snapshot is None else
+                          "future（隔离）" if cg_snapshot > AS_OF.isoformat() else
+                          "fresh" if cg_snapshot == AS_OF.isoformat() else "stale")
+    cg_future_blocked = cg_snapshot is None or cg_snapshot > AS_OF.isoformat()
+    cg = (pd.DataFrame(columns=["cg_available", "erp_item_code", "cg_owner", "cg_pool"])
+          if cg_future_blocked else pd.read_excel(args.c14, sheet_name="23_CG库存池"))
     b = (pd.read_excel(args.b10, sheet_name="主表")
          .rename(columns={"产品键": "product_id", "地区": "region"}))
     conf_order = {"高": 3, "中": 2, "低": 1}
@@ -153,82 +181,97 @@ def main(argv=None) -> int:
     tt2prod = {str(r.sku_tongtool): str(r.product)
                for r in bridge.itertuples(index=False) if str(r.status) == "唯一"}
 
-    # ---------- ETA：最近 6 个月 SO→DN + ZMT 头程；bootstrap 组合
+    # ---------- ETA：同池真实生产与头程样本；独立阶段情景，不作联合服务保证
     dn = pd.read_csv(args.dn_rows)
-    dn["lead_days"] = pd.to_numeric(dn["lead_days"], errors="coerce")
-    dn["posting_dt"] = pd.to_datetime(dn["posting_date"], errors="coerce")
-    dn = dn.dropna(subset=["lead_days", "customer", "role"])
-    dn["year"] = dn["posting_dt"].dt.year
-    dn_recent = dn[(dn["posting_dt"] >= "2026-05-01") & (dn["posting_dt"] <= "2026-10-31")]
-    year_stats = (dn.groupby("year")["lead_days"]
+    dn_stats = dn.copy()
+    dn_stats["lead_days"] = pd.to_numeric(dn_stats["lead_days"], errors="coerce")
+    dn_stats["posting_dt"] = pd.to_datetime(dn_stats["posting_date"], errors="coerce")
+    dn_stats["year"] = dn_stats["posting_dt"].dt.year
+    dn_recent = dn_stats[(dn_stats["posting_dt"] >= AS_OF - pd.DateOffset(months=6))
+                         & (dn_stats["posting_dt"] <= pd.Timestamp(AS_OF))]
+    year_stats = (dn_stats.groupby("year")["lead_days"]
                   .agg(n="count", p50="median", p90=lambda s: s.quantile(.9)).to_dict("index"))
     cust_stats = (dn_recent.groupby("customer")["lead_days"]
                   .agg(n="count", p50="median", p90=lambda s: s.quantile(.9)).to_dict("index"))
     role_stats = (dn_recent.groupby("role")["lead_days"]
                   .agg(n="count", p50="median", p90=lambda s: s.quantile(.9)).to_dict("index"))
-
-    # 用户给定锚点（最近 6 个月；2025 pooled 20/50.4 不再使用）
-    PROD_ANCHOR = {"KS/成品": (22.0, 36.0), "ND#组件": (21.0, 30.4),
-                   "PK#皮壳": (19.0, 30.7), "其他": (21.0, 36.0)}
-    ZMT_ANCHOR = {"FBA海运": (31.0, 57.0), "FBA空运": (14.0, 14.0),
-                  "美森速快线": (27.0, 32.0), "COSCO": (44.0, 57.0),
-                  "EVERGREEN": (47.0, 64.0), "卡车": (31.0, 60.0),
-                  "快递": (15.0, 44.0)}
-    # 两层运输：main_haul / last_mile；分段来自 leadtime_snapshot_20261102
-    SEG1 = {"海运普船": (11.0, 19.0), "海运快船": (8.0, 12.0), "空运": (0.0, 8.0)}
-    SEG2 = {"海运普船": (17.0, 35.0), "海运快船": (10.0, 12.0), "空运": (0.0, 0.0)}
-    SEG3 = {"卡车": (9.0, 18.0), "快递": (0.0, 9.0)}
-    MAIN_ORDER = ["海运普船", "海运快船", "空运"]
-    LAST_ORDER = ["卡车", "快递"]
-
-    def boot4(*anchors):
-        rng = np.random.default_rng(42)
-        s = np.zeros(3000)
-        for p50, p90 in anchors:
-            s += rng.choice(np.array([p50, p90], dtype=float), 3000, replace=True)
-        return float(np.quantile(s, 0.5)), float(np.quantile(s, 0.9))
-
-    combo, head_combo = {}, {}
-    for role in PROD_ANCHOR:
-        for m in MAIN_ORDER:
-            for l in LAST_ORDER:
-                combo[(role, m, l)] = boot4(PROD_ANCHOR[role], SEG1[m], SEG2[m], SEG3[l])
-    for m in MAIN_ORDER:
-        for l in LAST_ORDER:
-            head_combo[(m, l)] = boot4(SEG1[m], SEG2[m], SEG3[l])
-    inbound_p50 = {r: combo[(r, "海运普船", "卡车")][0] for r in PROD_ANCHOR}
-    inbound_p90 = {r: combo[(r, "海运普船", "卡车")][1] for r in PROD_ANCHOR}
-    inbound_head_p50, inbound_head_p90 = head_combo[("海运普船", "卡车")]
-
-    # ZMT 头程样本（2026-06..10）
     zmt = pd.read_csv(args.zmt)
-    zmt["full_lt"] = pd.to_numeric(zmt["full_lt"], errors="coerce")
-    zmt_pos = zmt[zmt["full_lt"] > 0]
-    zmt_counts = zmt["transport"].astype(str).value_counts().to_dict()
-
-    def _tcount(df, key):
-        t = df["transport"].astype(str)
-        c = df["carrier"].astype(str)
-        if key == "卡车":
-            return int(t.str.contains("卡派").sum())
-        if key == "快递":
-            return int(t.str.contains("快递").sum())
-        if key == "美森速快线":
-            return int(t.str.contains("美森").sum())
-        if key in ("COSCO", "EVERGREEN"):
-            return int((c == key).sum())
-        return int((t == key).sum())
-
-    zmt_anchor_tbl = [{"transport": k, "n": _tcount(zmt, k),
-                       "full_lt_n": _tcount(zmt_pos, k),
-                       "p50": v[0], "p90": v[1]} for k, v in ZMT_ANCHOR.items()]
-    head_n_raw = len(zmt)
-    head_assumed = False   # 使用 ZMT 锚点，不是 35/40 假设
-    head_p50, head_p90 = inbound_head_p50, inbound_head_p90
+    from supply_netting.route_leadtime import build_route_evidence
+    production_samples, head_samples, route_evidence_report = build_route_evidence(dn, zmt, AS_OF)
+    pool_code = {"美东USNJ": "USNJ", "美中USTX": "USTX", "波兰": "PL"}
+    production_dedup = production_leadtime_rows(dn_recent)
+    production_dedup["lead_days"] = pd.to_numeric(production_dedup["lead_days"], errors="coerce")
+    production_dedup = production_dedup.dropna(subset=["customer", "dn", "so", "lead_days"])
+    production_dedup = production_dedup[production_dedup["lead_days"] >= 0]
+    all_role_final = (production_dedup.groupby(["customer", "dn", "so"], dropna=False)
+                      ["lead_days"].max().reset_index())
+    route_pool_of_customer = {"CENTRADE": "USNJ", "DANEEY": "USTX", "波兰公司": "PL"}
+    for row in all_role_final.itertuples(index=False):
+        sample_pool = route_pool_of_customer.get(str(row.customer))
+        if sample_pool:
+            production_samples.setdefault((sample_pool, "__all_roles__"), []).append(
+                float(row.lead_days))
+    role_names = sorted({role_of(pid) for pid in d4["product_id"].astype(str)})
+    main_label = {"sea_regular": "海运普船", "sea_fast": "海运快船",
+                  "air": "空运", "unknown": "未知main_haul"}
+    last_label = {"truck": "卡车", "express": "快递", "unknown": "未知last_mile"}
+    route_combo, pool_head_scenario = {}, {}
+    pool_routes = {}
+    route_evidence_rows = []
+    for route_pool in sorted(set(pool_code.values())):
+        pool_head = [day for (p, _, _), days in head_samples.items() if p == route_pool
+                     for day in days]
+        pool_head_scenario[route_pool] = (float(np.quantile(pool_head, .5)),
+                                          float(np.quantile(pool_head, .9))) if pool_head else None
+        routes = route_candidates_for_pool(head_samples, route_pool)
+        pool_routes[route_pool] = routes
+        for role in role_names:
+            production, production_source = production_samples_for_pool_role(
+                production_samples, route_pool, role)
+            for main, last in routes:
+                route_combo[(route_pool, role, main, last)] = bootstrap_independent_route(
+                    production, head_samples[(route_pool, main, last)])
+                if route_combo[(route_pool, role, main, last)] is not None:
+                    route_combo[(route_pool, role, main, last)]["production_source"] = production_source
+            if production:
+                route_evidence_rows.append(dict(证据类型="production", pool=route_pool, role=role,
+                                                n=len(production), source=production_source,
+                                                note=(f"{production_source}; "
+                                                      f"{'small sample' if len(production) < 30 else 'observed'}; "
+                                                      "not a service guarantee")))
+            else:
+                route_evidence_rows.append(dict(证据类型="production", pool=route_pool, role=role,
+                                                n=0, source="unavailable",
+                                                note="no role sample or same-pool fallback; route ETA unavailable"))
+        for (p, main, last), days in head_samples.items():
+            if p == route_pool:
+                route_evidence_rows.append(dict(证据类型="head_route", pool=p,
+                                                role="", main=main_label.get(main, main),
+                                                last=last_label.get(last, last), n=len(days),
+                                                note=(f"{'small sample' if len(days) < 30 else 'observed'}; "
+                                                      "not a service guarantee")))
+    route_evidence_summary = {
+        "as_of": route_evidence_report["as_of"],
+        "dn": {k: v for k, v in route_evidence_report["dn"].items() if k != "groups"},
+        "head": {k: v for k, v in route_evidence_report["head"].items()
+                 if k not in {"groups", "delivery_purpose_counts"}},
+        "observed_groups": route_evidence_rows,
+    }
 
     # ---------- 在途/PO（en_stock 为主；仅 intransit=0 的 SKU/仓用 PO open）
     es = pd.read_parquet(args.en_stock)
-    es = es[es["snapshot_date"].astype(str) == es["snapshot_date"].astype(str).max()].copy()
+    es_dates = es["snapshot_date"].dropna().astype(str).tolist()
+    es_snapshot = select_snapshot_date(es_dates, AS_OF)
+    es_source_snapshot = max((d[:10] for d in es_dates), default=None)
+    es_snapshot_status = ("未知（无不晚于审计日快照）" if es_snapshot is None else
+                          "fresh" if es_snapshot == AS_OF.isoformat() else "stale")
+    es_latest_status = ("未知" if es_source_snapshot is None else
+                        "future（隔离）" if es_source_snapshot > AS_OF.isoformat() else
+                        "fresh" if es_source_snapshot == AS_OF.isoformat() else "stale")
+    if es_snapshot is None:
+        es = es.iloc[0:0].copy()
+    else:
+        es = es[es["snapshot_date"].astype(str).str[:10] == es_snapshot].copy()
     for c in ("intransit", "waiting_shipment"):
         es[c] = pd.to_numeric(es[c], errors="coerce").fillna(0.0)
     es["product_x"] = es["sku"].astype(str).map(tt2prod)
@@ -277,25 +320,34 @@ def main(argv=None) -> int:
     po.loc[m_seg, "eta_p90"] = po.loc[m_seg, "eta_p50"]
     po.loc[m_seg, "eta_src"] = "shipment_segment"
     seg_applied = int(m_seg.sum())
-    # 无日期 → bootstrap 分布（purchaseDate + full）
+    # 无逐 PO ETA → PO 创建时间不等于发运时间；仅用同池 head 情景，剩余阶段未知。
     m_ass = po["eta_p50"].isna()
     po["customer"] = po["warehouseName"].astype(str).map(POOL_OF_WAREHOUSE).map(CUSTOMER_OF_POOL)
     po["role"] = po["goods_sku"].astype(str).map(lambda s: role_of(tt2prod.get(s, "")))
+    po["route_pool"] = po["warehouseName"].astype(str).map(POOL_OF_WAREHOUSE).map(
+        {"美东USNJ": "USNJ", "美中USTX": "USTX", "波兰": "PL"})
     for i in po.index[m_ass]:
-        role = po.at[i, "role"]
-        role = role if role in PROD_ANCHOR else "其他"
-        p50, p90 = combo[(role, "海运普船", "卡车")]
+        pool = po.at[i, "route_pool"]
+        distribution = pool_head_scenario.get(pool)
+        if distribution is None:
+            po.at[i, "eta_src"] = "po_stage_unknown_head_unavailable_manual_review"
+            continue
         base = po.at[i, "purchase_dt"]
+        missing_purchase_date = pd.isna(base)
         if pd.isna(base):
             base = pd.Timestamp(AS_OF)
-        e50 = base + pd.Timedelta(days=p50)
-        e90 = base + pd.Timedelta(days=p90)
+        p50_days = unknown_age_transit_days("po", 0, distribution[0])
+        p90_days = unknown_age_transit_days("po", 0, distribution[1])
+        e50 = base + pd.Timedelta(days=p50_days)
+        e90 = base + pd.Timedelta(days=p90_days)
         if e90 < pd.Timestamp(AS_OF):
-            e50 = pd.Timestamp(AS_OF) + pd.Timedelta(days=inbound_head_p50)
-            e90 = pd.Timestamp(AS_OF) + pd.Timedelta(days=inbound_head_p90)
-            po.at[i, "eta_src"] = "bootstrap_headhaul_overdue"
+            e50 = pd.Timestamp(AS_OF) + pd.Timedelta(days=p50_days)
+            e90 = pd.Timestamp(AS_OF) + pd.Timedelta(days=p90_days)
+            po.at[i, "eta_src"] = "po_created_before_asof_age_unknown_full_transit_scenario_manual_review"
+        elif missing_purchase_date:
+            po.at[i, "eta_src"] = "po_stage_unknown_from_asof_manual_review_scenario"
         else:
-            po.at[i, "eta_src"] = "bootstrap_full"
+            po.at[i, "eta_src"] = "po_creation_not_ship_date_stage_unknown_scenario_manual_review"
         po.at[i, "eta_p50"], po.at[i, "eta_p90"] = e50, e90
     eta_src_counts = po["eta_src"].value_counts().to_dict()
 
@@ -319,12 +371,16 @@ def main(argv=None) -> int:
     po_use["product_x"] = po_use["goods_sku"].astype(str).map(tt2prod)
     po_use["pool_x"] = po_use["warehouseName"].astype(str).map(POOL_OF_WAREHOUSE)
     po_use_m = po_use[po_use["product_x"].notna() & po_use["pool_x"].notna()]
+    po_eta_basis = (po_use_m.groupby(["product_x", "pool_x"], dropna=False)["eta_src"]
+                    .agg(lambda values: "；".join(sorted(set(str(v) for v in values if str(v)))))
+                    .rename("po_eta_basis").reset_index())
     po_extra_total = float(po_use_m["qty_eff"].sum())
     pairs_all = int(len(set(zip(po["goods_sku"].astype(str),
                                 po["warehouseName"].astype(str)))))
 
     ks = (sw_m.groupby(["product_x", "pool_x"])
-          .agg(stock_inb=("stock_inb", "sum"), stock_intr=("intr", "sum")).reset_index())
+          .agg(stock_inb=("stock_inb", "sum"), stock_intr=("intr", "sum"),
+               stock_wait=("wait", "sum")).reset_index())
     kp = (po_use_m.groupby(["product_x", "pool_x"])["qty_eff"].sum()
           .rename("po_extra").reset_index())
 
@@ -358,22 +414,45 @@ def main(argv=None) -> int:
                 on=["product_id", "region"], how="left")
     f = f.merge(ks, left_on=["product_id", "pool"], right_on=["product_x", "pool_x"], how="left")
     f = f.merge(kp, left_on=["product_id", "pool"], right_on=["product_x", "pool_x"], how="left")
+    f = f.merge(po_eta_basis, left_on=["product_id", "pool"],
+                right_on=["product_x", "pool_x"], how="left")
+    f["po_eta_basis"] = f["po_eta_basis"].fillna("")
+    f["po_manual_review"] = f["po_eta_basis"].str.contains("scenario|manual_review", case=False, regex=True)
     f = f.merge(cg_credit, on=["product_id", "pool"], how="left")
-    for c in ("stock_inb", "stock_intr", "po_extra", "cg_buffer_credit"):
+    for c in ("stock_inb", "stock_intr", "stock_wait", "po_extra", "cg_buffer_credit"):
         f[c] = f[c].fillna(0.0)
     f["po_extra"] = f["po_extra"].astype(float)
-    f["stock_wait"] = (f["stock_inb"] - f["stock_intr"]).clip(lower=0.0)
     f["inbound"] = f["stock_inb"] + f["po_extra"]
+    f["en_stock_snapshot_date"] = es_snapshot or ""
+    f["en_stock_snapshot_status"] = es_snapshot_status
+    f["en_stock_latest_source_date"] = es_source_snapshot or ""
+    f["en_stock_latest_source_status"] = es_latest_status
+    f["cg_snapshot_date"] = cg_snapshot or ""
+    f["cg_snapshot_status"] = cg_snapshot_status
+    f["snapshot_review_required"] = (es_snapshot_status != "fresh"
+                                     or cg_snapshot_status != "fresh")
     f["market"] = f["pool"].map(MARKET_OF_POOL).fillna("OTHER")
     f["supply"] = pd.to_numeric(f["可发供给"], errors="coerce").fillna(0.0)
     f["cg_buffer"] = f["pool"].astype(str).str.startswith("CG")
     f["other_pool"] = f["pool"].astype(str) == "其他"
-    f["calib_fail"] = f["calibration_status"].astype(str) != "ok"
+    f["empirical_scenario"] = f["calibration_status"].astype(str) == "empirical_time_ordered"
+    f["calib_fail"] = ~f["calibration_status"].astype(str).isin(
+        ("ok", "empirical_time_ordered"))
+    f["service_validation_status"] = np.where(
+        f["calibration_status"].astype(str) == "ok", "validated",
+        np.where(f["empirical_scenario"], "empirical_time_ordered_unvalidated", "unvalidated"))
+    f["manual_review_required"] = ((f["service_validation_status"] != "validated")
+                                   | f["po_manual_review"]
+                                   | f["snapshot_review_required"])
+    f["auto_order"] = False
+    f["protection_horizon_days"] = H_MAIN
+    f["sensitivity_horizon_days"] = H_SENS
     f["data_gap"] = f["coverage_status"].astype(str) == "未覆盖"
     f["shared"] = f["market_pool_match"].astype(str) == "0"
     f["no_join"] = f["join_class"].astype(str) != "join_full"
     f["hard_excl"] = ((f["status"] == "d5_failed") | f["data_gap"] | f["shared"]
-                      | f["no_join"] | f["cg_buffer"] | f["other_pool"])
+                      | f["no_join"] | f["cg_buffer"] | f["other_pool"] | cg_future_blocked
+                      | (es_snapshot is None))
 
     # ---------- 需要日 / ETA / 迟到量
     f["daily"] = pd.to_numeric(f["p50"], errors="coerce").fillna(0.0) / H_MAIN
@@ -384,7 +463,7 @@ def main(argv=None) -> int:
     f["eta_p90"] = pd.NaT
     f["late_qty"] = 0.0
 
-    # stock：已发运/待发 → 头程分布（从 as_of 起）
+    # 在途/待发货龄未知；使用同池完整头程样本作显式情景，不加生产阶段。
     def upd(row_i, qty, p50d, p90d):
         if qty <= 0:
             return
@@ -398,10 +477,17 @@ def main(argv=None) -> int:
             f.at[row_i, "late_qty"] += qty
 
     for i, r in f.iterrows():
-        role = role_of(r["product_id"])
-        role = role if role in PROD_ANCHOR else "其他"
-        upd(i, float(r["stock_intr"]), inbound_p50[role], inbound_p90[role])
-        upd(i, float(r["stock_wait"]), inbound_p50[role], inbound_p90[role])
+        route_pool = pool_code.get(str(r["pool"]))
+        head_distribution = pool_head_scenario.get(route_pool)
+        if head_distribution is None:
+            continue
+        head_p50, head_p90 = head_distribution
+        upd(i, float(r["stock_intr"]),
+            unknown_age_transit_days("intr", 0, head_p50),
+            unknown_age_transit_days("intr", 0, head_p90))
+        upd(i, float(r["stock_wait"]),
+            unknown_age_transit_days("wait", 0, head_p50),
+            unknown_age_transit_days("wait", 0, head_p90))
     # PO：purchaseDate + full 分布（已过期→头程）
     for r in po_use_m.itertuples(index=False):
         key = (r.product_x, r.pool_x)
@@ -411,12 +497,14 @@ def main(argv=None) -> int:
         if len(idx) == 0:
             continue
         i = idx[0]
+        if pd.isna(r.eta_p50) or pd.isna(r.eta_p90):
+            continue
         p50 = pd.Timestamp(r.eta_p50)
         p90 = pd.Timestamp(r.eta_p90)
         upd(i, float(r.qty_eff), (p50 - pd.Timestamp(AS_OF)).days,
             (p90 - pd.Timestamp(AS_OF)).days)
 
-    # 推荐两层运输：main_haul → last_mile（按 p90 是否赶得上需要日）
+    # 新单路线只从本池明确观测到的 main/last 组合中选。
     f["inbound_eta_p50"], f["inbound_eta_p90"] = f["eta_p50"], f["eta_p90"]
     f["recommended_main_haul"] = ""
     f["recommended_last_mile"] = ""
@@ -424,56 +512,76 @@ def main(argv=None) -> int:
     f["last_mile_fits"] = False
     f["replenish_eta_p50"] = pd.NaT
     f["replenish_eta_p90"] = pd.NaT
-    for m in MAIN_ORDER:
-        f[f"{m}_p90"] = pd.NaT
-    for l in LAST_ORDER:
-        f[f"{l}_seg3_p90"] = SEG3[l][1]
+    f["route_status"] = ""
+    for m in main_label.values():
+        if m != "未知main_haul":
+            f[f"{m}_p90"] = pd.NaT
+    for l in last_label.values():
+        if l != "未知last_mile":
+            f[f"{l}_seg3_p90"] = pd.NaT
     for i, r in f.iterrows():
         role = role_of(r["product_id"])
-        role = role if role in PROD_ANCHOR else "其他"
+        route_pool = pool_code.get(str(r["pool"]))
         need = pd.Timestamp(r["need_dt"])
-        chosen_main, main_fits = "空运", False
-        for m in MAIN_ORDER:
-            if pd.Timestamp(AS_OF) + pd.Timedelta(days=combo[(role, m, "快递")][1]) <= need:
-                chosen_main, main_fits = m, True
-                break
-        chosen_last, last_fits = "快递", False
-        for l in LAST_ORDER:
-            if pd.Timestamp(AS_OF) + pd.Timedelta(days=combo[(role, chosen_main, l)][1]) <= need:
-                chosen_last, last_fits = l, True
-                break
-        f.at[i, "recommended_main_haul"] = chosen_main
-        f.at[i, "recommended_last_mile"] = chosen_last
-        f.at[i, "mode_fits"] = main_fits
-        f.at[i, "last_mile_fits"] = last_fits
-        f.at[i, "replenish_eta_p50"] = pd.Timestamp(AS_OF) + pd.Timedelta(
-            days=combo[(role, chosen_main, chosen_last)][0])
-        f.at[i, "replenish_eta_p90"] = pd.Timestamp(AS_OF) + pd.Timedelta(
-            days=combo[(role, chosen_main, chosen_last)][1])
-        for m in MAIN_ORDER:
-            f.at[i, f"{m}_p90"] = pd.Timestamp(AS_OF) + pd.Timedelta(
-                days=combo[(role, m, "快递")][1])
-    f["transport_basis"] = "urgency_only（无成本/重要度数据）"
+        routes = []
+        for main, last in pool_routes.get(route_pool, []):
+            estimate = route_combo.get((route_pool, role, main, last))
+            if estimate is not None:
+                routes.append((main, last, estimate))
+        need_days = (need - pd.Timestamp(AS_OF)).days
+        chosen, route_fits = select_route_candidate(routes, need_days)
+        if chosen is None:
+            f.at[i, "recommended_main_haul"] = "路线待确认"
+            f.at[i, "recommended_last_mile"] = "路线待确认"
+            f.at[i, "route_status"] = "route_unavailable_manual_review"
+            f.at[i, "transport_basis"] = "本池无完整路线样本；人工确认；urgency_only"
+            continue
+        chosen_main, chosen_last, estimate = chosen
+        f.at[i, "recommended_main_haul"] = main_label[chosen_main]
+        f.at[i, "recommended_last_mile"] = last_label[chosen_last]
+        f.at[i, "mode_fits"] = route_fits
+        f.at[i, "last_mile_fits"] = route_fits
+        f.at[i, "replenish_eta_p50"] = pd.Timestamp(AS_OF) + pd.Timedelta(days=estimate["p50"])
+        f.at[i, "replenish_eta_p90"] = pd.Timestamp(AS_OF) + pd.Timedelta(days=estimate["p90"])
+        if not route_fits:
+            f.at[i, "route_status"] = "route_scenario_late_manual_review"
+        elif estimate["n_production"] < 30 or estimate["n_head"] < 30:
+            f.at[i, "route_status"] = "small_sample_route_manual_review"
+        else:
+            f.at[i, "route_status"] = "pool_route_observed"
+        for main in main_label:
+            named = [route[2]["p90"] for route in routes if route[0] == main]
+            if named and main in main_label and main_label[main] in ("海运普船", "海运快船", "空运"):
+                f.at[i, f"{main_label[main]}_p90"] = pd.Timestamp(AS_OF) + pd.Timedelta(days=min(named))
+        for last in last_label:
+            named = [route[2]["p90"] for route in routes if route[1] == last]
+            if named and last in last_label and last_label[last] in ("卡车", "快递"):
+                f.at[i, f"{last_label[last]}_seg3_p90"] = pd.Timestamp(AS_OF) + pd.Timedelta(days=min(named))
+        f.at[i, "transport_basis"] = (
+            f"本池真实样本独立阶段情景 n生产={estimate['n_production']} n头程={estimate['n_head']}；"
+            f"production_source={estimate['production_source']}；阶段独立假设；"
+            "无服务保证；urgency_only")
+    if "transport_basis" not in f:
+        f["transport_basis"] = "本池无完整路线样本；路线待确认；urgency_only"
+    f["transport_basis"] = f["transport_basis"].replace("", "本池无完整路线样本；路线待确认；urgency_only")
+    f["route_status"] = f["route_status"].replace("", "route_unavailable_manual_review")
+    f["manual_review_required"] = (f["manual_review_required"]
+                                   | (f["route_status"] != "pool_route_observed"))
+    f["stage_independence_assumption"] = True
+    f["no_service_guarantee"] = True
     f["supply_on_time"] = f["supply"] + f["inbound"] - f["late_qty"]
 
-    # ---------- 需求 / 净需求（CG 缓冲抵扣）
-    for sl, suffix in ((0.95, "95"), (0.90, "90"), (0.85, "85")):
-        qcol = {"95": "q95", "90": "q90", "85": "q85"}[suffix]
-        f[f"ss_{suffix}"] = (pd.to_numeric(f[qcol], errors="coerce")
-                             - pd.to_numeric(f["p50"], errors="coerce")).clip(lower=0)
-    f["demand_lead"] = pd.to_numeric(f["p50"], errors="coerce") * LEAD_DAYS / H_MAIN
-    f["net_before_cg"] = f["demand_lead"] + f["ss_95"] - f["supply_on_time"]
-    f["net_95"] = f["net_before_cg"] - f["cg_buffer_credit"]
-    f["net_90"] = f["demand_lead"] + f["ss_90"] - f["supply_on_time"] - f["cg_buffer_credit"]
-    f["net_85"] = f["demand_lead"] + f["ss_85"] - f["supply_on_time"] - f["cg_buffer_credit"]
-    f["demand_lead_157"] = pd.to_numeric(f["p50_157"], errors="coerce") * LEAD_DAYS / H_SENS
-    f["ss_95_157"] = (pd.to_numeric(f["q95_157"], errors="coerce")
-                      - pd.to_numeric(f["p50_157"], errors="coerce")).clip(lower=0)
-    f["net_157"] = (f["demand_lead_157"] + f["ss_95_157"] - f["supply_on_time"]
-                    - f["cg_buffer_credit"])
+    # ---------- 按完整保护窗的预测总分位数净额（人工政策情景）
+    for qcol, netcol in (("q95", "net_95"), ("q90", "net_90"), ("q85", "net_85")):
+        f[netcol] = [horizon_net_need(q, s, c) for q, s, c in
+                     zip(f[qcol], f["supply_on_time"], f["cg_buffer_credit"])]
+    f["net_before_cg"] = [horizon_net_need(q, s, 0) for q, s in
+                          zip(f["q95"], f["supply_on_time"])]
+    f["net_157"] = [horizon_net_need(q, s, c) for q, s, c in
+                    zip(f["q95_157"], f["supply_on_time"], f["cg_buffer_credit"])]
     # CG 池键：需求/净额按 0（缓冲观察）
     cg_cols = ["p50", "p90", "q95", "q90", "q85", "p50_157", "q95_157",
-               "demand_lead", "ss_95", "net_before_cg", "net_95", "net_90", "net_85",
+               "net_before_cg", "net_95", "net_90", "net_85",
                "net_157", "inbound", "late_qty", "supply_on_time"]
     for c in cg_cols:
         f.loc[f["cg_buffer"], c] = 0.0
@@ -494,10 +602,12 @@ def main(argv=None) -> int:
             return "观察", "C 供给未 join_full"
         if r.calib_fail:
             return "观察", "D5 区间未校准"
+        if pd.isna(r.net_95):
+            return "观察", "净需求未知，不生成可执行行动"
         if r.net_95 <= 0:
             return "不补", "覆盖足够（净需求≤0）"
         if r.late_qty > 0:
-            return "催已有", "有在途/PO 且 p90 ETA 晚于需要日"
+            return "催已有", "有在途/PO 且 ETA 情景晚于需要日"
         return "补", "净需求>0 且无迟到在途"
 
     acts = [action_of(r) for r in f.itertuples(index=False)]
@@ -505,18 +615,21 @@ def main(argv=None) -> int:
     for c in ("recommended_main_haul", "recommended_last_mile"):
         f.loc[f["action"].isin(["不补", "观察"]), c] = "不适用（不补/观察）"
     f["action_reason"] = [a[1] for a in acts]
-    f["remaining_after_cover"] = np.where(
-        f["action"] == "催已有", (f["net_95"] - f["late_qty"]).clip(lower=0), f["net_95"])
+    splits = [split_actions(r.net_95, r.late_qty,
+                            blocked=bool(r.hard_excl or r.calib_fail))
+              for r in f.itertuples(index=False)]
+    f["expedite_qty"] = [s["expedite_qty"] for s in splits]
+    f["new_order_qty"] = [s["new_order_qty"] for s in splits]
+    f["remaining_need"] = [s["remaining_need"] for s in splits]
+    f["independent_actions"] = ["、".join(s["actions"]) for s in splits]
+    f["has_expedite_action"] = ["催已有" in s["actions"] for s in splits]
+    f["has_new_order_action"] = ["新补" in s["actions"] for s in splits]
+    f["remaining_after_cover"] = f["remaining_need"]
 
     def qty_of(r) -> tuple[int, str]:
-        if r.action in ("不补", "观察"):
-            return 0, "不补货"
-        if r.action == "催已有":
-            return (ceil_int(min(float(r.net_95), float(r.late_qty))),
-                    f"催已有量；剩余需补 {max(0.0, float(r.remaining_after_cover)):.2f}")
-        need = float(r.net_95)
+        need = float(r.remaining_need) if pd.notna(r.remaining_need) else 0.0
         if need <= 0:
-            return 0, "净需求≤0"
+            return 0, "无新增单量"
         pid = str(r.product_id)
         if pid in moq_map and np.isfinite(moq_map[pid]) and moq_map[pid] > 0:
             mq = float(moq_map[pid])
@@ -525,6 +638,7 @@ def main(argv=None) -> int:
 
     qty = [qty_of(r) for r in f.itertuples(index=False)]
     f["qty"] = [q[0] for q in qty]
+    f["new_order_qty"] = f["qty"]
     f["rounding_basis"] = [q[1] for q in qty]
     f["moq"] = [f"{moq_map[p]:g}" if (p in moq_map and np.isfinite(moq_map[p]))
                 else "n/a（自有工厂）" for p in f["product_id"].astype(str)]
@@ -534,12 +648,14 @@ def main(argv=None) -> int:
     f["order_late_flag"] = np.where(pd.to_datetime(f["order_date"]) < pd.Timestamp(AS_OF),
                                     "下单日已过（应立即下单）", "")
     f["confidence"] = np.where(
+        f["manual_review_required"], "待人工复核",
+        np.where(
         (f["calibration_status"].astype(str) == "ok")
         & (f["demand_basis"].astype(str) == "observed")
         & (f["b_market_confidence"].astype(str) == "高")
         & (~f["hard_excl"]), "高",
         np.where((f["calibration_status"].astype(str) == "ok")
-                 | (f["demand_basis"].astype(str) == "observed"), "中", "低"))
+                 | (f["demand_basis"].astype(str) == "observed"), "中", "低")))
     def unknowns_of(r) -> str:
         u = ["成品 MOQ=n/a（自有绍兴工厂）" if str(r.moq).startswith("n/a") else f"MOQ={r.moq}"]
         if r.cg_buffer:
@@ -548,28 +664,59 @@ def main(argv=None) -> int:
             u.append(f"CG 缓冲抵扣 {r.cg_buffer_credit:.0f}")
         if str(r.calibration_status) != "ok":
             u.append("D5 区间未校准")
+        if r.manual_review_required:
+            u.append("人工复核情景，不是服务承诺/自动下单许可")
+        if r.snapshot_review_required:
+            u.append("EN/CG 库存快照非fresh；需人工复核")
+        if r.po_manual_review:
+            u.append("PO无明确ETA，创建日不等于发运日；未知阶段情景需人工复核")
         if r.inbound > 0:
-            u.append("ETA 为分布假设（见 ETA依据）")
+            u.append("ETA 为同池情景或来源估算（见 ETA依据）；不保证交期")
+        if r.route_status == "route_unavailable_manual_review":
+            u.append("本池没有可用明确路线；需人工确认运输路线")
+        elif r.route_status == "route_scenario_late_manual_review":
+            u.append("本池所有路线 ETA 情景都晚于需要日；路线需人工复核")
+        elif r.route_status == "small_sample_route_manual_review":
+            u.append("本池路线样本不足30；路线需人工复核")
         return "；".join(u)
     f["unknowns"] = [unknowns_of(r) for r in f.itertuples(index=False)]
     f["eta_basis"] = np.where(
-        f["inbound"] > 0,
-        "inbound=prod+普船/卡车；plan=" + f["recommended_main_haul"] + "+" +
-        f["recommended_last_mile"],
-        "plan=" + f["recommended_main_haul"] + "+" + f["recommended_last_mile"])
+        (f["stock_intr"] + f["stock_wait"]) > 0,
+        "在途/待发=age_unknown_full_transit_scenario（无production）；PO=来源ETA/池路线情景；计划=" +
+        f["recommended_main_haul"] + "+" + f["recommended_last_mile"],
+        np.where(f["inbound"] > 0,
+                 "PO=来源ETA/完整段；计划=" + f["recommended_main_haul"] + "+" +
+                 f["recommended_last_mile"],
+                 "计划=" + f["recommended_main_haul"] + "+" + f["recommended_last_mile"]))
+    f["inbound_scenario"] = np.where(
+        (f["stock_intr"] + f["stock_wait"]) > 0,
+        "age_unknown_full_transit_scenario",
+        np.where(f["po_manual_review"],
+                 "po_creation_not_ship_date_stage_unknown_scenario",
+                 np.where(f["po_extra"] > 0, "source_eta", "none")))
 
     # ---------- 全量动作表
     full_cols = ["product_id", "market", "pool", "physical_form", "canonical_uom",
                  "demand_pattern", "p50", "q95", "supply", "stock_inb", "po_extra",
+                 "protection_horizon_days", "sensitivity_horizon_days",
+                 "service_validation_status", "po_eta_basis", "po_manual_review",
+                 "manual_review_required", "auto_order",
+                 "stock_intr", "stock_wait", "en_stock_snapshot_date",
+                 "en_stock_snapshot_status", "en_stock_latest_source_date",
+                 "en_stock_latest_source_status", "cg_snapshot_date", "cg_snapshot_status",
+                 "snapshot_review_required",
                  "cg_buffer_credit", "inbound", "late_qty", "supply_on_time",
                  "net_before_cg", "net_95", "net_90", "net_85", "net_157",
                  "replenish_eta_p50", "replenish_eta_p90", "inbound_eta_p50",
                  "inbound_eta_p90", "recommended_main_haul", "recommended_last_mile",
-                 "transport_basis", "last_mile_fits",
+                 "transport_basis", "route_status", "inbound_scenario",
+                 "stage_independence_assumption", "no_service_guarantee", "last_mile_fits",
                  "海运普船_p90", "海运快船_p90", "空运_p90",
                  "卡车_seg3_p90", "快递_seg3_p90",
                  "late_qty", "need_date", "order_date",
-                 "action", "action_reason", "qty", "rounding_basis", "moq",
+                 "action", "action_reason", "independent_actions", "has_expedite_action",
+                 "has_new_order_action", "expedite_qty", "new_order_qty", "remaining_need",
+                 "qty", "rounding_basis", "moq",
                  "confidence", "eta_basis", "unknowns", "order_late_flag"]
     full = f[full_cols].copy()
     for c in ("replenish_eta_p50", "replenish_eta_p90",
@@ -580,21 +727,36 @@ def main(argv=None) -> int:
     full = full.rename(columns={
         "market": "市场", "pool": "池", "physical_form": "形态", "canonical_uom": "UOM",
         "demand_pattern": "需求形态", "supply": "C可发供给",
+        "protection_horizon_days": "保护窗天数", "service_validation_status": "服务验证状态",
+        "sensitivity_horizon_days": "敏感性窗口天数",
+        "manual_review_required": "需人工复核", "auto_order": "自动下单",
+        "po_eta_basis": "PO ETA依据", "po_manual_review": "PO需人工复核",
         "stock_inb": "en_stock在途+待发", "po_extra": "PO追加(去重)",
         "cg_buffer_credit": "CG缓冲抵扣", "inbound": "在途合计",
-        "late_qty": "迟到在途(p90>需要日)", "supply_on_time": "到时供给",
+        "late_qty": "迟到在途(ETA情景晚于需要日)", "supply_on_time": "到时供给",
         "net_before_cg": "净需求(未扣CG)", "net_95": "净需求95", "net_90": "净需求90",
         "net_85": "净需求85", "net_157": "净需求157",
         "replenish_eta_p50": "ETA_p50", "replenish_eta_p90": "ETA_p90",
         "inbound_eta_p50": "在途ETA_p50", "inbound_eta_p90": "在途ETA_p90",
         "recommended_main_haul": "推荐main_haul", "recommended_last_mile": "推荐last_mile",
-        "transport_basis": "运输决策依据", "last_mile_fits": "last_mile p90赶得上",
-        "mode_fits": "p90赶得上需要日",
+        "transport_basis": "运输决策依据", "last_mile_fits": "last_mile情景赶得上",
+        "route_status": "路线状态",
+        "inbound_scenario": "已有供应ETA情景",
+        "mode_fits": "路线情景赶得上需要日",
         "海运普船_p90": "海运普船_p90", "海运快船_p90": "海运快船_p90",
         "空运_p90": "空运_p90", "卡车_seg3_p90": "卡车_seg3_p90",
         "快递_seg3_p90": "快递_seg3_p90",
         "need_date": "需要日", "order_date": "下单日",
         "action": "建议动作", "action_reason": "动作原因", "qty": "建议数量",
+        "independent_actions": "独立行动", "has_expedite_action": "催已有行动",
+        "has_new_order_action": "新补行动", "expedite_qty": "催已有量",
+        "new_order_qty": "新补数量", "remaining_need": "催后剩余缺口",
+        "stock_intr": "EN已发运量", "stock_wait": "EN待发量",
+        "en_stock_snapshot_date": "EN库存快照日", "en_stock_snapshot_status": "EN快照状态",
+        "en_stock_latest_source_date": "EN最新源快照日",
+        "en_stock_latest_source_status": "EN最新源状态",
+        "cg_snapshot_date": "CG库存快照日", "cg_snapshot_status": "CG快照状态",
+        "snapshot_review_required": "快照需复核",
         "rounding_basis": "取整依据", "confidence": "置信度", "eta_basis": "ETA依据",
         "unknowns": "未知项",
         "order_late_flag": "下单时点提示"})
@@ -649,11 +811,14 @@ def main(argv=None) -> int:
     # ---------- 汇总
     def agg(df, cols):
         if df.empty:
-            return pd.DataFrame(columns=cols + ["键数", "建议数量合计", "净需求95合计"])
+            return pd.DataFrame(columns=cols + ["键数", "建议数量合计", "催已有量合计",
+                                                 "新补数量合计", "净需求95合计"])
         return (df.groupby(cols, dropna=False)
                 .agg(键数=("product_id", "size"), 建议数量合计=("qty", "sum"),
+                     催已有量合计=("expedite_qty", "sum"),
+                     新补数量合计=("new_order_qty", "sum"),
                      净需求95合计=("net_95", "sum")).reset_index()
-                .sort_values(["键数", "建议数量合计"], ascending=False))
+                .sort_values(["键数", "新补数量合计"], ascending=False))
 
     act_full = agg(f, ["action"]).rename(columns={"action": "动作", "键数": "键数"})
     act_top = agg(top, ["action"]).rename(columns={"action": "动作"})
@@ -679,8 +844,9 @@ def main(argv=None) -> int:
     cg_repl = int(((f["cg_buffer"]) & (f["action"].isin(["补", "催已有"]))).sum())
     calc_bad = 0
     for r in f.itertuples(index=False):
-        calc = r.demand_lead + r.ss_95 - r.supply_on_time - r.cg_buffer_credit
-        if abs(calc - r.net_95) > 1e-6:
+        calc = horizon_net_need(r.q95, r.supply_on_time, r.cg_buffer_credit)
+        if ((calc is None and pd.notna(r.net_95)) or
+                (calc is not None and abs(calc - r.net_95) > 1e-6)):
             calc_bad += 1
     moq_bad = int((f["moq"].astype(str).str.contains("MOQ_unknown")).sum())
     self_rows = [
@@ -704,8 +870,9 @@ def main(argv=None) -> int:
     print(f"== {RULE_VERSION} == 全量 {len(f)} 键｜Top50 {len(top)}｜policy {len(pol_tbl)}")
     print("全量动作：", json.dumps(f["action"].value_counts().to_dict(), ensure_ascii=False))
     print("Top50 动作：", json.dumps(top["action"].value_counts().to_dict(), ensure_ascii=False))
-    print(f"ETA：SO→DN n={len(dn)}（最近6月 {len(dn_recent)}）｜ZMT n={len(zmt)}"
-          f"（positive {len(zmt_pos)}）｜seg1 {SEG1['海运普船'][0]:.0f}/{SEG1['海运普船'][1]:.0f}｜"
+    print(f"路线证据：production={route_evidence_report['dn']['included']}｜"
+          f"head={route_evidence_report['head']['included']}｜"
+          f"无已知路线池={sum(not pool_routes[p] for p in pool_routes)}｜"
           f"PO ETA 来源 {json.dumps(eta_src_counts, ensure_ascii=False)}")
     print("推荐运输方式（补/催）：",
           json.dumps(f[f["action"].isin(["补", "催已有"])]["recommended_main_haul"]
@@ -737,9 +904,12 @@ def main(argv=None) -> int:
             ("cross_warehouse_direct", "disabled_by_business"),
             ("供给", "C v14 可发 + en_stock intransit/waiting；仅 intransit=0 的 SKU/仓追加 PO open"),
             ("CG", "按 SKU owner 抵扣 USNJ/USTX 缓冲（cg_buffer_credit）；CG 池观察；库存/销量单列"),
-            ("ETA", "bootstrap production+head-haul；p50 期望、p90 95% 规划；"
-                   "ZMT 锚点"),
+            ("ETA", "同池真实 production×physical-route 阶段独立情景；非实测联合或服务保证"),
+            ("路线证据", "按 pool×role×main×last 选样；生产缺角色时只回退同池，标 pool_all_roles_fallback"),
+            ("库存快照", f"as-of={AS_OF}；EN={es_snapshot or '未知'}({es_snapshot_status})；"
+                       f"CG={cg_snapshot or '未知'}({cg_snapshot_status})"),
             ("MOQ", "成品 n/a（自有绍兴工厂）按个取整；原料用 moq_items_21"),
+            ("保护窗", "97 天 q95 总需求为人工政策情景；非随机服务承诺；auto_order=false"),
             ("需要日", "C 可发覆盖耗尽日（封顶 97 天）；下单日=需要日−50"),
         ] + [(f"输入 SHA · {k}", v["sha256"]) for k, v in inputs.items()],
             columns=["项", "内容"])
@@ -758,17 +928,23 @@ def main(argv=None) -> int:
         to_sheet(act_full, "3_动作汇总_全量")
         to_sheet(act_top, "3b_动作汇总_Top50")
         to_sheet(pool_sum, "3c_池与形态_Top50")
-        ev = top_out[["序号", "product_id", "池", "形态", "建议动作", "动作原因",
+        ev = top_out[["序号", "product_id", "池", "形态", "建议动作", "独立行动",
+                      "催已有量", "新补数量", "催后剩余缺口", "动作原因",
                       "净需求95", "C可发供给", "en_stock在途+待发", "PO追加(去重)",
-                      "CG缓冲抵扣", "到时供给", "迟到在途(p90>需要日)",
+                      "EN已发运量", "EN待发量", "EN库存快照日", "EN快照状态",
+                      "EN最新源快照日", "EN最新源状态",
+                      "CG库存快照日", "CG快照状态", "快照需复核", "需人工复核",
+                      "CG缓冲抵扣", "到时供给", "迟到在途(ETA情景晚于需要日)",
                       "ETA_p50", "ETA_p90", "ETA依据", "未知项", "置信度"]]
         to_sheet(ev, "4_证据与未知")
         to_sheet(cg_rec, "5_CG记录")
+        to_sheet(pd.DataFrame(route_evidence_rows), "8_路线证据")
         dec = pd.DataFrame([
             ("范围", "全量 1,853 键；Top50 仅子集", "用户要求"),
-            ("SO→DN", "最近 6 个月 2026-05..10；2025 14/28、2026 21/37", "用户要求+趋势"),
-            ("头程", "ZMT 4,102 条（5个月），transport/carrier 锚点", "用户要求"),
-            ("运输方式", "普船→海快→空运→快递→卡派，按 p90 赶需要日", "用户要求"),
+            ("SO→DN", f"as-of={AS_OF} 滚动六个月；按 pool×role", "真实样本"),
+            ("头程", "按本池 WMS-in→delivery 实物路线样本", "真实样本"),
+            ("运输方式", "只候选本池显式 main×last 组合；缺路线则待确认", "不借样本"),
+            ("组合分布", "production/head 独立阶段抽样；非实测联合分布", "无服务保证"),
             ("成本/重要度", "无数据 → urgency_only", "不硬造"),
             ("跨仓", "删除；cross_warehouse_direct=disabled_by_business", "用户要求"),
             ("CG", "按 SKU owner 抵扣 USNJ/USTX；CG 池只观察", "用户要求"),
@@ -791,23 +967,31 @@ def main(argv=None) -> int:
                    .value_counts().to_dict())
     mode_fit = int(f.loc[f["action"].isin(["补", "催已有"]), "mode_fits"].sum())
     lines = [
-        f"# D6 v5.1 全量补货沙盒（{RULE_VERSION}；只读）",
+        f"# D6 v6 全量补货沙盒（{RULE_VERSION}；只读）",
         "",
         f"- 全量 **{len(f)}** 个需求键；Top50 **{len(top)}**；policy 行 **{len(pol_tbl)}**",
         "- **cross_warehouse_direct=disabled_by_business**：不再有跨仓直发。",
         "- CG 库存按 SKU owner 抵扣 USNJ/USTX 分支；CG 池只观察；CG 库存/销量单列。",
-        "- 决策日志：`D6_DECISIONS.md`；本轮无 pending_codex、无 PENDING_APPROVAL。",
+        f"- 决策日志：`{Path(args.decisions).name}`；本轮无 pending_codex、无 PENDING_APPROVAL。",
         "",
         "## 1. 全量动作",
         "",
-        "| 动作 | 键数 | 建议数量 | 净需求95 |",
-        "|---|---:|---:|---:|",
+        "| 动作 | 键数 | 新补数量合计 | 催已有量合计 | 净需求95 |",
+        "|---|---:|---:|---:|---:|",
     ]
     for r in act_full.itertuples(index=False):
-        lines.append(f"| {r.动作} | {r.键数} | {r.建议数量合计:.0f} | {r.净需求95合计:.1f} |")
+        lines.append(f"| {r.动作} | {r.键数} | {r.新补数量合计:.0f} | "
+                     f"{r.催已有量合计:.0f} | {r.净需求95合计:.1f} |")
     lines += [
         "",
         f"- 全量动作分布：{json.dumps(f['action'].value_counts().to_dict(), ensure_ascii=False)}",
+        f"- 净额情景：{H_MAIN} 天 q95 总需求为人工政策情景；{H_SENS} 天 q95 仅作敏感性；"
+        "均不构成随机服务水平承诺。",
+        f"- 独立行动数量：催已有 {f['expedite_qty'].sum():.0f}；新补 {f['new_order_qty'].sum():.0f}；"
+        f"两者可同时出现，旧字段 qty 仅记新补数量。",
+        f"- 库存快照：as-of={AS_OF}；EN 使用 {es_snapshot or '未知'}（{es_snapshot_status}），"
+        f"最新源 {es_source_snapshot or '未知'}（{es_latest_status}）；"
+        f"CG {cg_snapshot or '未知'}（{cg_snapshot_status}）。未来/未知 CG 快照不抵扣并阻断可执行行动。",
         f"- Top50 动作分布：{json.dumps(top['action'].value_counts().to_dict(), ensure_ascii=False)}",
         "",
         "## 2. SO→DN 趋势与最近 6 个月口径",
@@ -820,7 +1004,7 @@ def main(argv=None) -> int:
         lines.append(f"| {int(yr)} | {int(s_['n'])} | {s_['p50']:.1f} | {s_['p90']:.1f} |")
     lines += [
         "",
-        "最近 6 个月（2026-05..10，线级复算）：",
+        f"as-of {AS_OF} 滚动六个月（线级复算）：",
         "",
         "| 客户 | n | p50 | p90 |",
         "|---|---:|---:|---:|",
@@ -836,57 +1020,38 @@ def main(argv=None) -> int:
         lines.append(f"| {k} | {int(v['n'])} | {v['p50']:.1f} | {v['p90']:.1f} |")
     lines += [
         "",
-        "- 2025 pooled median 14 / p90 28；2026 median 21 / p90 37——确实拖长，"
-        "**不再用 20/50.4 当默认**。",
-        "- 规划采用用户给定最近 6 个月锚点："
-        "KS 22/36、ND 21/30.4、PK 19/30.7；上表为线级复算，样本量已列。",
         "",
         "## 3. ETA 与两层运输",
         "",
-        f"- 血缘：EN 原生 Shipment `custom_zmt_*` 与 ZMT Snapshot 同源（Jack PC 约 10 点爬虫批量更新 EN，"
-        f"ZMT CSV 是同一批导入快照）；EN **{snap.get('counts',{}).get('en_rows','?')}** 行"
-        f"（docstatus=0 Draft，但真实运单，全读 0/1/2）；ZMT **{snap.get('counts',{}).get('zmt_rows','?')}** 行。",
-        "- 头程拆两层：**main_haul = 海运普船 / 海运快船 / 空运 / 未知**；"
-        "**last_mile = 卡车 / 快递 / 未知**。服务产品（FBA海运/美森速快线/卡派）是组合，不并列。",
-        "- 分段：seg1 入仓→离港、seg2 离港→到港、seg3 到港→签收；总交期 = SO→DN + seg1+seg2+seg3，bootstrap。",
-        f"- SO→DN 全量 n={len(dn)}；最近 6 个月 n={len(dn_recent)}；"
-        f"ZMT 头程 n={len(zmt)}（full_lt>0 {len(zmt_pos)}，2026-06..10 共 5 个月）。",
-        "- 分段锚点（leadtime_snapshot_20261102）：",
+        f"- as-of={AS_OF}；最近六个月有效 production={route_evidence_report['dn']['included']} 行；"
+        f"head-route={route_evidence_report['head']['included']} 行。",
+        "- production 与物理路线阶段独立抽样；`stage_independence_assumption=true`，"
+        "不是实测联合分布或服务保证。",
+        "- 缺少角色生产样本时只回退同池所有角色并标 `pool_all_roles_fallback`；"
+        "不在 USNJ、USTX、PL 之间借样本。",
+        "- 在途/待发模式和货龄未知，按同池完整 head 样本标 `age_unknown_full_transit_scenario`；"
+        "不加入 production，也不宣称剩余运输时间。",
+        f"- 未知 region={route_evidence_report['head']['unknown_region']}、"
+        f"main={route_evidence_report['head']['unknown_main_haul']}、"
+        f"last-mile={route_evidence_report['head']['unknown_last_mile']}。",
         "",
-        "| 段 | 海运普船 | 海运快船 | 空运 |",
-        "|---|---|---|---|",
-        f"| seg1 | {SEG1['海运普船'][0]:.0f}/{SEG1['海运普船'][1]:.0f} | "
-        f"{SEG1['海运快船'][0]:.0f}/{SEG1['海运快船'][1]:.0f} | "
-        f"{SEG1['空运'][0]:.0f}/{SEG1['空运'][1]:.0f} |",
-        f"| seg2 | {SEG2['海运普船'][0]:.0f}/{SEG2['海运普船'][1]:.0f} | "
-        f"{SEG2['海运快船'][0]:.0f}/{SEG2['海运快船'][1]:.0f} | "
-        f"{SEG2['空运'][0]:.0f}/{SEG2['空运'][1]:.0f} |",
-        "",
-        f"last_mile seg3：卡车 {SEG3['卡车'][0]:.0f}/{SEG3['卡车'][1]:.0f}、"
-        f"快递 {SEG3['快递'][0]:.0f}/{SEG3['快递'][1]:.0f}。",
-        "",
-        "- ZMT transport/carrier 原始锚点（校验用）：",
-        "",
-        "| transport/carrier | 总行 | full_lt>0 | p50 | p90 |",
-        "|---|---:|---:|---:|---:|",
+        "| 证据类型 | 池 | 角色 | main_haul | last_mile | n | 说明 |",
+        "|---|---|---|---|---|---:|---|",
     ]
-    for t in zmt_anchor_tbl:
-        lines.append(f"| {t['transport']} | {t['n']} | {t['full_lt_n']} | "
-                     f"{t['p50']:.0f} | {t['p90']:.0f} |")
+    for row in route_evidence_rows:
+        lines.append("| {kind} | {pool} | {role} | {main} | {last} | {n} | {note} |".format(
+            kind=row.get("证据类型", ""), pool=row.get("pool", ""),
+            role=row.get("role", ""), main=row.get("main", ""),
+            last=row.get("last", ""), n=row.get("n", 0), note=row.get("note", "")))
     lines += [
         "",
-        f"- bootstrap 组合 SO→DN + seg1+seg2+seg3；p50 期望、p90 95% 规划；"
-        f"现有在途/PO 按 海运普船+卡车 保守估计。",
+        "- 本池无完整命名路线时输出‘路线待确认’，不会补造空运路线。",
         f"- 推荐 main_haul（补/催已有 {sum(mode_counts.values())} 键）："
         f"{json.dumps(mode_counts, ensure_ascii=False)}；"
         f"推荐 last_mile：{json.dumps(last_counts, ensure_ascii=False)}；"
         f"main p90 赶得上 {mode_fit} 键；"
         f"last_mile p90 赶得上 {int(f.loc[f['action'].isin(['补','催已有']), 'last_mile_fits'].sum())} 键。",
-        "- 规则：main_haul 先看 海运普船 p90 → 海运快船 → 空运；"
-        "last_mile 先 卡车 → 快递；赶不上则空运/快递并标 late。"
-        "无成本/重要度数据，`transport_basis=urgency_only`。",
-        "- **ZMT 限制**：仅 2026-06..10 五个月、4,102 行（positive 2,137），"
-        "非全年稳定估计；carrier 覆盖不均，锚点为分 transport/carrier 的经验值。",
+        "- 无成本/重要度数据，运输优先级只标 `urgency_only`。",
         "",
         "## 4. Top50 分布",
         "",
@@ -915,7 +1080,7 @@ def main(argv=None) -> int:
     Path(args.out_report).write_text("\n".join(lines), encoding="utf-8")
     # 决策日志
     dec_md = [
-        "# D6 v5.1 决策日志",
+        "# D6 v6 决策日志",
         "",
         f"- 生成时间：{datetime.now().astimezone().isoformat()}",
         "- 协议：按 `DECISION_PROTOCOL.md`，未使用 AskUserQuestion；无不可逆外部动作。",
@@ -923,11 +1088,11 @@ def main(argv=None) -> int:
         "| 时间 | 问题 | 选项 | 选择 | 依据 | pending_codex |",
         "|---|---|---|---|---|---|",
         f"| {datetime.now().strftime('%H:%M')} | 输出范围 | Top50 / 全量 | 全量 1,853 + Top50 子集 | 用户要求 | 否 |",
-        f"| {datetime.now().strftime('%H:%M')} | SO→DN 口径 | 全年 pooled / 最近6月 | 最近6月(2026-05..10)；2025 14/28、2026 21/37 | 用户要求+趋势 | 否 |",
+        f"| {datetime.now().strftime('%H:%M')} | SO→DN 口径 | 跨池 / pool×role | as-of={AS_OF} 滚动六个月；缺角色样本只回退同池 | 用户要求 | 否 |",
         f"| {datetime.now().strftime('%H:%M')} | 运输层级 | 单层 / 两层 | main_haul + last_mile 分开；服务产品为组合 | 用户要求 | 否 |",
-        f"| {datetime.now().strftime('%H:%M')} | 头程来源 | shipment_segments / ZMT+EN | ZMT 4,102 条 + EN 原生 58 行（docstatus=0 也读） | 用户要求 | 否 |",
-        f"| {datetime.now().strftime('%H:%M')} | 分段 | 单一 full_lt / seg1+2+3 | 分段 p50/p90，bootstrap 总和 | 用户要求 | 否 |",
-        f"| {datetime.now().strftime('%H:%M')} | 运输方式 | 单一模式 / 两层规则 | main_haul 普船→快船→空运；last_mile 卡车→快递；按 p90 赶需要日 | 用户要求 | 否 |",
+        f"| {datetime.now().strftime('%H:%M')} | 头程来源 | hard-coded anchors / route samples | pool×main×last 物理路线样本 | 用户要求 | 否 |",
+        f"| {datetime.now().strftime('%H:%M')} | 分布假设 | 两点边际 / 实测联合 | 同池 production 与 physical-route 独立阶段抽样；无服务保证 | 限制标注 | 否 |",
+        f"| {datetime.now().strftime('%H:%M')} | 运输方式 | 强制模式 / 显式本池路线 | 缺路线输出路线待确认，不借池、不造空运 | 用户要求 | 否 |",
         f"| {datetime.now().strftime('%H:%M')} | 成本/重要度 | 纳入 / urgency_only | 无数据→urgency_only | 不硬造 | 否 |",
         f"| {datetime.now().strftime('%H:%M')} | 跨仓直发 | 保留 / 删除 | 删除，disabled_by_business | 用户要求 | 否 |",
         f"| {datetime.now().strftime('%H:%M')} | CG 处置 | 补货 / 缓冲抵扣 | 按 SKU owner 抵扣 USNJ/USTX；CG 池只观察 | 用户要求 | 否 |",
@@ -935,14 +1100,31 @@ def main(argv=None) -> int:
         f"| {datetime.now().strftime('%H:%M')} | 动作优先级 | 补优先 / 催已有优先 | 观察→不补→催已有→补 | 覆盖足够不补 | 否 |",
         f"| {datetime.now().strftime('%H:%M')} | Top50 选样 | 随机 / 覆盖目标 | 46 物理池 + 4 CG 观察 | 可解释 | 否 |",
     ]
-    Path(f"{BA}/D6_DECISIONS.md").write_text("\n".join(dec_md) + "\n", encoding="utf-8")
+    Path(args.decisions).write_text("\n".join(dec_md) + "\n", encoding="utf-8")
     manifest = dict(rule_version=RULE_VERSION, generated_at_utc=datetime.now(timezone.utc).isoformat(),
                     inputs=inputs, as_of=str(AS_OF), lead_days=LEAD_DAYS,
+                    planning_scenario=dict(protection_horizon_days=H_MAIN,
+                                           net_formula="q95_total_demand - on_time_supply - cg_credit",
+                                           sensitivity_horizon_days=H_SENS,
+                                           automatic_order=False,
+                                           service_promise=False),
+                    source_snapshots=dict(en_stock=dict(snapshot_date=es_snapshot,
+                                                        status=es_snapshot_status,
+                                                        latest_source_date=es_source_snapshot,
+                                                        latest_source_status=es_latest_status),
+                                          cg_inventory=dict(snapshot_date=cg_snapshot,
+                                                            status=cg_snapshot_status)),
                     counts=dict(full_keys=len(f), policy_rows=len(pol_tbl), top50=len(top),
                                 actions=f["action"].value_counts().to_dict(),
+                                expedite_qty=float(f["expedite_qty"].sum()),
+                                new_order_qty=float(f["new_order_qty"].sum()),
+                                manual_review_keys=int(f["manual_review_required"].sum()),
+                                snapshot_review_keys=int(f["snapshot_review_required"].sum()),
                                 top_actions=top["action"].value_counts().to_dict(),
                                 cg_credit_keys=int((f["cg_buffer_credit"] > 0).sum()),
                                 cg_credit_qty=float(f["cg_buffer_credit"].sum()),
+                                cg_future_blocked=bool(cg_future_blocked),
+                                future_cg_inventory_used=False,
                                 cg_pool_keys=int(f["cg_buffer"].sum()),
                                 eta_sources=eta_src_counts,
                                 transport_modes=f[f["action"].isin(["补", "催已有"])]
@@ -951,14 +1133,17 @@ def main(argv=None) -> int:
                                 ["recommended_last_mile"].value_counts().to_dict(),
                                 transport_mode_fits=int(
                                     f.loc[f["action"].isin(["补", "催已有"]), "mode_fits"].sum())),
-                    eta=dict(so_dn_n=len(dn), recent6_n=len(dn_recent),
-                             zmt_n=len(zmt), zmt_positive_n=len(zmt_pos),
-                             seg1=SEG1, seg2=SEG2, seg3=SEG3, prod_anchors=PROD_ANCHOR),
+                    eta=dict(route_evidence=route_evidence_summary,
+                             stage_independence_assumption=True,
+                             no_service_guarantee=True,
+                             route_candidates={pool: routes for pool, routes in pool_routes.items()}),
                     selfcheck=self_rows, selfcheck_pass=self_pass,
                     outputs=dict(xlsx=dict(path=args.out_xlsx, sha256=sha256(args.out_xlsx),
                                            bytes=Path(args.out_xlsx).stat().st_size),
                                  report=dict(path=args.out_report, sha256=sha256(args.out_report),
-                                             bytes=Path(args.out_report).stat().st_size)))
+                                             bytes=Path(args.out_report).stat().st_size),
+                                 decisions=dict(path=args.decisions, sha256=sha256(args.decisions),
+                                                bytes=Path(args.decisions).stat().st_size)))
     Path(args.manifest).write_text(json.dumps(manifest, ensure_ascii=False, indent=1),
                                    encoding="utf-8")
     print(f"\n已写：{args.out_xlsx}\n      {args.out_report}\n      {args.manifest}")

@@ -25,6 +25,12 @@ import numpy as np
 import pandas as pd
 import requests
 
+from supply_netting.leadtime_evidence import (
+    completed_transit_days,
+    production_leadtime_rows,
+    summarize_leadtimes,
+)
+
 B = "D:/Work/fzh-order-store"
 BA = f"{B}/analysis"
 ENV_PATH = "D:/Work/赛狐/Cursor/EN_API/.env"
@@ -74,13 +80,87 @@ def stat(s: pd.Series):
     return dict(n=int(len(x)), p50=float(x.median()), p90=float(x.quantile(0.9)))
 
 
+def local_evidence(shipment_csv: Path, dn_csv: Path, out_dir: Path) -> int:
+    """Write separate local evidence reports without invoking the API path."""
+    shipments = pd.read_csv(shipment_csv, encoding="utf-8-sig")
+    dn_source = pd.read_csv(dn_csv, encoding="utf-8-sig")
+    transit = completed_transit_days(shipments)
+    dn_rows = production_leadtime_rows(dn_source)
+    if "transport" in transit.columns:
+        if "main_haul" not in transit.columns:
+            transit["main_haul"] = transit["transport"].map(main_haul)
+        if "last_mile" not in transit.columns:
+            source = transit["way"] if "way" in transit.columns else transit["transport"]
+            transit["last_mile"] = source.map(last_mile)
+            if "way" in transit.columns:
+                fallback = transit["transport"].map(last_mile)
+                transit["last_mile"] = transit["last_mile"].where(transit["last_mile"] != "未知", fallback)
+
+    shipment_groups = [c for c in ["region", "dest", "customer", "main_haul", "last_mile"] if c in transit.columns]
+    dn_groups = [c for c in ["year", "customer", "role"] if c in dn_rows.columns]
+    transit_summary = summarize_leadtimes(
+        transit.rename(columns={"duration_days": "lead_days"}), shipment_groups
+    )
+    dn_summary = summarize_leadtimes(dn_rows, dn_groups)
+
+    raw_lead = pd.to_numeric(dn_source["lead_days"], errors="coerce")
+    source_unknown = int(dn_source["lead_days"].isna().sum())
+    source_failed = int((dn_source["lead_days"].notna() & raw_lead.isna()).sum())
+    counts = {
+        "shipment": {
+            "input": int(len(transit)),
+            "success": int(transit["status"].eq("complete").sum()),
+            "unknown": int(transit["status"].eq("incomplete").sum()),
+            "failed": int(transit["status"].eq("invalid").sum()),
+        },
+        "dn_source_rows": {
+            "input": int(len(dn_source)),
+            "success": int(raw_lead.notna().sum()),
+            "unknown": source_unknown,
+            "failed": source_failed,
+        },
+        "dn_production_rows": {
+            "input": int(len(dn_source)),
+            "success": int(dn_rows["n_valid_records"].sum()),
+            "failed": int(dn_rows["n_invalid_lead_days"].sum()),
+            "unknown": int(len(dn_source) - dn_rows["n_valid_records"].sum() - dn_rows["n_invalid_lead_days"].sum()),
+            "output_dn_so_role_rows": int(len(dn_rows)),
+        },
+        "group_dimensions": {"shipment": shipment_groups, "dn": dn_groups},
+        "transit_rule": "posting_date to warehouse_in direct date difference; shipping_days and depart_to_warehouse_days remain separate; incomplete/invalid rows excluded",
+        "dn_rule": "one row per dn+so+role; first=min lead_days, final=max lead_days; summary uses final delivery",
+    }
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    transit.to_csv(out_dir / "leadtime_evidence_transit_rows.csv", index=False, encoding="utf-8-sig")
+    dn_rows.to_csv(out_dir / "leadtime_evidence_dn_rows.csv", index=False, encoding="utf-8-sig")
+    transit_summary.to_csv(out_dir / "leadtime_evidence_transit_summary.csv", index=False, encoding="utf-8-sig")
+    dn_summary.to_csv(out_dir / "leadtime_evidence_dn_summary.csv", index=False, encoding="utf-8-sig")
+    (out_dir / "leadtime_evidence_counts.json").write_text(
+        json.dumps(counts, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(json.dumps(counts, ensure_ascii=False, indent=2))
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Leadtime 快照刷新（只读）")
+    ap.add_argument("--local-evidence", action="store_true", help="analyze local CSVs only; no API access")
+    ap.add_argument("--shipment-csv", type=Path, help="local shipment segments CSV")
+    ap.add_argument("--dn-csv", type=Path, help="local DN lead-time CSV")
     ap.add_argument("--zmt", default=f"{BA}/zmt_shipment_snapshot_2026-11-02.csv")
-    ap.add_argument("--out-dir", default=f"{BA}/leadtime")
+    ap.add_argument("--out-dir", type=Path, default=None, help="output directory (required with --local-evidence)")
     ap.add_argument("--date", default="2026-11-02")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
+
+    if args.local_evidence:
+        if args.shipment_csv is None or args.dn_csv is None or args.out_dir is None:
+            ap.error("--local-evidence requires --shipment-csv, --dn-csv, and --out-dir")
+        return local_evidence(args.shipment_csv, args.dn_csv, args.out_dir)
+
+    if args.out_dir is None:
+        args.out_dir = Path(f"{BA}/leadtime")
 
     # ---------- EN 原生 Shipment（docstatus 0/1/2）
     env = load_env()

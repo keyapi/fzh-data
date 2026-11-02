@@ -12,6 +12,10 @@
 
 ## 2. 代码地图
 
+11-02独立审核返修的离线实验入口、已知限制和重跑命令见
+[demand-repair-handoff-2026-11-02.md](docs/demand-repair-handoff-2026-11-02.md)。
+新纯函数模块仅为修复现有D线与沙盒，不替换下面正式`demand.py`/`engine.py`的契约。
+
 | 文件 | 职责 |
 |---|---|
 | `demand.py` | `demand_netting.parquet` 唯一入口 + 四列/资格校验 + 序列拆分 + 可选 backlog |

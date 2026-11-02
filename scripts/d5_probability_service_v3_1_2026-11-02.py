@@ -31,11 +31,14 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from supply_netting.temporal_demand import demand_quantiles, stratum_key
+
 import numpy as np
 import pandas as pd
 
 BA = "D:/Work/fzh-order-store/analysis"
-RULE_VERSION = "D5-v3.1-2026-11-02"
+RULE_VERSION = "D5-v3.2-legacy-exploratory-2026-11-02"
 KEY_VERSION = "D1b-v2.3-2026-11-02"
 
 START = date(2026, 11, 1)          # 预测起点（D3b 数据止于 2026-10-31）
@@ -104,9 +107,9 @@ def main(argv=None) -> int:
     ap.add_argument("--sku-map", default="D:/Work/fzh-order-store/sku_map.tsv")
     ap.add_argument("--customer-codes", default=f"{BA}/en_item_customer_codes.csv")
     ap.add_argument("--d3b-script", default="scripts/d3b_history_backtest_v3_2_2026-11-02.py")
-    ap.add_argument("--out-xlsx", default=f"{BA}/D_概率与服务_D5_v3_1_2026-11-02.xlsx")
-    ap.add_argument("--out-report", default=f"{BA}/D_概率与服务_D5_v3_1_2026-11-02_报告.md")
-    ap.add_argument("--manifest", default=f"{BA}/D_概率与服务_D5_v3_1_2026-11-02.manifest.json")
+    ap.add_argument("--out-xlsx", default=f"{BA}/D_概率与服务_D5_v3_2_legacy_2026-11-02.xlsx")
+    ap.add_argument("--out-report", default=f"{BA}/D_概率与服务_D5_v3_2_legacy_2026-11-02_报告.md")
+    ap.add_argument("--manifest", default=f"{BA}/D_概率与服务_D5_v3_2_legacy_2026-11-02.manifest.json")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args(argv)
@@ -427,10 +430,10 @@ def main(argv=None) -> int:
     calib_tbl = pd.DataFrame(calib_rows)
 
     # 分层校准判定：该层 held-out coverage 偏离过大 → 该层键全部回退全池分位数
-    stratum_fail = {tuple(str(r.stratum).split("|", 1)):
+    stratum_fail = {stratum_key(r.stratum):
                     (r.calibration == "calibration_fail")
                     for r in calib_tbl.itertuples(index=False) if r.level == "stratum"}
-    stratum_cov = {tuple(str(r.stratum).split("|", 1)): r.coverage80
+    stratum_cov = {stratum_key(r.stratum): r.coverage80
                    for r in calib_tbl.itertuples(index=False) if r.level == "stratum"}
 
     # ---------- 组装预测表
@@ -450,18 +453,14 @@ def main(argv=None) -> int:
                                   ("157", (HORIZONS[1][2] - HORIZONS[1][1]).days)):
             p50 = float(getattr(r, f"p{label}"))
             if len(resid_s):
-                q50 = q_at(resid_s, 0.50)
-                q10 = (q_at(resid_s, 0.10) - q50) * days_total
-                q90 = (q_at(resid_s, 0.90) - q50) * days_total
-                p10 = max(0.0, p50 + q10)
-                p90 = max(p10, p50 + q90)
+                qs = demand_quantiles(p50, resid_s, days_total)
+                p10, p90 = qs['q10'], qs['q90']
                 method = f"conformal_residual:{level}"
                 status = pstatus
             else:
                 p10 = p90 = np.nan
                 method, status = "none", "interval_uncalibrated"
-            svc = {f"q{int(l * 100)}": (max(0.0, p50 + (q_at(resid_s, l) - q_at(resid_s, 0.50)) * days_total)
-                                        if len(resid_s) else np.nan)
+            svc = {f"q{int(l * 100)}": demand_quantiles(p50, resid_s, days_total)[f'q{int(l*100)}']
                    for l in SERVICE_LEVELS}
             out_rows.append(dict(base, key_version=KEY_VERSION, horizon=label,
                                  horizon_days=days_total,
@@ -485,7 +484,7 @@ def main(argv=None) -> int:
             key = (r.product_id, r.pool, r.physical_form, r.canonical_uom)
             src, lvl, pstatus = pick_pool(key)
             for sl in SERVICE_LEVELS:
-                q = (max(0.0, r.p50 + q_at(src, sl) * days_total) if len(src) else np.nan)
+                q = demand_quantiles(r.p50, src, days_total)[f'q{int(sl*100)}']
                 svc_rows.append(dict(product_id=r.product_id, pool=r.pool,
                                      physical_form=r.physical_form,
                                      canonical_uom=r.canonical_uom,
@@ -614,6 +613,7 @@ def main(argv=None) -> int:
     out_sha = sha256(out)
 
     L = [f"# D5 概率预测与服务（{RULE_VERSION}；只读）", "",
+         "此为旧校准协议的探索性复现入口，不可据此承诺服务水平；正式返修使用 d5_time_validated_2026_11_02.py。", "",
          f"- 工作簿 SHA256：`{out_sha}`",
          f"- 键 {summary['keys']}｜有预测 {summary['predicted_keys']}｜明确失败 "
          f"{summary['failed_keys']}｜97 天行 {summary['rows_p97']}｜157 天行 {summary['rows_p157']}",

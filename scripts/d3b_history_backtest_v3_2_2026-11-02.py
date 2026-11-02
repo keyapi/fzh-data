@@ -32,9 +32,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from supply_netting.demand_input import canonical_order_dates
+
 B = "D:/Work/fzh-order-store"
 BA = f"{B}/analysis"
-RULE_VERSION = "D3b-v3.2-2026-11-02"
+RULE_VERSION = "D3b-v3.4-2026-11-02"
 KEY_VERSION = "D1b-v2.3-2026-11-02"   # D1b v2.3 正式键（product×market×pool×form×uom）
 
 END_MONTH = "202610"
@@ -69,6 +74,20 @@ POOL_OF_WAREHOUSE = {
 
 def sha256(p) -> str:
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+
+
+def prepare_order_input(frame: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Use sale_date as event time while retaining the source partition label."""
+    return canonical_order_dates(frame)
+
+
+def assign_order_bucket(o: pd.DataFrame) -> np.ndarray:
+    return np.select(
+        [o["demand_event_date"].isna(), o["pool"] == "其他",
+         o["status"] == "未匹配", o["status"] == "多候选", ~o["in_k_fixed"]],
+        ["date_unknown", "out_of_scope_pool", "no_product_match",
+         "multi_candidate", "no_demand_key"],
+        default="mapped")
 
 
 def script_identity(argv=None) -> dict:
@@ -164,33 +183,54 @@ def form_of(pid: str, role: str) -> str:
 # ============================ 模型（与 D3 同口径） ============================
 
 def f_naive(y, h, **kw):
-    return np.repeat(y[-1], h)
+    observed = np.asarray(y, dtype=float)
+    observed = observed[np.isfinite(observed)]
+    if not len(observed):
+        raise ValueError("训练无可观测月")
+    return np.repeat(observed[-1], h)
 
 
 def f_ma3(y, h, **kw):
-    return np.repeat(float(np.mean(y[-3:])), h)
+    tail = np.asarray(y, dtype=float)[-3:]
+    if len(tail) < 3 or not np.all(np.isfinite(tail)):
+        raise ValueError("MA3 最近 3 个日历月存在缺观测")
+    return np.repeat(float(np.mean(tail)), h)
 
 
 def f_snaive(y, h, **kw):
-    if len(y) < 12:
-        return np.repeat(y[-1], h)
-    return np.array([y[-12 + i] if -12 + i < 0 else y[-12] for i in range(h)])
+    values = np.asarray(y, dtype=float)
+    if len(values) < 12:
+        raise ValueError("季节性基线缺少 t-12 日历月")
+    indices = [len(values) - 12 + i for i in range(h)]
+    indices = [i if i < len(values) else len(values) - 12 for i in indices]
+    seasonal = values[indices]
+    if not np.all(np.isfinite(seasonal)):
+        raise ValueError("季节性基线所需 t-12 日历月缺观测")
+    return seasonal
 
 
 def f_ets_ann(y, h, **kw):
-    if len(y) < 2:
-        return np.repeat(y[-1], h)
-    yv = y[1:]
+    values = np.asarray(y, dtype=float)
+    observed = values[np.isfinite(values)]
+    if not len(observed):
+        raise ValueError("ETS 训练无可观测月")
+    if len(observed) < 2:
+        return np.repeat(observed[-1], h)
+    yv = values[1:]
     best_a, best_sse = ETS_ALPHAS[0], np.inf
     for a in ETS_ALPHAS:
-        l, sse = y[0], 0.0
+        l, sse = observed[0], 0.0
         for v in yv:
+            if not np.isfinite(v):
+                continue
             sse += (v - l) ** 2
             l = a * v + (1 - a) * l
         if sse < best_sse - 1e-12:
             best_a, best_sse = a, sse
-    l, a = y[0], best_a
+    l, a = observed[0], best_a
     for v in yv:
+        if not np.isfinite(v):
+            continue
         l = a * v + (1 - a) * l
     return np.repeat(l, h)
 
@@ -208,16 +248,22 @@ def _croston(y, alpha):
 
 
 def f_croston(y, h, **kw):
+    if not np.all(np.isfinite(y)):
+        raise ValueError("Croston 训练缺观测，拒绝压缩日历间隔")
     z, p = _croston(y, ALPHA)
     return np.repeat(z / p if p > 0 else 0.0, h)
 
 
 def f_sba(y, h, **kw):
+    if not np.all(np.isfinite(y)):
+        raise ValueError("SBA 训练缺观测，拒绝压缩日历间隔")
     z, p = _croston(y, ALPHA)
     return np.repeat((1 - ALPHA / 2) * z / p if p > 0 else 0.0, h)
 
 
 def f_tsb(y, h, **kw):
+    if not np.all(np.isfinite(y)):
+        raise ValueError("TSB 训练缺观测，拒绝压缩日历间隔")
     nz = np.where(y > 0)[0]
     if not len(nz):
         return np.zeros(h)
@@ -284,18 +330,24 @@ def classify(vals: np.ndarray, first_pos: str | None = None) -> dict:
 
 def backtest(y, obs, models, origins=ORIGINS, h=H, months=None):
     months = list(months or OBS_MONTHS)
+    y = np.asarray(y, dtype=float)
+    obs = np.asarray(obs, dtype=bool)
+    if len(y) != len(months) or len(obs) != len(months):
+        raise ValueError("y、obs 与 months 长度必须一致")
     rows = []
     for origin in origins:
         oi = months.index(origin)
-        tr = [i for i in range(0, oi + 1) if obs[i]]
-        te = [i for i in range(oi + 1, min(oi + 1 + h, len(months))) if obs[i]]
-        if len(tr) < MIN_TRAIN_OBS or len(te) < 3:
+        observed_train = [i for i in range(oi + 1) if obs[i] and np.isfinite(y[i])]
+        te = [i for i in range(oi + 1, min(oi + 1 + h, len(months)))
+              if obs[i] and np.isfinite(y[i])]
+        if len(observed_train) < MIN_TRAIN_OBS or len(te) < 3:
             rows.append(dict(origin=origin, status="skipped",
-                             reason=(f"训练已观测月 {len(tr)} < {MIN_TRAIN_OBS}"
-                                     if len(tr) < MIN_TRAIN_OBS
+                             reason=(f"训练已观测月 {len(observed_train)} < {MIN_TRAIN_OBS}"
+                                     if len(observed_train) < MIN_TRAIN_OBS
                                      else f"insufficient_test：测试窗已核验月 {len(te)} < 3")))
             continue
-        ytr = np.array([y[i] for i in tr], dtype=float)
+        first_train = observed_train[0]
+        ytr = np.where(obs[first_train:oi + 1], y[first_train:oi + 1], np.nan)
         for name in models:
             fn = BASELINES.get(name) or NEW_MODELS.get(name)
             try:
@@ -309,7 +361,7 @@ def backtest(y, obs, models, origins=ORIGINS, h=H, months=None):
                 continue
             errs, acts, mid = [], [], []
             for step, i in enumerate(range(oi + 1, min(oi + 1 + h, len(months)))):
-                if not obs[i]:
+                if i not in te:
                     continue
                 errs.append(float(fc[step] - y[i]))
                 acts.append(float(y[i]))
@@ -318,10 +370,19 @@ def backtest(y, obs, models, origins=ORIGINS, h=H, months=None):
                 rows.append(dict(origin=origin, model=name, status="skipped",
                                  reason="测试窗口无可评估月"))
                 continue
-            rows.append(dict(origin=origin, model=name, status="ok", n_train=len(tr),
+            rows.append(dict(origin=origin, model=name, status="ok", n_train=len(observed_train),
+                             n_train_calendar=len(ytr),
                              test_months=";".join(mid), n_test=len(errs),
                              abs_err=float(np.sum(np.abs(errs))),
                              sum_abs=float(np.sum(np.abs(acts)))))
+    successful = {name: {r["origin"] for r in rows
+                         if r.get("model") == name and r.get("status") == "ok"}
+                  for name in models}
+    active = [origins for origins in successful.values() if origins]
+    common_origins = set.intersection(*active) if active else set()
+    for row in rows:
+        if row.get("status") == "ok" and row["origin"] not in common_origins:
+            row.update(status="skipped", reason="不在模型共同可评估 origin（覆盖不同）")
     return rows
 
 
@@ -341,19 +402,31 @@ def _rank(v):
     return ((v["wape"] if np.isfinite(v["wape"]) else np.inf), v["mae"])
 
 
-def select(per_model, pattern):
-    """采用候选必须「测试窗有正销（Σ|y|>0）且 MAE>0」——
-    全零测试窗与零误差窗口不提供比较证据，不据此选模型。"""
+def select(per_model, pattern, rows=None):
+    """只比较有正销且共同可评估的测试窗；MAE=0 仍是有效成绩。"""
     evaluated = {k: v for k, v in per_model.items() if v["status"] == "ok"}
-    ok = {k: v for k, v in evaluated.items() if v.get("den", 0) > 0 and v["mae"] > 0}
+    if rows is not None:
+        successful = {k: {r["origin"]: r for r in rows
+                          if r.get("model") == k and r.get("status") == "ok"}
+                      for k in evaluated}
+        active = [set(v) for v in successful.values() if v]
+        common = set.intersection(*active) if active else set()
+        evaluated = {}
+        for name, by_origin in successful.items():
+            shared = [by_origin[o] for o in sorted(common)
+                      if all(o in other and by_origin[o].get("test_months")
+                             == other[o].get("test_months")
+                             for other in successful.values() if other)]
+            if shared:
+                evaluated[name] = agg(shared)
+    ok = {k: v for k, v in evaluated.items() if v.get("den", 0) > 0}
     if not ok:
         if not evaluated:
             return dict(adopted="none", baseline="none", reason="无有效 origin（无可评估模型）")
         if all(v.get("den", 0) == 0 for v in evaluated.values()):
             return dict(adopted="none", baseline="none",
                         reason="test_window_no_positive：测试窗无正销实际（WAPE 未定义），不算证据")
-        return dict(adopted="none", baseline="none",
-                    reason="test_window_zero_error：采用模型 MAE=0（零误差窗口无比较证据）")
+        return dict(adopted="none", baseline="none", reason="无正销测试窗可比较")
     base = {k: v for k, v in ok.items() if k in BASELINES}
     new = {k: v for k, v in ok.items() if k in NEW_MODELS}
     if not base:
@@ -380,6 +453,8 @@ def select(per_model, pattern):
         return dict(adopted=k, baseline=bb,
                     reason=f"{k} 相对基线 {bb} 改善 {g:.1%}（WAPE/MAE 均不劣）")
     note = "" if np.isfinite(bw) else "（测试窗口无正销，WAPE 未定义，按 MAE）"
+    if rows is not None:
+        note += "（采用判断使用共同可评估 origin/测试月份）"
     return dict(adopted=bb, baseline=bb,
                 reason=f"新方法未达门槛（需不劣 + ≥{ADOPT_GAIN:.0%}），用基线 {bb}{note}")
 
@@ -416,11 +491,11 @@ def run_selftests() -> list[tuple[str, bool, str]]:
     t.append(("④ 删失月不进评估（n_test=3）", ok4,
               str({k: r[-1].get(k) for k in ("n_test", "test_months")})))
     t.append(("⑥ 测试窗<3 月 → insufficient_test 跳过", ok6, str(r6[-1].get("reason"))))
-    per_zero = {"naive": dict(status="ok", wape=float("nan"), mae=1.0, den=0.0),
-                "croston": dict(status="ok", wape=float("nan"), mae=0.9, den=0.0)}
+    per_zero = {"naive": dict(status="ok", wape=0.0, mae=0.0, den=20.0),
+                "croston": dict(status="ok", wape=0.2, mae=1.0, den=20.0)}
     sel7 = select(per_zero, "intermittent")
-    t.append(("⑦ 无正销测试窗 → no_new_method_candidates",
-              sel7["adopted"] == "none" and "test_window_no_positive" in sel7["reason"],
+    t.append(("⑦ 有正销的零误差基线仍有效",
+              sel7["adopted"] == "naive" and sel7["baseline"] == "naive",
               sel7["reason"][:60]))
     t.append(("⑤ 映射候选唯一才合并",
               (lambda: (lambda m: m == "唯一")( "唯一" if len({"P1"}) == 1 else "多候选"))(), "唯一"))
@@ -440,9 +515,9 @@ def main(argv=None) -> int:
     ap.add_argument("--d1", default=f"{BA}/D_资格与契约_v2_2026-10-30.xlsx")
     ap.add_argument("--sku-map", default=f"{B}/sku_map.tsv")
     ap.add_argument("--customer-codes", default=f"{BA}/en_item_customer_codes.csv")
-    ap.add_argument("--out-xlsx", default=f"{BA}/D_历史归一与回测_D3b_v3_2_2026-11-02.xlsx")
-    ap.add_argument("--out-report", default=f"{BA}/D_历史归一与回测_D3b_v3_2_2026-11-02_报告.md")
-    ap.add_argument("--manifest", default=f"{BA}/D_历史归一与回测_D3b_v3_2_2026-11-02.manifest.json")
+    ap.add_argument("--out-xlsx", default=f"{BA}/D_历史归一与回测_D3b_v3_4_2026-11-02.xlsx")
+    ap.add_argument("--out-report", default=f"{BA}/D_历史归一与回测_D3b_v3_4_2026-11-02_报告.md")
+    ap.add_argument("--manifest", default=f"{BA}/D_历史归一与回测_D3b_v3_4_2026-11-02.manifest.json")
     ap.add_argument("--dry-run", action="store_true", help="只算不写 xlsx/报告/manifest")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args(argv)
@@ -504,9 +579,9 @@ def main(argv=None) -> int:
 
     # ---------- 订单 → canonical（按唯一 SKU 解析一次）
     o = pd.read_parquet(args.orders)
+    o, date_report = prepare_order_input(o)
     o["sku_tongtool"] = o["sku_tongtool"].astype(str)
     o["qty"] = pd.to_numeric(o["qty"], errors="coerce").fillna(0.0)
-    o["month"] = o["month"].astype(str)
     o["pool"] = o["warehouse"].map(POOL_OF_WAREHOUSE).fillna("其他")
     # v3.2：WayfairCG 仓不再按地理硬分（原 Cranbury→美东）；先标记，product 解析后按 B owner 归池
     o["is_cg_order"] = o["warehouse"].astype(str).str.startswith("WayfairCG")
@@ -626,15 +701,10 @@ def main(argv=None) -> int:
             return "form 不匹配（跨 form 隔离）"
         return "UOM 不匹配（跨 UOM 隔离）"
 
-    bucket = np.select(
-        [o["pool"] == "其他", o["status"] == "未匹配", o["status"] == "多候选",
-         ~o["in_k_fixed"]],
-        ["out_of_scope_pool", "no_product_match", "multi_candidate", "no_demand_key"],
-        default="mapped")
-    o["bucket"] = bucket
+    o["bucket"] = assign_order_bucket(o)
     cons = (o.groupby("bucket").agg(行数=("qty", "size"), 数量=("qty", "sum"))
             .reindex(["mapped", "no_demand_key", "multi_candidate", "no_product_match",
-                      "out_of_scope_pool"]).fillna(0).reset_index())
+                      "out_of_scope_pool", "date_unknown"]).fillna(0).reset_index())
     cons["占比_数量"] = (cons["数量"] / float(o["qty"].sum())).round(4)
     ndk = o[o["bucket"] == "no_demand_key"].copy()
     ndk["原因"] = [_ndk_reason(r) for r in ndk[["product", "pool", "form", "uom"]].itertuples(index=False)]
@@ -645,6 +715,7 @@ def main(argv=None) -> int:
               .groupby("product").agg(行数=("qty", "size"), 数量=("qty", "sum"))
               .sort_values("数量", ascending=False).reset_index().head(50))
     cons_total = float(cons["数量"].sum())
+    assert int(cons["行数"].sum()) == len(o), "守恒行数失败"
     assert abs(cons_total - float(o["qty"].sum())) < 1e-6, "守恒失败"
 
     # ---------- 月度序列（mapped 行）
@@ -732,7 +803,7 @@ def main(argv=None) -> int:
                                       类型=f"{r.get('model', 'origin')}:{r['status']}",
                                       原因=r.get("reason", ""),
                                       fallback="该 origin 跳过（不补 0）"))
-        sel = select(per, c["demand_pattern"])
+        sel = select(per, c["demand_pattern"], rows=rows)
         evaluated = [v for v in per.values() if v["status"] == "ok"]
         row["backtested"] = bool(evaluated)
         if not evaluated:
@@ -1005,9 +1076,9 @@ def main(argv=None) -> int:
         dict(指标="序列总数", 值=len(cls_tbl), 说明="D2 v3 需求键"),
         dict(指标="eligible（≥12 有效月）", 值=n_eligible, 说明="≥12 有效月 + 有正销 + 非老品"),
         dict(指标="backtested（有有效 origin）", 值=n_backtested, 说明="至少 1 个 origin 达标且有模型可评估"),
-        dict(指标="adopted（测试窗有正销）", 值=n_adopted, 说明="排除全零测试窗/零误差后仍在比较证据下的采用"),
+        dict(指标="adopted（测试窗有正销）", 值=n_adopted, 说明="通过共同可评估测试窗比较后选定"),
         dict(指标="no_positive（测试窗无正销）", 值=n_no_pos, 说明="WAPE 未定义，不算证据"),
-        dict(指标="zero_error（MAE=0 无比较证据）", 值=n_zero_err, 说明="正销但零误差，不据此选模型"),
+        dict(指标="zero_error（兼容状态）", 值=n_zero_err, 说明="MAE=0 不再被视为无比较证据；本状态仅保留兼容计数"),
         dict(指标="no_origin（无可回测 origin）", 值=n_no_origin, 说明="eligible 但无有效 origin，不算可回测"),
         dict(指标="new_method_adopted（sba/croston）", 值=n_new_adopted, 说明="经门槛复核后保留的新方法采用数"),
         dict(指标="baseline_adopted", 值=n_base_adopted, 说明="adopted − 新方法"),
@@ -1045,7 +1116,9 @@ def main(argv=None) -> int:
     contract = pd.DataFrame([
         ("rule_version", RULE_VERSION),
         ("输入", "orders_unified.parquet / A FINAL / D2 v3 / D1 v2 / D3 / sku_map / customer_codes"),
-        ("历史窗口", f"2023-01..{END_MONTH}（订单 2022-12 起；按 month 归月）"),
+        ("需求日期口径", "统一由 sale_date 派生 YYYYMM；源 month 仅为源表分区标签，保留为 source_month"),
+        ("需求日期诊断", json.dumps(date_report, ensure_ascii=False)),
+        ("历史窗口", f"2023-01..{END_MONTH}（订单 2022-12 起；按 sale_date 归月）"),
         ("归一规则", "casefold + 去空格 + 去前缀 OLD_/new- + 去后缀 -Cover/-c/-1/-2；"
                      "次级：去尾部 -<数字>（仅当候选唯一）"),
         ("合并条件", "候选唯一且证据一致（A来源码/sku_map/客户码）；多候选→隔离不合并"),
@@ -1099,6 +1172,9 @@ def main(argv=None) -> int:
     det_ok = det_tbl[det_tbl["n_test"] > 0] if len(det_tbl) else det_tbl
     min_ntest = int(det_ok["n_test"].min()) if len(det_ok) else 0
     mapped_bridge = mp[mp["status"] == "唯一"]
+    date_unknown_mask = o["demand_event_date"].isna()
+    date_unknown_qty = float(o.loc[date_unknown_mask, "qty"].sum())
+    date_unknown_bucket = cons.loc[cons["bucket"] == "date_unknown"].iloc[0]
     sc = pd.DataFrame([
         dict(检查项="zero_positive_effective_months",
              期望=0, 实际=int(((hist_tbl["months_positive"] == 0)
@@ -1116,6 +1192,12 @@ def main(argv=None) -> int:
         dict(检查项="守恒·行数", 期望=len(o), 实际=int(cons["行数"].sum())),
         dict(检查项="守恒·数量", 期望=round(float(o["qty"].sum()), 6),
              实际=round(float(cons["数量"].sum()), 6)),
+        dict(检查项="未知需求日期分桶行数",
+             期望=int(date_report["unknown_event_dates"]),
+             实际=int(date_unknown_bucket["行数"])),
+        dict(检查项="未知需求日期分桶数量",
+             期望=round(date_unknown_qty, 6),
+             实际=round(float(date_unknown_bucket["数量"]), 6)),
         dict(检查项="可回测数对账（D3 + 变长 + 新增 − 丢失）",
              期望=rec["now_bt"],
              实际=rec["d3_bt"] + rec["变长"] + rec["新增"] - rec["丢失"]),
@@ -1130,15 +1212,6 @@ def main(argv=None) -> int:
                                                ]["positive_test_actual"].iloc[0])))),
         dict(检查项="backtested_without_origin", 期望=0,
              实际=int(((cls_tbl["backtested"]) & (cls_tbl["adoption_status"] == "no_origin")).sum())),
-        dict(检查项="adopted_with_zero_error", 期望=0,
-             实际=int(sum(1 for r in cls_tbl.itertuples(index=False)
-                          if r.adoption_status == "adopted"
-                          and float(res_tbl[(res_tbl["product_id"] == r.product_id)
-                                            & (res_tbl["pool"] == r.pool)
-                                            & (res_tbl["physical_form"] == r.physical_form)
-                                            & (res_tbl["canonical_uom"] == r.canonical_uom)
-                                            & (res_tbl["model"] == r.adopted_model)
-                                            ]["mae"].iloc[0]) == 0.0))),
         dict(检查项="new_method_threshold_violations", 期望=0, 实际=_viol_after),
         dict(检查项="new_method_adopted（记录值，键迁移后重算）",
              期望=n_new_adopted, 实际=n_new_adopted),
@@ -1270,6 +1343,8 @@ def main(argv=None) -> int:
     tests = run_selftests()
     L = [f"# D3b 历史归一 + 重分类 + 重回测（{RULE_VERSION}；只读）", "",
          f"- 工作簿 SHA256：`{out_sha}`",
+         "- **需求日期口径**：`month` 统一从 `sale_date` 派生 YYYYMM；原始 `month` 保留为 `source_month`，仅作源表分区标签。",
+         f"- 日期诊断：`{json.dumps(date_report, ensure_ascii=False)}`；无日期订单进入 `date_unknown` 守恒桶，不进入需求序列。",
          f"- 序列 {len(cls_tbl)}｜**eligible {n_eligible} / with-origin {n_backtested} / "
          f"adopted {n_adopted} / no-positive {n_no_pos} / zero-error {n_zero_err} / "
          f"no-origin {n_no_origin}**（D3 可比口径 {rec['d3_bt']}；D3 旧键全量 954）",
@@ -1393,6 +1468,8 @@ def main(argv=None) -> int:
                     new_adopted=new_adopted, d3_new_adopted=d3_new),
         key_version=KEY_VERSION,
         key_version_note="正式键版本：D1b v2.3 product×market×pool×form×uom",
+        date_basis="sale_date; source month retained as source_month partition label only",
+        date_report=date_report,
         origins=list(ORIGINS), min_test_months=3,
         censoring=dict(applied=True, source="D2 v3 2_删失（2026-04..10）",
                        v1_bug="v1 month 格式 2026-04 与 202604 不匹配，删失从未生效"),
