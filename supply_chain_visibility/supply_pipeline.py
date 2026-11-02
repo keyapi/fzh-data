@@ -101,6 +101,12 @@ def publish(out, result, *, pipeline_as_of):
         latest_tmp = out / ".latest.json.tmp"
         _write_json(latest_tmp, pointer)
         latest_tmp.replace(out / "latest.json")
+        try:
+            _write_json(out / "last_attempt.json", {
+                "status": "succeeded", "run_id": run_id, "run_dir": str(run_dir),
+                "attempted_at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+        except OSError:
+            pass  # latest already committed; do not report a successful publish as failed.
         return {"status": "ok", "run_dir": str(run_dir), "manifest": manifest}
     except Exception as exc:  # noqa: BLE001
         shutil.rmtree(tmp_dir, ignore_errors=True)

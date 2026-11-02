@@ -165,3 +165,21 @@ Parquet按显式schema写入，空结果也有schema；数量nullable，复杂�
 这是本地计算规模验证，不是生产API吞吐或2000真实SKU业务验收。
 重放10月30日42条真实DN时，新生成文件仍明确提示旧快照与来源时点不足，
 未访问生产采集新数据，未伪装当前在途/库存。
+
+### 2026-11-02 Jack流水线复审补丁
+
+在Jack `4928fc35`上补4项回归：消费器的未闭环原因与来源观测时间传到
+`full_supply_facts`，计算时间不冒充源时间；显式冲突SKU不合并；补齐branch后
+同步内部查找键，后续其他branch不再误挂；流水线成功重跑更新`last_attempt.json`。
+包含PyArrow的模块全量288项、5子测试通过。
+
+`supply_pipeline`当前发布position/facts/timeline三份JSON与manifest/latest，
+不是最终补货决策，也尚未将完整facts/timeline发布成Parquet。
+原消费器单张`supply_position.parquet`仍是独立交付，两者不能混称。
+
+真实旧DN负向回放：42行、历史净交付516件；未提供批准B、创建清单和PO状态，
+所以PO完成供给0，1组待人工核实，来源时效未知。私有证据：
+`D:/Work/fzh-order-store/integration-smoke/jack-pipeline-20261102/real-legacy-acceptance-report.json`。
+当前连接可读范围的测试创建审计及带PO分公司DN均为0；本地缺测试REST凭证；
+单次通途只读查询未返回并已停止等待，没有重试或创建真实PO。
+这些结果验证缺证据路径，不能替代真实正向闭环、受限HTTP或生产规模验收。

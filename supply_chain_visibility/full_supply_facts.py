@@ -146,7 +146,8 @@ def _row_for(rows, item, uom, warehouse, purpose, branch="", tt_sku=None):
     candidates = [candidate for candidate, row in rows.items()
                   if candidate[0] == key[0] and candidate[1] == key[1]
                   and candidate[2] == key[2] and candidate[3] == key[3]
-                  and (not branch or not candidate[5] or candidate[5] == branch)]
+                  and (not key[4] or not candidate[4] or candidate[4] == key[4])
+                  and (not key[5] or not candidate[5] or candidate[5] == key[5])]
     if len(candidates) == 1:
         target = rows[candidates[0]]
         # Attach explicit identity from the source; never infer it.
@@ -154,6 +155,13 @@ def _row_for(rows, item, uom, warehouse, purpose, branch="", tt_sku=None):
             target["branch"] = _text(branch)
         if tt_sku and not target["tt_sku"]:
             target["tt_sku"] = _text(tt_sku)
+        # Keep the lookup identity in sync with explicit fields just attached.
+        # Otherwise a later source can attach another branch to the old empty key.
+        attached_key = _key(target["item_code"], target["uom"], target["warehouse"],
+                            target["purpose"], target["tt_sku"], target["branch"])
+        if attached_key != candidates[0]:
+            del rows[candidates[0]]
+            rows[attached_key] = target
         return target
     row = rows.setdefault(key, _row_base(key))
     if len(candidates) > 1:
@@ -238,8 +246,21 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         if any(pos.get(f) is None for f in
                ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty")):
             _mark_unknown(row, "dn_po", "dn_po_quantity_unknown")
-        row["sources"].append({"layer": "dn_po", "observed_at": pos.get("as_of")})
-        row["source_status"]["dn_po"] = "known"
+        source_report = position_result.get("report") or {}
+        versions = source_report.get("source_versions") or {}
+        # Position.as_of is calculation time, not the time the DN was observed.
+        row["sources"].append({"layer": "dn_po", "observed_at":
+                               versions.get("observed_at") or versions.get("as_of")})
+        unresolved = _dec(pos.get("unresolved_qty"))
+        pending = (unresolved is None or unresolved > 0 or pos.get("unknown_quantity_lines")
+                   or pos.get("return_review_lines"))
+        row["source_status"]["dn_po"] = "partial" if pending else "known"
+        if pending:
+            row["unknown_reasons"].extend(pos.get("reasons") or [])
+            row["unknown_reasons"].append("dn_po_unresolved")
+        observations = source_report.get("po_source_observed_at") or {}
+        for code in sorted({t.get("po_code") for t in pos.get("tranches") or [] if t.get("po_code")}):
+            row["sources"].append({"layer": "po_status", "observed_at": observations.get(code)})
         _add_stage(row, "po_completed_assumed",
                    _dec(pos.get("po_completed_assumed_qty")),
                    pos.get("as_of"), "observation")

@@ -132,6 +132,34 @@ class StageDateTests(unittest.TestCase):
 
 
 class DemandSupplyTests(unittest.TestCase):
+    def test_position_unresolved_reasons_and_source_time_survive(self):
+        p = position(unresolved_qty=5, reasons=["creation_lines_not_exported"])
+        p["report"] = {"source_versions": {"observed_at": "2026-10-30T00:00:00+00:00"}}
+        result = build_full_supply_facts(p, as_of="2026-11-02T00:00:00+00:00", max_age_seconds=900)
+        row = row_of(result)
+        self.assertIn("creation_lines_not_exported", row["unknown_reasons"])
+        self.assertEqual(row["source_status"]["dn_po"], "partial")
+        self.assertEqual(row["unresolved_qty"], 5)
+        self.assertEqual(row["next_node"], "manual_review_unknown")
+        self.assertFalse(result["freshness"]["rows"][0]["fresh"])
+
+    def test_explicit_conflicting_sku_is_not_attached(self):
+        result = build_full_supply_facts(position(), inventory=[{
+            "item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+            "purpose": "branch", "branch": "CENTRADE", "tt_sku": "OTHER", "qty": 8}])
+        self.assertEqual(len(result["rows"]), 2)
+        base = next(r for r in result["rows"] if r["tt_sku"] == "S1")
+        self.assertIsNone(base["inventory_qty"])
+
+    def test_filled_branch_key_is_not_reused_for_other_branch(self):
+        result = build_full_supply_facts(position(branch=""), production=[{
+            "item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+            "purpose": "branch", "branch": "CENTRADE", "qty": 3, "evidence_status": "proven"}],
+            inventory=[{"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+                        "purpose": "branch", "branch": "DANEEY", "qty": 8}])
+        self.assertEqual(len(result["rows"]), 2)
+        base = next(r for r in result["rows"] if r["branch"] == "CENTRADE")
+        self.assertIsNone(base["inventory_qty"])
     def test_so_balance_is_demand_not_production(self):
         result = build_full_supply_facts(
             position(), so_balances=[layer(so_open_qty=6)])

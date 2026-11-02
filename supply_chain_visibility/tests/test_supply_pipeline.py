@@ -5,6 +5,7 @@ import hashlib
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from supply_chain_visibility.supply_pipeline import main
@@ -141,6 +142,17 @@ class PipelineTests(unittest.TestCase):
                                .read_text(encoding="utf-8"))
             row = next(r for r in facts if r["item_code"] == "SKU-1")
             self.assertEqual(row["po_completed_assumed_qty"], 0.0)
+
+    def test_success_after_failure_clears_stale_failure_marker(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "in"
+            root.mkdir()
+            out = Path(td) / "out"
+            with patch("builtins.print"):
+                self.assertEqual(main(self._args(root, str(out), audit={"bad": True})), 1)
+                self.assertEqual(main(self._args(root, str(out))), 0)
+            attempt = json.loads((out / "last_attempt.json").read_text(encoding="utf-8"))
+            self.assertEqual(attempt["status"], "succeeded")
 
 
 if __name__ == "__main__":
