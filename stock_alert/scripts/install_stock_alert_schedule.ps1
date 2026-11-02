@@ -65,9 +65,14 @@ $wrapper = Write-ScheduleWrapper $repo $Warehouses $Threshold
 $action = New-ScheduledTaskAction -Execute $wrapper
 $trigger = New-ScheduledTaskTrigger -Daily -At $AtTime
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
+# Robustness: the PC may be asleep / not ready at the trigger time. Run ASAP after a
+# missed start (StartWhenAvailable), allow a wake timer (WakeToRun), and do not skip on
+# battery (matters for laptops; harmless on desktops). Without these, a single missed
+# 09:23 silently loses that day's report.
+$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
 Register-ScheduledTask -TaskName $taskNameFull -Action $action -Trigger $trigger `
-  -Principal $principal -Force | Out-Null
+  -Principal $principal -Settings $settings -Force | Out-Null
 
 $registered = (Get-ScheduledTask -TaskName $taskNameFull).Actions[0].Execute
 if ($registered -ne $wrapper) {
