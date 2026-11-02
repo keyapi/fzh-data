@@ -6,7 +6,7 @@ description: >
   当用户提到"PB对账"、"Pottery Barn 对账"、"remittance"、"payment advice"、
   "给财务"、"付款转账"、"对账单"、"Invoice to PB"、"PB Remittance Advice"、
   "未付发票"、"UPS 交付核查"、"We Have Your Package"、"TM 佣金"、"Tracy Miller"、
-  "PB invoice 合并"等时触发。
+  "PB invoice 合并"、"销售收款确认单"、"月合并 CSV"、"不要填月度总金额"等时触发。
   不要用于 OSTKUS / Wayfair / Walmart 账期对账（那是 platform-account-reconciliation）。
 compatibility: >
   需要 openpyxl, pandas。从 pb_reconciliation/ 目录运行，Windows 中文路径。
@@ -15,7 +15,7 @@ compatibility: >
 metadata:
   module: pb_reconciliation
   scripts: reconcile_pb.py, tm_commission.py, merge_invoices.py, visual_check.py
-  updated: 2026-09-23
+  updated: 2026-11-02
 ---
 
 # Pottery Barn (PB) 对账月度更新
@@ -31,6 +31,8 @@ metadata:
 4. 已解决坑：`docs/solutions/workflow-issues/pb-reconciliation-monthly-update.md`
 5. 扫目录取输入的通用防线：`docs/solutions/best-practices/scanner-silent-data-loss-guard.md`
 6. 核对 Excel 产出金额：`docs/solutions/tooling-decisions/excel-formula-cells-and-recalc-verification.md`
+7. PB 钉钉月包：`docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md`（日行 + 日 CSV，月合并只当最后附件，不要月合计行）
+8. 钉钉 API 带附件发起：`docs/solutions/integration-issues/dingtalk-oa-create-receipt-with-attachments.md`
 
 ## 快速启动
 

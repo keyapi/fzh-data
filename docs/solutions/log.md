@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-02（钉钉销售收款确认单 API 发起 + PB 月包惯例）
+- **新增**: `integration-issues/dingtalk-oa-create-receipt-with-attachments.md` —— 原生 OA 单可 API 带附件发起。读附件已有的 `Workflow.Instance.Write` 不够：还要 `Storage.UploadInfo.Read` / `Storage.File.Write`，每开一次发布新版本。OSS PUT 用 `urllib` 会注入 `Content-Type` 导致 `SignatureDoesNotMatch`；unionId 走旧 `topapi/v2/user/get`。发起前确认上一张已 `TERMINATED`。
+- **新增**: `conventions/pb-dingtalk-receipt-monthly-package.md` —— PB 月度钉钉包：表单只写各结日一行，不要月合计行；附件按日 CSV 升序，**最后**挂 `PB invoice 合并 YYYYMM.csv`（`merge_invoices.py`）。日文件夹须先收进 `YYYYMM/`。摘单丢表头的事故正文在 PR #297，不在此重复。
+
 ## 2026-10-27（供应分型 / frePPLe / 先搜分支）
 
 - **更新**: `workflow-issues/search-first-before-implementing.md`（`last_updated: 2026-10-27`）—— 补 Case 4：**main 上 grep 不到 ≠ 项目没有**。预测（statsforecast 2.1.1）、供应净额、库存政策、交期配置分别在本地的 `keyapi/forecast-refresh-oct27`、`keyapi/supply-integrate-oct27` 分支和 PR #300；先查 `git branch -a` / `git log --all` / `gh pr list --state all` / `git ls-tree`，再决定“复用 / 接线 / 重造”。

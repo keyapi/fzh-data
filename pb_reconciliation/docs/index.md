@@ -15,6 +15,7 @@ timestamp: 2026-08-14
 | 月度工作流/公式/列映射/校验细节 | [reference/workflow.md](reference/workflow.md) |
 | UPS 交付核查流程与 5 单未付结论 | [reference/ups-delivery-check.md](reference/ups-delivery-check.md) |
 | TM 佣金结算表生成（tm_commission.py） | [reference/workflow.md](reference/workflow.md) 第 8 节 |
+| 钉钉月包（日行 + 日 CSV，月合并只当最后附件） | [../../docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md](../../docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md) |
 | 变更历史 | [log.md](log.md) |
 | 主脚本（给财务） | [../reconcile_pb.py](../reconcile_pb.py) |
 | TM 佣金脚本 | [../tm_commission.py](../tm_commission.py) |
