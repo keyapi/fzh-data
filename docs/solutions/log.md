@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-02（JSON API 上到 api.vilavi.cn/pb）
+
+- **更新**: `architecture-patterns/pb-orders-json-api-human-agent.md`（`last_updated: 2026-11-02`）—— PR #297 的 `/api/v1` 已 `git archive` 部署到 `/opt/pb-orders`（`PB_ORDERS_PIPELINE_VERSION=pb-web-60e30ff1`），PR 仍未合并。部署前公网 healthz 被闸门 303 成钉钉页，不能把分支上有代码当成现网有路由。现网：healthz JSON 200、缺 Bearer 的 job 查询 JSON 401、网页首页仍 303 登录。建 Key 用容器名 `pb-orders-web`（不是 compose 示例里的 `web`）。首次上线 `backfill_order_numbers --apply` 写入 338 个历史号。API 未上镜像时的出件兜底：签 `pb_orders_session` + 公网 `POST /pb/jobs/{id}/fulfill`（CSRF `Path=/pb/`，直连 8412 会 403）。
+
 ## 2026-10-29（PB invoice CSV 摘单丢表头；JSON API 人+Agent 共用）
 
 - **新增**: `workflow-issues/pb-invoice-csv-header-loss.md` —— 从 PB 批次 invoice CSV 按行摘掉无货单时，脚本从 `i=1` 开始扫描、写回时忘记补 `lines[0]`，导致 **表头行丢失**。当时只校验 H/D 行数与 H 行总额，所以没发现；两周后 pandas 默认 `header=0` 把第一行数据当列名，误报「少了两张同额票」。修法：从 `NotUsed` 原件取表头字节补回 + 缺表头版本备份；预防：`keep=[lines[0]]`、交付前断言表头逐字节一致 / `len=data H+D` / 文件名 `xN==H` / 有原件则逐行差异相等，且**不要用 D 行总额求和校验**（SPS 的 D 行重复整票总额，一票多明细时 `H≠ΣD` 正常）。

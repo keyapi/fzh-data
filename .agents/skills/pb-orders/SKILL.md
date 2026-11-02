@@ -5,12 +5,13 @@ description: >
   打单后才发现无货时的 invoice 清理惯例、Notion 断货台账登记、通知 Diane 的邮件规律。
   当用户提到「PB」「Pottery Barn」「出件」「库存预检」「标签 PDF」「背贴」「Packslip」
   「无货未发」「断货台账」「通知对接人」「给 Diane 发邮件」「清 invoice」「invoice 总额」
-  「楔形枕补货」「PB 补货」「重发 AKN」「改 SPS 发货日期」「Ship No Later」「Order 状态 open」时触发。
+  「楔形枕补货」「PB 补货」「重发 AKN」「改 SPS 发货日期」「Ship No Later」「Order 状态 open」
+  「JSON API」「/api/v1」「Bearer」「api.vilavi.cn/pb」时触发。
   不要用于 PB 月度对账 / TM 佣金 / UPS 交付核查（那是 pb-reconciliation）。
 metadata:
   module: pb_orders
   docs: pb_orders/docs/reference/stockout-closed-loop.md
-  updated: 2026-10-16
+  updated: 2026-11-02
 ---
 
 # PB 出件与断货闭环
@@ -103,6 +104,13 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
 - 补发 `-N` 由服务端登记分配（`order_number_usage`），**不要手改 CSV**；
   冲突返回 `409 reorder_conflict`（换后缀或先查已用号）。
 - OpenAPI：`https://api.vilavi.cn/pb/api/docs`。
+- **先探活**：`GET $BASE/api/v1/healthz` 必须是 JSON `{"status":"ok"}`。若返回钉钉登录 HTML，
+  镜像还没有 `/api/v1`（未合并 PR ≠ 已部署）。那时不要扫码，改走签会话 cookie 的
+  `POST /pb/jobs/{id}/fulfill`（必须打公网 `/pb/`，直连 8412 会因 CSRF Path 403）。
+- 现网（2026-11-02）已部署，Key 在本机 gitignore 的 `pb_orders/.env`（`PB_ORDERS_API_KEY`）。
+  建新 Key：`docker exec pb-orders-web python -m web.api_keys create --name agent --scopes check,fulfill,read`。
+- 通途导入 xlsx 的下载名带 `checked0stock` 词干，是 `kind=tongtool` 那一份，不要漏下。
+  1:1 按 Packslip **页数 = 件数**（数量 2 的一行占 2 页）。
 
 ## 铁律
 
@@ -121,7 +129,7 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
 
 - `docs/solutions/workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— 打单后才发现无货的闭环：invoice 清理惯例、邮件成链、两套库存不能混用
 - `docs/solutions/workflow-issues/pb-invoice-csv-header-loss.md` —— invoice CSV 摘单丢表头：行筛选保留表头 + 交付前结构断言（同额票是金额校验盲区）
-- `docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md` —— 网页与 JSON API 共用服务层：双鉴权 / 幂等 / 补发号登记
+- `docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md` —— 网页与 JSON API 共用服务层：双鉴权 / 幂等 / 补发号登记；现网判定与 compose 服务名
 - `docs/solutions/workflow-issues/pb-replenishment-sizing-from-sales.md` —— 补货量估算：美中 Daneey 口径、通途订单表读法、剔除断货月、交付用 Excel
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— 断货判据 / PO→Tongtool Order 映射 / UPS 才算真发
 

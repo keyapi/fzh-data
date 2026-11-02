@@ -8,6 +8,26 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-11-02（第三十轮：JSON API 部署到现网 api.vilavi.cn/pb）
+
+- **做了什么**：把 PR #297 HEAD `60e30ff1` `git archive` 解到 `/opt/pb-orders`（不覆盖 `.env` / `runtime/` / `data/`），
+  `PB_ORDERS_PIPELINE_VERSION=pb-web-60e30ff1`，清华源重建镜像，只 `up -d --no-deps` web/worker。
+  备份 `pb_orders-code.bak-20261102-172115.tar.gz`。
+- **验收（公网，不是 localhost:8412）**：
+  `GET /pb/api/v1/healthz` → JSON `{"status":"ok"}`；
+  无 token 的 `GET /pb/api/v1/jobs/{id}` → JSON 401（不再跳钉钉 HTML）；
+  带 `sk-` Key 可读出件任务与产物；首页 `/pb/` 仍 303 钉钉登录。
+- **隔离**：只有 `pb-orders-web` / `pb-orders-worker` 的 StartedAt 变了；
+  Redis 与 nas-mcp / new-api / sellfox-api-proxy 未动。
+- **上线必做**：`python -m web.backfill_order_numbers --apply` 写入 **338** 个历史订单号（16 个任务）。
+  建 Key：`docker exec pb-orders-web python -m web.api_keys create …`（compose 服务名是
+  `pb-orders-web`，文档里写 `exec web` 会找不到服务）。明文只显示一次，放本机 `pb_orders/.env`。
+- **部署前的坑**：镜像还是 10-08 HTML-only 时，healthz 走闸门 → 钉钉页。分支有 `api.py` 不代表容器有。
+  当时出件用签会话 cookie + `POST /pb/jobs/{id}/fulfill`；CSRF `Path=/pb/`，直连 8412 会 403。
+- **产物名**：续出件的通途 xlsx 叫 `PB_0_导入_原始_{checked CSV 词干}_on_{ts}.xlsx`，
+  文件名里有 `checked0stock`，容易被当成库存检查表。1:1 口径是 **Packslip 页数 = 件数**
+  （某 PO `Qty Ordered=2` → 2 页），不是 CSV 明细行数。
+
 ## 2026-10-22（第二十九轮：restock date 必须先查 EN 上游 + 钉钉头程）
 
 - **背景**：复盘「一个断货 SKU 的完整流程」时发现，之前的闭环只查了本地 CSV / SPS / UPS /

@@ -213,13 +213,22 @@ server 块，里面本来就同时挂着 `/oidc/`、`/sellfox/`、`/nas/mcp`）�
    （默认 `check,fulfill,read`）。
 3. 速率限制按 principal：`PB_ORDERS_API_KEY_RPS`（默认 5/秒），超限 `429 rate_limited`。
 
-建 Key / 吊销（容器内）：
+建 Key / 吊销（现网容器名 `pb-orders-web`，不是文档里曾写的 `web`）：
 
 ```bash
-docker compose exec web python -m web.api_keys create --name agent --scopes check,fulfill,read
-docker compose exec web python -m web.api_keys list
-docker compose exec web python -m web.api_keys revoke key-xxxxxxxx
+docker exec pb-orders-web python -m web.api_keys create --name agent --scopes check,fulfill,read
+docker exec pb-orders-web python -m web.api_keys list
+docker exec pb-orders-web python -m web.api_keys revoke key-xxxxxxxx
 ```
+
+明文只显示一次。写入调用方本机 gitignore 的 `pb_orders/.env`（`PB_ORDERS_API_KEY`），禁止提交。
+
+**现网（2026-11-02）**：PR #297 已 `git archive` 部署到 `/opt/pb-orders`，
+`PB_ORDERS_PIPELINE_VERSION=pb-web-60e30ff1`，**PR 仍未合并**。
+判定 API 是否在跑：`GET https://api.vilavi.cn/pb/api/v1/healthz` 必须是 JSON
+`{"status":"ok"}`。若返回钉钉登录 HTML，镜像还是 HTML-only，不要扫码硬闯。
+缺 Bearer 的 job 查询应是 JSON 401。网页首页仍 303 钉钉。
+首次上线已 `python -m web.backfill_order_numbers --apply`（338 个历史号）。
 
 约定：
 
@@ -557,6 +566,18 @@ uv run pytest tests/ -q
     ⚠️ 别用 D 行总额求和校验：SPS 的 D 行重复整票总额，一票多明细时 `H ≠ ΣD` 是正常的。
     下游审计若发现首格像 `INV…`，应按 `header=None` 读并报警，别让 pandas 静默吃行。
     详见 `docs/solutions/workflow-issues/pb-invoice-csv-header-loss.md`。
+42. **分支上有 `/api/v1` ≠ 现网容器有**（2026-11-02 真踩过）：部署前公网
+    `GET /pb/api/v1/healthz` 被 OIDC 闸门 303 到钉钉页（镜像停在 10-08，没有 `web/api.py`）。
+    探针必须看响应是不是 JSON。API 未上镜像时出件兜底：用容器
+    `PB_ORDERS_SESSION_SECRET` 签 `pb_orders_session`，走公网
+    `POST /pb/jobs/{check_job_id}/fulfill` 只传 Packslip。CSRF cookie `Path=/pb/`，
+    直连 `127.0.0.1:8412` 不会带上它 → 403。建 Key 用 `docker exec pb-orders-web`，
+    compose 服务名不是 `web`。
+43. **1:1 是 Packslip 页数 = 件数，不是 CSV 明细行数**；通途 xlsx 文件名带 checked CSV 词干
+    （2026-11-02 真批次）：`Qty Ordered=2` 的一行对应 2 页 Packslip（例：x31 页 /
+    30 条 Detail / 29 个 PO Header，其中一单数量 2 → 31=31 通过）。
+    续出件产物叫 `PB_0_导入_原始_{checked0stock …}_on_{ts}.xlsx`，名字里有
+    `checked0stock`，容易被当成库存检查表漏下。下载看 `kind=tongtool`，不要凭文件名猜。
 
 ## 8. 数量对账口径
 
@@ -846,6 +867,8 @@ uv run pytest tests/ -q
 - [x] 网页出件的通途 xlsx 名已修：`JobOptions.csv_stem` 由 worker 传入页面上的文件名（原来是磁盘名 `order.csv`，产物看不出批次）。命令行行为不变
 - [ ] EN 测试服务器上累计了十几条 `actor=验收测试` 的任务（含刻意造的错误路径用例），清理属破坏性操作，等用户确认
 - [x] 数据行末尾多出的**空**字段已能读（2026-09-24 真实批次：表头 147 / H 146 / D 148）；非空的额外字段仍拒绝。见坑 34-35
+- [x] JSON API `/api/v1` **已部署到现网**（2026-11-02，`pb-web-60e30ff1`，PR #297 仍未合并）。
+      公网 healthz JSON 200、缺 token → JSON 401、网页仍钉钉登录。见 §4.5 与坑 42-43。
 
 ## 相关经验（docs/solutions）
 

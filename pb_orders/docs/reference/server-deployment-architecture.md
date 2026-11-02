@@ -447,14 +447,23 @@ API 不改变部署形态：同一容器、同一 SQLite、同一 RQ 队列，�
   而不是 303 去登录页；下载仍走 `resolve_artifact_path` 越界复查。
 - **文档**：`/pb/api/docs`（Swagger UI）与 `/pb/api/openapi.json`；配了
   `PB_ORDERS_URL_PREFIX` 时 `servers` 自动带前缀。
-- **运维命令**：
+- **运维命令**（compose 服务名是 `pb-orders-web`，不是 `web`）：
 
 ```bash
-docker compose exec web python -m web.api_keys create --name agent --scopes check,fulfill,read
-docker compose exec web python -m web.api_keys list
-docker compose exec web python -m web.api_keys revoke key-xxxxxxxx
+docker exec pb-orders-web python -m web.api_keys create --name agent --scopes check,fulfill,read
+docker exec pb-orders-web python -m web.api_keys list
+docker exec pb-orders-web python -m web.api_keys revoke key-xxxxxxxx
 curl -s https://api.vilavi.cn/pb/api/v1/healthz
+# 必须返回 JSON {"status":"ok"}。若是钉钉登录 HTML，镜像还没有 /api/v1。
 ```
+
+- **现网落地（2026-11-02，PR #297 仍未合并）**：`git archive` 解到 `/opt/pb-orders`，
+  不覆盖 `.env` / `runtime/` / `data/`；`PB_ORDERS_PIPELINE_VERSION=pb-web-60e30ff1`；
+  清华源 `docker compose build` 后 `up -d --no-deps` 只重建 web/worker。
+  公网 healthz JSON 200、缺 token 查 job JSON 401、网页仍 303 登录。
+  首次上线已 `backfill_order_numbers --apply`（338 个历史号 / 16 个任务）。
+  备份 `pb_orders-code.bak-20261102-172115.tar.gz`。
+  Key 明文只显示一次，写入调用方本机 gitignore 的 `pb_orders/.env`，禁止提交。
 
 ### 11.7 未完成事项
 
@@ -466,7 +475,8 @@ curl -s https://api.vilavi.cn/pb/api/v1/healthz
   `PB_ORDERS_QUEUE_WATCH_SECONDS` 秒再对（默认 60；设 0 关掉）。
 - **未接域名根路径**：目前挂在 `api.vilavi.cn/pb/` 路径前缀下；
   若以后要独立子域名（如 `pb.vilavi.cn`），需要加 DNS 记录与证书。
-- **代码版本标记是人工填的** `pb-web-20260922b`；PR 合并后应改为 commit SHA。
+- **代码版本标记是人工填的**；2026-11-02 起现网是 `pb-web-60e30ff1`（PR #297 HEAD）。
+  合并进 main 后再改成对应 SHA 即可。
 
 ## 12. 来源
 

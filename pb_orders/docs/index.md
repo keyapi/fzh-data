@@ -22,6 +22,7 @@ timestamp: 2026-09-22
 | **打单后才发现无货**的闭环（清 invoice / 登记 / 通知 Diane / SPS） | [reference/stockout-closed-loop.md](reference/stockout-closed-loop.md) |
 | 命令行入口（薄适配器） | [../run_pb_orders.py](../run_pb_orders.py) · [../run_stock_check.py](../run_stock_check.py) |
 | 网页服务（FastAPI 路由） | [../web/app.py](../web/app.py) |
+| JSON API v1（人+Agent，Bearer `sk-`；现网 `/pb/api/v1`） | [../web/api.py](../web/api.py) · [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) §4.5 · [../../docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md](../../docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md) |
 | 任务库（SQLite 状态机与恢复） | [../web/repository.py](../web/repository.py) |
 | 队列 worker | [../web/tasks.py](../web/tasks.py) |
 | 容器编排（独立 Compose 栈） | [../docker-compose.yml](../docker-compose.yml) |
