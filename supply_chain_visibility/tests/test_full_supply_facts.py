@@ -181,6 +181,14 @@ class DemandSupplyTests(unittest.TestCase):
         self.assertEqual(row["coverage"], "approved_item_without_evidence")
         self.assertIn("no_observed_supply_or_demand", row["unknown_reasons"])
 
+    def test_source_branch_enriches_position_row(self):
+        result = build_full_supply_facts(
+            position(branch=""), inventory=[layer(qty=5, brand=None,
+                                                  as_of="2026-11-02T00:00:00+00:00")
+                                            ])
+        row = row_of(result)
+        self.assertEqual(row["branch"], "CENTRADE")
+
     def test_source_without_tt_sku_attaches_to_position_row(self):
         result = build_full_supply_facts(
             position(), inventory=[{"item_code": "SKU-1", "uom": "个",

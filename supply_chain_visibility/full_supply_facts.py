@@ -148,7 +148,13 @@ def _row_for(rows, item, uom, warehouse, purpose, branch="", tt_sku=None):
                   and candidate[2] == key[2] and candidate[3] == key[3]
                   and (not branch or not candidate[5] or candidate[5] == branch)]
     if len(candidates) == 1:
-        return rows[candidates[0]]
+        target = rows[candidates[0]]
+        # Attach explicit identity from the source; never infer it.
+        if branch and not target["branch"]:
+            target["branch"] = _text(branch)
+        if tt_sku and not target["tt_sku"]:
+            target["tt_sku"] = _text(tt_sku)
+        return target
     row = rows.setdefault(key, _row_base(key))
     if len(candidates) > 1:
         row["unknown_reasons"].append("target_key_ambiguous")
