@@ -272,11 +272,20 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
   `dn_net_qty / po_completed_assumed_qty / open_po_qty / unresolved_qty /
   so_open_qty / in_production_qty / in_production_estimated_qty /
   inventory_qty / in_transit_qty / received_qty`、可用日期与置信度、逐源 observed_at、未知原因。
-- 规则：SO 余额只作需求，不计已证生产；estimated 生产单列；未知/来源不可用保持 null；
-  独立 DN 行保留；批准商品无证据也列一行（`approved_item_without_evidence`）；
-  POD 上传日不作签收日，仅 `signed_at` 计入 `received_qty`；
+- 规则：用途只接受批准映射的 `branch/fba`；缺失、`unknown`、非法值一律 `unknown` + `purpose_unknown`，
+  不默认分公司/FBA，也不进 in_house 过滤。
+- SO 余额只作需求，不计已证生产；estimated 生产单列；未知/来源不可用保持 null；
+  独立 DN 行保留；批准商品无证据也列一行（`approved_item_without_evidence`）。
+- 日期按阶段保留：`inventory_as_of` 仅为库存观测；生产/在途/签收分别保留 `date_kind`
+  （expected/actual），同阶段多批（如 11/10 与 11/20）都保留，不压成唯一日期；
+  跨阶段日期不判冲突；预计日期不与实绩混用。
+- POD 上传日不作签收日，仅 `signed_at` 计入 `received_qty`；
   同一 DN 多运单不复制整单数量（`multi_waybill_allocation_unknown`）。
-- `build_timeline` 输出供应侧节点与 `forecast_connected=false`，不产生建议量。
+- `build_timeline` 按阶段输出节点与 `forecast_connected=false`，不产生建议量。
+- 可执行链路：`python -m supply_chain_visibility.supply_pipeline --delivery-json ... --mapping-json ...
+  --audit-json ... --status-json ... [--so-json/--production-json/--inventory-json/--transit-json/--receipt-json]
+  --as-of ... --out ...`；输出 `runs/<run>/` + `manifest.json` + `latest.json`，失败写
+  `last_attempt.json` 且不切换 latest。
 - `assess_freshness(as_of, max_age_seconds)` 逐源标记 stale/unknown/future；
   过期或来源时间未知不作为新鲜数据。
 - 所有行 `netting_ready=false`、`auto_order=false`；最终补货建议由主线完成。

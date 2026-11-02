@@ -1,31 +1,53 @@
 # -*- coding: utf-8 -*-
-"""Full supply facts: join DN/PO position with SO, production, inventory,
-transit and receipts into one read-only table.
+"""Full supply facts: DN/PO position joined with SO, production, inventory,
+transit and receipts, keeping per-stage quantity/date fragments.
 
-Rules:
+Rules (colleague R1/R2):
+* purpose must come from an approved mapping; missing/unknown/invalid stays
+  ``unknown`` and never defaults to branch/in-house;
+* inventory ``as_of`` is an observation, not an availability date;
+* each stage keeps its own date fragments; different stages never conflict,
+  same-stage batches (11/10, 11/20) are both retained;
+* expected and actual dates stay distinguishable;
 * SO balance is demand, never proven production;
 * quantities stay null when the source is unknown/unavailable;
-* independent DN rows are preserved;
-* approved items without any evidence still get a row (destination listing);
-* POD upload date is not a receipt date; pod-only rows stay unknown;
-* multiple waybills for one DN never copy the full quantity;
-* no cross-item/UOM/destination totals; final decisions stay upstream.
+* independent DN rows are preserved; approved items without evidence are listed;
+* POD upload is not a receipt; multiple waybills never copy the quantity.
 """
 from __future__ import annotations
 
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Iterable, Optional
+from typing import Iterable
 
 SCHEMA_VERSION = "full-supply-facts/v1"
-RULE_VERSION = "2026-11-02.1"
-IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-02.1"
+RULE_VERSION = "2026-11-02.2"
+IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-02.2"
 
+VALID_PURPOSES = ("branch", "fba")
 QTY_FIELDS = ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty",
               "unresolved_qty", "so_open_qty", "in_production_qty",
               "in_production_estimated_qty", "inventory_qty", "in_transit_qty",
               "received_qty")
+LAYER_FIELDS = {
+    "dn_po": ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty"),
+    "so_demand": ("so_open_qty",),
+    "production": ("in_production_qty",),
+    "production_estimated": ("in_production_estimated_qty",),
+    "inventory": ("inventory_qty",),
+    "in_transit": ("in_transit_qty",),
+    "receipt": ("received_qty",),
+}
+QTY_BY_STAGE = {
+    "po_completed_assumed": "po_completed_assumed_qty",
+    "po_open": "open_po_qty",
+    "in_production": "in_production_qty",
+    "in_production_estimated": "in_production_estimated_qty",
+    "inventory": "inventory_qty",
+    "in_transit": "in_transit_qty",
+    "received": "received_qty",
+}
 
 
 def _dec(value):
@@ -52,35 +74,88 @@ def _aware(value):
     return parsed if parsed.tzinfo and parsed.utcoffset() is not None else None
 
 
-def _key(item_code, uom, warehouse, purpose="branch", tt_sku=None, branch=""):
-    return (_text(item_code), _text(uom), _text(warehouse), _text(purpose),
+def _purpose(value):
+    purpose = _text(value)
+    return purpose if purpose in VALID_PURPOSES else "unknown"
+
+
+def _key(item_code, uom, warehouse, purpose, tt_sku=None, branch=""):
+    return (_text(item_code), _text(uom), _text(warehouse), _purpose(purpose),
             _text(tt_sku), _text(branch))
 
 
 def _row_base(key):
+    purpose = key[3]
+    scope = {"branch": "in_house", "fba": "external_fba"}.get(purpose, "unknown")
+    reasons = ["purpose_unknown"] if purpose == "unknown" else []
     return {
         "item_code": key[0], "uom": key[1] or None, "warehouse": key[2],
-        "purpose": key[3] or "unknown", "tt_sku": key[4] or None,
-        "branch": key[5], "pool": key[2],
-        "scope": "external_fba" if key[3] == "fba" else "in_house",
+        "purpose": purpose, "tt_sku": key[4] or None, "branch": key[5],
+        "pool": key[2], "scope": scope,
         **{name: None for name in QTY_FIELDS},
-        "available_date": None, "date_confidence": "unknown",
-        "source_status": {}, "unknown_reasons": [], "sources": [],
-        "next_node": None, "alerts": [], "forecast_connected": False,
-        "coverage": "full_inputs", "netting_ready": False, "auto_order": False,
+        "inventory_as_of": None, "available_date": None,
+        "date_confidence": "unknown", "available_date_kind": None,
+        "stage_quantities": [], "source_status": {}, "unknown_reasons": reasons,
+        "sources": [], "next_node": None, "alerts": [],
+        "forecast_connected": False, "coverage": "full_inputs",
+        "netting_ready": False, "auto_order": False,
     }
+
+
+def _mark_unknown(row, layer, reason):
+    row["unknown_reasons"].append(reason)
+    row.setdefault("_unknown_layers", set()).add(layer)
+    for field in LAYER_FIELDS.get(layer, ()):
+        row[field] = None
+
+
+def _add_qty(row, field, layer, qty):
+    if qty is None:
+        _mark_unknown(row, layer, "quantity_unknown_" + layer)
+        return
+    if layer in row.get("_unknown_layers", set()):
+        return
+    row[field] = str((_dec(row[field]) or Decimal(0)) + qty)
+
+
+def _add_stage(row, stage, qty, date=None, date_kind=None):
+    """Append a quantity/date fragment only; aggregates are handled separately."""
+    if qty is None:
+        return
+    fragment = {"stage": stage, "qty": str(qty), "date": date,
+                "date_kind": date_kind,
+                "date_confidence": ({"observation": "observed",
+                                     "expected": "expected",
+                                     "actual": "confirmed"}.get(date_kind, "unknown"))}
+    if fragment not in row["stage_quantities"]:
+        row["stage_quantities"].append(fragment)
 
 
 def _merge_source(row, layer, status, observed_at=None, reason=""):
     row["source_status"][layer] = status
-    # Keep unknown timestamps visible so freshness can flag them.
     row["sources"].append({"layer": layer, "observed_at": observed_at})
     if reason:
         row["unknown_reasons"].append(reason)
 
 
+def _row_for(rows, item, uom, warehouse, purpose, branch="", tt_sku=None):
+    """Attach a non-DN source to the DN/PO row without guessing tt_sku/branch."""
+    key = _key(item, uom, warehouse, purpose, tt_sku, branch)
+    if key in rows:
+        return rows[key]
+    candidates = [candidate for candidate, row in rows.items()
+                  if candidate[0] == key[0] and candidate[1] == key[1]
+                  and candidate[2] == key[2] and candidate[3] == key[3]
+                  and (not branch or not candidate[5] or candidate[5] == branch)]
+    if len(candidates) == 1:
+        return rows[candidates[0]]
+    row = rows.setdefault(key, _row_base(key))
+    if len(candidates) > 1:
+        row["unknown_reasons"].append("target_key_ambiguous")
+    return row
+
+
 def collapse_waybills(events: Iterable[dict]) -> list[dict]:
-    """One DN with multiple waybills must not copy the full quantity."""
     grouped = defaultdict(list)
     for event in events:
         key = (_text(event.get("delivery_note")), _text(event.get("item_code")),
@@ -102,7 +177,7 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
             continue
         quantities = {str(_dec(item.get("qty"))) for item in items}
         if len(numbers) == 1 and len(quantities) == 1:
-            out.append(dict(items[0]))  # exact replay of one waybill
+            out.append(dict(items[0]))
             continue
         merged = dict(items[0])
         merged.update({
@@ -114,7 +189,6 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
 
 
 def _pod_evidence(receipt):
-    """POD upload is not a receipt; only a signed time proves receipt time."""
     signed = _aware(receipt.get("signed_at"))
     uploaded = _aware(receipt.get("pod_uploaded_at"))
     if signed:
@@ -124,84 +198,21 @@ def _pod_evidence(receipt):
     return "unknown", None
 
 
-def assess_freshness(rows, *, as_of, max_age_seconds):
-    """Per-row source freshness; no freshness is inferred for unknown times."""
-    now = _aware(as_of)
-    if now is None:
-        raise ValueError("as_of must be an aware timestamp")
-    if isinstance(max_age_seconds, bool) or not isinstance(max_age_seconds, int)             or max_age_seconds <= 0:
-        raise ValueError("max_age_seconds must be a positive integer")
-    out = []
-    for row in rows:
-        problems = []
-        for source in row.get("sources") or ():
-            observed = _aware(source.get("observed_at"))
-            if observed is None:
-                problems.append({"layer": source.get("layer"),
-                                 "status": "unknown"})
-            elif observed > now:
-                problems.append({"layer": source.get("layer"),
-                                 "status": "future"})
-            elif (now - observed).total_seconds() > max_age_seconds:
-                problems.append({"layer": source.get("layer"),
-                                 "status": "stale"})
-        out.append({"item_code": row["item_code"], "uom": row["uom"],
-                    "warehouse": row["warehouse"], "purpose": row["purpose"],
-                    "problems": problems,
-                    "fresh": not problems})
-    return {"rows": out,
-            "summary": {"rows": len(out),
-                        "fresh": sum(1 for r in out if r["fresh"]),
-                        "stale": sum(1 for r in out
-                                     if any(p["status"] == "stale" for p in r["problems"])),
-                        "unknown": sum(1 for r in out
-                                       if any(p["status"] == "unknown" for p in r["problems"])),
-                        "future": sum(1 for r in out
-                                      if any(p["status"] == "future" for p in r["problems"]))}}
-
-
-LAYER_FIELDS = {
-    "dn_po": ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty"),
-    "so_demand": ("so_open_qty",),
-    "production": ("in_production_qty",),
-    "inventory": ("inventory_qty",),
-    "in_transit": ("in_transit_qty",),
-    "receipt": ("received_qty",),
-}
-
-
-def _mark_unknown(row, layer, reason):
-    row["unknown_reasons"].append(reason)
-    row.setdefault("_unknown_layers", set()).add(layer)
-    for field in LAYER_FIELDS.get(layer, ()):
-        row[field] = None
-
-
-def _add_qty(row, field, layer, qty):
-    if qty is None:
-        _mark_unknown(row, layer, "quantity_unknown_" + layer)
-        return
-    if layer in row.get("_unknown_layers", set()):
-        return
-    row[field] = str((_dec(row[field]) or Decimal(0)) + qty)
-
-
-def _record_date(row, date):
-    if _aware(date) is None:
-        return
-    row.setdefault("_dates", []).append(str(date))
-
-
 def _finalize(row):
     row.pop("_unknown_layers", set())
-    dates = row.pop("_dates", [])
-    if len(set(dates)) > 1:
-        row["available_date"] = None
-        row["date_confidence"] = "unknown"
-        row["unknown_reasons"].append("date_conflict")
-    elif len(dates) == 1:
-        row["available_date"] = dates[0]
-        row["date_confidence"] = "confirmed"
+    fragments = row["stage_quantities"]
+    for fragment in fragments:
+        if fragment["stage"] == "inventory":
+            row["inventory_as_of"] = fragment["date"]
+    arrivals = [fragment for fragment in fragments
+                if fragment["date_kind"] in ("expected", "actual")
+                and _aware(fragment["date"]) is not None]
+    if arrivals:
+        earliest = min(arrivals, key=lambda item: _aware(item["date"]))
+        row["available_date"] = earliest["date"]
+        row["available_date_kind"] = earliest["date_kind"]
+        row["date_confidence"] = ("confirmed" if earliest["date_kind"] == "actual"
+                                  else "expected")
     row["unknown_reasons"] = sorted(set(row["unknown_reasons"]))
     row["source_status"] = dict(sorted(row["source_status"].items()))
 
@@ -214,7 +225,7 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
     for pos in position_result.get("rows") or []:
         key = _key(pos.get("item_code"), pos.get("uom"), pos.get("warehouse"),
                    pos.get("purpose"), pos.get("tt_sku"), pos.get("branch"))
-        row = _row_base(key)
+        row = rows.setdefault(key, _row_base(key))
         for field in ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty",
                       "unresolved_qty"):
             row[field] = pos.get(field)
@@ -223,13 +234,15 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             _mark_unknown(row, "dn_po", "dn_po_quantity_unknown")
         row["sources"].append({"layer": "dn_po", "observed_at": pos.get("as_of")})
         row["source_status"]["dn_po"] = "known"
-        rows[key] = row
+        _add_stage(row, "po_completed_assumed",
+                   _dec(pos.get("po_completed_assumed_qty")),
+                   pos.get("as_of"), "observation")
+        _add_stage(row, "po_open", _dec(pos.get("open_po_qty")), None, None)
 
     for item in so_balances:
-        key = _key(item.get("item_code"), item.get("uom"), item.get("warehouse"),
-                   item.get("purpose") or "branch", item.get("tt_sku"),
-                   item.get("branch"))
-        row = rows.setdefault(key, _row_base(key))
+        row = _row_for(rows, item.get("item_code"), item.get("uom"),
+                       item.get("warehouse"), item.get("purpose"),
+                       item.get("branch"), item.get("tt_sku"))
         status = _text(item.get("source_status") or "known")
         qty = _dec(item.get("so_open_qty")) if status == "known" else None
         _merge_source(row, "so_demand", status, item.get("observed_at"),
@@ -237,10 +250,9 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         _add_qty(row, "so_open_qty", "so_demand", qty)
 
     for item in production:
-        key = _key(item.get("item_code"), item.get("uom"), item.get("warehouse"),
-                   item.get("purpose") or "branch", item.get("tt_sku"),
-                   item.get("branch"))
-        row = rows.setdefault(key, _row_base(key))
+        row = _row_for(rows, item.get("item_code"), item.get("uom"),
+                       item.get("warehouse"), item.get("purpose"),
+                       item.get("branch"), item.get("tt_sku"))
         evidence = _text(item.get("evidence_status") or "unknown")
         qty = _dec(item.get("qty"))
         if evidence == "estimated":
@@ -248,6 +260,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             if qty is not None:
                 row["in_production_estimated_qty"] = str(
                     (_dec(row["in_production_estimated_qty"]) or Decimal(0)) + qty)
+            _add_stage(row, "in_production_estimated", qty,
+                       item.get("available_date"), "expected")
             continue
         if evidence != "proven":
             _merge_source(row, "production", evidence, item.get("observed_at"),
@@ -256,16 +270,20 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             continue
         _merge_source(row, "production", "proven", item.get("observed_at"))
         _add_qty(row, "in_production_qty", "production", qty)
-        _record_date(row, item.get("available_date"))
+        _add_stage(row, "in_production", qty, item.get("available_date"),
+                   "expected")
 
-    inventory_by_key = defaultdict(list)
+    inventory_by_row = defaultdict(lambda: (None, []))
     for item in inventory:
-        key = _key(item.get("item_code"), item.get("uom"), item.get("warehouse"),
-                   item.get("purpose") or "branch", item.get("tt_sku"),
-                   item.get("branch"))
-        inventory_by_key[key].append(item)
-    for key, items in inventory_by_key.items():
-        row = rows.setdefault(key, _row_base(key))
+        row = _row_for(rows, item.get("item_code"), item.get("uom"),
+                       item.get("warehouse"), item.get("purpose"),
+                       item.get("branch"), item.get("tt_sku"))
+        inventory_by_row[id(row)][1].append(item)
+    for _identity, (_unused, items) in inventory_by_row.items():
+        row = items and _row_for(rows, items[0].get("item_code"),
+                                 items[0].get("uom"), items[0].get("warehouse"),
+                                 items[0].get("purpose"), items[0].get("branch"),
+                                 items[0].get("tt_sku"))
         statuses = {_text(item.get("source_status") or "known") for item in items}
         identities = {(_text(item.get("as_of")), str(_dec(item.get("qty"))))
                       for item in items}
@@ -280,15 +298,15 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             _mark_unknown(row, "inventory", "multiple_inventory_snapshots")
         else:
             item = items[0]
+            qty = _dec(item.get("qty"))
             _merge_source(row, "inventory", "known", item.get("as_of"))
-            _add_qty(row, "inventory_qty", "inventory", _dec(item.get("qty")))
-            _record_date(row, item.get("as_of"))
+            _add_qty(row, "inventory_qty", "inventory", qty)
+            _add_stage(row, "inventory", qty, item.get("as_of"), "observation")
 
     for event in collapse_waybills(transit):
-        key = _key(event.get("item_code"), event.get("uom"),
-                   event.get("warehouse"), event.get("purpose") or "branch",
-                   event.get("tt_sku"), event.get("branch"))
-        row = rows.setdefault(key, _row_base(key))
+        row = _row_for(rows, event.get("item_code"), event.get("uom"),
+                       event.get("warehouse"), event.get("purpose"),
+                       event.get("branch"), event.get("tt_sku"))
         qty = _dec(event.get("qty"))
         if qty is None:
             reason = event.get("reason") or "in_transit_unknown"
@@ -298,19 +316,19 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         else:
             _merge_source(row, "in_transit", "known", event.get("observed_at"))
             _add_qty(row, "in_transit_qty", "in_transit", qty)
-            _record_date(row, event.get("available_date"))
+            _add_stage(row, "in_transit", qty, event.get("available_date"),
+                       "expected")
 
     for receipt in receipts:
-        key = _key(receipt.get("item_code"), receipt.get("uom"),
-                   receipt.get("warehouse"), receipt.get("purpose") or "branch",
-                   receipt.get("tt_sku"), receipt.get("branch"))
-        row = rows.setdefault(key, _row_base(key))
+        row = _row_for(rows, receipt.get("item_code"), receipt.get("uom"),
+                       receipt.get("warehouse"), receipt.get("purpose"),
+                       receipt.get("branch"), receipt.get("tt_sku"))
         evidence, signed = _pod_evidence(receipt)
         qty = _dec(receipt.get("qty"))
         if evidence == "proven" and qty is not None:
             _merge_source(row, "receipt", "proven", receipt.get("observed_at"))
             _add_qty(row, "received_qty", "receipt", qty)
-            _record_date(row, signed.isoformat())
+            _add_stage(row, "received", qty, signed.isoformat(), "actual")
         else:
             reason = ("receipt_qty_unknown" if evidence == "proven"
                       else "receipt_" + evidence)
@@ -319,12 +337,11 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             _mark_unknown(row, "receipt", reason)
 
     for code in approved_items or ():
-        matched = any(row["item_code"] == _text(code) for row in rows.values())
-        if not matched:
-            row = _row_base(_key(code, "", "", "unknown", None, ""))
+        if not any(row["item_code"] == _text(code) for row in rows.values()):
+            key = _key(code, "", "", "unknown")
+            row = rows.setdefault(key, _row_base(key))
             row["unknown_reasons"].append("no_observed_supply_or_demand")
             row["coverage"] = "approved_item_without_evidence"
-            rows[_key(code, "", "", "unknown", None, "")] = row
 
     for row in rows.values():
         _finalize(row)
@@ -348,12 +365,14 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         "implementation_version": IMPLEMENTATION_VERSION,
         "rows": len(ordered),
         "by_purpose": dict(sorted(Counter(row["purpose"] for row in ordered).items())),
+        "unknown_purpose_rows": sum(1 for row in ordered
+                                    if row["purpose"] == "unknown"),
         "unknown_rows": sum(1 for row in ordered if row["unknown_reasons"]),
         "forecast_connected": False,
         "netting_ready": False,
         "auto_order": False,
         "global_qty_total": None,
-        "note": "SO balance is demand; no cross-item totals; forecast not connected.",
+        "note": "SO balance is demand; stage dates stay separate; forecast not connected.",
     }
     result = {"rows": ordered, "summary": summary,
               "timeline": build_timeline(ordered, as_of=as_of)}
@@ -364,44 +383,75 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
 
 
 def build_timeline(rows, *, as_of=None):
-    """Supply-side timeline per key; explicitly marks forecast as not connected."""
     now = _aware(as_of) if as_of else None
     if now is None:
         now = datetime.now(timezone.utc)
     events = []
     for row in rows:
         stages = []
-        for field, node in (("inventory_qty", "on_hand"),
-                            ("in_production_qty", "in_production"),
-                            ("in_transit_qty", "in_transit"),
-                            ("open_po_qty", "po_open"),
-                            ("po_completed_assumed_qty", "po_completed_assumed")):
-            if row.get(field) is not None:
-                stages.append({"node": node, "qty": row[field],
-                               "date": row.get("available_date"),
-                               "date_confidence": row.get("date_confidence")})
-        alerts = list(row.get("alerts") or [])
-        date = _aware(row.get("available_date"))
-        if date and date < now:
-            alerts.append("date_in_past")
+        alerts = set()
+        for fragment in row.get("stage_quantities") or ():
+            date = _aware(fragment.get("date"))
+            if date and date < now:
+                alerts.add("date_in_past")
+            stages.append({"node": fragment["stage"], "qty": fragment["qty"],
+                           "date": fragment.get("date"),
+                           "date_kind": fragment.get("date_kind"),
+                           "date_confidence": fragment.get("date_confidence")})
         events.append({
             "item_code": row["item_code"], "uom": row["uom"],
             "warehouse": row["warehouse"], "purpose": row["purpose"],
-            "branch": row["branch"], "stages": stages,
-            "next_node": row["next_node"], "alerts": sorted(set(alerts)),
+            "branch": row["branch"], "scope": row["scope"],
+            "stages": stages, "next_node": row["next_node"],
+            "alerts": sorted(alerts),
             "unknown_reasons": row["unknown_reasons"],
             "forecast_connected": False,
             "note": "forecast not connected; no suggested quantity",
         })
-    return {"as_of": (now.isoformat() if now else None), "rows": events,
+    return {"as_of": now.isoformat() if now else None, "rows": events,
             "forecast_connected": False}
+
+
+def assess_freshness(rows, *, as_of, max_age_seconds):
+    now = _aware(as_of)
+    if now is None:
+        raise ValueError("as_of must be an aware timestamp")
+    if isinstance(max_age_seconds, bool) or not isinstance(max_age_seconds, int) \
+            or max_age_seconds <= 0:
+        raise ValueError("max_age_seconds must be a positive integer")
+    out = []
+    for row in rows:
+        problems = []
+        for source in row.get("sources") or ():
+            observed = _aware(source.get("observed_at"))
+            if observed is None:
+                problems.append({"layer": source.get("layer"),
+                                 "status": "unknown"})
+            elif observed > now:
+                problems.append({"layer": source.get("layer"),
+                                 "status": "future"})
+            elif (now - observed).total_seconds() > max_age_seconds:
+                problems.append({"layer": source.get("layer"),
+                                 "status": "stale"})
+        out.append({"item_code": row["item_code"], "uom": row["uom"],
+                    "warehouse": row["warehouse"], "purpose": row["purpose"],
+                    "problems": problems, "fresh": not problems})
+    return {"rows": out,
+            "summary": {"rows": len(out),
+                        "fresh": sum(1 for r in out if r["fresh"]),
+                        "stale": sum(1 for r in out
+                                     if any(p["status"] == "stale" for p in r["problems"])),
+                        "unknown": sum(1 for r in out
+                                       if any(p["status"] == "unknown" for p in r["problems"])),
+                        "future": sum(1 for r in out
+                                      if any(p["status"] == "future" for p in r["problems"]))}}
 
 
 def filter_rows(rows, *, scope=None, branch=None, purpose=None,
                 warehouse=None):
     out = []
     for row in rows:
-        if scope and row.get("scope", "in_house") != scope:
+        if scope and row.get("scope") != scope:
             continue
         if branch and row["branch"] != branch:
             continue
