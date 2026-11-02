@@ -29,9 +29,9 @@ def manifest(lines=None, po="PO-1", source="audit", status="0",
 
 
 def status(po="PO-1", raw="0", found=True, source_status="known",
-           is_voided=False):
+           is_voided=False, as_of=None):
     return PoStatus(po_code=po, found=found, raw_status=raw, is_voided=is_voided,
-                    source_status=source_status)
+                    as_of=as_of, source_status=source_status)
 
 
 def rows_of(result, stage=None):
@@ -93,6 +93,16 @@ class ClosureTests(unittest.TestCase):
         self.assertEqual(result["summary"]["outcomes"]["rule_excluded"], 1)
 
 
+class UnknownOutcomeTests(unittest.TestCase):
+    def test_unrecognised_outcome_is_unclosed_not_supply(self):
+        result = build_supply_position(
+            [manifest([line(outcome="weird_status")])], [status(raw="0")])
+        self.assertEqual(rows_of(result, "po_open"), [])
+        row = rows_of(result, "dn_goods_unclosed")[0]
+        self.assertEqual(row["reason"], "unknown_outcome")
+        self.assertEqual(row["qty_status"], "unknown")
+
+
 class LegacyTests(unittest.TestCase):
     def test_legacy_manifest_is_not_fabricated_and_does_not_block(self):
         result = build_supply_position([
@@ -125,7 +135,8 @@ class SnapshotDedupeTests(unittest.TestCase):
             [manifest([line()], status="3", completed_at="2026-11-02T12:00:00+00:00")],
             [status(raw="3")],
             [InventoryPosition(sku="SKU-1", warehouse="WH-1", uom="个",
-                               available=0, as_of="2026-11-01T00:00:00+00:00",
+                               available=0, branch="CENTRADE",
+                               as_of="2026-11-01T00:00:00+00:00",
                                window_start="2026-11-01T00:00:00+00:00",
                                window_end="2026-11-01T23:59:59+00:00")])
         row = rows_of(result, "po_completed")[0]
@@ -141,6 +152,32 @@ class SnapshotDedupeTests(unittest.TestCase):
         self.assertIsNone(on_hand["qty"])
         self.assertIn("inventory_source_unavailable", on_hand["flags"])
         self.assertTrue(result["summary"]["inventory_snapshot_available"] is False)
+
+
+class SnapshotTimeTests(unittest.TestCase):
+    def test_status_as_of_is_used_when_completed_at_missing(self):
+        result = build_supply_position(
+            [manifest([line()], status="3")],
+            [status(raw="3", as_of="2026-11-02T12:00:00+00:00")],
+            [InventoryPosition(sku="SKU-1", warehouse="WH-1", uom="个",
+                               available=0, branch="CENTRADE",
+                               as_of="2026-11-01T00:00:00+00:00",
+                               window_start="2026-11-01T00:00:00+00:00",
+                               window_end="2026-11-01T23:59:59+00:00")])
+        row = rows_of(result, "po_completed")[0]
+        self.assertIn("post_snapshot_completion", row["flags"])
+
+    def test_unbridged_completion_keeps_net_unknown(self):
+        result = build_supply_position(
+            [manifest([line()])], [status(raw="3")],
+            [InventoryPosition(sku="SKU-1", warehouse="WH-1", uom="个",
+                               available=0, branch="CENTRADE",
+                               as_of="2026-11-01T00:00:00+00:00",
+                               window_start="2026-11-01T00:00:00+00:00",
+                               window_end="2026-11-01T23:59:59+00:00")])
+        net = result["net"]["rows"][0]
+        self.assertEqual(net["qty_status"], "unknown")
+        self.assertGreaterEqual(net["unknown_rows"], 1)
 
 
 class FilterAndNetTests(unittest.TestCase):

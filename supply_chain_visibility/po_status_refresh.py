@@ -49,7 +49,25 @@ def refresh_po_statuses(codes, query_many, *, batch_size=MAX_BATCH,
     next_index = len(batches)
     for index in range(max(0, start_index), len(batches)):
         batch = batches[index]
-        response = query_many(batch) or {}
+        try:
+            response = query_many(batch) or {}
+        except Exception as exc:  # noqa: BLE001 - never turn a batch into 500
+            for code in batch:
+                statuses[code] = _status(None, "source_error", "source_error")
+                unqueried[code] = "source_error"
+            for rest in batches[index + 1:]:
+                for code in rest:
+                    statuses[code] = _status(None, "source_error", "not_queried")
+                    unqueried[code] = "source_error"
+            return {
+                "statuses": statuses, "unqueried": unqueried,
+                "requested": len(unique), "returned": len(statuses),
+                "next_index": index, "resume_at": index,
+                "exhausted": False, "partial": True,
+                "termination_reason": "source_error",
+                "error": str(exc)[:200],
+                "note": "unqueried codes are explicit; partial is never treated as success",
+            }
         results = response.get("results") or {}
         for code in batch:
             entry = results.get(code)
@@ -70,12 +88,11 @@ def refresh_po_statuses(codes, query_many, *, batch_size=MAX_BATCH,
         if response.get("exhausted") or response.get("termination_reason") == "rate_limited":
             exhausted = True
             termination = response.get("termination_reason") or "rate_limited"
-            next_index = index + 1
+            next_index = index
             for rest in batches[index + 1:]:
                 for code in rest:
                     statuses[code] = _status(None, "rate_limited", "not_queried")
                     unqueried[code] = "rate_limited"
-            next_index = len(batches)
             break
         if response.get("partial") and response.get("termination_reason") not in (None, "", "completed"):
             termination = response.get("termination_reason")

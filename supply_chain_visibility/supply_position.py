@@ -15,7 +15,7 @@ Rules (batch 2):
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Iterable, Optional
 
@@ -142,7 +142,7 @@ def _row(*, item_code, uom, warehouse, stage, qty, qty_status, source_layer,
     }
 
 
-def _status_stage(status: PoStatus, fallback):
+def _status_stage(status: PoStatus):
     if status.source_status in ("source_error", "not_queried"):
         return "po_status_unknown", "status_" + status.source_status
     if not status.found:
@@ -195,9 +195,10 @@ def build_supply_position(manifests: Iterable[PoManifest],
                               raw_status=manifest.status,
                               source_status=("known" if manifest.status not in (None, "")
                                              else "not_queried"))
-        stage, reason = _status_stage(status, manifest.status)
+        stage, reason = _status_stage(status)
         in_snapshot = manifest.po_code in included_po_codes
-        after_snapshot = _completed_after_snapshot(manifest, windows)
+        after_snapshot = _completed_after_snapshot(
+            manifest, status.as_of or manifest.as_of, windows)
 
         for line in manifest.lines:
             qty = _decimal(line.contribution_qty if line.contribution_qty is not None
@@ -207,6 +208,14 @@ def build_supply_position(manifests: Iterable[PoManifest],
                         scope=manifest.scope, branch=manifest.branch,
                         po_code=manifest.po_code, dn_item=line.dn_item)
 
+            if line.outcome not in OUTCOMES:
+                rows.append(_row(stage="dn_goods_unclosed", qty=None,
+                                 qty_status="unknown", source_layer="po_manifest",
+                                 reason=line.reason or "unknown_outcome",
+                                 flags=("dn_goods_not_closed", "unknown_outcome"),
+                                 **base))
+                stage_counts["dn_goods_unclosed"] += 1
+                continue
             if line.outcome in UNCLOSED_OUTCOMES:
                 rows.append(_row(stage="dn_goods_unclosed", qty=None,
                                  qty_status="unknown", source_layer="po_manifest",
@@ -314,12 +323,29 @@ def build_supply_position(manifests: Iterable[PoManifest],
             "net": net_position(rows, demand_rows)}
 
 
-def _completed_after_snapshot(manifest, windows):
-    if not manifest.completed_at or not windows:
+def _parse_instant(value):
+    from datetime import datetime
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        try:
+            parsed = datetime.fromisoformat(_text(value).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed
+
+
+def _completed_after_snapshot(manifest, status_as_of, windows):
+    completed = _parse_instant(manifest.completed_at or status_as_of)
+    if completed is None:
         return False
-    completed = _text(manifest.completed_at)
-    ends = [end for (_, end, _as_of) in windows if end]
-    return any(completed > _text(end) for end in ends)
+    ends = [_parse_instant(end) for (_, end, _as_of) in windows if end]
+    ends = [end for end in ends if end is not None]
+    return any(completed > end for end in ends)
 
 
 def filter_positions(rows, *, scope=None, branch=None, warehouse=None):
@@ -349,6 +375,8 @@ def net_position(rows, demand_rows=()):
         bucket = keys[key]
         if "post_snapshot_completion" in row["flags"]:
             bucket["post_snapshot"] += 1
+        if {"completed_not_in_snapshot", "inventory_source_unavailable"} & set(row["flags"]):
+            bucket["unknown"] += 1
         qty = _decimal(row["qty"])
         if row["qty_status"] == "unknown":
             bucket["unknown"] += 1

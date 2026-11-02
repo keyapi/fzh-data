@@ -24,6 +24,8 @@
 - `EN_API/fulfillment_query.py` + `EN_API/fulfillment/` —— 给通途 SKU 追「SO→PP→WO→JC→DN」，多输入/阶段/齐套/异常，**JSON 为权威输出**。
 - `EN_API/item_shipment_status.py` —— 单物料引擎（含 fixture 断言 + 单测，**不要整体搬迁**）。
 - `EN_API/docs/reference/en-order-to-shipment-chain.md` —— 链路导航。
+- `supply_chain_visibility/supply_position.py` —— 第二批 supply_position 消费表（创建清单×PO 状态，完成只关 included、部分不分摊、legacy 不伪造、快照防双计、A/B/C/D 构件）。
+- `supply_chain_visibility/po_status_refresh.py` —— PO 状态批量刷新（去重、10/批、断点、未查询显式）。
 
 ## 关键事实（先读，避免重复踩坑）
 

@@ -76,6 +76,33 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual(result["unqueried"]["PO-2"], "missing_in_response")
         self.assertTrue(result["partial"])
 
+    def test_provider_exception_is_not_a_500_and_marks_unqueried(self):
+        def query(batch):
+            raise RuntimeError("gateway down")
+
+        result = refresh_po_statuses(["PO-1", "PO-2"], query)
+        self.assertTrue(result["partial"])
+        self.assertEqual(result["termination_reason"], "source_error")
+        for code in ("PO-1", "PO-2"):
+            self.assertEqual(result["statuses"][code]["source_status"],
+                             "source_error")
+            self.assertIn(code, result["unqueried"])
+        self.assertEqual(result["resume_at"], 0)
+
+    def test_rate_limit_resumes_at_failed_batch(self):
+        codes = ["PO-%02d" % index for index in range(25)]
+
+        def query(batch):
+            if batch[0] == "PO-10":
+                return {"results": {code: {"reason": "rate_limited"}
+                                    for code in batch},
+                        "termination_reason": "rate_limited"}
+            return {"results": {code: {"found": True, "raw_status": "0"}
+                                for code in batch}}
+
+        result = refresh_po_statuses(codes, query)
+        self.assertEqual(result["resume_at"], 1)
+
     def test_source_error_is_not_known(self):
         def query(batch):
             return {"results": {batch[0]: {"reason": "source_error"}}}

@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections import defaultdict
 import os
 import shutil
 import sys
@@ -66,7 +67,8 @@ SUPPLY_POSITION_SCHEMA = "supply-position/v1"
 
 
 def supply_position_from_payloads(manifests_payload, statuses_payload=None,
-                                  inventory_payload=None, demand_payload=None):
+                                  inventory_payload=None, demand_payload=None,
+                                  bridge_rows=None):
     """Map local JSON payloads to the supply_positions builder (pure)."""
     def _rows(payload, key):
         if payload is None:
@@ -104,11 +106,20 @@ def supply_position_from_payloads(manifests_payload, statuses_payload=None,
         is_voided=bool(row.get("is_voided")), as_of=row.get("as_of"),
         source_status=str(row.get("source_status") or "known"))
         for row in _rows(statuses_payload, "statuses")]
+    bridge_includes = defaultdict(set)
+    for row in bridge_rows or ():
+        if row.get("receipt_inclusion_status") == "included" and row.get("po_code"):
+            bridge_includes[(str(row.get("sku") or ""),
+                             str(row.get("warehouse") or ""))].add(
+                str(row["po_code"]))
     inventory = [SPPInventory(
         sku=str(row.get("sku") or ""), warehouse=str(row.get("warehouse") or ""),
         uom=row.get("uom"), available=row.get("available"), as_of=row.get("as_of"),
         window_start=row.get("window_start"), window_end=row.get("window_end"),
-        includes_po_codes=tuple(row.get("includes_po_codes") or ()),
+        includes_po_codes=tuple(sorted(
+            set(row.get("includes_po_codes") or ())
+            | bridge_includes.get((str(row.get("sku") or ""),
+                                   str(row.get("warehouse") or "")), set()))),
         source_status=str(row.get("source_status") or "known"),
         scope=str(row.get("scope") or "in_house"),
         branch=str(row.get("branch") or ""), batch_key=str(row.get("batch_key") or ""),
@@ -1237,13 +1248,18 @@ def main(argv=None):
             [_receipt_event(row) for row in bridge_payload.get("receipts") or []],
             collection_windows=windows or None)
         result["inventory_bridge"] = bridge["rows"]
+        result["_bridge_rows_for_position"] = bridge["rows"]
         result["_inventory_bridge_summary"] = bridge["summary"]
         result["_inventory_bridge_coverage"] = bridge_payload.get("coverage")
     supply_payloads = [args.po_manifests_json, args.po_statuses_json,
                        args.inventory_positions_json, args.demand_positions_json]
-    if any(supply_payloads):
+    if not args.po_manifests_json and any(supply_payloads):
+        result["notes"].append(
+            "supply_position skipped: --po-manifests-json is required for other PO inputs")
+    if args.po_manifests_json:
         loaded = [_load_json(path) if path else None for path in supply_payloads]
-        position = supply_position_from_payloads(*loaded)
+        position = supply_position_from_payloads(
+            *loaded, bridge_rows=result.get("_bridge_rows_for_position") or None)
         result["supply_position"] = position["rows"]
         result["supply_position_legacy"] = position["legacy"]
         result["supply_position_net"] = position["net"]["rows"]

@@ -1118,6 +1118,22 @@ class SupplyPositionExportTest(unittest.TestCase):
             self.assertEqual(manifest["datasets"]["supply_position"]["rows"], 2)
             self.assertFalse(manifest["datasets"]["supply_position"]["eligible"])
 
+    def test_bridge_inclusion_marks_po_in_snapshot(self):
+        manifests = {"manifests": [{
+            "po_code": "PO-1", "source": "audit", "status": "0",
+            "warehouse": "WH-1", "lines": [
+                {"dn_item": "I-1", "item_code": "SKU-1", "outcome": "included",
+                 "qty": 5, "uom": "个"}]}]}
+        inventory = {"positions": [{"sku": "SKU-1", "warehouse": "WH-1",
+                                    "uom": "个", "available": 8}]}
+        bridge_rows = [{"sku": "SKU-1", "warehouse": "WH-1", "po_code": "PO-1",
+                        "receipt_inclusion_status": "included"}]
+        result = self.exporter.supply_position_from_payloads(
+            manifests, None, inventory, None, bridge_rows=bridge_rows)
+        stages = [row["stage"] for row in result["rows"]]
+        self.assertIn("po_in_snapshot", stages)
+        self.assertNotIn("po_open", stages)
+
     def test_legacy_manifest_is_listed_not_fabricated(self):
         manifests = {"manifests": [{"po_code": "PO-OLD", "source": "legacy"}]}
         result = self.exporter.supply_position_from_payloads(manifests)
