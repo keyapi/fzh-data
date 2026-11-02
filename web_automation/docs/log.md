@@ -8,6 +8,11 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 
 # 迁移日志
 
+## 2026-11-02
+
+- **新增能力 `tongtu.fba-sales.export`**：`legacy-compatible/tongtu_fba_sales_export.py` 导出通途「FBA销量分析报表」（`statisticsreport/fbasalesanalysis/index.htm`）。流程：付款时间=`自定义`（填整月起止 `statisticsTimeFrom/To`）→ 亚马逊账号=全部（默认）→ `查询` → 等 → `导出`（`a[onclick='exportExcelWithPic()']`，`expect_download` 取 zip）。产物 `downloads/通途FBA销量分析报表导出_YYYYMM_<ts>.zip`（内含 25 列 xlsx，表头第 1 行）。已注册 `capabilities.yaml` + 能力矩阵。实测 202610：116 行、销量 1611。
+- **注意**：该页 `#timeRange` 是自定义下拉（选项：最近7/15/30/60/90天、自定义），**不是** My97 直接输入；点 `#timeRange_text` 后点文本「自定义」才显示起止框。亚马逊账号默认=全部，无需再点（点「全部」反而可能命中隐藏元素）。
+
 ## 2026-10-22
 
 - **修复（通途登录密码框选择器）**：`legacy-compatible/tongtu_login_ocr.py` 的 `SELECTORS["password"]` 由 `input[name="password"]` 改为 `input[type="password"]`。登录页现有两个密码字段——可见 `input[type=password]#password` 与隐藏 `input[name=password]#passwordMd5`；按 name 会命中隐藏框，`fill` 等到 15s 超时（日志 `resolved to hidden <input ... id="passwordMd5">`），导致会话过期后自动登录失败、订单详情导出 `BLOCKED`。改按 type 后复导 2026-09 成功。
