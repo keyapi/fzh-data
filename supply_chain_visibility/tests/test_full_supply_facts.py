@@ -114,6 +114,74 @@ class WaybillTests(unittest.TestCase):
                       row["unknown_reasons"])
 
 
+class StrictUnknownTests(unittest.TestCase):
+    def test_known_plus_unknown_so_nulls_total(self):
+        result = build_full_supply_facts(position(), so_balances=[
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "branch": "CENTRADE", "so_open_qty": 5, "source_status": "known"},
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "branch": "CENTRADE", "so_open_qty": None,
+             "source_status": "unavailable"}])
+        row = row_of(result)
+        self.assertIsNone(row["so_open_qty"])
+        self.assertIn("so_open_unknown", row["unknown_reasons"])
+
+    def test_multiple_inventory_snapshots_are_not_summed(self):
+        result = build_full_supply_facts(position(), inventory=[
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "branch": "CENTRADE", "qty": 8,
+             "as_of": "2026-11-01T00:00:00+00:00"},
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "branch": "CENTRADE", "qty": 6,
+             "as_of": "2026-11-02T00:00:00+00:00"}])
+        row = row_of(result)
+        self.assertIsNone(row["inventory_qty"])
+        self.assertIn("multiple_inventory_snapshots", row["unknown_reasons"])
+
+    def test_conflicting_dates_are_marked_unknown(self):
+        result = build_full_supply_facts(position(), production=[
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "branch": "CENTRADE", "qty": 1, "evidence_status": "proven",
+             "available_date": "2026-11-01T00:00:00+00:00"},
+            {"item_code": "SKU-1", "uom": "个", "warehouse": "WH-1",
+             "branch": "CENTRADE", "qty": 1, "evidence_status": "proven",
+             "available_date": "2026-11-03T00:00:00+00:00"}])
+        row = row_of(result)
+        self.assertIsNone(row["available_date"])
+        self.assertEqual(row["date_confidence"], "unknown")
+        self.assertIn("date_conflict", row["unknown_reasons"])
+
+    def test_duplicate_waybill_same_qty_is_replay(self):
+        events = [
+            {"delivery_note": "DN-1", "item_code": "SKU-1", "uom": "个",
+             "warehouse": "WH-1", "branch": "CENTRADE", "qty": 10,
+             "waybill": "W1"},
+            {"delivery_note": "DN-1", "item_code": "SKU-1", "uom": "个",
+             "warehouse": "WH-1", "branch": "CENTRADE", "qty": 10,
+             "waybill": "W1"}]
+        collapsed = collapse_waybills(events)
+        self.assertEqual(len(collapsed), 1)
+        self.assertEqual(collapsed[0]["qty"], 10)
+
+    def test_duplicate_waybill_different_qty_is_unknown(self):
+        events = [
+            {"delivery_note": "DN-1", "item_code": "SKU-1", "uom": "个",
+             "warehouse": "WH-1", "branch": "CENTRADE", "qty": 10,
+             "waybill": "W1"},
+            {"delivery_note": "DN-1", "item_code": "SKU-1", "uom": "个",
+             "warehouse": "WH-1", "branch": "CENTRADE", "qty": 12,
+             "waybill": "W1"}]
+        collapsed = collapse_waybills(events)
+        self.assertIsNone(collapsed[0]["qty"])
+        self.assertEqual(collapsed[0]["reason"],
+                         "duplicate_waybill_quantity_conflict")
+
+    def test_invalid_timeline_as_of_does_not_crash(self):
+        result = build_full_supply_facts(position(), as_of="not-a-time",
+                                         max_age_seconds=None)
+        self.assertIn("timeline", result)
+
+
 class TimelineAndFilterTests(unittest.TestCase):
     def test_timeline_marks_forecast_not_connected_and_past_date(self):
         result = build_full_supply_facts(position(), inventory=[{

@@ -96,9 +96,20 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
                            "reason": "multi_waybill_allocation_unknown",
                            "waybill_count": len(numbers)})
             out.append(merged)
-        else:
-            for item in items:
-                out.append(dict(item))
+            continue
+        if len(items) == 1:
+            out.append(dict(items[0]))
+            continue
+        quantities = {str(_dec(item.get("qty"))) for item in items}
+        if len(numbers) == 1 and len(quantities) == 1:
+            out.append(dict(items[0]))  # exact replay of one waybill
+            continue
+        merged = dict(items[0])
+        merged.update({
+            "qty": None, "qty_status": "unknown",
+            "reason": ("duplicate_waybill_quantity_conflict"
+                       if numbers else "missing_waybill_duplicate_events")})
+        out.append(merged)
     return out
 
 
@@ -149,6 +160,52 @@ def assess_freshness(rows, *, as_of, max_age_seconds):
                                       if any(p["status"] == "future" for p in r["problems"]))}}
 
 
+LAYER_FIELDS = {
+    "dn_po": ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty"),
+    "so_demand": ("so_open_qty",),
+    "production": ("in_production_qty",),
+    "inventory": ("inventory_qty",),
+    "in_transit": ("in_transit_qty",),
+    "receipt": ("received_qty",),
+}
+
+
+def _mark_unknown(row, layer, reason):
+    row["unknown_reasons"].append(reason)
+    row.setdefault("_unknown_layers", set()).add(layer)
+    for field in LAYER_FIELDS.get(layer, ()):
+        row[field] = None
+
+
+def _add_qty(row, field, layer, qty):
+    if qty is None:
+        _mark_unknown(row, layer, "quantity_unknown_" + layer)
+        return
+    if layer in row.get("_unknown_layers", set()):
+        return
+    row[field] = str((_dec(row[field]) or Decimal(0)) + qty)
+
+
+def _record_date(row, date):
+    if _aware(date) is None:
+        return
+    row.setdefault("_dates", []).append(str(date))
+
+
+def _finalize(row):
+    row.pop("_unknown_layers", set())
+    dates = row.pop("_dates", [])
+    if len(set(dates)) > 1:
+        row["available_date"] = None
+        row["date_confidence"] = "unknown"
+        row["unknown_reasons"].append("date_conflict")
+    elif len(dates) == 1:
+        row["available_date"] = dates[0]
+        row["date_confidence"] = "confirmed"
+    row["unknown_reasons"] = sorted(set(row["unknown_reasons"]))
+    row["source_status"] = dict(sorted(row["source_status"].items()))
+
+
 def build_full_supply_facts(position_result: dict, *, so_balances=(),
                             production=(), inventory=(), transit=(),
                             receipts=(), approved_items=(), as_of=None,
@@ -163,7 +220,7 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             row[field] = pos.get(field)
         if any(pos.get(f) is None for f in
                ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty")):
-            row["unknown_reasons"].append("dn_po_quantity_unknown")
+            _mark_unknown(row, "dn_po", "dn_po_quantity_unknown")
         row["sources"].append({"layer": "dn_po", "observed_at": pos.get("as_of")})
         row["source_status"]["dn_po"] = "known"
         rows[key] = row
@@ -175,12 +232,9 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         row = rows.setdefault(key, _row_base(key))
         status = _text(item.get("source_status") or "known")
         qty = _dec(item.get("so_open_qty")) if status == "known" else None
-        if qty is None:
-            _merge_source(row, "so_demand", status, item.get("observed_at"),
-                          "so_open_unknown")
-        else:
-            row["so_open_qty"] = str((_dec(row["so_open_qty"]) or Decimal(0)) + qty)
-            _merge_source(row, "so_demand", "known", item.get("observed_at"))
+        _merge_source(row, "so_demand", status, item.get("observed_at"),
+                      "" if qty is not None else "so_open_unknown")
+        _add_qty(row, "so_open_qty", "so_demand", qty)
 
     for item in production:
         key = _key(item.get("item_code"), item.get("uom"), item.get("warehouse"),
@@ -189,41 +243,46 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         row = rows.setdefault(key, _row_base(key))
         evidence = _text(item.get("evidence_status") or "unknown")
         qty = _dec(item.get("qty"))
-        if evidence != "proven":
-            _merge_source(row, "production", evidence, item.get("observed_at"),
-                          "production_" + (evidence or "unknown"))
-            if qty is not None and evidence == "estimated":
+        if evidence == "estimated":
+            _merge_source(row, "production", evidence, item.get("observed_at"))
+            if qty is not None:
                 row["in_production_estimated_qty"] = str(
                     (_dec(row["in_production_estimated_qty"]) or Decimal(0)) + qty)
             continue
-        if qty is None:
-            _merge_source(row, "production", "unknown", item.get("observed_at"),
-                          "production_qty_unknown")
+        if evidence != "proven":
+            _merge_source(row, "production", evidence, item.get("observed_at"),
+                          "production_" + (evidence or "unknown"))
+            _mark_unknown(row, "production", "production_not_proven")
             continue
-        row["in_production_qty"] = str(
-            (_dec(row["in_production_qty"]) or Decimal(0)) + qty)
         _merge_source(row, "production", "proven", item.get("observed_at"))
-        date = item.get("available_date")
-        if date and _aware(date):
-            row["available_date"] = date
-            row["date_confidence"] = "confirmed"
+        _add_qty(row, "in_production_qty", "production", qty)
+        _record_date(row, item.get("available_date"))
 
+    inventory_by_key = defaultdict(list)
     for item in inventory:
         key = _key(item.get("item_code"), item.get("uom"), item.get("warehouse"),
                    item.get("purpose") or "branch", item.get("tt_sku"),
                    item.get("branch"))
+        inventory_by_key[key].append(item)
+    for key, items in inventory_by_key.items():
         row = rows.setdefault(key, _row_base(key))
-        status = _text(item.get("source_status") or "known")
-        qty = _dec(item.get("qty")) if status == "known" else None
-        if qty is None:
-            _merge_source(row, "inventory", status or "unknown",
-                          item.get("observed_at"), "inventory_source_" + status)
+        statuses = {_text(item.get("source_status") or "known") for item in items}
+        identities = {(_text(item.get("as_of")), str(_dec(item.get("qty"))))
+                      for item in items}
+        if statuses != {"known"}:
+            _merge_source(row, "inventory", "unavailable",
+                          items[0].get("observed_at"),
+                          "inventory_source_unavailable")
+            _mark_unknown(row, "inventory", "inventory_source_unavailable")
+        elif len(identities) > 1:
+            _merge_source(row, "inventory", "conflict", items[0].get("as_of"),
+                          "multiple_inventory_snapshots")
+            _mark_unknown(row, "inventory", "multiple_inventory_snapshots")
         else:
-            row["inventory_qty"] = str(qty)
+            item = items[0]
             _merge_source(row, "inventory", "known", item.get("as_of"))
-            if item.get("as_of") and _aware(item.get("as_of")):
-                row["available_date"] = item["as_of"]
-                row["date_confidence"] = "confirmed"
+            _add_qty(row, "inventory_qty", "inventory", _dec(item.get("qty")))
+            _record_date(row, item.get("as_of"))
 
     for event in collapse_waybills(transit):
         key = _key(event.get("item_code"), event.get("uom"),
@@ -232,12 +291,14 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         row = rows.setdefault(key, _row_base(key))
         qty = _dec(event.get("qty"))
         if qty is None:
+            reason = event.get("reason") or "in_transit_unknown"
             _merge_source(row, "in_transit", "unknown", event.get("observed_at"),
-                          event.get("reason") or "in_transit_unknown")
+                          reason)
+            _mark_unknown(row, "in_transit", reason)
         else:
-            row["in_transit_qty"] = str(
-                (_dec(row["in_transit_qty"]) or Decimal(0)) + qty)
             _merge_source(row, "in_transit", "known", event.get("observed_at"))
+            _add_qty(row, "in_transit_qty", "in_transit", qty)
+            _record_date(row, event.get("available_date"))
 
     for receipt in receipts:
         key = _key(receipt.get("item_code"), receipt.get("uom"),
@@ -247,14 +308,15 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         evidence, signed = _pod_evidence(receipt)
         qty = _dec(receipt.get("qty"))
         if evidence == "proven" and qty is not None:
-            row["received_qty"] = str(
-                (_dec(row["received_qty"]) or Decimal(0)) + qty)
-            row["available_date"] = signed.isoformat()
-            row["date_confidence"] = "confirmed"
             _merge_source(row, "receipt", "proven", receipt.get("observed_at"))
+            _add_qty(row, "received_qty", "receipt", qty)
+            _record_date(row, signed.isoformat())
         else:
+            reason = ("receipt_qty_unknown" if evidence == "proven"
+                      else "receipt_" + evidence)
             _merge_source(row, "receipt", evidence, receipt.get("observed_at"),
-                          "receipt_" + evidence)
+                          reason)
+            _mark_unknown(row, "receipt", reason)
 
     for code in approved_items or ():
         matched = any(row["item_code"] == _text(code) for row in rows.values())
@@ -265,7 +327,7 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             rows[_key(code, "", "", "unknown", None, "")] = row
 
     for row in rows.values():
-        row["unknown_reasons"] = sorted(set(row["unknown_reasons"]))
+        _finalize(row)
         if row["unknown_reasons"]:
             row["next_node"] = "manual_review_unknown"
         elif row["in_transit_qty"]:
@@ -303,7 +365,9 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
 
 def build_timeline(rows, *, as_of=None):
     """Supply-side timeline per key; explicitly marks forecast as not connected."""
-    now = _aware(as_of) if as_of else datetime.now(timezone.utc)
+    now = _aware(as_of) if as_of else None
+    if now is None:
+        now = datetime.now(timezone.utc)
     events = []
     for row in rows:
         stages = []
