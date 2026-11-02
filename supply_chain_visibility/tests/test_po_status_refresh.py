@@ -103,6 +103,20 @@ class RefreshTests(unittest.TestCase):
         result = refresh_po_statuses(codes, query)
         self.assertEqual(result["resume_at"], 1)
 
+    def test_provenance_is_passed_through(self):
+        def query(batch):
+            return {"results": {batch[0]: {
+                "found": True, "status": "3", "is_voided": False,
+                "observed_at": "2026-11-02T00:00:00+00:00",
+                "cache_generated_at": "2026-11-02T00:00:00+00:00",
+                "cached": False}}}
+
+        result = refresh_po_statuses(["PO-1"], query)
+        entry = result["statuses"]["PO-1"]
+        self.assertEqual(entry["observed_at"], "2026-11-02T00:00:00+00:00")
+        self.assertFalse(entry["cached"])
+        self.assertEqual(entry["raw_status"], "3")
+
     def test_source_error_is_not_known(self):
         def query(batch):
             return {"results": {batch[0]: {"reason": "source_error"}}}

@@ -27,13 +27,20 @@ def dedupe_po_codes(item_to_po):
 
 
 def _status(entry, reason, source_status):
-    return {
-        "found": bool((entry or {}).get("found")) and source_status == "known",
-        "raw_status": (entry or {}).get("raw_status"),
-        "is_voided": bool((entry or {}).get("is_voided")),
+    entry = entry or {}
+    result = {
+        "found": bool(entry.get("found")) and source_status == "known",
+        "raw_status": entry.get("raw_status", entry.get("status")),
+        "is_voided": bool(entry.get("is_voided")),
         "source_status": source_status,
         "reason": reason,
     }
+    # Provenance must survive the refresh; never synthesize a query time.
+    for key in ("observed_at", "cache_generated_at", "cache_age_seconds",
+                "cached", "identity", "raw_code", "error"):
+        if entry.get(key) is not None:
+            result[key] = entry[key]
+    return result
 
 
 def refresh_po_statuses(codes, query_many, *, batch_size=MAX_BATCH,
