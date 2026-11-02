@@ -94,13 +94,17 @@ import datetime
 import hashlib
 import json
 import re
-import shutil
 from pathlib import Path
 
 import pandas as pd
 
 RULE_VERSION = "C-v14-2026-10-30"
-AS_OF = "2026-10-28"
+BASELINE_DATE = "2026-10-28"
+BASELINE_SOURCE_SHA256 = {
+    "stock": "2f24e7401d30a0e15313bd3288b9fe015a9b39053436c5060b75421b865dbce7",
+    "cg": "20fbfd45d3483fdc84fb052ecab8457c83122cab8f6ed32f7fac9ad40d0d246e",
+    "b": "cd629de18d5417f03f70a36b819e6ba9ef605d09d33d40c1409b2a50833483b9",
+}
 UOM_VERSION = "UOM-CANONICAL-2026-10-29"
 
 COVER_RE = re.compile(r"^(.*)-cover\d*$", re.I)
@@ -129,6 +133,17 @@ BUCKET_BASELINE = {
     "皮壳无活跃EN": (254, 1192.0),
 }
 SRC_ROWS, SRC_QTY = 5317, 10360448.0
+
+HISTORICAL_FIXTURE_CHECKS = {
+    "源行数/数值和", "254 行逐行回指", "254 行数值和",
+    "254 补证(皮壳/半成品/双形态)", "254 拆包组装", "254 组件不全(不阻塞)",
+    "C13 套件拆解", "254 零库存忽略", "骨架 599 保留", "TJ# 套件按套单列",
+    "星球组 1:1", "C8-2 254 桥可回放", "C8-3 十键回放",
+    "15 键门禁",
+    "C10 CG 汇总行=EN", "C10 分仓明细不累加",
+    "老产品·产品级（distinct product_id）",
+    "老产品·行级（事实层）", "老产品·行级（供给层）",
+}
 
 # v5 冻结基线（v6 必须原样保留的既有结论）
 V5_BASELINE = {
@@ -267,6 +282,142 @@ def fetch_bundles(env: dict, base: str, cache: Path | None = None,
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(out, ensure_ascii=False, indent=0), encoding="utf-8")
     return {k: [tuple(x) for x in v] for k, v in out.items()}
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description="通途库存 → A337 角色/形态/仓池/UOM 归并 v14（只读）")
+    b = "D:/Work/fzh-order-store"
+    ap.add_argument("--a-final", default=f"{b}/analysis/SKU活跃宇宙_2026-10-29_FINAL.xlsx")
+    ap.add_argument("--stock", default=f"{b}/en_stock.parquet")
+    ap.add_argument("--date", default=None, help="快照日期；缺省取 stock 文件中最新日期")
+    ap.add_argument("--sku-map", default=f"{b}/sku_map.tsv")
+    ap.add_argument("--customer-codes", default=f"{b}/analysis/en_item_customer_codes.csv")
+    ap.add_argument("--overrides", default=f"{b}/analysis/sku_mapping_overrides_2026-10-29.csv")
+    ap.add_argument("--non-product", default=f"{b}/non_product_skus.csv")
+    ap.add_argument("--warehouse-scope", default=f"{b}/warehouse_scope.csv")
+    ap.add_argument("--uom-cache", default=f"{b}/en-demand-v1/canonical/item_uom_cache.parquet")
+    ap.add_argument("--en-env", default="D:/Work/赛狐/Cursor/EN_API/.env")
+    ap.add_argument("--en-base", default="https://erpnext.vilavi.cn")
+    ap.add_argument("--b-attribution",
+                    default=f"{b}/analysis/仓库归属_A337_v6r10_2026-10-30.xlsx")
+    ap.add_argument("--cg-alias-zip",
+                    default=f"{b}/analysis/商品导出_20261030_1626.zip")
+    ap.add_argument("--bundle-cache",
+                    default=f"{b}/analysis/en_product_bundles_2026-10-30.json")
+    ap.add_argument("--refresh-bundles", action="store_true")
+    ap.add_argument("--cg-cache", help="读取指定 CG Parquet；给定后不访问 CG REST endpoint")
+    ap.add_argument("--out-cg-cache", default=None)
+    ap.add_argument("--out-xlsx", default=None)
+    ap.add_argument("--out-report", default=None)
+    ap.add_argument("--run-mode", choices=("baseline", "refresh"), default="refresh")
+    return ap
+
+
+def filter_stock_snapshot(stock: pd.DataFrame, snapshot_date: str) -> pd.DataFrame:
+    d = stock.reset_index(drop=True).copy()
+    d["src_row"] = d.index + 1
+    dates = pd.to_datetime(d["snapshot_date"]).dt.date.astype(str)
+    return d[dates == snapshot_date].copy()
+
+
+def configure_output_paths(args: argparse.Namespace) -> None:
+    out_base = "D:/Work/fzh-order-store/analysis"
+    mode = args.run_mode
+    stem = f"通途库存_A337_v14_{mode}_{args.date}"
+    args.out_xlsx = args.out_xlsx or f"{out_base}/{stem}.xlsx"
+    args.out_report = args.out_report or f"{out_base}/{stem}_报告.md"
+    args.out_cg_cache = args.out_cg_cache or f"{out_base}/cg_stock_latest_{args.date}_v14.parquet"
+
+
+def load_cg_snapshot(cache_path: str | None, env: dict, base: str) -> pd.DataFrame:
+    if cache_path:
+        return pd.read_parquet(cache_path)
+    return fetch_cg_stock(env, base)
+
+
+def persist_cg_snapshot(frame: pd.DataFrame, output_path: str | Path,
+                        input_path: str | Path | None = None) -> Path:
+    output = Path(output_path)
+    if input_path is not None and Path(input_path).resolve() == output.resolve():
+        return output
+    output.parent.mkdir(parents=True, exist_ok=True)
+    frame.to_parquet(output, index=False)
+    return output
+
+
+def reconcile_buckets(facts: pd.DataFrame, run_mode: str) -> pd.DataFrame:
+    recon = (facts.groupby("bucket").agg(行数=("sku", "size"), 数值和=("available", "sum"))
+             .reindex(list(BUCKET_BASELINE)).reset_index())
+    recon[["行数", "数值和"]] = recon[["行数", "数值和"]].fillna(0)
+    recon["行数"] = recon["行数"].astype(int)
+    if run_mode == "baseline":
+        recon["基线行数"] = [BUCKET_BASELINE[b][0] for b in recon["bucket"]]
+        recon["基线数值和"] = [BUCKET_BASELINE[b][1] for b in recon["bucket"]]
+        recon["行数差"] = recon["行数"] - recon["基线行数"]
+        recon["数值差"] = recon["数值和"] - recon["基线数值和"]
+        baseline_rows, baseline_qty = SRC_ROWS, SRC_QTY
+    else:
+        recon["基线行数"] = pd.NA
+        recon["基线数值和"] = pd.NA
+        baseline_rows, baseline_qty = int(len(facts)), float(facts["available"].sum())
+        recon["行数差"] = 0
+        recon["数值差"] = 0.0
+    total = {"bucket": "合计", "行数": int(recon["行数"].sum()),
+             "数值和": float(recon["数值和"].sum()), "基线行数": baseline_rows,
+             "基线数值和": baseline_qty,
+             "行数差": int(recon["行数"].sum()) - baseline_rows,
+             "数值差": float(recon["数值和"].sum()) - baseline_qty}
+    result = pd.concat([recon, pd.DataFrame([total])], ignore_index=True)
+    if total["行数差"] != 0 or abs(total["数值差"]) > 1e-6:
+        raise SystemExit(f"六桶对账不平：{total}")
+    if run_mode == "baseline" and ((recon["行数差"] != 0).any()
+                                   or (recon["数值差"].abs() > 1e-6).any()):
+        raise SystemExit(f"六桶冻结基线不平：{recon.to_dict('records')}")
+    return result
+
+
+def format_baseline_value(value) -> str:
+    return "—" if pd.isna(value) else f"{value:,.0f}"
+
+
+def check_status(passed) -> str:
+    if passed == "not_applicable_historical_fixture":
+        return "not_applicable_historical_fixture"
+    return "PASS" if bool(passed) else "FAIL"
+
+
+def apply_run_mode_checks(checks: list[tuple], run_mode: str) -> tuple[list[tuple], int]:
+    if run_mode != "refresh":
+        return checks, 0
+    prepared = []
+    skipped = 0
+    for name, result, expected, passed in checks:
+        if name in HISTORICAL_FIXTURE_CHECKS:
+            prepared.append((name, "not_applicable_historical_fixture",
+                             "not_applicable_historical_fixture",
+                             "not_applicable_historical_fixture"))
+            skipped += 1
+        else:
+            prepared.append((name, result, expected, passed))
+    return prepared, skipped
+
+
+def b_attribution_version(path: str | Path) -> str:
+    match = re.search(r"v6r(\d+)", Path(path).stem, re.I)
+    return f"B-v6-r{match.group(1)}" if match else f"B-{Path(path).stem}"
+
+
+def validate_baseline_sources(args: argparse.Namespace) -> None:
+    if args.run_mode != "baseline":
+        return
+    if args.date != BASELINE_DATE:
+        raise SystemExit(f"baseline 模式仅接受 {BASELINE_DATE} 快照；新快照请用 --run-mode refresh")
+    if not args.cg_cache:
+        raise SystemExit("baseline 模式需要显式 --cg-cache 指向冻结的 10/30 CG Parquet")
+    expected = (("stock", args.stock), ("cg", args.cg_cache), ("b", args.b_attribution))
+    for name, path in expected:
+        if not Path(path).is_file() or sha256(Path(path)) != BASELINE_SOURCE_SHA256[name]:
+            raise SystemExit(f"baseline 模式的 {name} 输入不是冻结的 C14 历史源")
 
 
 def load_alias_map(zip_path: Path) -> dict:
@@ -620,31 +771,13 @@ def form_of_suffix(n: str, role: str | None, en: str | None) -> tuple[str, str]:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="通途库存 → A337 角色/形态/仓池/UOM 归并 v6（只读）")
-    B = "D:/Work/fzh-order-store"
-    ap.add_argument("--a-final", default=f"{B}/analysis/SKU活跃宇宙_2026-10-29_FINAL.xlsx")
-    ap.add_argument("--stock", default=f"{B}/en_stock.parquet")
-    ap.add_argument("--date", default=AS_OF)
-    ap.add_argument("--sku-map", default=f"{B}/sku_map.tsv")
-    ap.add_argument("--customer-codes", default=f"{B}/analysis/en_item_customer_codes.csv")
-    ap.add_argument("--overrides", default=f"{B}/analysis/sku_mapping_overrides_2026-10-29.csv")
-    ap.add_argument("--non-product", default=f"{B}/non_product_skus.csv")
-    ap.add_argument("--warehouse-scope", default=f"{B}/warehouse_scope.csv")
-    ap.add_argument("--uom-cache", default=f"{B}/en-demand-v1/canonical/item_uom_cache.parquet")
-    ap.add_argument("--en-env", default="D:/Work/赛狐/Cursor/EN_API/.env")
-    ap.add_argument("--en-base", default="https://erpnext.vilavi.cn")
-    ap.add_argument("--b-attribution",
-                    default=f"{B}/analysis/仓库归属_A337_v6r9_2026-10-30.xlsx")
-    ap.add_argument("--cg-alias-zip",
-                    default=f"{B}/analysis/商品导出_20261030_1626.zip")
-    ap.add_argument("--bundle-cache",
-                    default=f"{B}/analysis/en_product_bundles_2026-10-30.json")
-    ap.add_argument("--refresh-bundles", action="store_true")
-    ap.add_argument("--out-cg-cache",
-                    default=f"{B}/analysis/cg_stock_latest_2026-10-30.parquet")
-    ap.add_argument("--out-xlsx", default=f"{B}/analysis/通途库存_A337_v14_2026-10-30.xlsx")
-    ap.add_argument("--out-report", default=f"{B}/analysis/通途库存_A337_v14_2026-10-30_报告.md")
-    args = ap.parse_args(argv)
+    args = build_parser().parse_args(argv)
+
+    stock_source = pd.read_parquet(args.stock)
+    stock_dates = pd.to_datetime(stock_source["snapshot_date"]).dt.date.astype(str)
+    args.date = args.date or stock_dates.max()
+    validate_baseline_sources(args)
+    configure_output_paths(args)
 
     active, shared_df = load_a(Path(args.a_final))
     overrides = pd.read_csv(args.overrides, dtype=str)
@@ -688,10 +821,8 @@ def main(argv=None) -> int:
     third_party = set(pd.read_csv(args.warehouse_scope, dtype=str)
                       .query("scope == 'third_party_cloud'")["warehouse"].astype(str))
 
-    d = pd.read_parquet(args.stock)
-    d = d.reset_index(drop=True)
-    d["src_row"] = d.index + 1
-    f = d[pd.to_datetime(d["snapshot_date"]).dt.date.astype(str) == args.date].copy()
+    d = stock_source.reset_index(drop=True).copy()
+    f = filter_stock_snapshot(stock_source, args.date)
     if f.empty:
         raise SystemExit(f"{args.stock} 没有 {args.date} 的行")
     f["sku"] = f["sku"].astype(str)
@@ -752,21 +883,8 @@ def main(argv=None) -> int:
     f.loc[(f["exclusion"] == "") & f["en"].isna() & (f["mapping_source_v2"] == "皮壳无活跃EN"),
           "bucket"] = "皮壳无活跃EN"
 
-    # ---------- 六桶对账（冻结） ----------
-    recon = (f.groupby("bucket").agg(行数=("sku", "size"), 数值和=("available", "sum"))
-             .reindex(list(BUCKET_BASELINE)).reset_index())
-    recon["基线行数"] = [BUCKET_BASELINE[b][0] for b in recon["bucket"]]
-    recon["基线数值和"] = [BUCKET_BASELINE[b][1] for b in recon["bucket"]]
-    recon["行数差"] = recon["行数"] - recon["基线行数"]
-    recon["数值差"] = recon["数值和"] - recon["基线数值和"]
-    total_row = {"bucket": "合计", "行数": int(recon["行数"].sum()),
-                 "数值和": float(recon["数值和"].sum()),
-                 "基线行数": SRC_ROWS, "基线数值和": SRC_QTY,
-                 "行数差": int(recon["行数"].sum()) - SRC_ROWS,
-                 "数值差": float(recon["数值和"].sum()) - SRC_QTY}
-    recon = pd.concat([recon, pd.DataFrame([total_row])], ignore_index=True)
-    if total_row["行数差"] != 0 or abs(total_row["数值差"]) > 1e-6:
-        raise SystemExit(f"六桶对账不平：{total_row}")
+    # ---------- 六桶对账：baseline 对历史锚点，refresh 对当前快照总量守恒 ----------
+    recon = reconcile_buckets(f, args.run_mode)
     assert f["bucket"].notna().all()
 
     # ---------- F1/F5 逐行事实层 ----------
@@ -1875,7 +1993,7 @@ def main(argv=None) -> int:
         "whitelist_status": supply_tbl["whitelist_status"],
         "consumption": supply_tbl["consumption"],
         "reason": [top50_reason(r) for _, r in supply_tbl.iterrows()],
-        "as_of": AS_OF,
+        "as_of": args.date,
         "rule_version": RULE_VERSION,
     })
     top50 = base[base["join_class"] == "join_full"].reset_index(drop=True)
@@ -1928,10 +2046,10 @@ def main(argv=None) -> int:
                        & (supply_tbl["uom"] == uom)]
         fact_q = f[(f["product_id"] == pid) & (f["pool"] == pool)]
         src_ok = "—"
-        if st is not None:
+        if st is not None and args.run_mode == "baseline":
             prow = d.iloc[st - 1]
             frow = f[f["src_row"] == st]
-            ok = (str(prow["snapshot_date"])[:10] == AS_OF
+            ok = (str(prow["snapshot_date"])[:10] == args.date
                   and len(frow) == 1
                   and str(frow.iloc[0]["product_id"]) == pid
                   and abs(float(prow["available"]) - float(frow.iloc[0]["available"])) < 1e-9)
@@ -1941,23 +2059,31 @@ def main(argv=None) -> int:
         val_ok = ((exp_val is None and got_val is None)
                   or (exp_val is not None and got_val is not None and abs(exp_val - got_val) < 1e-9))
         cls_ok = got_cls == exp_cls
+        replay_status = ("通过" if (cls_ok and val_ok) else "不通过")
+        if args.run_mode == "refresh":
+            src_ok = "not_applicable_historical_fixture"
+            replay_status = "not_applicable_historical_fixture"
         ten.append({
             "序号": seq, "类型": kind, "product_id": pid, "仓池": pool, "uom": uom,
             "C join_class": got_cls, "期望 join_class": exp_cls,
             "C 可发供给": got_val, "期望可发供给": exp_val,
             "事实行数": int(len(fact_q)),
             "源行回放": ("ST:%d %s" % (st, src_ok)) if st else "无 C 源行",
-            "回放结果": "通过" if (cls_ok and val_ok) else "不通过",
+            "回放结果": replay_status,
             "规则变更": ("v11：半成品皮壳计入（v7 pilot 记为 no_join）" if seq == 3 else ""),
         })
     ten_tbl = pd.DataFrame(ten)
 
     # ---------- C v10：CG 库存池（EN 只读 API；只取 warehouse_id='CG' 汇总行） ----------
-    env = read_env_file(Path(args.en_env))
-    cg_all = fetch_cg_stock(env, args.en_base)
+    needs_en_env = (not args.cg_cache or args.refresh_bundles
+                    or not Path(args.bundle_cache).exists())
+    env = read_env_file(Path(args.en_env)) if needs_en_env else {}
+    cg_all = load_cg_snapshot(args.cg_cache, env, args.en_base)
     cg_cache = Path(args.out_cg_cache)
-    cg_cache.parent.mkdir(parents=True, exist_ok=True)
-    cg_all.to_parquet(cg_cache, index=False)
+    cg_source_cache = Path(args.cg_cache) if args.cg_cache else cg_cache
+    cg_source = "offline_parquet_cache" if args.cg_cache else "EN REST API: Wayfair CG Stock Latest"
+    persist_cg_snapshot(cg_all, cg_cache, args.cg_cache)
+    b_version = b_attribution_version(args.b_attribution)
     b_owner = {}
     if Path(args.b_attribution).exists():
         _bm = pd.read_excel(args.b_attribution, sheet_name="主表")
@@ -1970,8 +2096,8 @@ def main(argv=None) -> int:
                             refresh=args.refresh_bundles)
     cg_pack = build_cg_table(cg_all, idx, cand, set(en_role), b_owner,
                              supply_tbl,
-                             attribution_source="B-r9-local-provisional",
-                             attribution_version=Path(args.b_attribution).stem,
+                             attribution_source=b_version,
+                             attribution_version=b_version,
                              alias_map=alias_map, bundles=bundles)
     cg_tbl, cg_pool_tbl, cg_detail = cg_pack["cg_tbl"], cg_pack["pool"], cg_pack["cg"]
 
@@ -2174,6 +2300,10 @@ def main(argv=None) -> int:
         cg_avail_missing=int((cg_tbl["cg_available_missing"].fillna(0) != 0).sum()),
         cg_in_net=int((cg_tbl["cg_included_in_current_net"]).sum()),
         cg_transfer=int((cg_tbl["transfer_flag"]).sum()),
+        cg_source=cg_source,
+        cg_run_id=sorted(set(cg_tbl["cg_run_id"].astype(str))),
+        cg_snapshot_at=sorted(set(cg_tbl["cg_snapshot_at"].astype(str))),
+        attribution_source=b_version,
     )
 
     # ---------- 15 键门禁回放 ----------
@@ -2368,8 +2498,8 @@ def main(argv=None) -> int:
         ("15 键门禁", f"FAIL={fifteen_fail}", "0", fifteen_fail == 0),
         ("伪 0 全量扫描", f"违例={len(pseudo)}", "0", len(pseudo) == 0),
         ("仓池标准名（5 值）", f"非标准={pool_bad}", "0", pool_bad == 0),
-        ("契约完整性（rule/as_of/uom）", f"{RULE_VERSION} / {AS_OF} / {UOM_VERSION}", "非空",
-         bool(RULE_VERSION and AS_OF and UOM_VERSION)),
+        ("契约完整性（rule/as_of/uom）", f"{RULE_VERSION} / {args.date} / {UOM_VERSION}", "非空",
+         bool(RULE_VERSION and args.date and UOM_VERSION)),
         # ---- P2-1 join_class ----
         ("join_class 可复算", f"不一致={jc_mismatch} / {len(supply_tbl)}", "0",
          jc_mismatch == 0),
@@ -2439,16 +2569,18 @@ def main(argv=None) -> int:
         ("C10 stale=0", f"{summary['cg_stale']}", "0", summary["cg_stale"] == 0),
         ("C10 available_missing 不填0", f"{summary['cg_avail_missing']}", "0",
          summary["cg_avail_missing"] == 0),
-        ("C10 CG 三池合计", f"{summary['cg_pool_rows']}", "行数合计=104",
-         sum(summary["cg_pool_rows"].values()) == 104),
+        ("C10 CG 三池合计", f"{summary['cg_pool_rows']}", f"行数合计={summary['cg_rows']}",
+         sum(summary["cg_pool_rows"].values()) == summary["cg_rows"]),
         ("C10 归属状态可复算",
          f"owner {summary['cg_owner_rows']} / unknown {summary['cg_unknown_owner']} / "
          f"mapped_inactive {summary.get('cg_mapped_inactive', 0)} / "
-         f"unmapped {summary['cg_unmapped']}", "104 / 0 / 0 / 0",
-         summary["cg_owner_rows"] == 104 and summary.get("cg_mapped_inactive", 0) == 0
-         and summary["cg_unknown_owner"] == 0 and summary["cg_unmapped"] == 0),
+         f"unmapped {summary['cg_unmapped']}", f"状态合计={summary['cg_rows']}",
+         summary["cg_owner_rows"] + summary["cg_unknown_owner"]
+         + summary.get("cg_mapped_inactive", 0) + summary["cg_unmapped"] == summary["cg_rows"]),
         ("C10 cg_eligible/pending", f"{summary['cg_eligible']} / {summary['cg_pending']}",
-         "104 / 0", summary["cg_eligible"] == 104 and summary["cg_pending"] == 0),
+         f"行数合计={summary['cg_rows']}，未知归属不 eligible",
+         summary["cg_eligible"] + summary["cg_pending"] == summary["cg_rows"]
+         and summary["cg_eligible"] <= summary["cg_owner_rows"]),
         ("C10 CG 不进当前净额", f"included={summary['cg_in_net']}，transfer={summary['cg_transfer']}",
          "0/0", summary["cg_in_net"] == 0 and summary["cg_transfer"] == 0),
         ("C10 cg_eligible 仅 join_full",
@@ -2473,6 +2605,13 @@ def main(argv=None) -> int:
         ("老产品·默认不补断言（独立）", f"标签值={legacy_labels}；行数差={legacy_row_diff}",
          "1 个标签且行数差=0", legacy_row_diff == 0 and legacy_labels == [LEGACY_NOTE]),
     ]
+    checks, checks_not_applicable = apply_run_mode_checks(checks, args.run_mode)
+    summary["checks_not_applicable_historical_fixture"] = checks_not_applicable
+    summary["cg_source_rows"] = int(len(cg_all))
+    summary["cg_source_stale_rows"] = int(
+        (pd.to_numeric(cg_all["stale"], errors="coerce").fillna(0) != 0).sum())
+    summary["cg_source_available_missing_rows"] = int(
+        (pd.to_numeric(cg_all["available_missing"], errors="coerce").fillna(0) != 0).sum())
 
     # ---------- 输出 ----------
     out = Path(args.out_xlsx)
@@ -2483,7 +2622,7 @@ def main(argv=None) -> int:
         t = recon.copy()
         t["桶"] = t["bucket"]
         t.insert(0, "rule_version", RULE_VERSION)
-        t.insert(1, "as_of", AS_OF)
+        t.insert(1, "as_of", args.date)
         return t[["rule_version", "as_of", "桶", "行数", "数值和", "基线行数", "基线数值和",
                   "行数差", "数值差"]]
 
@@ -2515,22 +2654,24 @@ def main(argv=None) -> int:
         ("warehouse_scope.csv", args.warehouse_scope),
         ("item_uom_cache.parquet", args.uom_cache),
         ("商品导出_20261030_1626.zip(CG别名)", args.cg_alias_zip),
-        ("仓库归属_A337_v6r9_2026-10-30.xlsx(CG归属)", args.b_attribution),
+        ("B warehouse attribution", args.b_attribution),
         ("EN Product Bundle 缓存", args.bundle_cache),
+        ("Wayfair CG Stock Latest snapshot", cg_source_cache),
     ]
     input_sha = [(n, str(p), sha256(Path(p))) for n, p in input_files]
 
     def contract_tbl():
         rows = [
             ("rule_version", RULE_VERSION),
-            ("as_of(快照日)", AS_OF),
+            ("as_of(快照日)", args.date),
             ("snapshot_date(parquet 过滤)", args.date),
             ("UOM 版本", UOM_VERSION),
             ("UOM 唯一依据", "D:/Work/赛狐/Cursor-claude/docs/research/supply-chain/2026-10-20/claude/control/reference/UOM-CANONICAL.md"),
-            ("源行数", SRC_ROWS),
-            ("源 available 数值和", SRC_QTY),
+            ("源行数基线", SRC_ROWS if args.run_mode == "baseline" else "not_applicable_historical_fixture"),
+            ("源 available 数值和基线", SRC_QTY if args.run_mode == "baseline" else "not_applicable_historical_fixture"),
             ("六桶基线", "计入A 2,484/47,332；共享码 53/1,403；A未激活 425/20；"
-                        "规则排除 879/10,308,263；未映射 1,222/2,238；皮壳无活跃EN 254/1,192"),
+                        "规则排除 879/10,308,263；未映射 1,222/2,238；皮壳无活跃EN 254/1,192"
+                        if args.run_mode == "baseline" else "not_applicable_historical_fixture；刷新按当前快照守恒"),
             ("仓池标准名", " / ".join(POOL_CANON)),
             ("身份状态枚举", "唯一 / 共享 / 未映射 / 未激活 / 待核"),
             ("单位状态枚举", "已证 / 默认个 / 冲突 / 套件"),
@@ -2583,7 +2724,7 @@ def main(argv=None) -> int:
                         f"{summary['cg_pending']}"),
             ("C10 CG 边界", "不并入 USNJ/USTX 物理库存；分仓明细不累加；不生成 transfer；"
                           "cg_included_in_current_net=false"),
-            ("C10 归属来源", "attribution_source=B-r9-local-provisional（EN SKU Market Attribution 未建，暂用 B r9 本地）"),
+            ("C10 归属来源", f"attribution_source={b_version}（EN SKU Market Attribution 未建，使用指定 B 归属文件）"),
             ("C11 CG 别名映射", "商品导出_20261030_1626.zip（3 表）SKU+分号别名 → 45,494 键；"
                              "CG SKU 先剥 OLD_，再 sku/alias 匹配；mapping_basis=sku|old_prefix_strip|alias"),
             ("C11 形态要求", "皮壳：required=皮壳或成品（成品可替代）；成品：required=成品（皮壳组件不计）；"
@@ -2608,7 +2749,8 @@ def main(argv=None) -> int:
             rows.append((f"输入 SHA256 · {n}", h))
             rows.append((f"输入路径 · {n}", p))
         for c, got, want, ok in checks:
-            rows.append((f"自检 · {c}", f"{got}（期望 {want}）→ {'PASS' if ok else 'FAIL'}"))
+            status = check_status(ok)
+            rows.append((f"自检 · {c}", f"{got}（期望 {want}）→ {status}"))
         rows.append(("产物", str(out)))
         rows.append(("内容哈希（可重放证据）", content_hash))
         return pd.DataFrame(rows, columns=["项", "内容"])
@@ -2618,7 +2760,9 @@ def main(argv=None) -> int:
             ("产物", "通途库存_A337_v14_2026-10-30.xlsx（v5 + 契约冻结 + 门禁/守恒/状态分层，只读）"),
             ("脚本", "scripts/tongtool_inventory_rollup_a337_v14.py"),
             ("rule_version", RULE_VERSION),
-            ("as_of", f"{AS_OF} 快照（snapshot_date 过滤）"),
+            ("as_of", f"{args.date} 快照（snapshot_date 过滤）"),
+            ("run_mode", args.run_mode),
+            ("历史 fixture 自检未适用数", checks_not_applicable),
             ("UOM 版本", UOM_VERSION),
             ("快照", f"snapshot_date={args.date}，{len(f)} 行，available 数值和 {f['available'].sum():,.0f}"),
             ("口径1·默认个", "一切按个；EN stock_uom 只作参考、不作证明"),
@@ -2770,43 +2914,40 @@ def main(argv=None) -> int:
         set_tbl.to_excel(w, sheet_name="26_套件拆解", index=False)
 
     out_sha = sha256(out)
-    Path(args.out_report).write_text(
-        render(summary, bucket_tbl(), bridge_tbl(), supply_tbl, pc_summary, conflict_tbl,
-               fifteen_tbl, checks, input_sha, scan_tbl, scan_total, scan_wh,
-               uncovered, content_hash, out_sha, args, out,
-               cat_elig=cat_elig, sp=sp, ten_tbl=ten_tbl, top50=top50,
-               cg_pool=cg_pool_tbl, set_tbl=set_tbl),
-        encoding="utf-8")
-    # ---------- P1-2：脚本落盘（仓库 + D:/Work/fzh-order-store/scripts，同 SHA）+ manifest ----------
+    if args.run_mode == "refresh":
+        report_text = render_refresh_report(summary, bucket_tbl(), checks, input_sha,
+                                            content_hash, out_sha, args, out)
+    else:
+        report_text = render(summary, bucket_tbl(), bridge_tbl(), supply_tbl, pc_summary, conflict_tbl,
+                             fifteen_tbl, checks, input_sha, scan_tbl, scan_total, scan_wh,
+                             uncovered, content_hash, out_sha, args, out,
+                             cat_elig=cat_elig, sp=sp, ten_tbl=ten_tbl, top50=top50,
+                             cg_pool=cg_pool_tbl, set_tbl=set_tbl)
+    Path(args.out_report).write_text(report_text, encoding="utf-8")
+    # ---------- P1-2：脚本身份与来源随 manifest 记录 ----------
     script_src = Path(__file__).resolve()
     script_sha = sha256(script_src)
-    dscripts = Path("D:/Work/fzh-order-store/scripts")
-    dscripts.mkdir(parents=True, exist_ok=True)
-    script_dup = dscripts / script_src.name
-    if script_dup.resolve() != script_src:
-        shutil.copyfile(script_src, script_dup)
     predecessors = []
     for nm in ("tongtool_inventory_rollup_a337_v8.py", "tongtool_inventory_rollup_a337_v8b.py"):
         src_p = script_src.with_name(nm)
         if not src_p.exists():
             continue
-        dup_p = dscripts / nm
-        if dup_p.resolve() != src_p.resolve():
-            shutil.copyfile(src_p, dup_p)
-        predecessors.append({"path": str(src_p), "sha256": sha256(src_p),
-                             "mirror_path": str(dup_p), "mirror_sha256": sha256(dup_p)})
+        predecessors.append({"path": str(src_p), "sha256": sha256(src_p)})
     manifest_path = Path(str(out).replace(".xlsx", ".manifest.json"))
     manifest = {
         "rule_version": RULE_VERSION,
-        "as_of": AS_OF,
+        "as_of": args.date,
         "snapshot_date": args.date,
         "uom_version": UOM_VERSION,
         "generated_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-        "command": "uv run python scripts/tongtool_inventory_rollup_a337_v14.py",
+        "command": (f"uv run python scripts/tongtool_inventory_rollup_a337_v14.py --date {args.date} "
+                    f"--run-mode {args.run_mode} --stock {args.stock} "
+                    + (f"--cg-cache {args.cg_cache} " if args.cg_cache else "")
+                    + f"--b-attribution {args.b_attribution}"),
         "script": {"path": str(script_src), "sha256": script_sha},
-        "script_mirror": {"path": str(script_dup), "sha256": sha256(script_dup)},
         "predecessor_scripts": predecessors,
         "inputs": [{"name": n, "path": pp, "sha256": hh} for n, pp, hh in input_sha],
+        "run_mode": args.run_mode,
         "outputs": {
             "xlsx": {"path": str(out), "sha256": out_sha},
             "report": {"path": str(args.out_report), "sha256": sha256(Path(args.out_report))},
@@ -2821,7 +2962,8 @@ def main(argv=None) -> int:
             "join_class": summary["join_class"],
             "uncovered_products": summary["uncovered_en"],
             "checks_total": len(checks),
-            "checks_failed": sum(1 for c in checks if not c[3]),
+            "checks_failed": sum(1 for c in checks if check_status(c[3]) == "FAIL"),
+            "checks_not_applicable_historical_fixture": checks_not_applicable,
             "ten_keys_pass": summary["c8_ten_pass"],
         },
         "cg": {
@@ -2838,9 +2980,15 @@ def main(argv=None) -> int:
             "alias_keys": len(alias_map),
             "mapping_basis": {k: int(v) for k, v in
                               cg_tbl["mapping_basis"].value_counts().items()},
-            "attribution_source": "B-r9-local-provisional",
+            "source": cg_source,
+            "attribution_source": b_version,
             "attribution_file": args.b_attribution,
             "attribution_sha256": sha256(Path(args.b_attribution)) if Path(args.b_attribution).exists() else None,
+            "source_cache_path": str(cg_source_cache),
+            "source_cache_sha256": sha256(cg_source_cache),
+            "source_rows": summary["cg_source_rows"],
+            "source_stale_rows": summary["cg_source_stale_rows"],
+            "source_available_missing_rows": summary["cg_source_available_missing_rows"],
         },
         "content_hash": content_hash,
         "sheets": {name: int(len(df)) for name, df in tables.items() if df is not None},
@@ -2883,15 +3031,84 @@ def _tags_for(cand: dict, n: str, en: str) -> set:
     return {t for t, ens in cand.get(n, {}).items() if en in ens}
 
 
+def render_refresh_report(summary, bucket_tbl, checks, input_sha, content_hash,
+                          out_sha, args, out: Path) -> str:
+    lines = [
+        f"# 通途库存 → A FINAL（A337）v14 刷新报告（as_of={args.date}）",
+        "",
+        f"- run_mode: **{args.run_mode}**；rule_version: **{RULE_VERSION}**；"
+        f"uom_version: **{UOM_VERSION}**",
+        "- 本报告只列当前刷新结果。历史数量锚点、固定源行号、十键及 N1 回放均不作为本次证明。",
+        f"- historical fixture 状态：{summary['checks_not_applicable_historical_fixture']} 项 "
+        "not_applicable_historical_fixture。",
+        f"- 当前快照：{summary['rows_in']:,} 行；available={summary['qty_in']:,.0f}。",
+        "",
+        "## 输入证据",
+        "",
+        "| 输入 | 路径 | SHA256 |",
+        "|---|---|---|",
+    ]
+    lines.extend(f"| {name} | {path} | {digest} |" for name, path, digest in input_sha)
+    lines += [
+        "",
+        "## 六桶守恒",
+        "",
+        "| 桶 | 行数 | available | 当前总量差(行) | 当前总量差(数量) |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for row in bucket_tbl.to_dict("records"):
+        lines.append(f"| {row['桶']} | {row['行数']:,} | {row['数值和']:,.0f} | "
+                     f"{row['行数差']} | {row['数值差']:,.0f} |")
+    lines += [
+        "",
+        "## 当前供给与覆盖状态",
+        "",
+        f"- join_class: {summary['join_class']}。",
+        f"- 覆盖: {summary['coverage']}；未覆盖产品数={summary['uncovered_en']}。",
+        f"- 身份: {summary['identity']}；UOM: {summary['uom_status']}；"
+        f"UOM 冲突物料={summary['uom_conflict_en']}。",
+        f"- 共享候选码={summary['shared_codes']}；共享池={summary['c8_shared_pools']}；"
+        f"共享原量={summary['c8_shared_pool_qty']:,.0f}；allocation={summary['c8_shared_allocation']:g}。",
+        "",
+        "## CG 快照状态",
+        "",
+        f"- 数据源: {summary['cg_source']}；run_id={summary['cg_run_id']}；"
+        f"snapshot_at={summary['cg_snapshot_at']}。",
+        f"- 源缓存: {summary['cg_source_rows']} 行，其中 stale={summary['cg_source_stale_rows']}、"
+        f"available_missing={summary['cg_source_available_missing_rows']}。",
+        f"- CG 汇总: {summary['cg_rows']} 行 / available={summary['cg_available']:,.0f}；"
+        f"分仓明细 {summary['cg_detail_rows']} 行 / sum={summary['cg_detail_sum']:,.0f}；"
+        f"汇总行对账={summary['cg_reconcile_ok']}/{summary['cg_rows']}。",
+        f"- C 汇总行资格: stale={summary['cg_stale']}、available_missing={summary['cg_avail_missing']}；"
+        f"eligible {summary['cg_eligible']} / pending {summary['cg_pending']}。",
+        f"- B attribution: {summary['attribution_source']}。",
+        "",
+        "## 自检",
+        "",
+        "| 检查项 | 结果 | 期望 | 状态 |",
+        "|---|---|---|---|",
+    ]
+    lines.extend(f"| {name} | {result} | {expected} | {check_status(passed)} |"
+                 for name, result, expected, passed in checks)
+    failed = sum(check_status(check[3]) == "FAIL" for check in checks)
+    lines += [
+        "",
+        f"- 失败检查={failed}；历史 fixture 未适用={summary['checks_not_applicable_historical_fixture']}。",
+        f"- 产物：{out}；normalized content SHA256={content_hash}；xlsx SHA256={out_sha}。",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def render(summary, bucket_tbl, bridge_tbl, supply_tbl, pc_summary, conflict_tbl,
            fifteen_tbl, checks, input_sha, scan_tbl, scan_total, scan_wh,
            uncovered, content_hash, out_sha, args, out: Path,
            cat_elig=None, sp=None, ten_tbl=None, top50=None, cg_pool=None,
            set_tbl=None) -> str:
     L = [
-        f"# 通途库存 → A FINAL（A337）v14 报告（as_of={AS_OF}，只读）",
+        f"# 通途库存 → A FINAL（A337）v14 报告（as_of={args.date}，只读）",
         "",
-        f"- `rule_version` = **{RULE_VERSION}**；`as_of` = **{AS_OF}**；`uom_version` = **{UOM_VERSION}**",
+        f"- `rule_version` = **{RULE_VERSION}**；`as_of` = **{args.date}**；`uom_version` = **{UOM_VERSION}**",
+        f"- `run_mode` = **{args.run_mode}**；历史 fixture 自检未适用数 = **{summary['checks_not_applicable_historical_fixture']}**",
         f"- 生成：`scripts/tongtool_inventory_rollup_a337_v14.py`（只读：不写 EN/通途、不发消息、不 push）",
         f"- 产物：`{out.name}`（不覆盖 v2…v13）",
         "- 本版 = v13 + 两件修复：**身份以库存源 SKU 为准**（零库存共享码不阻塞 → KS0248 两行 join_full）；"
@@ -2902,6 +3119,14 @@ def render(summary, bucket_tbl, bridge_tbl, supply_tbl, pc_summary, conflict_tbl
         "| 输入 | SHA256 |",
         "|---|---|",
     ]
+    if args.run_mode == "refresh":
+        L += [
+            "",
+            "> 刷新模式下，旧 C14 报告中的固定数量、固定源行号与十键结果仅作 10/28 历史背景；"
+            "本次机器自检将这些历史 fixture 标为 not_applicable_historical_fixture。",
+            "> 当前快照是否可用以逐行映射、仓池、UOM、共享、CG stale/missing 和守恒检查为准；"
+            "CG stale 行保持 pending，不会因为快照新而自动 eligible。",
+        ]
     for n, p, h in input_sha:
         L.append(f"| {n} | `{h}` |")
     L += [
@@ -2928,8 +3153,9 @@ def render(summary, bucket_tbl, bridge_tbl, supply_tbl, pc_summary, conflict_tbl
         "|---|---:|---:|---:|---:|---:|---:|",
     ]
     for r in bucket_tbl.to_dict("records"):
-        L.append(f"| {r['桶']} | {r['行数']:,} | {r['数值和']:,.0f} | {r['基线行数']:,} | "
-                 f"{r['基线数值和']:,.0f} | {r['行数差']} | {r['数值差']:,.0f} |")
+        L.append(f"| {r['桶']} | {r['行数']:,} | {r['数值和']:,.0f} | "
+                 f"{format_baseline_value(r['基线行数'])} | "
+                 f"{format_baseline_value(r['基线数值和'])} | {r['行数差']} | {r['数值差']:,.0f} |")
     L += [
         "",
         "### 3.1 六桶 → 供给输入桥接",
@@ -3128,7 +3354,7 @@ def render(summary, bucket_tbl, bridge_tbl, supply_tbl, pc_summary, conflict_tbl
         f"{summary['cg_stale']}；available_missing {summary['cg_avail_missing']}（缺失不填 0）。",
         f"- 映射（C v11）：商品导出别名表 + 剥 `OLD_` → **104/104 匹配**；"
         f"`mapping_basis` 分布见 23_（sku / old_prefix_strip / alias）。",
-        f"- 归属：`attribution_source=B-r9-local-provisional`；owner {summary['cg_owner_rows']} / "
+        f"- 归属：`attribution_source={b_attribution_version(args.b_attribution)}`；owner {summary['cg_owner_rows']} / "
         f"unknown {summary['cg_unknown_owner']} / unmapped {summary['cg_unmapped']}；"
         f"`cg_status`：eligible {summary['cg_eligible']} / pending {summary['cg_pending']}"
         f"（unknown 的 2 个是 TJ# 旧套件，映射到未激活 EN、无 US owner）。",
@@ -3284,7 +3510,7 @@ def render(summary, bucket_tbl, bridge_tbl, supply_tbl, pc_summary, conflict_tbl
         "|---|---|---|---|",
     ]
     for c, got, want, ok in checks:
-        L.append(f"| {c} | {got} | {want} | {'PASS' if ok else 'FAIL'} |")
+        L.append(f"| {c} | {got} | {want} | {check_status(ok)} |")
     L += [
         "",
         "## 13. join v7 消费边界",

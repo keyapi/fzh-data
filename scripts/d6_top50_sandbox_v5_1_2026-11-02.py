@@ -5,8 +5,8 @@
 1) 范围扩到全量 1,853 个需求键；另列 307 policy_excluded 行。
 2) 删除「跨仓直发」：动作只保留 补 / 不补 / 催已有 / 观察；
    合同写 cross_warehouse_direct=disabled_by_business。
-3) CG：按 SKU owner 把 CG 库存作为 USNJ/USTX 分支的缓冲抵扣（cg_buffer_credit），
-   生成任何 CG 仓补货建议；CG 池 178 键只作 observation；CG 库存/销量单列。
+3) CG：仅明确 eligible 且非 stale 的 CG 数量按 SKU owner 抵扣；其余原始行保留诊断，
+   相关 owner 键使用 CG 未抵扣保守情景并人工复核；不生成 CG 仓补货建议。
 4) ETA 用实测分布：SO→DN 按 customer/role；头程用 shipment_segments；
    同池真实样本阶段独立情景；在途/待发采用未知货龄完整头程情景。
 5) 成品 MOQ=n/a（自有绍兴工厂），按个取整；只有原料用 moq_items_21。
@@ -32,7 +32,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from supply_netting.replenishment_actions import (  # noqa: E402
+    action_export_fields,
     horizon_net_need,
+    classify_cg_inventory,
     bootstrap_independent_route,
     unknown_age_transit_days,
     production_samples_for_pool_role,
@@ -45,7 +47,7 @@ from supply_netting.leadtime_evidence import production_leadtime_rows  # noqa: E
 
 B = "D:/Work/fzh-order-store"
 BA = f"{B}/analysis"
-RULE_VERSION = "D6-v6-2026-11-02"
+RULE_VERSION = "D6-v6.2-2026-11-02"
 AS_OF = date(2026, 11, 2)
 LEAD_DAYS = 50
 H_MAIN, H_SENS = 97, 157
@@ -97,7 +99,7 @@ def boot(a, b, seed=42, n=3000):
 
 def main(argv=None) -> int:
     global AS_OF
-    ap = argparse.ArgumentParser(description="D6 v6 全量补货沙盒（只读）")
+    ap = argparse.ArgumentParser(description="D6 v6.2 全量补货沙盒（只读）")
     ap.add_argument("--d1b", default=f"{BA}/D_资格与契约_D1b_v2_3_2026-11-02.xlsx")
     ap.add_argument("--d3b", default=f"{BA}/codex-repair-20261102/"
                     "D_历史归一与回测_D3b_v3_4_2026-11-02.xlsx")
@@ -108,7 +110,8 @@ def main(argv=None) -> int:
     ap.add_argument("--as-of", type=date.fromisoformat, default=AS_OF,
                     help="审计日 YYYY-MM-DD；库存只使用不晚于该日的快照")
     ap.add_argument("--d4", default=f"{BA}/D_层级一致性_D4_v2_2026-11-02.xlsx")
-    ap.add_argument("--c14", default=f"{BA}/通途库存_A337_v14_2026-10-30.xlsx")
+    ap.add_argument("--c14", default=f"{BA}/codex-repair-20261102/C-refresh-20261102-v2/"
+                    "通途库存_A337_v14_refresh_2026-11-02.xlsx")
     ap.add_argument("--b10", default=f"{BA}/仓库归属_A337_v6r10_2026-10-30.xlsx")
     ap.add_argument("--leadtime", default=f"{BA}/leadtime/leadtime_summary.json")
     ap.add_argument("--dn-rows", default=f"{BA}/leadtime/dn_leadtime_rows.csv")
@@ -119,13 +122,17 @@ def main(argv=None) -> int:
     ap.add_argument("--dn-po", default=f"{BA}/leadtime/dn_po_no.csv")
     ap.add_argument("--moq", default=f"{B}/en-demand-v1/supply-netting/"
                                      "moq-replenish-policy-2026-10-28/moq_items_21.csv")
-    ap.add_argument("--en-stock", default=f"{B}/en_stock.parquet")
+    ap.add_argument("--en-stock", default=f"{BA}/codex-repair-20261102/C-source-20261102/en_stock.parquet")
     ap.add_argument("--po-open", default=f"{BA}/po_open_receipt_queue_2026-10-28.csv")
     ap.add_argument("--orders", default=f"{B}/orders_unified.parquet")
-    ap.add_argument("--out-xlsx", default=f"{BA}/D_Top50沙盒_D6_v6_2026-11-02.xlsx")
-    ap.add_argument("--out-report", default=f"{BA}/D_Top50沙盒_D6_v6_2026-11-02_报告.md")
-    ap.add_argument("--manifest", default=f"{BA}/D_Top50沙盒_D6_v6_2026-11-02.manifest.json")
-    ap.add_argument("--decisions", default=f"{BA}/D6_DECISIONS_D6_v6_2026-11-02.md")
+    ap.add_argument("--out-xlsx", default=f"{BA}/codex-repair-20261102/D6v6_2-final/"
+                    "D_Top50沙盒_D6_v6_2_2026-11-02.xlsx")
+    ap.add_argument("--out-report", default=f"{BA}/codex-repair-20261102/D6v6_2-final/"
+                    "D_Top50沙盒_D6_v6_2_2026-11-02_报告.md")
+    ap.add_argument("--manifest", default=f"{BA}/codex-repair-20261102/D6v6_2-final/"
+                    "D_Top50沙盒_D6_v6_2_2026-11-02.manifest.json")
+    ap.add_argument("--decisions", default=f"{BA}/codex-repair-20261102/D6v6_2-final/"
+                    "D6_DECISIONS_D6_v6_2_2026-11-02.md")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
     AS_OF = args.as_of
@@ -159,8 +166,20 @@ def main(argv=None) -> int:
                           "future（隔离）" if cg_snapshot > AS_OF.isoformat() else
                           "fresh" if cg_snapshot == AS_OF.isoformat() else "stale")
     cg_future_blocked = cg_snapshot is None or cg_snapshot > AS_OF.isoformat()
-    cg = (pd.DataFrame(columns=["cg_available", "erp_item_code", "cg_owner", "cg_pool"])
-          if cg_future_blocked else pd.read_excel(args.c14, sheet_name="23_CG库存池"))
+    cg = pd.read_excel(args.c14, sheet_name="23_CG库存池")
+    c_selfchecks = pd.read_excel(args.c14, sheet_name="15_自检清单")
+    def c_check_result(value):
+        if value is True or isinstance(value, np.bool_) and bool(value):
+            return True
+        if value is False or isinstance(value, np.bool_) and not bool(value):
+            return False
+        if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
+            return value.strip().lower() == "true"
+        return None
+
+    c_check_results = c_selfchecks["通过"].map(c_check_result)
+    c_failed_checks = c_selfchecks.loc[c_check_results.eq(False), "检查项"].astype(str).tolist()
+    c_checked_rows = int(c_check_results.notna().sum())
     b = (pd.read_excel(args.b10, sheet_name="主表")
          .rename(columns={"产品键": "product_id", "地区": "region"}))
     conf_order = {"高": 3, "中": 2, "低": 1}
@@ -384,12 +403,27 @@ def main(argv=None) -> int:
     kp = (po_use_m.groupby(["product_x", "pool_x"])["qty_eff"].sum()
           .rename("po_extra").reset_index())
 
-    # ---------- CG 缓冲抵扣（按 SKU owner）
-    cg["cg_available"] = pd.to_numeric(cg["cg_available"], errors="coerce").fillna(0.0)
-    cg_credit = (cg.groupby(["erp_item_code", "cg_owner"])["cg_available"].sum()
-                 .rename("cg_buffer_credit").reset_index()
-                 .rename(columns={"erp_item_code": "product_id",
-                                  "cg_owner": "pool"}))
+    # ---------- CG 缓冲抵扣：只认明确 eligible 且非 stale；其余保留为逐键未知诊断
+    cg_credit_map, cg_unknown_map, cg_diagnostics = classify_cg_inventory(
+        cg.to_dict("records"), source_usable=not cg_future_blocked)
+    cg_credit = pd.DataFrame([
+        {"product_id": key[0], "pool": key[1], "cg_buffer_credit": value}
+        for key, value in cg_credit_map.items()])
+    cg_credit = cg_credit.reindex(columns=["product_id", "pool", "cg_buffer_credit"])
+    cg_unknown = pd.DataFrame([
+        {"product_id": key[0], "pool": key[1],
+         "cg_supply_unknown": True,
+         "cg_unknown_qty": value["unknown_qty"],
+         "cg_unknown_qty_known_subtotal": value.get("unknown_qty_known_subtotal",
+                                                       value["unknown_qty"]),
+         "cg_unknown_qty_complete": value["unknown_qty_complete"],
+         "cg_unknown_row_count": value["row_count"],
+         "cg_unknown_reasons": "、".join(value["reasons"])}
+        for key, value in cg_unknown_map.items()])
+    cg_unknown = cg_unknown.reindex(columns=["product_id", "pool", "cg_supply_unknown",
+                                             "cg_unknown_qty", "cg_unknown_qty_known_subtotal",
+                                             "cg_unknown_qty_complete", "cg_unknown_row_count",
+                                             "cg_unknown_reasons"])
     # CG 销量（WayfairCG 仓订单）
     o = pd.read_parquet(args.orders)
     o["qty"] = pd.to_numeric(o["qty"], errors="coerce").fillna(0.0)
@@ -419,8 +453,16 @@ def main(argv=None) -> int:
     f["po_eta_basis"] = f["po_eta_basis"].fillna("")
     f["po_manual_review"] = f["po_eta_basis"].str.contains("scenario|manual_review", case=False, regex=True)
     f = f.merge(cg_credit, on=["product_id", "pool"], how="left")
-    for c in ("stock_inb", "stock_intr", "stock_wait", "po_extra", "cg_buffer_credit"):
+    f = f.merge(cg_unknown, on=["product_id", "pool"], how="left")
+    f["cg_supply_unknown"] = f["cg_supply_unknown"].fillna(False).astype(bool)
+    f["cg_supply_scenario"] = np.where(
+        f["cg_supply_unknown"],
+        "CG未抵扣保守情景（未知量保留诊断，不代表实际为0）",
+        np.where(f["cg_buffer_credit"].notna(), "仅扣除eligible且非stale CG数量",
+                 "无相关CG供给记录；不作CG抵扣"))
+    for c in ("stock_inb", "stock_intr", "stock_wait", "po_extra"):
         f[c] = f[c].fillna(0.0)
+    f["cg_buffer_credit"] = f["cg_buffer_credit"].fillna(0.0)
     f["po_extra"] = f["po_extra"].astype(float)
     f["inbound"] = f["stock_inb"] + f["po_extra"]
     f["en_stock_snapshot_date"] = es_snapshot or ""
@@ -429,8 +471,7 @@ def main(argv=None) -> int:
     f["en_stock_latest_source_status"] = es_latest_status
     f["cg_snapshot_date"] = cg_snapshot or ""
     f["cg_snapshot_status"] = cg_snapshot_status
-    f["snapshot_review_required"] = (es_snapshot_status != "fresh"
-                                     or cg_snapshot_status != "fresh")
+    f["snapshot_review_required"] = (es_snapshot_status != "fresh")
     f["market"] = f["pool"].map(MARKET_OF_POOL).fillna("OTHER")
     f["supply"] = pd.to_numeric(f["可发供给"], errors="coerce").fillna(0.0)
     f["cg_buffer"] = f["pool"].astype(str).str.startswith("CG")
@@ -443,7 +484,8 @@ def main(argv=None) -> int:
         np.where(f["empirical_scenario"], "empirical_time_ordered_unvalidated", "unvalidated"))
     f["manual_review_required"] = ((f["service_validation_status"] != "validated")
                                    | f["po_manual_review"]
-                                   | f["snapshot_review_required"])
+                                   | f["snapshot_review_required"]
+                                   | f["cg_supply_unknown"])
     f["auto_order"] = False
     f["protection_horizon_days"] = H_MAIN
     f["sensitivity_horizon_days"] = H_SENS
@@ -451,7 +493,7 @@ def main(argv=None) -> int:
     f["shared"] = f["market_pool_match"].astype(str) == "0"
     f["no_join"] = f["join_class"].astype(str) != "join_full"
     f["hard_excl"] = ((f["status"] == "d5_failed") | f["data_gap"] | f["shared"]
-                      | f["no_join"] | f["cg_buffer"] | f["other_pool"] | cg_future_blocked
+                      | f["no_join"] | f["cg_buffer"] | f["other_pool"]
                       | (es_snapshot is None))
 
     # ---------- 需要日 / ETA / 迟到量
@@ -616,7 +658,8 @@ def main(argv=None) -> int:
         f.loc[f["action"].isin(["不补", "观察"]), c] = "不适用（不补/观察）"
     f["action_reason"] = [a[1] for a in acts]
     splits = [split_actions(r.net_95, r.late_qty,
-                            blocked=bool(r.hard_excl or r.calib_fail))
+                            blocked=bool(r.hard_excl or r.calib_fail or pd.isna(r.net_95)
+                                         or r.action == "观察"))
               for r in f.itertuples(index=False)]
     f["expedite_qty"] = [s["expedite_qty"] for s in splits]
     f["new_order_qty"] = [s["new_order_qty"] for s in splits]
@@ -626,10 +669,12 @@ def main(argv=None) -> int:
     f["has_new_order_action"] = ["新补" in s["actions"] for s in splits]
     f["remaining_after_cover"] = f["remaining_need"]
 
-    def qty_of(r) -> tuple[int, str]:
-        need = float(r.remaining_need) if pd.notna(r.remaining_need) else 0.0
-        if need <= 0:
+    def qty_of(r) -> tuple[float, str]:
+        if pd.isna(r.new_order_qty):
+            return np.nan, "数量未决（观察/阻断）"
+        if not r.has_new_order_action:
             return 0, "无新增单量"
+        need = float(r.remaining_need)
         pid = str(r.product_id)
         if pid in moq_map and np.isfinite(moq_map[pid]) and moq_map[pid] > 0:
             mq = float(moq_map[pid])
@@ -637,8 +682,12 @@ def main(argv=None) -> int:
         return ceil_int(need), "成品 MOQ=n/a（自有绍兴工厂）→ 按个向上取整"
 
     qty = [qty_of(r) for r in f.itertuples(index=False)]
-    f["qty"] = [q[0] for q in qty]
-    f["new_order_qty"] = f["qty"]
+    export_values = [action_export_fields(split, action, quantity)
+                     for split, action, (quantity, _) in zip(splits, f["action"], qty)]
+    for column in ("action", "independent_actions", "has_expedite_action",
+                   "has_new_order_action", "expedite_qty", "new_order_qty", "qty",
+                   "remaining_need"):
+        f[column] = [values[column] for values in export_values]
     f["rounding_basis"] = [q[1] for q in qty]
     f["moq"] = [f"{moq_map[p]:g}" if (p in moq_map and np.isfinite(moq_map[p]))
                 else "n/a（自有工厂）" for p in f["product_id"].astype(str)]
@@ -667,7 +716,9 @@ def main(argv=None) -> int:
         if r.manual_review_required:
             u.append("人工复核情景，不是服务承诺/自动下单许可")
         if r.snapshot_review_required:
-            u.append("EN/CG 库存快照非fresh；需人工复核")
+            u.append("EN 库存快照非fresh；需人工复核")
+        if r.cg_supply_unknown:
+            u.append("CG原始库存未过eligible/非stale闸门；数量仅诊断，按CG未抵扣保守情景人工复核")
         if r.po_manual_review:
             u.append("PO无明确ETA，创建日不等于发运日；未知阶段情景需人工复核")
         if r.inbound > 0:
@@ -705,6 +756,9 @@ def main(argv=None) -> int:
                  "en_stock_snapshot_status", "en_stock_latest_source_date",
                  "en_stock_latest_source_status", "cg_snapshot_date", "cg_snapshot_status",
                  "snapshot_review_required",
+                 "cg_supply_unknown", "cg_unknown_qty", "cg_unknown_qty_known_subtotal",
+                 "cg_unknown_qty_complete", "cg_unknown_row_count", "cg_unknown_reasons",
+                 "cg_supply_scenario",
                  "cg_buffer_credit", "inbound", "late_qty", "supply_on_time",
                  "net_before_cg", "net_95", "net_90", "net_85", "net_157",
                  "replenish_eta_p50", "replenish_eta_p90", "inbound_eta_p50",
@@ -757,6 +811,11 @@ def main(argv=None) -> int:
         "en_stock_latest_source_status": "EN最新源状态",
         "cg_snapshot_date": "CG库存快照日", "cg_snapshot_status": "CG快照状态",
         "snapshot_review_required": "快照需复核",
+        "cg_supply_unknown": "CG供给未知需复核", "cg_unknown_qty": "CG未核实原始数量",
+        "cg_unknown_qty_known_subtotal": "CG未知行已知数量小计",
+        "cg_unknown_qty_complete": "CG未知数量完整",
+        "cg_unknown_row_count": "CG未核实行数", "cg_unknown_reasons": "CG未知原因",
+        "cg_supply_scenario": "CG抵扣情景",
         "rounding_basis": "取整依据", "confidence": "置信度", "eta_basis": "ETA依据",
         "unknowns": "未知项",
         "order_late_flag": "下单时点提示"})
@@ -767,7 +826,7 @@ def main(argv=None) -> int:
     pol_tbl = pd.DataFrame({
         "product_id": pol["product_id"], "市场": pol["pool"].map(MARKET_OF_POOL),
         "池": pol["pool"], "形态": pol["physical_form"], "UOM": pol["canonical_uom"],
-        "建议动作": "观察", "动作原因": "policy_excluded（非需求键）", "建议数量": 0,
+        "建议动作": "观察", "动作原因": "policy_excluded（非需求键）", "建议数量": pd.NA,
         "置信度": "n/a", "备注": "仅列出，不进补货"})
 
     # ---------- Top50 选样（从全量动作中挑）
@@ -812,11 +871,14 @@ def main(argv=None) -> int:
     def agg(df, cols):
         if df.empty:
             return pd.DataFrame(columns=cols + ["键数", "建议数量合计", "催已有量合计",
-                                                 "新补数量合计", "净需求95合计"])
+                                                 "新补数量合计", "unknown_action_qty_rows",
+                                                 "净需求95合计"])
         return (df.groupby(cols, dropna=False)
-                .agg(键数=("product_id", "size"), 建议数量合计=("qty", "sum"),
-                     催已有量合计=("expedite_qty", "sum"),
-                     新补数量合计=("new_order_qty", "sum"),
+                .agg(键数=("product_id", "size"),
+                     建议数量合计=("qty", lambda values: values.sum(min_count=1)),
+                     催已有量合计=("expedite_qty", lambda values: values.sum(min_count=1)),
+                     新补数量合计=("new_order_qty", lambda values: values.sum(min_count=1)),
+                     unknown_action_qty_rows=("new_order_qty", lambda values: int(values.isna().sum())),
                      净需求95合计=("net_95", "sum")).reset_index()
                 .sort_values(["键数", "新补数量合计"], ascending=False))
 
@@ -826,9 +888,9 @@ def main(argv=None) -> int:
         columns={"market": "市场", "pool": "池", "physical_form": "形态"})
 
     # CG 记录
-    cg_rec = (cg.groupby(["erp_item_code", "cg_owner", "cg_pool"], dropna=False)
-              .agg(CG库存=("cg_available", "sum")).reset_index()
-              .rename(columns={"erp_item_code": "product_id", "cg_owner": "owner_pool"}))
+    cg_rec = pd.DataFrame(cg_diagnostics).rename(
+        columns={"erp_item_code": "product_id", "cg_owner": "owner_pool",
+                 "cg_available": "CG库存"})
     cg_rec = cg_rec.merge(cg_sales, left_on="product_id", right_on="product_x", how="left")
     cg_rec["cg_sales_qty"] = cg_rec["cg_sales_qty"].fillna(0.0)
     cg_rec["未分配抵扣"] = [
@@ -842,6 +904,11 @@ def main(argv=None) -> int:
     late_bad = int(((f["action"] == "催已有") & (f["late_qty"] <= 0)).sum())
     cross_any = int(f["action"].astype(str).str.contains("跨仓").sum())
     cg_repl = int(((f["cg_buffer"]) & (f["action"].isin(["补", "催已有"]))).sum())
+    observe_mask = f["action"].eq("观察")
+    observe_qty_bad = int((observe_mask & f["qty"].notna()).sum())
+    observe_new_action_bad = int((observe_mask &
+                                  (f["has_expedite_action"] | f["has_new_order_action"])).sum())
+    unknown_action_qty_rows = int(f["new_order_qty"].isna().sum())
     calc_bad = 0
     for r in f.itertuples(index=False):
         calc = horizon_net_need(r.q95, r.supply_on_time, r.cg_buffer_credit)
@@ -856,6 +923,10 @@ def main(argv=None) -> int:
              通过="是" if set(f["action"]) <= {"补", "不补", "催已有", "观察"} else "否"),
         dict(检查项="跨仓直发已删除", 期望=0, 实际=cross_any, 通过="是" if cross_any == 0 else "否"),
         dict(检查项="CG 缓冲不生成补/催", 期望=0, 实际=cg_repl, 通过="是" if cg_repl == 0 else "否"),
+        dict(检查项="观察建议数量必须未决", 期望=0, 实际=observe_qty_bad,
+             通过="是" if observe_qty_bad == 0 else "否"),
+        dict(检查项="观察行独立行动必须为观察", 期望=0, 实际=observe_new_action_bad,
+             通过="是" if observe_new_action_bad == 0 else "否"),
         dict(检查项="ETA p50≤p90（有在途键）", 期望=0, 实际=eta_bad, 通过="是" if eta_bad == 0 else "否"),
         dict(检查项="催已有必须有迟到在途", 期望=0, 实际=late_bad, 通过="是" if late_bad == 0 else "否"),
         dict(检查项="净需求可复算（扣 CG 后）", 期望=0, 实际=calc_bad, 通过="是" if calc_bad == 0 else "否"),
@@ -903,7 +974,7 @@ def main(argv=None) -> int:
             ("动作", "补 / 不补 / 催已有 / 观察"),
             ("cross_warehouse_direct", "disabled_by_business"),
             ("供给", "C v14 可发 + en_stock intransit/waiting；仅 intransit=0 的 SKU/仓追加 PO open"),
-            ("CG", "按 SKU owner 抵扣 USNJ/USTX 缓冲（cg_buffer_credit）；CG 池观察；库存/销量单列"),
+            ("CG", "仅 eligible 且非 stale 可抵扣；其他行原样诊断、相关键保守未抵扣并人工复核；CG不补货"),
             ("ETA", "同池真实 production×physical-route 阶段独立情景；非实测联合或服务保证"),
             ("路线证据", "按 pool×role×main×last 选样；生产缺角色时只回退同池，标 pool_all_roles_fallback"),
             ("库存快照", f"as-of={AS_OF}；EN={es_snapshot or '未知'}({es_snapshot_status})；"
@@ -967,21 +1038,21 @@ def main(argv=None) -> int:
                    .value_counts().to_dict())
     mode_fit = int(f.loc[f["action"].isin(["补", "催已有"]), "mode_fits"].sum())
     lines = [
-        f"# D6 v6 全量补货沙盒（{RULE_VERSION}；只读）",
+        f"# D6 v6.2 全量补货沙盒（{RULE_VERSION}；只读）",
         "",
         f"- 全量 **{len(f)}** 个需求键；Top50 **{len(top)}**；policy 行 **{len(pol_tbl)}**",
         "- **cross_warehouse_direct=disabled_by_business**：不再有跨仓直发。",
-        "- CG 库存按 SKU owner 抵扣 USNJ/USTX 分支；CG 池只观察；CG 库存/销量单列。",
+        "- CG 不补货；仅明确 eligible 且非 stale 的 CG 数量可抵扣。其他 CG 原始行保留诊断，相关 SKU/owner 标为未知并人工复核。",
         f"- 决策日志：`{Path(args.decisions).name}`；本轮无 pending_codex、无 PENDING_APPROVAL。",
         "",
         "## 1. 全量动作",
         "",
-        "| 动作 | 键数 | 新补数量合计 | 催已有量合计 | 净需求95 |",
-        "|---|---:|---:|---:|---:|",
+        "| 动作 | 键数 | 新补数量合计 | 催已有量合计 | 未决数量行 | 净需求95 |",
+        "|---|---:|---:|---:|---:|---:|",
     ]
     for r in act_full.itertuples(index=False):
         lines.append(f"| {r.动作} | {r.键数} | {r.新补数量合计:.0f} | "
-                     f"{r.催已有量合计:.0f} | {r.净需求95合计:.1f} |")
+                     f"{r.催已有量合计:.0f} | {r.unknown_action_qty_rows} | {r.净需求95合计:.1f} |")
     lines += [
         "",
         f"- 全量动作分布：{json.dumps(f['action'].value_counts().to_dict(), ensure_ascii=False)}",
@@ -989,9 +1060,14 @@ def main(argv=None) -> int:
         "均不构成随机服务水平承诺。",
         f"- 独立行动数量：催已有 {f['expedite_qty'].sum():.0f}；新补 {f['new_order_qty'].sum():.0f}；"
         f"两者可同时出现，旧字段 qty 仅记新补数量。",
+        f"- 数量未决行 {unknown_action_qty_rows}；观察行数量保留为空白，汇总不将未决量当作零缺口。",
         f"- 库存快照：as-of={AS_OF}；EN 使用 {es_snapshot or '未知'}（{es_snapshot_status}），"
         f"最新源 {es_source_snapshot or '未知'}（{es_latest_status}）；"
-        f"CG {cg_snapshot or '未知'}（{cg_snapshot_status}）。未来/未知 CG 快照不抵扣并阻断可执行行动。",
+        f"CG {cg_snapshot or '未知'}（{cg_snapshot_status}），有效抵扣仅来自 eligible 且非 stale 行；"
+        f"相关未知键 {int(f.loc[f['cg_supply_unknown'], ['product_id', 'pool']].drop_duplicates().shape[0])}，"
+        "按未抵扣保守情景标人工复核；不将原始未知量当作实际0。",
+        f"- C 输入自检失败项 {len(c_failed_checks)}：{json.dumps(c_failed_checks, ensure_ascii=False)}；"
+        "此处保留上游失败信息，不宣称 C 全部自检通过。",
         f"- Top50 动作分布：{json.dumps(top['action'].value_counts().to_dict(), ensure_ascii=False)}",
         "",
         "## 2. SO→DN 趋势与最近 6 个月口径",
@@ -1063,7 +1139,7 @@ def main(argv=None) -> int:
         "## 5. CG（缓冲抵扣，不并入物理库存）",
         "",
         f"- CG 库存按 owner：{json.dumps({k: round(v, 0) for k, v in cg_inv_by_owner.items()}, ensure_ascii=False)}",
-        f"- 生成抵扣的键：{int((f['cg_buffer_credit'] > 0).sum())} 个，抵扣合计 "
+        f"- 生成有效抵扣的键：{int((f['cg_buffer_credit'] > 0).sum())} 个，抵扣合计 "
         f"{f['cg_buffer_credit'].sum():.0f} 件",
         f"- CG 池 178 键：全部 `观察`，不生成 CG 仓补货建议",
         f"- CG 销量（WayfairCG 仓订单）：{cg_sales['cg_sales_qty'].sum():.0f} 件，"
@@ -1080,7 +1156,7 @@ def main(argv=None) -> int:
     Path(args.out_report).write_text("\n".join(lines), encoding="utf-8")
     # 决策日志
     dec_md = [
-        "# D6 v6 决策日志",
+        "# D6 v6.2 决策日志",
         "",
         f"- 生成时间：{datetime.now().astimezone().isoformat()}",
         "- 协议：按 `DECISION_PROTOCOL.md`，未使用 AskUserQuestion；无不可逆外部动作。",
@@ -1113,16 +1189,40 @@ def main(argv=None) -> int:
                                                         latest_source_date=es_source_snapshot,
                                                         latest_source_status=es_latest_status),
                                           cg_inventory=dict(snapshot_date=cg_snapshot,
-                                                            status=cg_snapshot_status)),
+                                                            status=cg_snapshot_status,
+                                                            source_rows=len(cg),
+                                                            eligible_rows=int((cg.get("cg_status", pd.Series(index=cg.index,
+                                                                                                               dtype=object))
+                                                                               .astype(str) == "cg_eligible").sum()),
+                                                            stale_rows=int(pd.to_numeric(
+                                                                cg.get("cg_stale", pd.Series(index=cg.index,
+                                                                                             dtype=float)),
+                                                                errors="coerce").fillna(1).ne(0).sum()),
+                                                            credited_rows=sum(
+                                                                row.get("cg_consumption_disposition") == "credited"
+                                                                for row in cg_diagnostics))),
+                    upstream_c_selfchecks=dict(checked_rows=c_checked_rows,
+                                               failed_rows=len(c_failed_checks),
+                                               failed_checks=c_failed_checks),
                     counts=dict(full_keys=len(f), policy_rows=len(pol_tbl), top50=len(top),
                                 actions=f["action"].value_counts().to_dict(),
                                 expedite_qty=float(f["expedite_qty"].sum()),
                                 new_order_qty=float(f["new_order_qty"].sum()),
+                                unknown_action_qty_rows=unknown_action_qty_rows,
+                                observe_qty_bad=observe_qty_bad,
+                                observe_new_action_bad=observe_new_action_bad,
                                 manual_review_keys=int(f["manual_review_required"].sum()),
                                 snapshot_review_keys=int(f["snapshot_review_required"].sum()),
                                 top_actions=top["action"].value_counts().to_dict(),
                                 cg_credit_keys=int((f["cg_buffer_credit"] > 0).sum()),
                                 cg_credit_qty=float(f["cg_buffer_credit"].sum()),
+                                cg_unknown_keys=int(f.loc[f["cg_supply_unknown"],
+                                                          ["product_id", "pool"]]
+                                                    .drop_duplicates().shape[0]),
+                                cg_unknown_action_rows=int(f["cg_supply_unknown"].sum()),
+                                cg_unknown_raw_rows=sum(
+                                    row.get("cg_consumption_disposition") == "unknown_not_credited"
+                                    for row in cg_diagnostics),
                                 cg_future_blocked=bool(cg_future_blocked),
                                 future_cg_inventory_used=False,
                                 cg_pool_keys=int(f["cg_buffer"].sum()),

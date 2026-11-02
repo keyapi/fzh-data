@@ -1,7 +1,10 @@
 import pytest
+import pandas as pd
 
 from supply_netting.replenishment_actions import (
+    action_export_fields,
     bootstrap_independent_route,
+    classify_cg_inventory,
     horizon_net_need,
     production_samples_for_pool_role,
     unknown_age_transit_days,
@@ -10,6 +13,52 @@ from supply_netting.replenishment_actions import (
     select_snapshot_date,
     split_actions,
 )
+
+
+def test_cg_credit_requires_explicit_eligibility_and_non_stale_source():
+    records = [
+        {"erp_item_code": "A", "cg_owner": "USNJ", "cg_available": 8,
+         "cg_status": "cg_eligible", "cg_stale": 0},
+        {"erp_item_code": "A", "cg_owner": "USNJ", "cg_available": 5,
+         "cg_status": "cg_pending", "cg_stale": 0},
+        {"erp_item_code": "B", "cg_owner": "USTX", "cg_available": 11,
+         "cg_status": "cg_eligible", "cg_stale": 1},
+    ]
+
+    credit, unknown, diagnostics = classify_cg_inventory(records)
+
+    assert credit == {("A", "USNJ"): 8.0}
+    assert unknown[("A", "USNJ")]["unknown_qty"] == 5.0
+    assert unknown[("B", "USTX")]["unknown_qty"] == 11.0
+    assert [row["cg_available"] for row in diagnostics] == [8, 5, 11]
+
+
+def test_cg_unknown_is_scoped_to_source_sku_owner_pair():
+    credit, unknown, diagnostics = classify_cg_inventory([
+        {"erp_item_code": "A", "cg_owner": "USNJ", "cg_available": 6,
+         "cg_eligible": True, "stale": False},
+    ])
+
+    assert credit == {("A", "USNJ"): 6.0}
+    assert set(unknown) == set()
+    assert len(diagnostics) == 1
+    assert ("UNRELATED", "USNJ") not in unknown
+
+
+def test_explicit_false_cg_eligibility_overrides_status_and_future_source_is_unusable():
+    row = {"erp_item_code": "A", "cg_owner": "USNJ", "cg_available": 6,
+           "cg_eligible": False, "cg_status": "cg_eligible", "cg_stale": 0}
+
+    credit, unknown, _ = classify_cg_inventory([row])
+    assert credit == {}
+    assert "cg_eligibility_conflict" in unknown[("A", "USNJ")]["reasons"]
+
+    credit, unknown, _ = classify_cg_inventory([{
+        "erp_item_code": "B", "cg_owner": "USTX", "cg_available": 9,
+        "cg_eligible": True, "stale": False,
+    }], source_usable=False)
+    assert credit == {}
+    assert unknown[("B", "USTX")]["unknown_qty"] == 9
 
 
 def test_late_supply_and_new_order_are_independent_actions():
@@ -31,6 +80,26 @@ def test_horizon_gap_uses_total_quantile_without_lead_time_scaling(horizon_deman
 
 def test_unknown_horizon_demand_stays_unknown():
     assert horizon_net_need(float("nan"), 10, 0) is None
+
+
+def test_final_export_observation_quantities_are_null_not_zero():
+    export_rows = [
+        action_export_fields(split_actions(5156, 0, blocked=True), "观察"),
+        action_export_fields(split_actions(-4, 0), "不补"),
+        action_export_fields(split_actions(9, 0), "补", new_order_qty=9),
+    ]
+    export = pd.DataFrame(export_rows).rename(columns={
+        "action": "建议动作", "qty": "建议数量", "expedite_qty": "催已有量",
+        "new_order_qty": "新补数量", "has_new_order_action": "新补行动",
+    })
+
+    assert export.loc[0, "建议动作"] == "观察"
+    assert pd.isna(export.loc[0, "建议数量"])
+    assert pd.isna(export.loc[0, "催已有量"])
+    assert pd.isna(export.loc[0, "新补数量"])
+    assert not bool(export.loc[0, "新补行动"])
+    assert export.loc[1, "建议数量"] == 0
+    assert export.loc[2, "建议数量"] == 9
 
 
 def test_sufficient_late_supply_only_expedites():
@@ -55,8 +124,8 @@ def test_no_late_supply_only_places_new_order():
 def test_unknown_gap_blocks_executable_actions(unknown):
     result = split_actions(unknown, 55)
 
-    assert result["expedite_qty"] == 0
-    assert result["new_order_qty"] == 0
+    assert result["expedite_qty"] is None
+    assert result["new_order_qty"] is None
     assert result["remaining_need"] is None
     assert result["actions"] == ["观察"]
 
@@ -64,8 +133,8 @@ def test_unknown_gap_blocks_executable_actions(unknown):
 def test_blocked_gap_does_not_create_new_order():
     result = split_actions(12.2, 5, blocked=True)
 
-    assert result["expedite_qty"] == 0
-    assert result["new_order_qty"] == 0
+    assert result["expedite_qty"] is None
+    assert result["new_order_qty"] is None
     assert result["remaining_need"] == pytest.approx(12.2)
     assert result["actions"] == ["观察"]
 
