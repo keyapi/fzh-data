@@ -15,7 +15,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from collections import defaultdict
 import os
 import shutil
 import sys
@@ -37,14 +36,6 @@ from supply_chain_visibility.receipt_bridge import (  # noqa: E402
 from supply_chain_visibility.receipt_reconciliation import (  # noqa: E402
     ReceiptEvent, SnapshotWindow,
 )
-from supply_chain_visibility.supply_position import (  # noqa: E402
-    DemandPosition as SPPDemand,
-    InventoryPosition as SPPInventory,
-    ManifestLine as SPPLine,
-    PoManifest as SPPManifest,
-    PoStatus as SPPStatus,
-    build_supply_position,
-)
 from supply_chain_visibility.receipt_state import (  # noqa: E402
     ReceiptLine, ShipmentLink, reconcile_signed_receipts,
 )
@@ -63,76 +54,6 @@ DEFAULT_OUT = EN_API / "out" / "supply_facts"
 SCHEMA_VERSION = "supply-facts/v3"
 RECEIPT_STATE_SCHEMA = "supply-facts/receipt-state/v1"
 INVENTORY_BRIDGE_SCHEMA = "supply-facts/inventory-bridge/v1"
-SUPPLY_POSITION_SCHEMA = "supply-position/v1"
-
-
-def supply_position_from_payloads(manifests_payload, statuses_payload=None,
-                                  inventory_payload=None, demand_payload=None,
-                                  bridge_rows=None):
-    """Map local JSON payloads to the supply_positions builder (pure)."""
-    def _rows(payload, key):
-        if payload is None:
-            return []
-        if isinstance(payload, list):
-            return payload
-        return payload.get(key) or []
-
-    manifests = []
-    for row in _rows(manifests_payload, "manifests"):
-        lines = tuple(SPPLine(
-            dn_item=str(line.get("dn_item") or ""),
-            item_code=str(line.get("item_code") or ""),
-            outcome=str(line.get("outcome") or "included"),
-            qty=line.get("qty"), uom=line.get("uom"),
-            tt_sku=str(line.get("tt_sku") or ""),
-            goods_detail_id=str(line.get("goods_detail_id") or ""),
-            merged_goods_detail_id=str(line.get("merged_goods_detail_id") or ""),
-            contribution_qty=line.get("contribution_qty"),
-            reason=str(line.get("reason") or ""),
-        ) for line in row.get("lines") or ())
-        manifests.append(SPPManifest(
-            po_code=str(row.get("po_code") or ""),
-            dn_name=str(row.get("dn_name") or ""),
-            source=str(row.get("source") or "audit"),
-            status=None if row.get("status") is None else str(row.get("status")),
-            completed_at=row.get("completed_at"), as_of=row.get("as_of"),
-            lines=lines, warehouse=str(row.get("warehouse") or ""),
-            scope=str(row.get("scope") or "in_house"),
-            branch=str(row.get("branch") or ""),
-        ))
-    statuses = [SPPStatus(
-        po_code=str(row.get("po_code") or ""),
-        found=bool(row.get("found")), raw_status=row.get("raw_status"),
-        is_voided=bool(row.get("is_voided")), as_of=row.get("as_of"),
-        source_status=str(row.get("source_status") or "known"))
-        for row in _rows(statuses_payload, "statuses")]
-    bridge_includes = defaultdict(set)
-    for row in bridge_rows or ():
-        if row.get("receipt_inclusion_status") == "included" and row.get("po_code"):
-            bridge_includes[(str(row.get("sku") or ""),
-                             str(row.get("warehouse") or ""))].add(
-                str(row["po_code"]))
-    inventory = [SPPInventory(
-        sku=str(row.get("sku") or ""), warehouse=str(row.get("warehouse") or ""),
-        uom=row.get("uom"), available=row.get("available"), as_of=row.get("as_of"),
-        window_start=row.get("window_start"), window_end=row.get("window_end"),
-        includes_po_codes=tuple(sorted(
-            set(row.get("includes_po_codes") or ())
-            | bridge_includes.get((str(row.get("sku") or ""),
-                                   str(row.get("warehouse") or "")), set()))),
-        source_status=str(row.get("source_status") or "known"),
-        scope=str(row.get("scope") or "in_house"),
-        branch=str(row.get("branch") or ""), batch_key=str(row.get("batch_key") or ""),
-        role=str(row.get("role") or "finished"))
-        for row in _rows(inventory_payload, "positions")]
-    demand = [SPPDemand(
-        sku=str(row.get("sku") or ""), uom=row.get("uom"),
-        open_qty=row.get("open_qty"), warehouse=str(row.get("warehouse") or ""),
-        scope=str(row.get("scope") or "in_house"),
-        branch=str(row.get("branch") or ""),
-        source_status=str(row.get("source_status") or "known"))
-        for row in _rows(demand_payload, "demand")]
-    return build_supply_position(manifests, statuses, inventory, demand)
 
 
 def _call(base_url, key, secret, filters):
@@ -1071,14 +992,6 @@ def main(argv=None):
                         help="交付扫描包含草稿/取消 DN（仅留痕，不计实际交付）")
     parser.add_argument("--delivery-customer", help="交付扫描客户过滤")
     parser.add_argument("--delivery-item", help="交付扫描物料过滤")
-    parser.add_argument("--po-manifests-json",
-                        help="本地只读：采购创建清单 JSON（含 lines）")
-    parser.add_argument("--po-statuses-json",
-                        help="本地只读：已查询的 PO 状态 JSON")
-    parser.add_argument("--inventory-positions-json",
-                        help="本地只读：库存快照位置 JSON（含 includes_po_codes）")
-    parser.add_argument("--demand-positions-json",
-                        help="本地只读：需求位置 JSON")
     parser.add_argument("--delivery-scope-json",
                         help="warehouse_restock 权威目标范围 JSON（source/version/hash/items）")
     args = parser.parse_args(argv)
@@ -1248,30 +1161,8 @@ def main(argv=None):
             [_receipt_event(row) for row in bridge_payload.get("receipts") or []],
             collection_windows=windows or None)
         result["inventory_bridge"] = bridge["rows"]
-        result["_bridge_rows_for_position"] = bridge["rows"]
         result["_inventory_bridge_summary"] = bridge["summary"]
         result["_inventory_bridge_coverage"] = bridge_payload.get("coverage")
-    supply_payloads = [args.po_manifests_json, args.po_statuses_json,
-                       args.inventory_positions_json, args.demand_positions_json]
-    if not args.po_manifests_json and any(supply_payloads):
-        result["notes"].append(
-            "supply_position skipped: --po-manifests-json is required for other PO inputs")
-    if args.po_manifests_json:
-        loaded = [_load_json(path) if path else None for path in supply_payloads]
-        position = supply_position_from_payloads(
-            *loaded, bridge_rows=result.get("_bridge_rows_for_position") or None)
-        result["supply_position"] = position["rows"]
-        result["supply_position_legacy"] = position["legacy"]
-        result["supply_position_net"] = position["net"]["rows"]
-        result["_supply_position_summary"] = position["summary"]
-        result["counts"].update({
-            "supply_position": len(position["rows"]),
-            "supply_position_legacy": len(position["legacy"]),
-            "supply_position_net": len(position["net"]["rows"]),
-        })
-        if position["summary"]["legacy_manifests"]:
-            result["notes"].append(
-                "supply_position: legacy POs without audit manifests are listed, not fabricated")
     query_seconds = time.perf_counter() - started
     run_id = hashlib.sha1(("%s|%s|%s|%s|%s|%s" % (
         result["as_of"], args.codes, args.so, args.all, len(result["lines"]),
@@ -1285,11 +1176,7 @@ def main(argv=None):
 
     files = {}
     try:
-        extra = ()
-        if "_supply_position_summary" in result:
-            extra = ("supply_position", "supply_position_legacy",
-                     "supply_position_net")
-        for name in DATASETS + DELIVERY_DATASETS + extra:
+        for name in DATASETS + DELIVERY_DATASETS:
             path = tmp_dir / ("%s.json" % name)
             _write_json(path, result[name])
             files["%s.json" % name] = {"path": "%s.json" % name, "sha256": _sha256(path),
@@ -1394,24 +1281,6 @@ def main(argv=None):
                 "source": "server" if args.delivery_all else "not_requested",
             },
         }
-        if "_supply_position_summary" in result:
-            manifest["datasets"]["supply_position"] = {
-                "rows": len(result["supply_position"]),
-                "source": "local_manifests",
-                "schema_version": SUPPLY_POSITION_SCHEMA,
-                "summary": result["_supply_position_summary"],
-                "eligible": False,
-            }
-            manifest["datasets"]["supply_position_legacy"] = {
-                "rows": len(result["supply_position_legacy"]),
-                "source": "local_manifests",
-                "eligible": False,
-            }
-            manifest["datasets"]["supply_position_net"] = {
-                "rows": len(result["supply_position_net"]),
-                "source": "local_manifests",
-                "eligible": False,
-            }
         manifest["files"] = files
         _write_json(tmp_dir / "manifest.json", manifest)
         tmp_dir.rename(run_dir)
