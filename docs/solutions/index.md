@@ -13,6 +13,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-10-29 | 人 + Agent 共用的订单 API —— PB 网页与 JSON API 共用一套服务层 | [architecture-patterns/pb-orders-json-api-human-agent.md](architecture-patterns/pb-orders-json-api-human-agent.md) |
+| 2026-10-29 | PB invoice CSV 摘单后丢了表头 —— 行筛选必须保留第 1 行，并用程序断言 | [workflow-issues/pb-invoice-csv-header-loss.md](workflow-issues/pb-invoice-csv-header-loss.md) |
 | 2026-10-16 | SPS 门户的 IA 与 AKN 操作 — 断货后重发 Inventory Advice / PO Acknowledgement | [workflow-issues/sps-portal-ia-akn-operations.md](workflow-issues/sps-portal-ia-akn-operations.md) |
 | 2026-10-16 | PB 楔形枕补货量估算 — 美中 Daneey 口径、剔除断货月、6 个月覆盖 | [workflow-issues/pb-replenishment-sizing-from-sales.md](workflow-issues/pb-replenishment-sizing-from-sales.md) |
 | 2026-10-16 | PB 打单后才发现无货的闭环 — invoice 清理惯例、邮件成链、两套库存不能混用 | [workflow-issues/pb-stockout-post-shipment-closed-loop.md](workflow-issues/pb-stockout-post-shipment-closed-loop.md) |

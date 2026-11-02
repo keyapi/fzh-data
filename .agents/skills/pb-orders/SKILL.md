@@ -111,11 +111,17 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
 - **EN 侧不扣减通途库存**（2026-10 确认）→ EN 的 Bin 数量**不能当可用库存**。
 - **SO 的「未交量」≠ 在途**：货常常已经出境到目的仓。
 - **invoice 的 H 行才带 PO 号**，D 行 PO 为空 —— 删无货单要整块删（H+D），否则留孤儿明细。
+- **改 invoice CSV 必须保留第 1 行表头**：按行摘单时 `keep = [lines[0]]` 再处理数据行；
+  交付前断言首格是 `Invoice Number`、数据行数 = H+D、文件名 `xN` = H 数、H 行总额 = txt。
+  **同额两张票会让「总额对」和「少一张」同时成立** —— 金额校验不够，必须查表头与逐行差异。
+  D 行重复整票总额，`H ≠ ΣD` 是正常，别用 D 行求和校验。
 - **绝不把邮件口令 / 账号密码写进仓库**；邮件里不出现 Tracy / 中间人 / 5% 佣金。
 
 ## 相关经验（docs/solutions）
 
 - `docs/solutions/workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— 打单后才发现无货的闭环：invoice 清理惯例、邮件成链、两套库存不能混用
+- `docs/solutions/workflow-issues/pb-invoice-csv-header-loss.md` —— invoice CSV 摘单丢表头：行筛选保留表头 + 交付前结构断言（同额票是金额校验盲区）
+- `docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md` —— 网页与 JSON API 共用服务层：双鉴权 / 幂等 / 补发号登记
 - `docs/solutions/workflow-issues/pb-replenishment-sizing-from-sales.md` —— 补货量估算：美中 Daneey 口径、通途订单表读法、剔除断货月、交付用 Excel
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— 断货判据 / PO→Tongtool Order 映射 / UPS 才算真发
 

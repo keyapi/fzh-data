@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-10-29（PB invoice CSV 摘单丢表头；JSON API 人+Agent 共用）
+
+- **新增**: `workflow-issues/pb-invoice-csv-header-loss.md` —— 从 PB 批次 invoice CSV 按行摘掉无货单时，脚本从 `i=1` 开始扫描、写回时忘记补 `lines[0]`，导致 **表头行丢失**。当时只校验 H/D 行数与 H 行总额，所以没发现；两周后 pandas 默认 `header=0` 把第一行数据当列名，误报「少了两张同额票」。修法：从 `NotUsed` 原件取表头字节补回 + 缺表头版本备份；预防：`keep=[lines[0]]`、交付前断言表头逐字节一致 / `len=data H+D` / 文件名 `xN==H` / 有原件则逐行差异相等，且**不要用 D 行总额求和校验**（SPS 的 D 行重复整票总额，一票多明细时 `H≠ΣD` 正常）。
+- **新增**: `architecture-patterns/pb-orders-json-api-human-agent.md` —— PB 出件新增 `/api/v1` 的设计取舍：网页与 API 共用 `web/jobs_service.py`（同一 job 模型/产物/审计）；`sk-` Key（sha256+scope+限速）与 OIDC `/userinfo` 双鉴权；API 不认 cookie/CSRF、401 返回 JSON；`Idempotency-Key` + 输入哈希双层幂等；`order_number_usage` 预留 `-N` 并由 worker 回填（避免通途重号）；OpenAPI 带反代前缀；历史号段用 `web.backfill_order_numbers` 回填。
+- **更新**: `pb_orders/docs/reference/stockout-closed-loop.md` §2 第 1 步补「表头必须保留 + 交付前程序断言」；`pb_orders/AGENT_HANDOFF.md` 补坑 41 并修正坑 40 里「网页/worker 不接后缀链路」的过期断言（现已接 `order_number_usage`）；`pb-orders` skill 铁律与相关经验同步。
+
 ## 2026-10-22（断货 restock date 必须先查 EN 上游 + 钉钉头程）
 
 - **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` 新增 **§7「restock date 必须先查上游」**：断货 ≠ 拍一个 +3 个月。报给 Diane / Notion 的日期要从六处推出来 —— EN **Sales Order**（已下单未交）、**Production Plan / Work Order / 工序卡**（生产到哪）、**Delivery Note**（工厂出了没有）、**钉钉 `2026年下单表` + `发货信息总表`**（ZMT、离港/到港/入库）、**通途采购在途**、**通途海外仓可用**。判定：有在途且 ETA 早于客户最晚发货日 → 以在途为准；没有才按「补货下单 + 提前期」推并标 TBC。另补一条 Why：不查上游会把「已在生产/已在海上」的货报成还要等 3 个月，导致 PB 重新排期或内部重复下单。同步 `pb_orders/docs/reference/stockout-closed-loop.md` §1.2、`pb-orders` skill 与 `AGENT_HANDOFF.md`；同时把 §1 的 UPS 判据从 `Carrier Tracking` 改为 **`Pack Level Carrier Tracking ID`**。

@@ -541,6 +541,22 @@ uv run pytest tests/ -q
     （补发时务必传 `PB orders` 根目录，否则扫不全 → 后缀算小；查无会留警告）。
     **只做本地** —— 服务器上没有历史导入文件，网页表单/worker 不接这条链路。
     详见 `docs/reference/workflow.md` §10（含用法与测试）。
+    **2026-10-28 起网页/API 已接入**：服务器改用 `order_number_usage` 登记（不扫文件），
+    `jobs_service.prepare_reorder` 在 `BEGIN IMMEDIATE` 里预留 `-N`，worker 成功后回填实际写入
+    xlsx 的 `order_numbers`；API 收 `reorder` / `reorder_map`，冲突返回 `409 reorder_conflict`。
+    新库上线先跑一次 `python -m web.backfill_order_numbers --apply` 回填历史号。
+
+41. **改 invoice CSV 时表头丢了 —— 行筛选必须先保留第 1 行**（2026-10-19 真实事故，10-29 发现）：
+    摘无货单的脚本从 `i = 1` 开始扫数据行，写回时只 `"".join(keep)`，**表头从未放进 keep**。
+    当时只校验 H/D 行数和 H 行总额（30 张 / 2048.14 都对），没发现。
+    两周后审计用 pandas 默认 `header=0` 读，**第一行数据被当列名**，第一张票消失 →
+    误报「29 张 / 2013.15、有两张 $34.99 被剔」；实际只剔了 1 张，且第一张剩余票恰好也是 $34.99。
+    预防：`keep = [lines[0]]` 再处理数据行；交付前**程序断言**首格 == `Invoice Number`
+    （并与源文件表头逐字节相等）、数据行数 = H + D、文件名 `xN` == H 数、H 行总额 == txt；
+    有 `NotUsed` 原件时要求当前行 == 原件去掉被删票后的行（逐行相等）。
+    ⚠️ 别用 D 行总额求和校验：SPS 的 D 行重复整票总额，一票多明细时 `H ≠ ΣD` 是正常的。
+    下游审计若发现首格像 `INV…`，应按 `header=None` 读并报警，别让 pandas 静默吃行。
+    详见 `docs/solutions/workflow-issues/pb-invoice-csv-header-loss.md`。
 
 ## 8. 数量对账口径
 
@@ -836,3 +852,6 @@ uv run pytest tests/ -q
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
+- `docs/solutions/workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— 打单后才发现无货的闭环（invoice / Notion / SPS / 邮件）
+- `docs/solutions/workflow-issues/pb-invoice-csv-header-loss.md` —— invoice CSV 摘单丢表头：行筛选保留表头 + 交付前的结构断言
+- `docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md` —— 网页与 JSON API 共用服务层的设计取舍（鉴权 / 幂等 / 补发号登记）

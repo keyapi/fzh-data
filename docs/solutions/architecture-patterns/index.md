@@ -28,3 +28,4 @@ timestamp: 2026-07-28
 | 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务） | [account-period-revenue-reconciliation-ecosystem.md](account-period-revenue-reconciliation-ecosystem.md) |
 | ERPNext 工作流配置完整指南 | [erpnext-workflow-configuration.md](erpnext-workflow-configuration.md) |
 | SKU 背贴 PDF 生成与通用名称查询模式 | [sku-label-pdf-generation-and-name-lookup.md](sku-label-pdf-generation-and-name-lookup.md) |
+| 人 + Agent 共用的订单 API：PB 网页与 JSON API 共用一套服务层 | [pb-orders-json-api-human-agent.md](pb-orders-json-api-human-agent.md) |
