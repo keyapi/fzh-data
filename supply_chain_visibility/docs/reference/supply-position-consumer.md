@@ -35,6 +35,8 @@ uv run --with pyarrow python -m supply_chain_visibility.supply_position --delive
 ```
 
 `--audit-json`、`--status-json`均可重复，B文件结构为`{source, version, rows}`。
+PO输入同时支持原API的`results/status`与Jack刷新器的`statuses/raw_status`；
+组装时规范化字段，同一响应若同时提供互相矛盾的容器/状态则拒收，不盲选优先级。
 创建响应使用`{delivery_note, creations}`；缺lines不会自动造清单。
 相同创建ID或PO的内容/来源时点冲突会拒收，而不是盲选最后一条。
 保留PO批次的partial/终止原因及审计分页覆盖状态；未查询项仍待核实。

@@ -90,6 +90,32 @@ class PositionTests(unittest.TestCase):
         self.assertEqual(row["unresolved_qty"], 10)
         self.assertIn("po_observed_at_unknown", row["reasons"])
 
+    def test_po_refresh_statuses_raw_status_shape_is_consumable(self):
+        p = sample()
+        status = dict(p["po_statuses"]["results"]["PO1"])
+        status["raw_status"] = status.pop("status")
+        status["observed_at"] = p["po_statuses"]["observed_at"]
+        refreshed = {"statuses": {"PO1": status}, "unqueried": {},
+                     "requested": 1, "returned": 1, "partial": False,
+                     "termination_reason": "completed"}
+        payload = assemble_input(delivery=p["delivery"],
+            mappings={"source": "B", "version": "v1", "rows": p["mappings"]},
+            audits=[{"delivery_note": "DN1", "creations": p["creations"]}],
+            statuses=[refreshed], as_of=p["as_of"])
+        self.assertEqual(build_position(payload)["rows"][0]["po_completed_assumed_qty"], 10)
+
+    def test_conflicting_status_aliases_are_rejected(self):
+        p = sample()
+        mapping = {"source": "B", "version": "v1", "rows": p["mappings"]}
+        ambiguous = {"results": p["po_statuses"]["results"], "statuses": {}}
+        with self.assertRaisesRegex(ValueError, "conflict"):
+            assemble_input(delivery=p["delivery"], mappings=mapping, audits=[],
+                           statuses=[ambiguous], as_of=p["as_of"])
+        p["po_statuses"]["results"]["PO1"]["raw_status"] = "0"
+        with self.assertRaisesRegex(ValueError, "conflict"):
+            assemble_input(delivery=p["delivery"], mappings=mapping, audits=[],
+                           statuses=[p["po_statuses"]], as_of=p["as_of"])
+
     def test_build_report_carries_partial_batch_coverage(self):
         p = sample()
         p["input_sources"] = {"po_batches": [{"partial": True, "termination_reason": "rate_limited"}]}

@@ -104,14 +104,21 @@ def assemble_input(*, delivery, mappings, audits, statuses, as_of):
     results, batch_coverage = {}, []
     for response in statuses:
         body = unwrap(response)
-        if not isinstance(body.get("results"), dict):
-            raise ValueError("PO batch response requires results")
+        if "results" in body and "statuses" in body and body["results"] != body["statuses"]:
+            raise ValueError("PO result containers conflict")
+        entries = body.get("results", body.get("statuses"))
+        if not isinstance(entries, dict):
+            raise ValueError("PO batch response requires results/statuses")
         batch_coverage.append({k: body.get(k) for k in (
             "requested", "returned", "queried", "exhausted", "partial", "termination_reason")})
-        for code, entry in body["results"].items():
+        for code, entry in entries.items():
             if not isinstance(entry, dict):
                 raise ValueError("PO status result must be an object")
             item = dict(entry)
+            if "status" in item and "raw_status" in item and item["status"] != item["raw_status"]:
+                raise ValueError("PO raw/status values conflict: " + str(code))
+            if "status" not in item and "raw_status" in item:
+                item["status"] = item["raw_status"]
             if not item.get("observed_at") and body.get("observed_at"):
                 item["observed_at"] = body["observed_at"]
             if code in results and results[code] != item:
