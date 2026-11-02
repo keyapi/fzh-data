@@ -13,6 +13,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-02 | 删失需求、短史冷启动与季节/促销识别：D 的可复用方法 | [best-practices/censored-demand-cold-start-seasonality.md](best-practices/censored-demand-cold-start-seasonality.md) |
+| 2026-11-02 | D 需求预测层：状态分层、政策/数据/供给分离与 4 年历史 | [architecture-patterns/demand-forecast-layer-d.md](architecture-patterns/demand-forecast-layer-d.md) |
 | 2026-10-30 | 供应链补货 A/B/C 数据管线：活跃宇宙→市场归属→库存归并→决策基座 | [architecture-patterns/supply-chain-a-b-c-data-pipeline.md](architecture-patterns/supply-chain-a-b-c-data-pipeline.md) |
 | 2026-10-30 | 供应链复审与人工升级：能自动判的不要甩给人 | [workflow-issues/supply-chain-review-and-human-escalation.md](workflow-issues/supply-chain-review-and-human-escalation.md) |
 | 2026-10-30 | SKU 归一、单位层级、套件与拆包成品：供应链补货的复用规则 | [best-practices/sku-normalization-uom-sets-split-package.md](best-practices/sku-normalization-uom-sets-split-package.md) |

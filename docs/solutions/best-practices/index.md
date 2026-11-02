@@ -18,3 +18,4 @@ tags: [best-practices, index]
 | 办公室 OpenClash 屏蔽 Adobe 授权校验域名的处理与教训 | [adobe-genuine-prompts-office-openclash.md](adobe-genuine-prompts-office-openclash.md) |
 | 一个 Agent 实现、另一个复审，需要多轮返修才收敛 | [multi-agent-rework-review-status-separation.md](multi-agent-rework-review-status-separation.md) |
 | 供应链 SKU 归一、单位层级、套件与拆包成品（大小写/后缀/共享/0库存） | [sku-normalization-uom-sets-split-package.md](sku-normalization-uom-sets-split-package.md) |
+| 删失需求、短史冷启动与季节/促销识别（D 方法） | [censored-demand-cold-start-seasonality.md](censored-demand-cold-start-seasonality.md) |

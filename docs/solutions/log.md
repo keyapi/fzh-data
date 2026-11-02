@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-02（D 需求预测 pivot）
+- **新增**: `architecture-patterns/demand-forecast-layer-d.md` —— D 四状态；政策排除/数据缺口/供给缺口分离；CG 销量计入分公司；统一 2022-2026 订单 parquet。
+- **新增**: `best-practices/censored-demand-cold-start-seasonality.md` —— 删失需求 NB-EM 估计与遮断回测；短史历史归一/冷启动/池化；自动季节/清仓特征；广告不当前置。
+
 ## 2026-10-30（供应链 A/B/C 复盘）
 - **新增**: `architecture-patterns/supply-chain-a-b-c-data-pipeline.md` —— 四层 artifact 边界；库存仓作投放证据、DN 时间裁决、套件/拆包/CG 汇总行、join 三态。
 - **新增**: `best-practices/sku-normalization-uom-sets-split-package.md` —— casefold/后缀归一、0库存忽略、单一形态正常、HM 独立、TJ# 拆 Bundle、Cover/Foam 组装、三层单位；列出 9 条已推翻旧结论。

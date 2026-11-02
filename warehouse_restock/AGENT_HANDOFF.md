@@ -139,3 +139,7 @@ BOM Excel 列名用 `, ` （逗号+空格）分隔。脚本需用 `norm_col` 统
 - `docs/solutions/best-practices/sku-normalization-uom-sets-split-package.md` — 大小写/后缀归一、0 库存忽略、单一形态、HM、TJ# 拆 Bundle、Cover/Foam 拆包。
 - `docs/solutions/workflow-issues/supply-chain-review-and-human-escalation.md` — 能自动判的不要甩给人；命名只用美东USNJ/美中USTX；复审分层。
 
+补充 D 阶段方法：
+- `docs/solutions/architecture-patterns/demand-forecast-layer-d.md`
+- `docs/solutions/best-practices/censored-demand-cold-start-seasonality.md`
+

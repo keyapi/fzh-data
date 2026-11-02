@@ -29,3 +29,4 @@ timestamp: 2026-07-28
 | ERPNext 工作流配置完整指南 | [erpnext-workflow-configuration.md](erpnext-workflow-configuration.md) |
 | SKU 背贴 PDF 生成与通用名称查询模式 | [sku-label-pdf-generation-and-name-lookup.md](sku-label-pdf-generation-and-name-lookup.md) |
 | 供应链补货 A/B/C 数据管线：活跃宇宙→市场归属→库存归并→决策基座 | [supply-chain-a-b-c-data-pipeline.md](supply-chain-a-b-c-data-pipeline.md) |
+| D 需求预测层：状态分层、政策/数据/供给分离与 4 年历史 | [demand-forecast-layer-d.md](demand-forecast-layer-d.md) |
