@@ -26,6 +26,39 @@ uv run --with pyarrow python -m supply_chain_visibility.supply_position --input 
 uv run --with pyarrow python -m pytest supply_chain_visibility/tests/test_supply_position.py -q
 ```
 
+### 2026-11-02：直接组装保存的API导出
+
+无需手工拼整个envelope，可直接输入已保存的API响应（支持外层`message`）：
+
+```powershell
+uv run --with pyarrow python -m supply_chain_visibility.supply_position --delivery-json D:/private/delivery.json --mapping-json D:/private/B.json --audit-json D:/private/audit-DN1.json --status-json D:/private/po-batch1.json --out D:/private/supply-position
+```
+
+`--audit-json`、`--status-json`均可重复，B文件结构为`{source, version, rows}`。
+创建响应使用`{delivery_note, creations}`；缺lines不会自动造清单。
+相同创建ID或PO的内容/来源时点冲突会拒收，而不是盲选最后一条。
+保留PO批次的partial/终止原因及审计分页覆盖状态；未查询项仍待核实。
+组装仅关联本地文件，不会远程拉取或绕过受限权限。
+
+### 统一读取与查看
+
+下游使用`read_position(out, as_of=带时区时点, max_age_seconds=业务允许时效)`。
+它校验固定版本路径、manifest/文件哈希、Parquet类型/行数及与报告逐行一致，
+返回已解析的reasons/tranches，不要求下游自己解析JSON证据列。
+
+```powershell
+uv run --with pyarrow python -m supply_chain_visibility.supply_position --inspect --out D:/private/supply-position --max-age-seconds 86400
+```
+
+时效由调用方显式指定；过期、未来时点、来源时点未知或最近刷新失败，默认拒绝读取。
+需查看旧资料时加`--allow-stale`，保留所有警告，仍不授权净额/下单。
+只读CLI显示汇总，不输出商品明细；程序读取返回完整表。
+
+快照as_of、DN原始observed_at/as_of、PO来源observed_at分别检查。
+刚重新生成的文件不能把旧来源变新；日期不带时区/只有日期时标来源时点未知。
+缓存读取时间received_at不替代observed_at。旧版本快照缺来源字段时同样保守提示，
+不静默视为新鲜。输入文件损坏/JSON解析失败也记录刷新失败，保留旧latest。
+
 PyArrow通过本次命令的 `--with` 环境提供，不要求修改服务器依赖。
 没有PyArrow的普通测试环境仍运行核心规则，明确跳过两项Parquet测试；
 发布验收必须按上面命令安装PyArrow执行，不能用跳过结果代替。
@@ -77,6 +110,9 @@ purpose, evidence`。purpose为 `branch/fba/unknown`；同DN/行只能一条映�
 无查询、限流、权限不足、超时和未知状态均进入待核实，不能当作没有供应。
 状态0为待到货；1/2保留具体商品分配未知；3为用户批准的整PO完成假设；4为作废。
 不会把状态3观测时间写成实际收货时间。
+普通非退货DN的actual_qty也须与审计贡献量一致；不能仅比较原始qty列，
+否则原始qty为10但actual_qty变12时会错误关闭12。显式conservation_ok=false/0
+禁止关闭；字符串is_return不再按Python真值判定，必须布尔或整数0/1。
 
 ## 输出与数量去向
 
@@ -121,3 +157,9 @@ Parquet按显式schema写入，空结果也有schema；数量nullable，复杂�
 - Jack补完整创建清单导出和PO状态来源时点；主线补批准B映射、SO/生产/当前库存与D预测。
   入库后是否已含某库存快照仍独立核实，不能重复加入库存。
 - 最终`replenishment_decisions`由上述拼接完成后产出；本模块不是该最终交付。
+
+2026-11-02补验：27项消费器测试通过，包括2000商品/2000条DN明细/20000件的
+离线守恒对照、保存API导出→组装→Parquet→统一读回的端到端用例。
+这是本地计算规模验证，不是生产API吞吐或2000真实SKU业务验收。
+重放10月30日42条真实DN时，新生成文件仍明确提示旧快照与来源时点不足，
+未访问生产采集新数据，未伪装当前在途/库存。
