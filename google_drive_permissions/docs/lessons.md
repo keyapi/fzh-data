@@ -56,3 +56,11 @@ description: 踩坑记录：writersCanShare vs capabilities.canShare、权限接
 - 用 gspread 逐表 `list_permissions()` 需要几百次串行调用（本项目 260 次花了 12 分钟+）。
 - **快得多**：`Drive files.list` 带 `permissions(...)` 字段，一次分页拉全部；加权限 `POST permissions.create`、删 `DELETE permissions/{id}`。
 - 400+ 文件时差距是数量级的，优先 Drive API 批量。
+
+## Lesson 8：本机 Google API 的 SSL EOF 是 IPv6 路由问题
+
+- **表象**：`www.googleapis.com` 偶发 `SSL: UNEXPECTED_EOF_WHILE_READING`，但 `oauth2.googleapis.com`、`sheets.googleapis.com` 正常。
+- **根因**：本机解析得到 Google 的 IPv6 地址，但 IPv6 路由不通；urllib3 先试 IPv6 就断，表现为瞬时 SSL 错误。
+- **诊断**：`curl -4` 返回 401（可达），`curl -6` 连接失败；不是 Google API 宕机，也不是凭证坏了。
+- **修复**：请求前设置 `urllib3.util.connection.allowed_gai_family = lambda: socket.AF_INET`，并对 429/5xx/SSL/连接错误做指数退避；连续失败后切备用 Drive 主机 `https://content.googleapis.com`（Drive v3 路径相同，实测可用）。
+- **实现**：`drive_folder_ops/drive_folder_ops.py` 的 `install_ipv4_only()` 与 `DriveClient.request()`。

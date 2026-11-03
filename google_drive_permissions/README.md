@@ -43,3 +43,17 @@ https://docs.google.com/spreadsheets/d/1TTVVHQOe5VCmdLZynGFAKXSPUVIvtlB6kOOqgszI
 - 表里全是同事邮箱，**别转发、别截图外传**。
 - 加权限前先确认对方是**在职**。不确定就看「账号主清单」的状态。
 - 「保留」「不取消」即使状态写成离职也不会被脚本删。
+
+## 把另一个 Google 账号的文件夹交给机器人（无需新凭证）
+
+服务账号是独立机器人身份，不是某个 Gmail 的账号。要让 `mxdeals1023@gmail.com` 名下的文件夹
+可被 Agent 操作，只需登录该账号，把文件夹共享给：
+
+```text
+colab-gsheets@gsheets-351101.iam.gserviceaccount.com
+```
+
+角色选「编辑者」即可。**不需要新建服务账号、不需要新 JSON 密钥、不需要用户 OAuth。**
+
+- 完整步骤与边界：[docs/reference/share-folder-with-service-account.md](docs/reference/share-folder-with-service-account.md)
+- 验证与内容读写（Markdown / Google Sheet）：[../drive_folder_ops/README.md](../drive_folder_ops/README.md)
