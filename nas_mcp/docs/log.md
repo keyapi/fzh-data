@@ -8,6 +8,18 @@ tags: [nas, mcp, log]
 
 # 变更日志
 
+## 2026-11-03
+
+- **故障 + 恢复**：容器连续运行 42 天、闲置 29 天后出现**假活** —— 进程/端口/鉴权/`tools/list` 都正常，
+  但所有真实调用报 DSM 错误码 **119 `Invalid session / SID not found.`**；进程内「会话失效→重登」在 11-02
+  还能恢复，11-03 起重登后仍被拒。同一凭据在**新进程**里一切正常 → `docker restart nas-mcp` 后恢复并实测验证
+  （`nas_health` available=true、`nas_list_shares` 2 个共享、`nas_list_folder` 正常）。
+- **新增**: [reference/self-healing.md](reference/self-healing.md) —— 三类失败（崩溃/假活/上游故障）的区分、
+  A（定时探活+重启）/B（HEALTHCHECK+autoheal）/C（进程内 watchdog）方案对比、探活频率结论
+  （10 分钟不必要，30 分钟推荐，1 小时可接受；建议连续 2 次失败才重启）、systemd timer 实施草图。
+- **顺带记录（未修）**：`tool_list_shares()` 的 `fetch()` 闭包绑定旧客户端，重登后仍用旧 `c`；
+  与本次全挂无关（`nas_health` 走 `list_strict` 同样失败），属独立小 bug。
+
 ## 2026-09-21
 
 - **初始化 OKF bundle**：新建 `nas_mcp/` 模块并实现服务。
