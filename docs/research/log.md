@@ -7,6 +7,21 @@ description: docs/research 目录变更历史
 
 # 变更日志
 
+## 2026-11-03
+
+- **新增**: [2026-11-03-nas-mcp-opensource-landscape.md](2026-11-03-nas-mcp-opensource-landscape.md) —
+  重扫群晖 MCP 生态并回答「要不要换掉自建」。起因：`nas_mcp` 出现「进程活着但会话假重登」故障（详见
+  `nas_mcp/docs/reference/self-healing.md`）。
+  - **生态**：普遍小众（最高 14★）。**mrquj/mcp-server-synology** 姿态最接近（Streamable HTTP + Bearer、
+    只读默认、路径白名单、`/healthz`、**106/107/119 重认证 + 重放**）；**cmeans/mcp-synology** 工程最成熟
+    （vDSM 矩阵 CI、codecov、真实 NAS live-test、单飞重认证、DSM Auto Block 防护）。其余多为 71~87 工具的
+    广面管理员型，权限面不适合对外接 ChatGPT。
+  - **关键差距**：会话生命周期、唯一会话名（避免 duplicate login 互踢）、健康端点、`SYNO.API.Info`
+    运行时发现、错误码分族翻译、长任务 progress、mock/CI 测试体系。
+  - **我们的独有项**：图片/PDF/Office 渲染、批量缩略图、MD5、File Station 深链（照抄 EN 实现）、
+    中文共享目录、ChatGPT 远程直连已生产验证；cmeans 自述缺 thumbnails/MD5，且 Streamable HTTP 仍是 roadmap。
+  - **结论：不整体替换，按 P0/P1/P2 清单借鉴**；待 cmeans 支持 Streamable HTTP 或我们需要多客户端时再评估。
+
 ## 2026-09-21
 
 - **新增**: [2026-09-21-sellfox-amazon-settlement-reports.md](2026-09-21-sellfox-amazon-settlement-reports.md) — 赛狐 API 拉 Amazon 账期报表的可行性与覆盖度实测。起点是「财务报税要各账号 Amazon 账期报表，现在只能拿 PDF 自己算」。结论：**能拉，但只有「插件获取报告」一条路，且 API 不可触发抓取**。赛狐侧三条路径实测分工：①`亚马逊原报告`（`report/center/add.json`）是**赛狐服务端生成**，报告类型枚举里**没有账期/结算**；②`自定义报表`（`custom/report/*`）是赛狐自建分析表，非 Amazon 结算文件；③`插件获取报告`（`report/center/task/getPlugPageList.json`）**唯一含账期**，靠浏览器插件在账号登录态下抓回存 COS，接口是**纯读**。旁证：`创建报告任务` 的 `reportType` 只支持 `PRODUCT_SALE_REPORT` 一个值 ⇒ 抓取只能在 UI 侧发生。

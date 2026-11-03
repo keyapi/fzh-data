@@ -23,8 +23,11 @@ import io
 import json
 import os
 import posixpath
+import socket
 import sys
 import threading
+import time
+import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +35,13 @@ from urllib.parse import quote_plus
 
 import requests
 from PIL import Image
+from synology_api.base_api import BaseApi  # noqa: E402
+from synology_api.error_codes import (  # noqa: E402
+    auth_error_codes,
+    error_codes as generic_error_codes,
+    file_station_error_codes,
+)
+from synology_api.exceptions import LoginError  # noqa: E402
 from synology_api.filestation import FileStation  # noqa: E402
 
 PORT = int(os.environ.get("NAS_MCP_PORT", "8402"))
@@ -44,6 +54,27 @@ IMAGE_MAX_EDGE = int(os.environ.get("NAS_MCP_IMAGE_MAX_EDGE", "1280"))
 # File Station 深链基址（需 DSM 登录才能打开 → 天然「有 NAS 权限的人才看得到」）
 LINK_BASE = (os.environ.get("NAS_MCP_LINK_BASE") or "https://nas.vilavi.cn:11024").rstrip("/")
 LOG = os.environ.get("NAS_MCP_LOG", "")
+SERVER_VERSION = "0.1.3"
+
+# ── 进程实例标识（仅用于日志/healthz 诊断）─────────────────
+# 注：曾评估「唯一 DSM 会话名」以规避 duplicate login 互踢，**实测本 DSM 不适用**：
+# 自定义 session 名（如 nasmcp_xxx）登录返回 402；而 session='webui' 的两个会话
+# 可以共存，重复登录不会踢掉旧的。所以沿用库默认的 'webui'。
+INSTANCE_ID = f"{socket.gethostname()[:16]}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+
+# ── P0：重登串行化 + Auto Block 熔断 ───────────────────────
+# 注：曾想做「5 秒内刚登录过就复用」的单飞窗口，实测会掩盖「刚登录就被外部
+# 登出」的情况，导致会话失效后不再恢复。改为：重登由 _nas_lock 串行化执行
+# （本 DSM 允许同账号多会话共存，重复登录无害），只额外加登录失败熔断。
+AUTOBLOCK_WINDOW = 300.0       # 5 分钟
+AUTOBLOCK_MAX_FAILURES = 3     # 连续失败 3 次
+AUTOBLOCK_COOLDOWN = 900.0     # 熔断 15 分钟（DSM Auto Block 默认 10 次/5 分钟封 IP）
+
+_login_state = {"last_ok": 0.0, "failures": [], "blocked_until": 0.0}
+
+# ── 并发上限：避免并行工具调用把 DSM 会话/线程打爆 ─────────
+MAX_TOOL_CONCURRENCY = int(os.environ.get("NAS_MCP_MAX_CONCURRENCY", "8"))
+_tool_sem = threading.BoundedSemaphore(MAX_TOOL_CONCURRENCY)
 
 
 def _parse_roots() -> tuple[list[str], bool]:
@@ -112,18 +143,45 @@ _nas: FileStation | None = None
 
 
 def nas_client(relogin: bool = False) -> FileStation:
-    """DSM 客户端（进程内复用）。relogin=True 时丢弃旧会话重新登录。"""
+    """DSM 客户端（进程内复用）。relogin=True 时丢弃旧会话**真正重新登录**。
+
+    - **串行**：重登在 `_nas_lock` 内执行，避免并发登录风暴。
+    - **熔断**：连续 3 次登录失败（5 分钟窗口）后停 15 分钟 —— DSM Auto Block
+      默认 10 次失败/5 分钟就封 IP，绝不能无限重试。
+    """
     global _nas
     with _nas_lock:
+        now = time.monotonic()
+        st = _login_state
         if _nas is None or relogin:
+            if now < st["blocked_until"]:
+                raise NasError(
+                    "DSM 登录已熔断，约 %d 秒后重试（连续登录失败，可能是密码变更或 "
+                    "DSM Auto Block；先检查 /opt/nas-mcp/.env）"
+                    % int(st["blocked_until"] - now))
             url = os.environ.get("NAS_URL", "")
             user, pw = os.environ.get("NAS_USERNAME", ""), os.environ.get("NAS_PASSWORD", "")
             if not (url and user):
                 raise NasError("NAS_URL / NAS_USERNAME 未配置")
             host, port, secure = _parse_nas_url(url)
-            _nas = FileStation(ip_address=host, port=port, username=user, password=pw,
-                               secure=secure, cert_verify=False, dsm_version=7, debug=False)
-            log(f"  DSM 会话{'重建' if relogin else '建立'}: {host}:{port}")
+            # synology_api 把 Authentication 缓存在**类级** BaseApi.shared_session 里：
+            # 不清掉的话，新建 FileStation 只会复用旧（可能已失效的）会话，
+            # relogin 变成「假重登」—— 实测 2026-11-03：会话过期后永远报 119。
+            BaseApi.shared_session = None
+            try:
+                _nas = FileStation(ip_address=host, port=port, username=user, password=pw,
+                                   secure=secure, cert_verify=False, dsm_version=7, debug=False)
+            except LoginError as e:
+                st["failures"] = [t for t in st["failures"]
+                                  if now - t < AUTOBLOCK_WINDOW] + [now]
+                if len(st["failures"]) >= AUTOBLOCK_MAX_FAILURES:
+                    st["blocked_until"] = now + AUTOBLOCK_COOLDOWN
+                    log("!! DSM 登录连续失败，熔断 15 分钟（疑似 Auto Block / 密码变更）")
+                raise NasError(f"DSM 登录失败：{e}") from e
+            st["failures"].clear()
+            st["blocked_until"] = 0.0
+            st["last_ok"] = now
+            log(f"  DSM 会话{'重建' if relogin else '建立'}: {host}:{port} ({INSTANCE_ID})")
         return _nas
 
 
@@ -140,6 +198,39 @@ def _is_session_error(err) -> bool:
     # 105 / 106 / 107 = DSM 的鉴权类错误码（与 EN 的 pim/api/nas.py 对齐）
     return ("session" in s) or ("timeout" in s) or any(
         ('code":%d' % c) in s or ('code": %d' % c) in s for c in (105, 106, 107))
+
+
+def describe_dsm_error(err) -> str:
+    """把 DSM 的数字错误码翻译成可操作的中文（借用库自带码表，不自己发明）。"""
+    if isinstance(err, NasError):
+        return str(err)
+    code = getattr(err, "error_code", None)
+    msg = None
+    if isinstance(code, int):
+        msg = (file_station_error_codes.get(code)
+               or auth_error_codes.get(code)
+               or generic_error_codes.get(code))
+    base = f"{type(err).__name__}: {err}"
+    return f"{base}（DSM {code}：{msg}）" if msg else base
+
+
+def retry_on_session(fn):
+    """调用 fn(client)；会话失效（105/106/107/119）则真正重登后重试一次。
+
+    用于「一次性发起任务」这类不经过 list_strict 的调用（search / folder_size /
+    md5 / archive），否则会话过期后这些工具不会自愈。
+    """
+    last = None
+    for attempt in (1, 2):
+        try:
+            return fn(nas_client(relogin=(attempt == 2)))
+        except Exception as e:                       # noqa: BLE001
+            if attempt == 1 and _is_session_error(e):
+                log(f"  会话失效，重登重试：{e}")
+                last = e
+                continue
+            raise
+    raise NasError(f"重试后仍失败：{last}")
 
 
 def list_strict(path: str, limit: int = 100, offset: int = 0) -> dict:
@@ -160,7 +251,7 @@ def list_strict(path: str, limit: int = 100, offset: int = 0) -> dict:
                 log(f"  会话失效，重登重试：{e}")
                 last = e
                 continue
-            raise NasError(f"{type(e).__name__}: {e}") from e
+            raise NasError(describe_dsm_error(e)) from e
         if not r.get("success"):
             err = r.get("error") or {}
             if attempt == 1 and _is_session_error(err):
@@ -213,7 +304,7 @@ def fetch_bytes(path: str, max_bytes: int = MAX_IMAGE_BYTES) -> bytes:
                 log(f"  会话失效，重登重试：{e}")
                 last = e
                 continue
-            raise NasError(f"{type(e).__name__}: {e}") from e
+            raise NasError(describe_dsm_error(e)) from e
     raise NasError(f"重试后仍失败：{last}")
 
 
@@ -645,14 +736,9 @@ def tool_search(a: dict) -> dict:
     def start(c):
         return c.search_start(folder_path=p, recursive=True, pattern=name, extension=ext)
 
-    res = start(nas_client())
+    res = retry_on_session(start)
     c = nas_client()
-    try:
-        task_id = _task_id(res, "搜索")
-    except NasError:
-        res = start(nas_client(relogin=True))
-        c = nas_client()
-        task_id = _task_id(res, "搜索")
+    task_id = _task_id(res, "搜索")
 
     def fetch():
         # 注意：synology_api 的 get_search_list 要求 taskid **带双引号**
@@ -683,14 +769,9 @@ def tool_folder_size(a: dict) -> dict:
     def start(c):
         return c.start_dir_size_calc(path=p)
 
-    res = start(nas_client())
+    res = retry_on_session(start)
     c = nas_client()
-    try:
-        task_id = _task_id(res, "目录统计")
-    except NasError:
-        res = start(nas_client(relogin=True))
-        c = nas_client()
-        task_id = _task_id(res, "目录统计")
+    task_id = _task_id(res, "目录统计")
 
     state = {"restarts": 0}
     MAX_RESTARTS = 3
@@ -698,7 +779,7 @@ def tool_folder_size(a: dict) -> dict:
     def restart(_why: str) -> dict:
         nonlocal task_id
         state["restarts"] += 1
-        task_id = _task_id(start(nas_client()), "目录统计")
+        task_id = _task_id(retry_on_session(start), "目录统计")
         return {"finished": False}
 
     def fetch():
@@ -789,6 +870,32 @@ def tool_read_pdf(a: dict) -> dict:
 
 # 经 SYNO.API.Info 查得：Thumb 在 entry.cgi，maxVersion=3（库未收录，自行构造）
 THUMB_PATH, THUMB_VER = "entry.cgi", "3"
+_thumb_api_cache = {"path": None, "version": None}
+
+
+def thumb_api(c) -> tuple[str, str]:
+    """运行时通过 SYNO.API.Info 发现 Thumb 的 path/version 并缓存（DSM 6/7 通用）。
+
+    库的 FileStation API 表里没有 Thumb，所以不能直接用 c.file_station_list。
+    发现失败时回退到内置默认值（entry.cgi / 3）。
+    """
+    if _thumb_api_cache["path"]:
+        return _thumb_api_cache["path"], _thumb_api_cache["version"]
+    try:
+        r = requests.get(
+            f"{c.base_url}query.cgi",
+            params={"api": "SYNO.API.Info", "version": "1", "method": "query",
+                    "query": "SYNO.FileStation.Thumb"},
+            verify=False, timeout=30)
+        d = (r.json().get("data") or {}).get("SYNO.FileStation.Thumb") or {}
+        path, ver = d.get("path"), d.get("maxVersion")
+        if path and ver:
+            _thumb_api_cache.update({"path": path, "version": str(ver)})
+            log(f"  Thumb API 发现: {path} v{ver}")
+            return path, str(ver)
+    except Exception as e:                          # noqa: BLE001
+        log(f"  Thumb API 发现失败，用内置默认值：{type(e).__name__}")
+    return THUMB_PATH, THUMB_VER
 
 
 def tool_thumbnail(a: dict) -> dict:
@@ -804,17 +911,24 @@ def tool_thumbnail(a: dict) -> dict:
     if size not in ("small", "medium", "large"):
         size = "small"
 
-    c = nas_client()
-    # path 用双引号包起来 —— EN 的 pim/api/nas.py 注释写明 spec 要求
-    # （实测加不加都通；加上更稳，能防带逗号等特殊字符的路径）
-    url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
-           f"&method=get&path={quote_plus(chr(34) + p + chr(34))}&size={size}&_sid={c._sid}")
-    token = getattr(c.session, "_syno_token", "") or ""
-    r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
-    r.raise_for_status()
-    raw = r.content
-    if raw[:2] == b"{" or b'"error"' in raw[:200]:
-        raise NasError("缩略图不可用（该类型/该图可能没有缩略图）：" + raw[:200].decode("utf-8", "replace"))
+    def fetch_raw(c):
+        # path 用双引号包起来 —— EN 的 pim/api/nas.py 注释写明 spec 要求
+        # （实测加不加都通；加上更稳，能防带逗号等特殊字符的路径）
+        tpath, tver = thumb_api(c)
+        url = (f"{c.base_url}{tpath}?api=SYNO.FileStation.Thumb&version={tver}"
+               f"&method=get&path={quote_plus(chr(34) + p + chr(34))}&size={size}&_sid={c._sid}")
+        token = getattr(c.session, "_syno_token", "") or ""
+        r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
+        r.raise_for_status()
+        raw = r.content
+        if raw[:2] == b"{" or b'"error"' in raw[:200]:
+            msg = raw[:200].decode("utf-8", "replace")
+            if _is_session_error(msg):
+                raise NasError(msg)                   # 触发 retry_on_session 重登
+            raise NasError("缩略图不可用（该类型/该图可能没有缩略图）：" + msg)
+        return raw
+
+    raw = retry_on_session(fetch_raw)
 
     try:
         im = Image.open(io.BytesIO(raw))
@@ -845,14 +959,9 @@ def tool_file_md5(a: dict) -> dict:
     def start(c):
         return c.start_md5_calc(file_path=p)
 
-    res = start(nas_client())
+    res = retry_on_session(start)
     c = nas_client()
-    try:
-        task_id = _task_id(res, "MD5")
-    except NasError:
-        res = start(nas_client(relogin=True))
-        c = nas_client()
-        task_id = _task_id(res, "MD5")
+    task_id = _task_id(res, "MD5")
 
     def status(tid):
         # 有的版本要带引号，有的不要 —— 两种都试
@@ -951,26 +1060,33 @@ def tool_read_doc(a: dict) -> dict:
 
 def tool_list_shares(_a: dict) -> dict:
     """列出**该账号能看到的共享文件夹** —— 让模型先知道有什么，不用猜路径。只读。"""
-    c = nas_client()
-
-    def fetch():
-        r = c.get_list_share(limit=100, offset=0, additional="size,time")
+    last = None
+    for attempt in (1, 2):
+        c = nas_client(relogin=(attempt == 2))
+        try:
+            r = c.get_list_share(limit=100, offset=0, additional="size,time")
+        except Exception as e:                       # noqa: BLE001
+            if attempt == 1 and _is_session_error(e):
+                log(f"  会话失效，重登重试：{e}")
+                last = e
+                continue
+            raise NasError(describe_dsm_error(e)) from e
         if isinstance(r, str):
             raise NasError(r[:200])
         if not (isinstance(r, dict) and r.get("success")):
-            raise NasError("列共享文件夹失败：" + json.dumps(r, ensure_ascii=False)[:200])
+            err = r.get("error") if isinstance(r, dict) else None
+            if attempt == 1 and _is_session_error(err):
+                last = err
+                continue
+            raise NasError("列共享文件夹失败：" + json.dumps(err, ensure_ascii=False)[:200])
         d = r.get("data") or {}
-        return {"shares": [{"name": s0.get("name"), "path": s0.get("path")}
-                           for s0 in (d.get("shares") or [])],
-                "total": d.get("total")}
-
-    try:
-        return fetch()
-    except NasError:
-        globals()["_nas"] = None                      # 会话可能失效，重登一次
-        out = fetch()
-        out["note"] = "（已重新登录后取得）"
+        out = {"shares": [{"name": s0.get("name"), "path": s0.get("path")}
+                          for s0 in (d.get("shares") or [])],
+               "total": d.get("total")}
+        if attempt == 2:
+            out["note"] = "（已重新登录后取得）"
         return out
+    raise NasError(f"重试后仍失败：{last}")
 
 
 def tool_folder_thumbnails(a: dict) -> dict:
@@ -1004,7 +1120,8 @@ def tool_folder_thumbnails(a: dict) -> dict:
     }, ensure_ascii=False, indent=2)}]
 
     for it in picked:
-        url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
+        tpath, tver = thumb_api(c)
+        url = (f"{c.base_url}{tpath}?api=SYNO.FileStation.Thumb&version={tver}"
                f"&method=get&path={quote_plus(chr(34) + it['path'] + chr(34))}&size={size}&_sid={c._sid}")
         try:
             r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
@@ -1049,9 +1166,7 @@ def tool_list_archive(a: dict) -> dict:
                                           sort_by="name", sort_direction="asc",
                                           codepage=codepage, password=password)
 
-    res = call(nas_client())
-    if isinstance(res, str):
-        res = call(nas_client(relogin=True))
+    res = retry_on_session(call)
     if isinstance(res, str):
         raise NasError("列压缩包失败：" + res[:200])
     if not (isinstance(res, dict) and res.get("success")):
@@ -1147,12 +1262,14 @@ class Handler(BaseHTTPRequestHandler):
             self._result(mid, {
                 "protocolVersion": PROTOCOL,
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "nas-mcp", "version": "0.1.0"},
+                "serverInfo": {"name": "nas-mcp", "version": SERVER_VERSION},
                 "instructions": (
                     f"只读访问公司群晖 NAS。允许的根目录：{ROOTS_STR}。"
                     "只提供列目录/查元数据/读小文本文件；无任何写入或删除能力。"
                 ),
             })
+        elif method == "ping":
+            self._result(mid, {})
         elif method.startswith("notifications/"):
             self.send_response(202)
             self.send_header("Content-Length", "0")
@@ -1166,6 +1283,11 @@ class Handler(BaseHTTPRequestHandler):
             fn = TOOL_IMPL.get(name)
             if fn is None:
                 self._error(mid, -32602, f"未知工具 {name}")
+                return
+            if not _tool_sem.acquire(timeout=60):
+                self._result(mid, {"content": [{"type": "text",
+                                   "text": f"服务器忙：并发调用已达上限（{MAX_TOOL_CONCURRENCY}），请稍后重试"}],
+                                   "isError": True})
                 return
             try:
                 out = fn(args)
@@ -1185,12 +1307,38 @@ class Handler(BaseHTTPRequestHandler):
                                    "isError": True})
             except Exception as e:                  # noqa: BLE001
                 log(f"!! tool {name} error: {type(e).__name__}: {e}")
-                self._result(mid, {"content": [{"type": "text", "text": f"错误：{e}"}],
+                self._result(mid, {"content": [{"type": "text",
+                                   "text": f"错误：{describe_dsm_error(e)}"}],
                                    "isError": True})
+            finally:
+                _tool_sem.release()
         else:
             self._error(mid, -32601, f"unknown method {method}")
 
     def do_GET(self):
+        """GET /healthz：本机回环、**不需要令牌**的轻量健康端点（不调 DSM）。
+
+        与 systemd 探活互补：那边是「真实调用 nas_health」，这里给 Docker/监控
+        看进程状态与当前策略，不产生 DSM 会话。其它 GET 仍需 Bearer。
+        """
+        path = (self.path or "").split("?", 1)[0]
+        if path == "/healthz":
+            now = time.monotonic()
+            st = _login_state
+            self._send({
+                "ok": True,
+                "server": "nas-mcp",
+                "version": SERVER_VERSION,
+                "read_only": True,
+                "tools": len(TOOLS),
+                "allowed_roots": ROOTS,
+                "dsm_session_ready": _nas is not None,
+                "instance_id": INSTANCE_ID,
+                "last_login_age_s": (round(now - st["last_ok"], 1) if st["last_ok"] else None),
+                "login_blocked_for_s": max(0, round(st["blocked_until"] - now, 1)),
+                "recent_login_failures": len(st["failures"]),
+            })
+            return
         if not self._auth_ok():
             self._send({"error": "unauthorized"}, 401)
             return
@@ -1201,5 +1349,9 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if not TOKEN:
         raise SystemExit("必须设置 NAS_MCP_TOKEN")
-    log(f"=== nas-mcp 启动于 {BIND}:{PORT}（只读，root={ROOT}） ===")
+    _missing = [k for k in ("NAS_URL", "NAS_USERNAME", "NAS_PASSWORD")
+                if not os.environ.get(k)]
+    if _missing:
+        log(f"!! 缺少环境变量：{', '.join(_missing)}（首次调用会失败）")
+    log(f"=== nas-mcp 启动于 {BIND}:{PORT}（只读，root={ROOT}，并发上限={MAX_TOOL_CONCURRENCY}） ===")
     ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()

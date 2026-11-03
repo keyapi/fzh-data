@@ -301,5 +301,61 @@ check("nas_list_folder 带自身 link", bool(lf.get("link")), "")
 check("默认不给子项附 link（避免输出膨胀）",
       not any("link" in i for i in (lf.get("items") or [])), "")
 
+print("\n── 15) 会话失效后自动重登（回归：BaseApi.shared_session 类级复用 bug）")
+# 背景：synology_api 把 Authentication 缓存在类级 BaseApi.shared_session，
+# 不清掉的话 relogin 只是复用死会话 → 会话过期后永远报 119（2026-11-03 生产故障）。
+if os.environ.get("NAS_URL"):
+    import requests as _rq
+
+    _base = os.environ["NAS_URL"].rstrip("/")
+
+    def _force_logout(sid: str):
+        return _rq.get(_base + "/webapi/auth.cgi",
+                       params={"api": "SYNO.API.Auth", "version": "7", "method": "logout",
+                               "session": "webui", "_sid": sid},
+                       verify=False, timeout=30)
+
+    try:
+        _force_logout(S.nas_client()._sid)      # 服务端登出，客户端仍拿着旧 SID
+        h2 = S.tool_health({})
+        check("nas_health 会话失效后自动恢复", h2.get("available") is True,
+              str(h2.get("error"))[:80])
+
+        _force_logout(S.nas_client()._sid)
+        ls = S.tool_list_shares({})
+        check("nas_list_shares 会话失效后自动恢复", ls.get("total") is not None,
+              f"total={ls.get('total')} note={ls.get('note')}")
+    except Exception as e:                      # noqa: BLE001
+        check("会话失效恢复", False, f"{type(e).__name__}: {e}")
+else:
+    print("  SKIP  需要 NAS_URL")
+
+print("\n── 16) P0 护栏：实例标识 / 登录熔断")
+check("实例标识合法", bool(S.INSTANCE_ID) and len(S.INSTANCE_ID) <= 60, S.INSTANCE_ID)
+
+# 用桩替换 FileStation 模拟登录失败，验证连续 3 次后熔断（且第 4 次不再尝试网络）
+class _BoomFS:
+    def __init__(self, **kw):
+        raise S.LoginError(error_code=400)
+
+
+_orig_fs = S.FileStation
+_orig_nas = S._nas
+S.FileStation = _BoomFS
+S._nas = None
+S._login_state.update({"last_ok": 0.0, "failures": [], "blocked_until": 0.0})
+_msgs = []
+for _ in range(4):
+    try:
+        S.nas_client()
+    except S.NasError as e:
+        _msgs.append(str(e))
+S.FileStation = _orig_fs
+S._nas = _orig_nas
+S._login_state.update({"last_ok": 0.0, "failures": [], "blocked_until": 0.0})
+check("前 3 次报登录失败", len(_msgs) == 4 and all("登录失败" in m for m in _msgs[:3]),
+      str(_msgs[:3]))
+check("第 4 次直接熔断", "熔断" in (_msgs[3] if len(_msgs) > 3 else ""), str(_msgs[3:4]))
+
 print(f"\n结果：{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

@@ -20,6 +20,7 @@ timestamp: 2026-09-21
 |----------|--------|
 | 概览、三条硬安全约束、本地怎么跑 | [../README.md](../README.md) |
 | 部署到上海 VPS：Docker、nginx 反代、外部验证、接 ChatGPT | [reference/deploy.md](reference/deploy.md) |
+| 容器假活怎么兜：探活/自动重启方案与频率选择 | [reference/self-healing.md](reference/self-healing.md) |
 | 为什么部署在 VPS 而不是 NAS、为什么自建而不是用第三方 | [../../docs/research/2026-09-21-nas-mcp-chatgpt-feasibility.md](../../docs/research/2026-09-21-nas-mcp-chatgpt-feasibility.md) |
 
 ## 工具（只读，15 个）

@@ -8,6 +8,38 @@ tags: [nas, mcp, log]
 
 # 变更日志
 
+## 2026-11-03
+
+- **故障**：容器出现**假活** —— 进程/端口/鉴权/`tools/list` 都正常，但所有真实调用报 DSM 错误码
+  **119 `Invalid session / SID not found.`**。老容器跑 42 天时复现；重启后 **仅 3 小时又复现**
+  （闲置约 2 小时后 `Session timeout`），说明不是「跑久了腐化」。
+- **根因（已定位并验证）**：`synology_api` 用**类级** `BaseApi.shared_session` 缓存 `Authentication`，
+  新建 `FileStation` 直接复用它、**不会重新登录** → `nas_client(relogin=True)` 是「假重登」，
+  永远带着失效 SID。复现：服务端强制 logout 后，旧代码 `available=false`；清掉 `shared_session` 后调用成功。
+- **修复**: [server.py](../server.py)
+  - `nas_client()` 重建前清 `BaseApi.shared_session`（根因）；
+  - 新增 `retry_on_session()`，让 search / folder_size / md5 / archive 在会话失效时真重登重试；
+  - `tool_list_shares()` 改为重试循环（原先闭包绑定旧客户端）；
+  - `tool_thumbnail()` 改走 `retry_on_session`。
+  - 回归测试：`tests/test_smoke.py` 第 15 节（强制登出后必须自动恢复）。
+- **部署**：镜像 `nas-mcp:0.1.1`，替换生产容器（`--network host`、`nas-mcp` @ 8402）；
+  外部 HTTPS 实测 `nas_health` / `nas_list_shares` / `nas_list_folder` 全部正常。
+- **运行时兜底**: `/usr/local/bin/nas-mcp-healthcheck.sh` + `nas-mcp-healthcheck.timer`（30 分钟）。
+  连续 2 次不可用才 `docker restart`；`LoginError` / `ConnectionError` 只记日志不重启。
+  故障演练通过：`docker stop nas-mcp` → 第 2 次探活自动拉起并恢复。
+  ⚠️ MCP 响应内层 JSON 是转义字符串，**必须解析不能 grep**（第一版脚本因此误报）。
+- **文档**: [reference/self-healing.md](reference/self-healing.md) —— 根因、修复、频率结论
+  （10 分钟不必要，30 分钟已采用；实测 DSM 闲置超时约 2 小时）、失败分类与更标准方案。
+- **P0 加固（镜像 0.1.2）**：新增 `GET /healthz`（本机回环、免令牌、不调 DSM）；登录失败熔断
+  （5 分钟内连续 3 次 `LoginError` → 停 15 分钟，避免触发 DSM Auto Block）；重登在 `_nas_lock`
+  内串行化。**唯一会话名不适用**：实测自定义 `session` 名登录返回 402，`session='webui'`
+  重复登录不互踢（两个 SID 均可正常调用）；单飞时间窗会掩盖「刚登录就被外部登出」，已移除。
+- **兼容性/可观测性（镜像 0.1.3）**：MCP `ping`；工具并发上限（默认 8，超出等待 60s 后返回「服务器忙」）；
+  DSM 错误码翻译（借用 `synology_api` 自带码表）；Thumb API 运行时发现 + 缓存（实测 `entry.cgi v3`）；
+  启动时校验 `NAS_URL/USERNAME/PASSWORD`；新增 `tests/test_offline.py`（23 项，不连 NAS）与
+  `.github/workflows/nas-mcp-tests.yml`。
+
+
 ## 2026-09-21
 
 - **初始化 OKF bundle**：新建 `nas_mcp/` 模块并实现服务。
