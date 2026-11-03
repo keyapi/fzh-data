@@ -9,7 +9,7 @@ timestamp: 2026-11-03
 
 # nas_mcp 自愈方案
 
-> 状态：**已实施并验证**（2026-11-03）。代码修复 + 镜像 `nas-mcp:0.1.1` + 30 分钟探活定时器。
+> 状态：**已实施并验证**（2026-11-03）。代码修复 + 镜像 `nas-mcp:0.1.2` + 30 分钟探活定时器。
 
 ## 1. 故障复盘
 
@@ -55,6 +55,16 @@ else:
 
 **回归测试**：`tests/test_smoke.py` 第 15 节 —— 服务端强制登出后，
 `nas_health` 与 `nas_list_shares` 都必须自动恢复。旧代码必挂，新代码通过。
+
+## 2.1 P0 加固（镜像 0.1.2）
+
+| 项 | 实现 | 备注 |
+|---|---|---|
+| **登录失败熔断** | 5 分钟内连续 3 次 `LoginError` → 停 15 分钟；第 4 次直接报「熔断」，不再打 DSM | DSM Auto Block 默认 10 次失败/5 分钟封 IP |
+| **重登串行化** | 重登在 `_nas_lock` 内执行 | 本 DSM 允许同账号多会话共存，重复登录无害 |
+| **`GET /healthz`** | 本机回环、**无需令牌**、不调 DSM；返回 `version / tools / allowed_roots / dsm_session_ready / instance_id / last_login_age_s / login_blocked_for_s / recent_login_failures` | 给 Docker/监控探针用 |
+| ~~唯一 DSM 会话名~~ | **实测不适用**：自定义 `session` 名（如 `nasmcp_xxx`）登录返回 **402**；`session='webui'` 的两个会话可共存，**重复登录不互踢** | 沿用库默认 `webui` |
+| ~~单飞时间窗~~ | **已移除**：5 秒内「刚登录过就复用」会掩盖「刚登录就被外部登出」，导致不恢复 | 改为锁串行 |
 
 ## 3. 运行时兜底：30 分钟探活
 
@@ -102,3 +112,6 @@ else:
 - 强制登出回归：`nas_health` / `nas_list_shares` 均自动恢复。
 - 故障演练：`docker stop nas-mcp` → 第 1 次探活计 x1 → 第 2 次触发 `restarting nas-mcp` → 容器自动拉起、健康恢复。
 - 定时器：`systemctl list-timers` 显示下一次 30 分钟后执行。
+- P0 加固（0.1.2）：强制登出后 `nas_health` / `nas_list_shares` 自动恢复；
+  熔断第 4 次立即返回「已熔断，约 899 秒后重试」；`/healthz` 返回
+  `dsm_session_ready=true`、`login_blocked_for_s=0`；非 `/healthz` 的 GET 仍需令牌（401）。

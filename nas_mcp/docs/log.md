@@ -30,6 +30,10 @@ tags: [nas, mcp, log]
   ⚠️ MCP 响应内层 JSON 是转义字符串，**必须解析不能 grep**（第一版脚本因此误报）。
 - **文档**: [reference/self-healing.md](reference/self-healing.md) —— 根因、修复、频率结论
   （10 分钟不必要，30 分钟已采用；实测 DSM 闲置超时约 2 小时）、失败分类与更标准方案。
+- **P0 加固（镜像 0.1.2）**：新增 `GET /healthz`（本机回环、免令牌、不调 DSM）；登录失败熔断
+  （5 分钟内连续 3 次 `LoginError` → 停 15 分钟，避免触发 DSM Auto Block）；重登在 `_nas_lock`
+  内串行化。**唯一会话名不适用**：实测自定义 `session` 名登录返回 402，`session='webui'`
+  重复登录不互踢（两个 SID 均可正常调用）；单飞时间窗会掩盖「刚登录就被外部登出」，已移除。
 
 
 ## 2026-09-21

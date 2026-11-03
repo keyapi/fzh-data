@@ -23,8 +23,11 @@ import io
 import json
 import os
 import posixpath
+import socket
 import sys
 import threading
+import time
+import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -33,6 +36,7 @@ from urllib.parse import quote_plus
 import requests
 from PIL import Image
 from synology_api.base_api import BaseApi  # noqa: E402
+from synology_api.exceptions import LoginError  # noqa: E402
 from synology_api.filestation import FileStation  # noqa: E402
 
 PORT = int(os.environ.get("NAS_MCP_PORT", "8402"))
@@ -45,6 +49,23 @@ IMAGE_MAX_EDGE = int(os.environ.get("NAS_MCP_IMAGE_MAX_EDGE", "1280"))
 # File Station 深链基址（需 DSM 登录才能打开 → 天然「有 NAS 权限的人才看得到」）
 LINK_BASE = (os.environ.get("NAS_MCP_LINK_BASE") or "https://nas.vilavi.cn:11024").rstrip("/")
 LOG = os.environ.get("NAS_MCP_LOG", "")
+SERVER_VERSION = "0.1.2"
+
+# ── 进程实例标识（仅用于日志/healthz 诊断）─────────────────
+# 注：曾评估「唯一 DSM 会话名」以规避 duplicate login 互踢，**实测本 DSM 不适用**：
+# 自定义 session 名（如 nasmcp_xxx）登录返回 402；而 session='webui' 的两个会话
+# 可以共存，重复登录不会踢掉旧的。所以沿用库默认的 'webui'。
+INSTANCE_ID = f"{socket.gethostname()[:16]}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+
+# ── P0：重登串行化 + Auto Block 熔断 ───────────────────────
+# 注：曾想做「5 秒内刚登录过就复用」的单飞窗口，实测会掩盖「刚登录就被外部
+# 登出」的情况，导致会话失效后不再恢复。改为：重登由 _nas_lock 串行化执行
+# （本 DSM 允许同账号多会话共存，重复登录无害），只额外加登录失败熔断。
+AUTOBLOCK_WINDOW = 300.0       # 5 分钟
+AUTOBLOCK_MAX_FAILURES = 3     # 连续失败 3 次
+AUTOBLOCK_COOLDOWN = 900.0     # 熔断 15 分钟（DSM Auto Block 默认 10 次/5 分钟封 IP）
+
+_login_state = {"last_ok": 0.0, "failures": [], "blocked_until": 0.0}
 
 
 def _parse_roots() -> tuple[list[str], bool]:
@@ -113,10 +134,22 @@ _nas: FileStation | None = None
 
 
 def nas_client(relogin: bool = False) -> FileStation:
-    """DSM 客户端（进程内复用）。relogin=True 时丢弃旧会话**真正重新登录**。"""
+    """DSM 客户端（进程内复用）。relogin=True 时丢弃旧会话**真正重新登录**。
+
+    - **串行**：重登在 `_nas_lock` 内执行，避免并发登录风暴。
+    - **熔断**：连续 3 次登录失败（5 分钟窗口）后停 15 分钟 —— DSM Auto Block
+      默认 10 次失败/5 分钟就封 IP，绝不能无限重试。
+    """
     global _nas
     with _nas_lock:
+        now = time.monotonic()
+        st = _login_state
         if _nas is None or relogin:
+            if now < st["blocked_until"]:
+                raise NasError(
+                    "DSM 登录已熔断，约 %d 秒后重试（连续登录失败，可能是密码变更或 "
+                    "DSM Auto Block；先检查 /opt/nas-mcp/.env）"
+                    % int(st["blocked_until"] - now))
             url = os.environ.get("NAS_URL", "")
             user, pw = os.environ.get("NAS_USERNAME", ""), os.environ.get("NAS_PASSWORD", "")
             if not (url and user):
@@ -126,9 +159,20 @@ def nas_client(relogin: bool = False) -> FileStation:
             # 不清掉的话，新建 FileStation 只会复用旧（可能已失效的）会话，
             # relogin 变成「假重登」—— 实测 2026-11-03：会话过期后永远报 119。
             BaseApi.shared_session = None
-            _nas = FileStation(ip_address=host, port=port, username=user, password=pw,
-                               secure=secure, cert_verify=False, dsm_version=7, debug=False)
-            log(f"  DSM 会话{'重建' if relogin else '建立'}: {host}:{port}")
+            try:
+                _nas = FileStation(ip_address=host, port=port, username=user, password=pw,
+                                   secure=secure, cert_verify=False, dsm_version=7, debug=False)
+            except LoginError as e:
+                st["failures"] = [t for t in st["failures"]
+                                  if now - t < AUTOBLOCK_WINDOW] + [now]
+                if len(st["failures"]) >= AUTOBLOCK_MAX_FAILURES:
+                    st["blocked_until"] = now + AUTOBLOCK_COOLDOWN
+                    log("!! DSM 登录连续失败，熔断 15 分钟（疑似 Auto Block / 密码变更）")
+                raise NasError(f"DSM 登录失败：{e}") from e
+            st["failures"].clear()
+            st["blocked_until"] = 0.0
+            st["last_ok"] = now
+            log(f"  DSM 会话{'重建' if relogin else '建立'}: {host}:{port} ({INSTANCE_ID})")
         return _nas
 
 
@@ -1167,7 +1211,7 @@ class Handler(BaseHTTPRequestHandler):
             self._result(mid, {
                 "protocolVersion": PROTOCOL,
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "nas-mcp", "version": "0.1.0"},
+                "serverInfo": {"name": "nas-mcp", "version": SERVER_VERSION},
                 "instructions": (
                     f"只读访问公司群晖 NAS。允许的根目录：{ROOTS_STR}。"
                     "只提供列目录/查元数据/读小文本文件；无任何写入或删除能力。"
@@ -1211,6 +1255,29 @@ class Handler(BaseHTTPRequestHandler):
             self._error(mid, -32601, f"unknown method {method}")
 
     def do_GET(self):
+        """GET /healthz：本机回环、**不需要令牌**的轻量健康端点（不调 DSM）。
+
+        与 systemd 探活互补：那边是「真实调用 nas_health」，这里给 Docker/监控
+        看进程状态与当前策略，不产生 DSM 会话。其它 GET 仍需 Bearer。
+        """
+        path = (self.path or "").split("?", 1)[0]
+        if path == "/healthz":
+            now = time.monotonic()
+            st = _login_state
+            self._send({
+                "ok": True,
+                "server": "nas-mcp",
+                "version": SERVER_VERSION,
+                "read_only": True,
+                "tools": len(TOOLS),
+                "allowed_roots": ROOTS,
+                "dsm_session_ready": _nas is not None,
+                "instance_id": INSTANCE_ID,
+                "last_login_age_s": (round(now - st["last_ok"], 1) if st["last_ok"] else None),
+                "login_blocked_for_s": max(0, round(st["blocked_until"] - now, 1)),
+                "recent_login_failures": len(st["failures"]),
+            })
+            return
         if not self._auth_ok():
             self._send({"error": "unauthorized"}, 401)
             return

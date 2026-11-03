@@ -52,6 +52,10 @@ mrquj README 明确写：
 （我们调试时就同时跑过 canary + 生产）可能互相顶掉。
 → 建议：每个进程用唯一会话名（子类/补丁覆盖 `login()` 的 `session` 参数）。
 
+> **2026-11-03 实测（本 DSM 不适用）**：自定义 `session` 名（`nasmcp_test_123`、`nasmcp-test-123`）
+> 登录均返回 **402**；而 `session='webui'` 连续登录两次，两个 SID **都能正常调用** ——
+> **重复登录不会踢掉旧会话**。因此这一项没有采用，保留库默认 `webui`（原因已写进代码注释）。
+
 ### 2.3 单飞重认证（single-flight）
 
 cmeans 的 `AuthManager` 用 `asyncio.Lock` 包住 `_re_authenticate()`，并回调通知等待者，
@@ -123,11 +127,11 @@ cmeans：`setup` 向导 + `check` 校验 + 多 NAS + keyring + 2FA device token�
 
 ## 4. 建议的借鉴清单（按优先级）
 
-| 优先级 | 事项 | 参考 |
-|---|---|---|
-| P0 | 唯一 DSM 会话名（避免重复登录互踢） | cmeans `_build_session_name` / mrquj 会话失效说明 |
-| P0 | 单飞重认证 + 登录失败熔断（Auto Block） | cmeans `AuthManager` / `LoginRefusals` |
-| P0 | 本机 `GET /healthz`（策略 + DSL 可用性 + 工具数） | mrquj `/healthz` |
+| 优先级 | 事项 | 参考 | 状态（2026-11-03） |
+|---|---|---|---|
+| P0 | 唯一 DSM 会话名（避免重复登录互踢） | cmeans `_build_session_name` / mrquj 会话失效说明 | ❌ **本 DSM 不适用**（自定义名 402；webui 重复登录不互踢） |
+| P0 | 单飞重认证 + 登录失败熔断（Auto Block） | cmeans `AuthManager` / `LoginRefusals` | ✅ 已实现：锁串行 + 连续 3 次失败熔断 15 分钟（单飞时间窗因掩盖外部登出已移除） |
+| P0 | 本机 `GET /healthz`（策略 + DSL 可用性 + 工具数） | mrquj `/healthz` | ✅ 已实现（0.1.2，无需令牌、不调 DSM） |
 | P1 | 长任务 `notifications/progress` | cmeans / mrquj |
 | P1 | `SYNO.API.Info` 运行时发现 + 缓存 | mrquj |
 | P1 | FileStation 错误码翻译表 | mrquj / cmeans `docs/error-codes.md` |
