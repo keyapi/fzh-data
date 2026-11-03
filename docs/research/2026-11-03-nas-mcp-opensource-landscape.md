@@ -132,11 +132,12 @@ cmeans：`setup` 向导 + `check` 校验 + 多 NAS + keyring + 2FA device token�
 | P0 | 唯一 DSM 会话名（避免重复登录互踢） | cmeans `_build_session_name` / mrquj 会话失效说明 | ❌ **本 DSM 不适用**（自定义名 402；webui 重复登录不互踢） |
 | P0 | 单飞重认证 + 登录失败熔断（Auto Block） | cmeans `AuthManager` / `LoginRefusals` | ✅ 已实现：锁串行 + 连续 3 次失败熔断 15 分钟（单飞时间窗因掩盖外部登出已移除） |
 | P0 | 本机 `GET /healthz`（策略 + DSL 可用性 + 工具数） | mrquj `/healthz` | ✅ 已实现（0.1.2，无需令牌、不调 DSM） |
-| P1 | 长任务 `notifications/progress` | cmeans / mrquj |
-| P1 | `SYNO.API.Info` 运行时发现 + 缓存 | mrquj |
-| P1 | FileStation 错误码翻译表 | mrquj / cmeans `docs/error-codes.md` |
-| P2 | mock 客户端单测 + CI；vDSM 集成测试评估 | cmeans CI |
-| P2 | 面向多客户端的 per-client 会话设计（若将来做共享服务） | cmeans ADR 0001 |
+| P1 | 长任务 `notifications/progress` | cmeans / mrquj | ❌ 暂不做：当前 stdlib 传输无 SSE 流，ChatGPT 不依赖；留待需要时评估 |
+| P1 | `SYNO.API.Info` 运行时发现 + 缓存 | mrquj | ✅ Thumb API 已实现（实测 `entry.cgi v3`） |
+| P1 | FileStation 错误码翻译表 | mrquj / cmeans `docs/error-codes.md` | ✅ 已实现（借用 `synology_api` 自带码表） |
+| P2 | mock 客户端单测 + CI；vDSM 集成测试评估 | cmeans CI | ✅ 离线单测 23 项 + GitHub Actions；vDSM 仍待评估 |
+| P2 | 面向多客户端的 per-client 会话设计（若将来做共享服务） | cmeans ADR 0001 | ⏸ 未做（当前单客户端，不需要） |
+| — | MCP `ping` + 工具并发上限 | 标准 / 自身稳定性 | ✅ 已实现（0.1.3） |
 
 ## 5. 要不要换掉自建？
 

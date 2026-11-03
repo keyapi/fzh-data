@@ -36,6 +36,11 @@ from urllib.parse import quote_plus
 import requests
 from PIL import Image
 from synology_api.base_api import BaseApi  # noqa: E402
+from synology_api.error_codes import (  # noqa: E402
+    auth_error_codes,
+    error_codes as generic_error_codes,
+    file_station_error_codes,
+)
 from synology_api.exceptions import LoginError  # noqa: E402
 from synology_api.filestation import FileStation  # noqa: E402
 
@@ -49,7 +54,7 @@ IMAGE_MAX_EDGE = int(os.environ.get("NAS_MCP_IMAGE_MAX_EDGE", "1280"))
 # File Station 深链基址（需 DSM 登录才能打开 → 天然「有 NAS 权限的人才看得到」）
 LINK_BASE = (os.environ.get("NAS_MCP_LINK_BASE") or "https://nas.vilavi.cn:11024").rstrip("/")
 LOG = os.environ.get("NAS_MCP_LOG", "")
-SERVER_VERSION = "0.1.2"
+SERVER_VERSION = "0.1.3"
 
 # ── 进程实例标识（仅用于日志/healthz 诊断）─────────────────
 # 注：曾评估「唯一 DSM 会话名」以规避 duplicate login 互踢，**实测本 DSM 不适用**：
@@ -66,6 +71,10 @@ AUTOBLOCK_MAX_FAILURES = 3     # 连续失败 3 次
 AUTOBLOCK_COOLDOWN = 900.0     # 熔断 15 分钟（DSM Auto Block 默认 10 次/5 分钟封 IP）
 
 _login_state = {"last_ok": 0.0, "failures": [], "blocked_until": 0.0}
+
+# ── 并发上限：避免并行工具调用把 DSM 会话/线程打爆 ─────────
+MAX_TOOL_CONCURRENCY = int(os.environ.get("NAS_MCP_MAX_CONCURRENCY", "8"))
+_tool_sem = threading.BoundedSemaphore(MAX_TOOL_CONCURRENCY)
 
 
 def _parse_roots() -> tuple[list[str], bool]:
@@ -191,6 +200,20 @@ def _is_session_error(err) -> bool:
         ('code":%d' % c) in s or ('code": %d' % c) in s for c in (105, 106, 107))
 
 
+def describe_dsm_error(err) -> str:
+    """把 DSM 的数字错误码翻译成可操作的中文（借用库自带码表，不自己发明）。"""
+    if isinstance(err, NasError):
+        return str(err)
+    code = getattr(err, "error_code", None)
+    msg = None
+    if isinstance(code, int):
+        msg = (file_station_error_codes.get(code)
+               or auth_error_codes.get(code)
+               or generic_error_codes.get(code))
+    base = f"{type(err).__name__}: {err}"
+    return f"{base}（DSM {code}：{msg}）" if msg else base
+
+
 def retry_on_session(fn):
     """调用 fn(client)；会话失效（105/106/107/119）则真正重登后重试一次。
 
@@ -228,7 +251,7 @@ def list_strict(path: str, limit: int = 100, offset: int = 0) -> dict:
                 log(f"  会话失效，重登重试：{e}")
                 last = e
                 continue
-            raise NasError(f"{type(e).__name__}: {e}") from e
+            raise NasError(describe_dsm_error(e)) from e
         if not r.get("success"):
             err = r.get("error") or {}
             if attempt == 1 and _is_session_error(err):
@@ -281,7 +304,7 @@ def fetch_bytes(path: str, max_bytes: int = MAX_IMAGE_BYTES) -> bytes:
                 log(f"  会话失效，重登重试：{e}")
                 last = e
                 continue
-            raise NasError(f"{type(e).__name__}: {e}") from e
+            raise NasError(describe_dsm_error(e)) from e
     raise NasError(f"重试后仍失败：{last}")
 
 
@@ -847,6 +870,32 @@ def tool_read_pdf(a: dict) -> dict:
 
 # 经 SYNO.API.Info 查得：Thumb 在 entry.cgi，maxVersion=3（库未收录，自行构造）
 THUMB_PATH, THUMB_VER = "entry.cgi", "3"
+_thumb_api_cache = {"path": None, "version": None}
+
+
+def thumb_api(c) -> tuple[str, str]:
+    """运行时通过 SYNO.API.Info 发现 Thumb 的 path/version 并缓存（DSM 6/7 通用）。
+
+    库的 FileStation API 表里没有 Thumb，所以不能直接用 c.file_station_list。
+    发现失败时回退到内置默认值（entry.cgi / 3）。
+    """
+    if _thumb_api_cache["path"]:
+        return _thumb_api_cache["path"], _thumb_api_cache["version"]
+    try:
+        r = requests.get(
+            f"{c.base_url}query.cgi",
+            params={"api": "SYNO.API.Info", "version": "1", "method": "query",
+                    "query": "SYNO.FileStation.Thumb"},
+            verify=False, timeout=30)
+        d = (r.json().get("data") or {}).get("SYNO.FileStation.Thumb") or {}
+        path, ver = d.get("path"), d.get("maxVersion")
+        if path and ver:
+            _thumb_api_cache.update({"path": path, "version": str(ver)})
+            log(f"  Thumb API 发现: {path} v{ver}")
+            return path, str(ver)
+    except Exception as e:                          # noqa: BLE001
+        log(f"  Thumb API 发现失败，用内置默认值：{type(e).__name__}")
+    return THUMB_PATH, THUMB_VER
 
 
 def tool_thumbnail(a: dict) -> dict:
@@ -865,7 +914,8 @@ def tool_thumbnail(a: dict) -> dict:
     def fetch_raw(c):
         # path 用双引号包起来 —— EN 的 pim/api/nas.py 注释写明 spec 要求
         # （实测加不加都通；加上更稳，能防带逗号等特殊字符的路径）
-        url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
+        tpath, tver = thumb_api(c)
+        url = (f"{c.base_url}{tpath}?api=SYNO.FileStation.Thumb&version={tver}"
                f"&method=get&path={quote_plus(chr(34) + p + chr(34))}&size={size}&_sid={c._sid}")
         token = getattr(c.session, "_syno_token", "") or ""
         r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
@@ -1020,7 +1070,7 @@ def tool_list_shares(_a: dict) -> dict:
                 log(f"  会话失效，重登重试：{e}")
                 last = e
                 continue
-            raise NasError(f"{type(e).__name__}: {e}") from e
+            raise NasError(describe_dsm_error(e)) from e
         if isinstance(r, str):
             raise NasError(r[:200])
         if not (isinstance(r, dict) and r.get("success")):
@@ -1070,7 +1120,8 @@ def tool_folder_thumbnails(a: dict) -> dict:
     }, ensure_ascii=False, indent=2)}]
 
     for it in picked:
-        url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
+        tpath, tver = thumb_api(c)
+        url = (f"{c.base_url}{tpath}?api=SYNO.FileStation.Thumb&version={tver}"
                f"&method=get&path={quote_plus(chr(34) + it['path'] + chr(34))}&size={size}&_sid={c._sid}")
         try:
             r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
@@ -1217,6 +1268,8 @@ class Handler(BaseHTTPRequestHandler):
                     "只提供列目录/查元数据/读小文本文件；无任何写入或删除能力。"
                 ),
             })
+        elif method == "ping":
+            self._result(mid, {})
         elif method.startswith("notifications/"):
             self.send_response(202)
             self.send_header("Content-Length", "0")
@@ -1230,6 +1283,11 @@ class Handler(BaseHTTPRequestHandler):
             fn = TOOL_IMPL.get(name)
             if fn is None:
                 self._error(mid, -32602, f"未知工具 {name}")
+                return
+            if not _tool_sem.acquire(timeout=60):
+                self._result(mid, {"content": [{"type": "text",
+                                   "text": f"服务器忙：并发调用已达上限（{MAX_TOOL_CONCURRENCY}），请稍后重试"}],
+                                   "isError": True})
                 return
             try:
                 out = fn(args)
@@ -1249,8 +1307,11 @@ class Handler(BaseHTTPRequestHandler):
                                    "isError": True})
             except Exception as e:                  # noqa: BLE001
                 log(f"!! tool {name} error: {type(e).__name__}: {e}")
-                self._result(mid, {"content": [{"type": "text", "text": f"错误：{e}"}],
+                self._result(mid, {"content": [{"type": "text",
+                                   "text": f"错误：{describe_dsm_error(e)}"}],
                                    "isError": True})
+            finally:
+                _tool_sem.release()
         else:
             self._error(mid, -32601, f"unknown method {method}")
 
@@ -1288,5 +1349,9 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if not TOKEN:
         raise SystemExit("必须设置 NAS_MCP_TOKEN")
-    log(f"=== nas-mcp 启动于 {BIND}:{PORT}（只读，root={ROOT}） ===")
+    _missing = [k for k in ("NAS_URL", "NAS_USERNAME", "NAS_PASSWORD")
+                if not os.environ.get(k)]
+    if _missing:
+        log(f"!! 缺少环境变量：{', '.join(_missing)}（首次调用会失败）")
+    log(f"=== nas-mcp 启动于 {BIND}:{PORT}（只读，root={ROOT}，并发上限={MAX_TOOL_CONCURRENCY}） ===")
     ThreadingHTTPServer((BIND, PORT), Handler).serve_forever()

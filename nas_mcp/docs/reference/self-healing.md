@@ -9,7 +9,7 @@ timestamp: 2026-11-03
 
 # nas_mcp 自愈方案
 
-> 状态：**已实施并验证**（2026-11-03）。代码修复 + 镜像 `nas-mcp:0.1.2` + 30 分钟探活定时器。
+> 状态：**已实施并验证**（2026-11-03）。代码修复 + 镜像 `nas-mcp:0.1.3` + 30 分钟探活定时器。
 
 ## 1. 故障复盘
 
@@ -65,6 +65,17 @@ else:
 | **`GET /healthz`** | 本机回环、**无需令牌**、不调 DSM；返回 `version / tools / allowed_roots / dsm_session_ready / instance_id / last_login_age_s / login_blocked_for_s / recent_login_failures` | 给 Docker/监控探针用 |
 | ~~唯一 DSM 会话名~~ | **实测不适用**：自定义 `session` 名（如 `nasmcp_xxx`）登录返回 **402**；`session='webui'` 的两个会话可共存，**重复登录不互踢** | 沿用库默认 `webui` |
 | ~~单飞时间窗~~ | **已移除**：5 秒内「刚登录过就复用」会掩盖「刚登录就被外部登出」，导致不恢复 | 改为锁串行 |
+
+## 2.2 兼容性与可观测性（镜像 0.1.3）
+
+| 项 | 实现 |
+|---|---|
+| **MCP `ping`** | 返回 `{}`，兼容标准客户端探活 |
+| **并发上限** | `NAS_MCP_MAX_CONCURRENCY`（默认 8）；超出等待 60 秒后返回「服务器忙」，保护 DSM 会话与线程 |
+| **错误码翻译** | 借用 `synology_api` 自带的 `file_station_error_codes` / `auth_error_codes` / `error_codes`，输出如 `FileStationError: ...（DSM 408：No such file or directory）` |
+| **Thumb API 运行时发现** | `SYNO.API.Info` 查询 `SYNO.FileStation.Thumb` 的 path/version 并缓存；失败回退 `entry.cgi v3`（实测发现 `entry.cgi v3`） |
+| **离线单测 + CI** | `tests/test_offline.py`（23 项，**不连 NAS、不需要网络**）+ `.github/workflows/nas-mcp-tests.yml` |
+| **启动校验** | 缺 `NAS_URL` / `NAS_USERNAME` / `NAS_PASSWORD` 时启动日志明确告警 |
 
 ## 3. 运行时兜底：30 分钟探活
 

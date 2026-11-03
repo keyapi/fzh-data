@@ -34,6 +34,10 @@ tags: [nas, mcp, log]
   （5 分钟内连续 3 次 `LoginError` → 停 15 分钟，避免触发 DSM Auto Block）；重登在 `_nas_lock`
   内串行化。**唯一会话名不适用**：实测自定义 `session` 名登录返回 402，`session='webui'`
   重复登录不互踢（两个 SID 均可正常调用）；单飞时间窗会掩盖「刚登录就被外部登出」，已移除。
+- **兼容性/可观测性（镜像 0.1.3）**：MCP `ping`；工具并发上限（默认 8，超出等待 60s 后返回「服务器忙」）；
+  DSM 错误码翻译（借用 `synology_api` 自带码表）；Thumb API 运行时发现 + 缓存（实测 `entry.cgi v3`）；
+  启动时校验 `NAS_URL/USERNAME/PASSWORD`；新增 `tests/test_offline.py`（23 项，不连 NAS）与
+  `.github/workflows/nas-mcp-tests.yml`。
 
 
 ## 2026-09-21

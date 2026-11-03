@@ -159,7 +159,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://api.vilavi.cn/nas/mcp 
 
 见 [self-healing.md](self-healing.md)。
 
-当前生产状态（2026-11-03）：镜像 **`nas-mcp:0.1.2`**（含会话重登修复、登录熔断、`/healthz`）+
+当前生产状态（2026-11-03）：镜像 **`nas-mcp:0.1.3`**（含会话重登修复、登录熔断、`/healthz`、错误码翻译、Thumb 发现）+
 `/usr/local/bin/nas-mcp-healthcheck.sh` + `nas-mcp-healthcheck.timer`（每 30 分钟一次真实 `nas_health`，
 连续 2 次失败则 `docker restart nas-mcp`）。
 
