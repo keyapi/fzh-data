@@ -41,7 +41,7 @@ from supply_chain_visibility.supply_position import (
     position_table,
 )
 
-PUBLICATION_SCHEMA = "supply-publication/v6"
+PUBLICATION_SCHEMA = "supply-publication/v7"
 TARGET_SUMMARY_SCHEMA = "supply-target-summary/v1"
 FULL_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
             "market", "product_form")
@@ -77,6 +77,7 @@ STAGE_STRING_COLUMNS = (
     "market", "product_form", "pool", "scope", "stage",
     "doc_type", "doc_name", "doc_line", "batch_id",
     "stage_fact_id", "physical_lineage_id", "lineage_status", "payload_hash",
+    "lineage_namespace", "lineage_key",
     "inclusion_proof", "qty_status", "confidence",
     "stage_measured_qty", "same_stage_reconciliation_status",
     "inventory_freshness", "attribution_status",

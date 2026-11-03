@@ -675,6 +675,91 @@ class ReviewSameStageAndOnHandTests(unittest.TestCase):
                     on_hand["inventory_inclusion_status"], "unknown", name)
 
 
+class ReviewLineageNamespaceTests(unittest.TestCase):
+    def test_same_batch_across_items_is_separate(self):
+        full = build_full_supply_facts({"rows": []}, production=[
+            production(item_code="SKU-A", source_ref="WO-A",
+                       batch_id="B1", qty=5),
+            production(item_code="SKU-B", source_ref="WO-B",
+                       batch_id="B1", qty=7)])
+        facts = stage_rows(full, "waiting_shipment")
+        self.assertEqual(len(facts), 2)
+        self.assertEqual(sorted(fact["qty"] for fact in facts), ["5", "7"])
+        self.assertTrue(all(fact["counted_as_supply"] for fact in facts))
+        self.assertFalse(any("same_stage_quantity_conflict" in fact["conflicts"]
+                             for fact in facts))
+        self.assertEqual(len({fact["lineage_key"] for fact in facts}), 2)
+        self.assertEqual(full["stage_summary"]["physical_lineages"], 2)
+
+    def test_same_batch_across_units_is_separate(self):
+        full = build_full_supply_facts({"rows": []}, production=[
+            production(item_code="SKU-A", uom="EA", source_ref="WO-EA",
+                       batch_id="B1", qty=5),
+            production(item_code="SKU-A", uom="BOX", source_ref="WO-BOX",
+                       batch_id="B1", qty=7)])
+        facts = stage_rows(full, "waiting_shipment")
+        self.assertEqual(len(facts), 2)
+        self.assertEqual(len({fact["lineage_key"] for fact in facts}), 2)
+        self.assertEqual(sorted(fact["stage_measured_qty"] for fact in facts),
+                         ["5", "7"])
+        self.assertFalse(any("same_stage_quantity_conflict" in fact["conflicts"]
+                             for fact in facts))
+        self.assertEqual(full["stage_summary"]["physical_lineages"], 2)
+
+    def test_different_source_instance_is_not_deduped_or_closed(self):
+        duplicates = build_full_supply_facts({"rows": []}, production=[
+            production(item_code="SKU-A", source_ref="WO-1",
+                       source_system="SYS-1", batch_id="B1", qty=5),
+            production(item_code="SKU-A", source_ref="WO-2",
+                       source_system="SYS-2", batch_id="B1", qty=5)])
+        facts = stage_rows(duplicates, "waiting_shipment")
+        self.assertEqual(len(facts), 2)
+        self.assertEqual({fact["lineage_namespace"] for fact in facts},
+                         {"SYS-1", "SYS-2"})
+        self.assertEqual(len({fact["lineage_key"] for fact in facts}), 2)
+        self.assertTrue(all(fact["counted_as_supply"] for fact in facts))
+        self.assertFalse(any(fact["evidence_only"] for fact in facts))
+
+        closure = build_full_supply_facts(
+            {"rows": []},
+            receipts=[receipt(item_code="SKU-A", batch_id="B1", qty=5,
+                              instance="SYS-1",
+                              signed_at="2026-10-31T00:00:00+00:00",
+                              received_at="2026-11-01T00:00:00+00:00")],
+            inventory=[inventory(item_code="SKU-A", batch_id="B1", qty=5,
+                                 instance="SYS-2",
+                                 as_of="2026-11-02T00:00:00+00:00")])
+        received = stage_rows(closure, "received")[0]
+        self.assertEqual(received["inventory_inclusion_status"], "unknown")
+
+    def test_same_instance_same_item_across_warehouse_still_dedupes(self):
+        full = build_full_supply_facts({"rows": []}, production=[
+            production(item_code="SKU-A", warehouse="WH-1", source_ref="WO-1",
+                       source_system="SYS-1", batch_id="B1", qty=5),
+            production(item_code="SKU-A", warehouse="WH-2", source_ref="WO-2",
+                       source_system="SYS-1", batch_id="B1", qty=5)])
+        facts = stage_rows(full, "waiting_shipment")
+        self.assertEqual(len(facts), 2)
+        self.assertEqual(sum(1 for fact in facts if fact["evidence_only"]), 1)
+        self.assertEqual(
+            full["stage_summary"]["counted_qty_by_stage"],
+            {"waiting_shipment": "5"})
+
+    def test_receipt_and_inventory_across_items_are_not_included(self):
+        full = build_full_supply_facts(
+            {"rows": []},
+            receipts=[receipt(item_code="SKU-A", batch_id="B1", qty=5,
+                              signed_at="2026-10-31T00:00:00+00:00",
+                              received_at="2026-11-01T00:00:00+00:00")],
+            inventory=[inventory(item_code="SKU-B", batch_id="B1", qty=5,
+                                 as_of="2026-11-02T00:00:00+00:00")])
+        received = stage_rows(full, "received")[0]
+        on_hand = stage_rows(full, "on_hand")[0]
+        self.assertEqual(received["inventory_inclusion_status"], "unknown")
+        self.assertNotEqual(received["inventory_inclusion_status"], "included")
+        self.assertEqual(on_hand["inventory_inclusion_status"], "included")
+
+
 class ReviewStableKeyTests(unittest.TestCase):
     def test_same_stable_identity_same_payload_replays_once(self):
         record = production(source_ref="WO-1", batch_id="B1", qty=3)
@@ -829,7 +914,8 @@ class ReviewPublicationContractTests(unittest.TestCase):
             stage = json.loads((run / "full_supply_facts.json").read_text(
                 encoding="utf-8"))
             fields = {"fact_identity", "physical_lineage_id",
-                      "lineage_status", "payload_hash",
+                      "lineage_status", "lineage_namespace", "lineage_key",
+                      "payload_hash",
                       "payload_conflict", "payload_hashes",
                       "payload_candidates", "stage_measured_qty",
                       "evidence_only", "same_stage_reconciliation_status",
@@ -849,6 +935,10 @@ class ReviewPublicationContractTests(unittest.TestCase):
             summary = manifest["output_summary"]
             self.assertEqual(summary["stage_unique_key"], list(STAGE_KEY))
             self.assertIn("lineage_status_counts", summary["stage_summary"])
+            self.assertIn("lineage_namespace_counts",
+                          summary["stage_summary"])
+            self.assertGreaterEqual(
+                summary["stage_summary"]["physical_lineages"], 1)
             self.assertEqual(summary["stage_summary"]["payload_conflict_rows"],
                              0)
 

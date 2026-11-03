@@ -7,6 +7,14 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-11-03
+- D6 最终复审 P0（lineage_key 命名空间）：`physical_lineage_id` 不再视为全局唯一，统一
+  `lineage_key = lineage_namespace × physical_lineage_id × item_code × uom`；
+  `lineage_namespace` 取来源 `instance`/`source_system`，缺失显式 `unknown`。同阶段核账、
+  receipt/inventory inclusion、owner 冲突、当前阶段选择、stage_measured_qty 去重与
+  physical_lineages 统计全部改用 lineage_key；仓库/分支/用途不进入该键。新增
+  lineage_namespace/lineage_key 到阶段 JSON/Parquet/manifest。版本 `full-supply-facts/v8`、
+  RULE/IMPL `2026-11-03.4`、`supply-publication/v7`。完整依赖 485 passed / 26 subtests；
+  最小依赖 426 passed / 59 skipped。
 - D6 第二次复审（同 lineage 同阶段防重复 / on_hand 门槛 / 业务冲突 partial）：按
   `physical_lineage_id×stage` 核账，同量多链路只计一次（`evidence_only`）、异量无
   allocation → `same_stage_quantity_conflict` 全部不计、合法 allocation 才可相加；

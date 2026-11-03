@@ -39,9 +39,9 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
-SCHEMA_VERSION = "full-supply-facts/v7"
-RULE_VERSION = "2026-11-03.3"
-IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-03.3"
+SCHEMA_VERSION = "full-supply-facts/v8"
+RULE_VERSION = "2026-11-03.4"
+IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-03.4"
 QUANTITY_SCALE = 6
 
 VALID_PURPOSES = ("branch", "fba", "cg")
@@ -393,15 +393,17 @@ def _dedupe_layer(records, *, layer, source_groups, identity_groups,
         if not any(source_values):
             missing.append(record)
         else:
-            physical = source_values + (_text(record.get("item_code")),
-                                        _text(record.get("uom")))
+            physical = source_values + (
+                _text(record.get("item_code")), _text(record.get("uom")),
+                _record_namespace(record))
             groups[physical].append((target_values, record))
     effective = []
     replayed = conflicts = splits = target_conflicts = 0
     for physical, entries in sorted(groups.items()):
         source_identity = {
             group[0]: value for group, value in
-            zip(tuple(source_groups) + (("item_code",), ("uom",)),
+            zip(tuple(source_groups) + (("item_code",), ("uom",),
+                                        ("lineage_namespace",)),
                 physical) if value}
         items = [record for _, record in entries]
         by_target = defaultdict(list)
@@ -835,6 +837,7 @@ def _waybill_physical_identity(event):
         else:
             values.append(_text(event.get(field)))
     values.append(_text(event.get("waybill") or event.get("shipment")))
+    values.append(_record_namespace(event))
     return tuple(values)
 
 
@@ -877,12 +880,15 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
     by_identity = defaultdict(list)
     physical_groups = defaultdict(list)
     for event in events:
-        by_identity[_waybill_identity(event)].append(event)
+        by_identity[(_record_namespace(event),)
+                    + _waybill_identity(event)].append(event)
         physical_groups[_waybill_physical_identity(event)].append(event)
     out = []
     for identity, raw_items in sorted(by_identity.items()):
         items = sorted(raw_items, key=_event_sort_key)
-        identity_dict = _source_identity(WAYBILL_IDENTITY_FIELDS, identity)
+        namespace = identity[0]
+        identity_dict = _source_identity(WAYBILL_IDENTITY_FIELDS, identity[1:])
+        identity_dict["lineage_namespace"] = namespace
         batch = _text(items[0].get("batch_id"))
         if batch:
             identity_dict["batch_id"] = batch
@@ -934,7 +940,8 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
     # choose one; a capacity-proven allocation is the only legal split.
     for physical, group_events in sorted(physical_groups.items()):
         identities = {_waybill_identity(event) for event in group_events}
-        waybill = physical[-1]
+        waybill = physical[-2]
+        namespace = physical[-1]
         if physical in invalid_allocations:
             out = [item for item in out
                    if not (_text(item.get("waybill") or item.get("shipment"))
@@ -947,8 +954,9 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
                 "qty": None, "qty_status": "unknown",
                 "reason": "source_allocation_conflict",
                 "candidates": [dict(item) for item in group_events],
-                "source_identity": _source_identity(
-                    WAYBILL_IDENTITY_FIELDS, base_identity),
+                "source_identity": dict(
+                    _source_identity(WAYBILL_IDENTITY_FIELDS, base_identity),
+                    lineage_namespace=namespace),
                 "_replay_count": 1})
             out.append(merged)
             continue
@@ -971,8 +979,10 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
             "reason": "multi_assignment_allocation_unknown",
             "candidates": [_source_identity(WAYBILL_IDENTITY_FIELDS, item)
                            for item in explicit],
-            "source_identity": _source_identity(
-                WAYBILL_IDENTITY_FIELDS, _waybill_identity(base)),
+            "source_identity": dict(
+                _source_identity(WAYBILL_IDENTITY_FIELDS,
+                                 _waybill_identity(base)),
+                lineage_namespace=namespace),
             "_replay_count": 1})
         if _text(base.get("batch_id")):
             merged["source_identity"]["batch_id"] = _text(base.get("batch_id"))
@@ -1174,6 +1184,29 @@ def _fact_identity(row, stage, doc_type, doc_name, doc_line, identity,
             if _text(value)}
 
 
+def _record_namespace(record):
+    """Source namespace: instance first, then explicit source_system."""
+    record = record or {}
+    return (_text(record.get("instance")
+                  or record.get("lineage_namespace")
+                  or record.get("source_system"))
+            or "unknown")
+
+
+def _lineage_key(namespace, lineage, item_code, uom):
+    """Physical lineage scoped by source namespace, item and unit.
+
+    A batch name alone is not globally unique: different items, units or
+    source systems may reuse it. Warehouse/branch/purpose stay out so the same
+    physical batch still reconciles across targets.
+    """
+    if not lineage:
+        return None
+    return json.dumps([namespace or "unknown", _text(lineage),
+                       _text(item_code), _text(uom)],
+                      ensure_ascii=False, separators=(",", ":"))
+
+
 def _lineage(identity, evidence):
     identity = identity or {}
     evidence = evidence or {}
@@ -1233,6 +1266,12 @@ def _stage_base(row, *, stage, qty, identity, evidence, confidence,
     batch = _text((identity or {}).get("batch_id")
                   or (evidence or {}).get("batch_id")) or None
     lineage, lineage_status = _lineage(identity, evidence)
+    namespace = (_record_namespace(identity)
+                 if any((identity or {}).get(key) for key in
+                        ("instance", "lineage_namespace", "source_system"))
+                 else _record_namespace(evidence))
+    lineage_key = _lineage_key(namespace, lineage, row.get("item_code"),
+                               row.get("uom"))
     fact_identity = _fact_identity(
         row, stage, doc_type, doc_name, doc_line, identity, evidence)
     owner, cg_stale, cg_eligible, cg_reasons = _stage_owner(row)
@@ -1248,6 +1287,7 @@ def _stage_base(row, *, stage, qty, identity, evidence, confidence,
         "doc_type": doc_type, "doc_name": doc_name, "doc_line": doc_line,
         "batch_id": batch,
         "physical_lineage_id": lineage, "lineage_status": lineage_status,
+        "lineage_namespace": namespace, "lineage_key": lineage_key,
         "fact_identity": fact_identity,
         "stage_fact_id": _stable_fact_id(fact_identity),
         "payload_hash": None, "payload_conflict": False,
@@ -1525,9 +1565,9 @@ def _stage_inventory_inclusion(facts):
     has_any_on_hand = any(fact["stage"] == "on_hand" for fact in facts)
     by_lineage = defaultdict(list)
     for fact in facts:
-        lineage = fact.get("physical_lineage_id")
-        if lineage and fact.get("lineage_status") != "unproven":
-            by_lineage[lineage].append(fact)
+        lineage_key = fact.get("lineage_key")
+        if lineage_key and fact.get("lineage_status") != "unproven":
+            by_lineage[lineage_key].append(fact)
     for fact in facts:
         proof = _text(fact.get("inclusion_proof")).lower()
         if proof in ("included", "not_included", "unknown"):
@@ -1540,12 +1580,12 @@ def _stage_inventory_inclusion(facts):
         if fact["stage"] not in ("received", "in_transit"):
             fact["inventory_inclusion_status"] = "not_applicable"
             continue
-        lineage = fact.get("physical_lineage_id")
-        if not lineage or fact.get("lineage_status") == "unproven":
+        lineage_key = fact.get("lineage_key")
+        if not lineage_key or fact.get("lineage_status") == "unproven":
             fact["inventory_inclusion_status"] = (
                 "unknown" if has_any_on_hand else "not_applicable")
             continue
-        peers = [peer for peer in by_lineage.get(lineage, [])
+        peers = [peer for peer in by_lineage.get(lineage_key, [])
                  if peer["stage"] == "on_hand"
                  and _on_hand_time_usable(peer)]
         if not peers:
@@ -1571,7 +1611,7 @@ def _on_hand_time_usable(fact):
     """Aware proven fresh on-hand time; used for both inclusion and current stage."""
     if fact["stage"] != "on_hand":
         return False
-    if not (fact.get("physical_lineage_id")
+    if not (fact.get("lineage_key")
             and fact.get("lineage_status") != "unproven"):
         return False
     if fact.get("available_at_time_status") != "known":
@@ -1641,9 +1681,9 @@ def _reconcile_stage_quantities(facts):
     """
     grouped = defaultdict(list)
     for fact in facts:
-        if (fact.get("physical_lineage_id")
-                and fact.get("lineage_status") != "unproven"):
-            grouped[(fact["physical_lineage_id"], fact["stage"])].append(fact)
+        lineage_key = fact.get("lineage_key")
+        if lineage_key and fact.get("lineage_status") != "unproven":
+            grouped[(lineage_key, fact["stage"])].append(fact)
         else:
             fact["stage_measured_qty"] = None
             fact["evidence_only"] = False
@@ -1713,14 +1753,12 @@ def _reconcile_stage_quantities(facts):
 def _select_stage_facts(facts):
     owner_map = defaultdict(set)
     for fact in facts:
-        if (fact.get("physical_lineage_id")
-                and fact.get("lineage_status") != "unproven"):
-            owner_map[(fact["physical_lineage_id"], fact["item_code"],
-                       fact["uom"])].add(
+        lineage_key = fact.get("lineage_key")
+        if lineage_key and fact.get("lineage_status") != "unproven":
+            owner_map[lineage_key].add(
                 (fact["purpose"], fact["branch"] or ""))
     for fact in facts:
-        owners = owner_map.get((fact.get("physical_lineage_id"),
-                                fact["item_code"], fact["uom"]))
+        owners = owner_map.get(fact.get("lineage_key"))
         if not owners:
             continue
         branches = {branch for purpose, branch in owners
@@ -1738,11 +1776,8 @@ def _select_stage_facts(facts):
 
     groups = defaultdict(list)
     for fact in facts:
-        if (fact.get("physical_lineage_id")
-                and fact.get("lineage_status") != "unproven"):
-            key = (fact["item_code"], fact["uom"], fact["warehouse"],
-                   fact["purpose"], fact["tt_sku"], fact["branch"],
-                   fact["physical_lineage_id"])
+        if fact.get("lineage_key") and fact.get("lineage_status") != "unproven":
+            key = ("lineage", fact["lineage_key"])
         else:
             key = ("fact", fact["stage_fact_id"])
         groups[key].append(fact)
@@ -1869,7 +1904,7 @@ def _select_stage_facts(facts):
                 fact["unknown_reasons"] = sorted(set(
                     fact["unknown_reasons"] + [stage_unknown]))
         for fact in items:
-            proven = bool(fact.get("physical_lineage_id")
+            proven = bool(fact.get("lineage_key")
                           and fact.get("lineage_status") != "unproven")
             fact["overlap_status"] = (
                 "same/proven" if len(items) > 1 and proven
@@ -1978,11 +2013,11 @@ def summarize_stage_facts(facts):
     measured_qty = defaultdict(Decimal)
     measured_seen = set()
     for fact in facts:
-        lineage = fact.get("physical_lineage_id")
+        lineage_key = fact.get("lineage_key")
         value = _dec(fact.get("stage_measured_qty"), signed=True)
-        if not lineage or value is None:
+        if not lineage_key or value is None:
             continue
-        key = (lineage, fact["stage"])
+        key = (lineage_key, fact["stage"])
         if key in measured_seen:
             continue
         measured_seen.add(key)
@@ -2018,8 +2053,11 @@ def summarize_stage_facts(facts):
         "lineage_status_counts": dict(sorted(Counter(
             fact["lineage_status"] for fact in facts).items())),
         "physical_lineages": len({
-            fact["physical_lineage_id"] for fact in facts
-            if fact.get("physical_lineage_id")}),
+            fact["lineage_key"] for fact in facts
+            if fact.get("lineage_key")}),
+        "lineage_namespace_counts": dict(sorted(Counter(
+            fact.get("lineage_namespace") for fact in facts
+            if fact.get("lineage_key")).items())),
         "unproven_lineage_rows": sum(
             1 for fact in facts if fact["lineage_status"] == "unproven"),
         "batch_identity_missing": sum(

@@ -266,9 +266,9 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 ### `full_supply_facts` v6（阶段明细 + 兼容目标汇总）
 
 模块：`supply_chain_visibility/full_supply_facts.py`，schema
-`full-supply-facts/v7`，`RULE=2026-11-03.3`，
-`IMPLEMENTATION=fzh.full_supply_facts@2026-11-03.3`。发布/读取：
-`supply_chain_visibility/publication.py`（`supply-publication/v6`）。
+`full-supply-facts/v8`，`RULE=2026-11-03.4`，
+`IMPLEMENTATION=fzh.full_supply_facts@2026-11-03.4`。发布/读取：
+`supply_chain_visibility/publication.py`（`supply-publication/v7`）。
 主数据集 `full_supply_facts.parquet` 为阶段明细；历史目标汇总迁移为独立兼容数据集
 `supply_target_summary.parquet/json`，不丢失旧能力。目标唯一键为
 `item_code×uom×warehouse×purpose×tt_sku×branch×market×product_form`；市场与形态
@@ -284,6 +284,11 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
   或父级链证据时才生成 `physical_lineage_id`（`lineage_status=proven_*`）；否则
   `lineage_status=unproven`，事实保留但 `counted_as_supply=false`。适配层不得把 WO/DN/
   Shipment/receipt 名称写成 `batch_id`。
+- **lineage_key**：`lineage_namespace × physical_lineage_id × item_code × uom`。
+  `lineage_namespace` 取来源 `instance`/`source_system`，缺失显式 `unknown`；不同系统
+  的同名 batch 不假定为同一批。仓库/分支/用途不进入该键，同商品同单位同 lineage 跨目标
+  仍按一个物理量防重复；合法拆分仍需 allocation 容量证明。同阶段核账、库存包含、owner
+  冲突、当前阶段选择、stage_measured_qty 去重与 physical_lineages 统计统一使用该键。
 - 阶段只允许 `open_po/waiting_shipment/in_transit/received/on_hand`。
   `open_po` 仅核账，`counted_as_supply=false`；`signed_pending_tongtool_receipt` 归
   `in_transit` 并填 `signed_at`；`received` 只认通途入库时间；`on_hand` 只认库存快照。

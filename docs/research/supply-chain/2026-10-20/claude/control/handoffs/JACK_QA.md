@@ -497,6 +497,16 @@ subtests**。未创建真实 PO、未写 EN/通途业务数据、未合并 main�
 验证：完整依赖 **479 passed / 26 subtests**；最小依赖 **420 passed / 59 skipped / 24
 subtests**。未创建真实 PO、未写 EN/通途业务数据、未合并 main、未部署生产。
 
+### [W1-FULL-FACTS-V8-REREVIEW3-2026-11-03] D6 最终复审 P0：lineage_key
+
+| 问题 | 修复 | 反例/结果 |
+|---|---|---|
+| batch 被当全局唯一 | 统一 `lineage_key = lineage_namespace × physical_lineage_id × item_code × uom`；namespace 取 instance/source_system，缺失 unknown。同阶段核账、inclusion、owner 冲突、当前阶段选择、measured 去重、physical_lineages 全部使用该键 | SKU-A/B1/5 + SKU-B/B1/7 → 分别计量不冲突；同 SKU EA/BOX 同 B1 → 分开；不同 source system 同 SKU/B1 → 不去重/不闭合；同 instance 同 SKU/UOM/B1 跨仓 5+5 → 仍只计 5；receipt SKU-A + inventory SKU-B → inclusion 非 included |
+| 输出缺命名空间 | 阶段 JSON/Parquet/manifest 增加 `lineage_namespace`/`lineage_key`，并加 `lineage_namespace_counts` | JSON/Parquet/manifest 字段一致 |
+
+验证：完整依赖 **485 passed / 26 subtests**；最小依赖 **426 passed / 59 skipped / 24
+subtests**。未创建真实 PO、未写 EN/通途业务数据、未合并 main、未部署生产。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

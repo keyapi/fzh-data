@@ -114,7 +114,7 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(published["status"], "ok")
             latest = json.loads((Path(tmp) / "latest.json").read_text(encoding="utf-8"))
             manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
-            self.assertEqual(manifest["schema_version"], "supply-publication/v6")
+            self.assertEqual(manifest["schema_version"], "supply-publication/v7")
             self.assertEqual(manifest["versions"]["full_supply_facts"], SCHEMA_VERSION)
             self.assertFalse(manifest["netting_ready"])
             self.assertFalse(manifest["auto_order"])
