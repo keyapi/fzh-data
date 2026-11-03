@@ -301,5 +301,34 @@ check("nas_list_folder 带自身 link", bool(lf.get("link")), "")
 check("默认不给子项附 link（避免输出膨胀）",
       not any("link" in i for i in (lf.get("items") or [])), "")
 
+print("\n── 15) 会话失效后自动重登（回归：BaseApi.shared_session 类级复用 bug）")
+# 背景：synology_api 把 Authentication 缓存在类级 BaseApi.shared_session，
+# 不清掉的话 relogin 只是复用死会话 → 会话过期后永远报 119（2026-11-03 生产故障）。
+if os.environ.get("NAS_URL"):
+    import requests as _rq
+
+    _base = os.environ["NAS_URL"].rstrip("/")
+
+    def _force_logout(sid: str):
+        return _rq.get(_base + "/webapi/auth.cgi",
+                       params={"api": "SYNO.API.Auth", "version": "7", "method": "logout",
+                               "session": "webui", "_sid": sid},
+                       verify=False, timeout=30)
+
+    try:
+        _force_logout(S.nas_client()._sid)      # 服务端登出，客户端仍拿着旧 SID
+        h2 = S.tool_health({})
+        check("nas_health 会话失效后自动恢复", h2.get("available") is True,
+              str(h2.get("error"))[:80])
+
+        _force_logout(S.nas_client()._sid)
+        ls = S.tool_list_shares({})
+        check("nas_list_shares 会话失效后自动恢复", ls.get("total") is not None,
+              f"total={ls.get('total')} note={ls.get('note')}")
+    except Exception as e:                      # noqa: BLE001
+        check("会话失效恢复", False, f"{type(e).__name__}: {e}")
+else:
+    print("  SKIP  需要 NAS_URL")
+
 print(f"\n结果：{ok} passed, {fail} failed")
 sys.exit(1 if fail else 0)

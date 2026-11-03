@@ -32,6 +32,7 @@ from urllib.parse import quote_plus
 
 import requests
 from PIL import Image
+from synology_api.base_api import BaseApi  # noqa: E402
 from synology_api.filestation import FileStation  # noqa: E402
 
 PORT = int(os.environ.get("NAS_MCP_PORT", "8402"))
@@ -112,7 +113,7 @@ _nas: FileStation | None = None
 
 
 def nas_client(relogin: bool = False) -> FileStation:
-    """DSM 客户端（进程内复用）。relogin=True 时丢弃旧会话重新登录。"""
+    """DSM 客户端（进程内复用）。relogin=True 时丢弃旧会话**真正重新登录**。"""
     global _nas
     with _nas_lock:
         if _nas is None or relogin:
@@ -121,6 +122,10 @@ def nas_client(relogin: bool = False) -> FileStation:
             if not (url and user):
                 raise NasError("NAS_URL / NAS_USERNAME 未配置")
             host, port, secure = _parse_nas_url(url)
+            # synology_api 把 Authentication 缓存在**类级** BaseApi.shared_session 里：
+            # 不清掉的话，新建 FileStation 只会复用旧（可能已失效的）会话，
+            # relogin 变成「假重登」—— 实测 2026-11-03：会话过期后永远报 119。
+            BaseApi.shared_session = None
             _nas = FileStation(ip_address=host, port=port, username=user, password=pw,
                                secure=secure, cert_verify=False, dsm_version=7, debug=False)
             log(f"  DSM 会话{'重建' if relogin else '建立'}: {host}:{port}")
@@ -140,6 +145,25 @@ def _is_session_error(err) -> bool:
     # 105 / 106 / 107 = DSM 的鉴权类错误码（与 EN 的 pim/api/nas.py 对齐）
     return ("session" in s) or ("timeout" in s) or any(
         ('code":%d' % c) in s or ('code": %d' % c) in s for c in (105, 106, 107))
+
+
+def retry_on_session(fn):
+    """调用 fn(client)；会话失效（105/106/107/119）则真正重登后重试一次。
+
+    用于「一次性发起任务」这类不经过 list_strict 的调用（search / folder_size /
+    md5 / archive），否则会话过期后这些工具不会自愈。
+    """
+    last = None
+    for attempt in (1, 2):
+        try:
+            return fn(nas_client(relogin=(attempt == 2)))
+        except Exception as e:                       # noqa: BLE001
+            if attempt == 1 and _is_session_error(e):
+                log(f"  会话失效，重登重试：{e}")
+                last = e
+                continue
+            raise
+    raise NasError(f"重试后仍失败：{last}")
 
 
 def list_strict(path: str, limit: int = 100, offset: int = 0) -> dict:
@@ -645,14 +669,9 @@ def tool_search(a: dict) -> dict:
     def start(c):
         return c.search_start(folder_path=p, recursive=True, pattern=name, extension=ext)
 
-    res = start(nas_client())
+    res = retry_on_session(start)
     c = nas_client()
-    try:
-        task_id = _task_id(res, "搜索")
-    except NasError:
-        res = start(nas_client(relogin=True))
-        c = nas_client()
-        task_id = _task_id(res, "搜索")
+    task_id = _task_id(res, "搜索")
 
     def fetch():
         # 注意：synology_api 的 get_search_list 要求 taskid **带双引号**
@@ -683,14 +702,9 @@ def tool_folder_size(a: dict) -> dict:
     def start(c):
         return c.start_dir_size_calc(path=p)
 
-    res = start(nas_client())
+    res = retry_on_session(start)
     c = nas_client()
-    try:
-        task_id = _task_id(res, "目录统计")
-    except NasError:
-        res = start(nas_client(relogin=True))
-        c = nas_client()
-        task_id = _task_id(res, "目录统计")
+    task_id = _task_id(res, "目录统计")
 
     state = {"restarts": 0}
     MAX_RESTARTS = 3
@@ -698,7 +712,7 @@ def tool_folder_size(a: dict) -> dict:
     def restart(_why: str) -> dict:
         nonlocal task_id
         state["restarts"] += 1
-        task_id = _task_id(start(nas_client()), "目录统计")
+        task_id = _task_id(retry_on_session(start), "目录统计")
         return {"finished": False}
 
     def fetch():
@@ -804,17 +818,23 @@ def tool_thumbnail(a: dict) -> dict:
     if size not in ("small", "medium", "large"):
         size = "small"
 
-    c = nas_client()
-    # path 用双引号包起来 —— EN 的 pim/api/nas.py 注释写明 spec 要求
-    # （实测加不加都通；加上更稳，能防带逗号等特殊字符的路径）
-    url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
-           f"&method=get&path={quote_plus(chr(34) + p + chr(34))}&size={size}&_sid={c._sid}")
-    token = getattr(c.session, "_syno_token", "") or ""
-    r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
-    r.raise_for_status()
-    raw = r.content
-    if raw[:2] == b"{" or b'"error"' in raw[:200]:
-        raise NasError("缩略图不可用（该类型/该图可能没有缩略图）：" + raw[:200].decode("utf-8", "replace"))
+    def fetch_raw(c):
+        # path 用双引号包起来 —— EN 的 pim/api/nas.py 注释写明 spec 要求
+        # （实测加不加都通；加上更稳，能防带逗号等特殊字符的路径）
+        url = (f"{c.base_url}{THUMB_PATH}?api=SYNO.FileStation.Thumb&version={THUMB_VER}"
+               f"&method=get&path={quote_plus(chr(34) + p + chr(34))}&size={size}&_sid={c._sid}")
+        token = getattr(c.session, "_syno_token", "") or ""
+        r = requests.get(url, verify=False, timeout=60, headers={"X-SYNO-TOKEN": token})
+        r.raise_for_status()
+        raw = r.content
+        if raw[:2] == b"{" or b'"error"' in raw[:200]:
+            msg = raw[:200].decode("utf-8", "replace")
+            if _is_session_error(msg):
+                raise NasError(msg)                   # 触发 retry_on_session 重登
+            raise NasError("缩略图不可用（该类型/该图可能没有缩略图）：" + msg)
+        return raw
+
+    raw = retry_on_session(fetch_raw)
 
     try:
         im = Image.open(io.BytesIO(raw))
@@ -845,14 +865,9 @@ def tool_file_md5(a: dict) -> dict:
     def start(c):
         return c.start_md5_calc(file_path=p)
 
-    res = start(nas_client())
+    res = retry_on_session(start)
     c = nas_client()
-    try:
-        task_id = _task_id(res, "MD5")
-    except NasError:
-        res = start(nas_client(relogin=True))
-        c = nas_client()
-        task_id = _task_id(res, "MD5")
+    task_id = _task_id(res, "MD5")
 
     def status(tid):
         # 有的版本要带引号，有的不要 —— 两种都试
@@ -951,26 +966,33 @@ def tool_read_doc(a: dict) -> dict:
 
 def tool_list_shares(_a: dict) -> dict:
     """列出**该账号能看到的共享文件夹** —— 让模型先知道有什么，不用猜路径。只读。"""
-    c = nas_client()
-
-    def fetch():
-        r = c.get_list_share(limit=100, offset=0, additional="size,time")
+    last = None
+    for attempt in (1, 2):
+        c = nas_client(relogin=(attempt == 2))
+        try:
+            r = c.get_list_share(limit=100, offset=0, additional="size,time")
+        except Exception as e:                       # noqa: BLE001
+            if attempt == 1 and _is_session_error(e):
+                log(f"  会话失效，重登重试：{e}")
+                last = e
+                continue
+            raise NasError(f"{type(e).__name__}: {e}") from e
         if isinstance(r, str):
             raise NasError(r[:200])
         if not (isinstance(r, dict) and r.get("success")):
-            raise NasError("列共享文件夹失败：" + json.dumps(r, ensure_ascii=False)[:200])
+            err = r.get("error") if isinstance(r, dict) else None
+            if attempt == 1 and _is_session_error(err):
+                last = err
+                continue
+            raise NasError("列共享文件夹失败：" + json.dumps(err, ensure_ascii=False)[:200])
         d = r.get("data") or {}
-        return {"shares": [{"name": s0.get("name"), "path": s0.get("path")}
-                           for s0 in (d.get("shares") or [])],
-                "total": d.get("total")}
-
-    try:
-        return fetch()
-    except NasError:
-        globals()["_nas"] = None                      # 会话可能失效，重登一次
-        out = fetch()
-        out["note"] = "（已重新登录后取得）"
+        out = {"shares": [{"name": s0.get("name"), "path": s0.get("path")}
+                          for s0 in (d.get("shares") or [])],
+               "total": d.get("total")}
+        if attempt == 2:
+            out["note"] = "（已重新登录后取得）"
         return out
+    raise NasError(f"重试后仍失败：{last}")
 
 
 def tool_folder_thumbnails(a: dict) -> dict:
@@ -1049,9 +1071,7 @@ def tool_list_archive(a: dict) -> dict:
                                           sort_by="name", sort_direction="asc",
                                           codepage=codepage, password=password)
 
-    res = call(nas_client())
-    if isinstance(res, str):
-        res = call(nas_client(relogin=True))
+    res = retry_on_session(call)
     if isinstance(res, str):
         raise NasError("列压缩包失败：" + res[:200])
     if not (isinstance(res, dict) and res.get("success")):

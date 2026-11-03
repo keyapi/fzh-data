@@ -154,3 +154,18 @@ curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://api.vilavi.cn/nas/mcp 
 | DSM 会话过期 | 客户端会重新登录；若频繁报错先看是不是会话 |
 | 出口 IP 变动 | 该机出口是 EIP；若换 IP 要同步 DSM 白名单 |
 | 速度 | 瓶颈是**办公室上行带宽**，不是 VPS。工具只返回元数据/小文本，**不要让它搬大文件** |
+
+## 8. 运行时兜底（自愈）
+
+见 [self-healing.md](self-healing.md)。
+
+当前生产状态（2026-11-03）：镜像 **`nas-mcp:0.1.1`**（含会话重登修复）+
+`/usr/local/bin/nas-mcp-healthcheck.sh` + `nas-mcp-healthcheck.timer`（每 30 分钟一次真实 `nas_health`，
+连续 2 次失败则 `docker restart nas-mcp`）。
+
+```bash
+# 查看定时器 / 手动跑一次
+systemctl list-timers nas-mcp-healthcheck.timer
+sudo /usr/local/bin/nas-mcp-healthcheck.sh
+journalctl -t nas-mcp-health -n 20 --no-pager
+```

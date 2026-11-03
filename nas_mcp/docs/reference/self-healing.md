@@ -2,154 +2,103 @@
 okf: v0.1
 type: Reference
 title: nas_mcp 自愈方案（探活 / 自动重启）
-description: 2026-11-03 假活故障复盘；进程崩溃、假活、上游故障三类失败的区别；A/B/C 三方案对比；探活频率（10 分钟不必要，30 分钟推荐，1 小时可接受）与实施草图
-tags: [nas, mcp, self-healing, healthcheck, watchdog, docker, systemd]
+description: 2026-11-03 假活故障的真实根因（synology_api 类级共享会话）、修复与已上线状态；探活频率结论（30 分钟推荐）与实施脚本
+tags: [nas, mcp, self-healing, healthcheck, watchdog, docker, systemd, synology-api]
 timestamp: 2026-11-03
 ---
 
 # nas_mcp 自愈方案
 
-## 1. 故障复盘（2026-11-03）
+> 状态：**已实施并验证**（2026-11-03）。代码修复 + 镜像 `nas-mcp:0.1.1` + 30 分钟探活定时器。
 
-**现象**：容器 `nas-mcp` 活着，端口在，Bearer 鉴权正常，`tools/list` 返回 200 + 15 个工具；
+## 1. 故障复盘
+
+**现象**：容器活着，端口在，Bearer 鉴权正常，`tools/list` 返回 200 + 15 个工具；
 但所有真实 NAS 操作返回 DSM 错误码 **119 `Invalid session / SID not found.`**。
 ChatGPT 连接器显示「已连接」，一查文件就报错。
 
-**时间线（容器日志）**：
+**两次复现**：
 
-| 时间 (UTC) | 事件 |
+- 老容器连续运行 42 天：10-04 最后一次使用，闲置 29 天后（11-02）开始失败。
+- 重启后 **仅 3 小时又失败**：03:38 建立会话，05:46 首次调用即 `Session timeout`（闲置约 2 小时）。
+
+→ 因此不是「跑久了进程腐化」，而是**只要 DSM 会话过期一次，进程内重登就救不回来**。
+
+**真实根因**：`synology_api` 把 `Authentication` 缓存在**类级属性** `BaseApi.shared_session` 上。
+`BaseApi.__init__` 的逻辑是：
+
+```python
+if BaseApi.shared_session:
+    self.session = BaseApi.shared_session      # ← 直接复用，不重新登录
+else:
+    ... 新建 Authentication 并 login() ...
+    BaseApi.shared_session = self.session
+```
+
+所以 `nas_client(relogin=True)` 里 `new FileStation(...)` **并没有登录**，
+日志里的「DSM 会话重建」是假象 —— 实际仍带着那个已失效的 SID，于是永远 119。
+
+**验证**（容器内，同一份库）：
+
+1. 正常调用成功 → 在服务端强制 `logout`（客户端仍持有旧 SID）。
+2. 旧代码：`tool_health` 返回 `available: false`（重登无效）。
+3. 修复：重建前把 `BaseApi.shared_session = None` → 拿到新 SID，调用成功。
+
+## 2. 修复内容（server.py）
+
+| 改动 | 说明 |
 |---|---|
-| 2026-10-04 23:58 | 最后一次正常调用 |
-| —— | **闲置 29 天** |
-| 2026-11-02 00:00 | 调用 → 会话失效 → 进程内重登 → 重试**成功** |
-| 2026-11-02 00:00 | `nas_list_shares` 失败（该工具的重试路径有闭包 bug，见 §5） |
-| 2026-11-03 03:18 起 | 重登后调用**仍** 119；反复重登无效 |
-| 2026-11-03 03:38 | `docker restart nas-mcp` → 全部恢复 |
+| `nas_client()` 重建前清 `BaseApi.shared_session` | 根因修复：确保 `relogin=True` 真正重新登录 |
+| 新增 `retry_on_session(fn)` | 会话失效（105/106/107/119）→ 真重登后重试一次；用于 search / folder_size / md5 / archive |
+| `tool_list_shares()` 改为重试循环 | 原先 `fetch()` 闭包绑定旧客户端，`globals()["_nas"]=None` 后仍用旧 `c` |
+| `tool_thumbnail()` 走 `retry_on_session` | 原裸 requests 拿旧 `_sid`，失效后不会自愈 |
 
-**已排除**：容器内代码与仓库 sha256 一致；容器 env 与 `/opt/nas-mcp/.env` 一致（密码哈希相同）；
-DNS 稳定单 IP；同一凭据在**新进程**里登录、列目录、列共享文件夹全部正常；线程内调用正常。
+**回归测试**：`tests/test_smoke.py` 第 15 节 —— 服务端强制登出后，
+`nas_health` 与 `nas_list_shares` 都必须自动恢复。旧代码必挂，新代码通过。
 
-**结论**：不是网络/凭证/NAS 侧问题，是**长时间运行的进程状态坏了**（库的会话重建路径在进程内失效）。
-闲置导致的 DSM 会话过期是触发条件之一，但不是唯一原因 —— 11-02 重登还能救回来，11-03 就不行了。
-**重启进程即可恢复**；容器没有 healthcheck，所以「活着但不可用」不会被发现。
+## 3. 运行时兜底：30 分钟探活
 
-## 2. 三类失败要分开处理
+即使代码能自愈，仍需要兜底（NAS 重启、网络中断、进程卡死等情况）。
 
-| 类型 | 表现 | 正确动作 |
-|---|---|---|
-| **进程崩溃** | 容器退出 | Docker `restart=unless-stopped` 已覆盖，无需额外处理 |
-| **假活（liveness）** | 进程在、HTTP 200，但功能全废 | 探针 + 自动重启 |
-| **上游故障** | DSM/NAS 不可达，或**登录就失败** | **不要重启**（重启无用且会风暴），应告警 |
+- 脚本：`/usr/local/bin/nas-mcp-healthcheck.sh`
+- 定时器：`nas-mcp-healthcheck.timer`（`OnUnitActiveSec=30min`）
+- 策略：**连续 2 次** `nas_health` 不可用才 `docker restart nas-mcp`；
+  若返回是 `LoginError` / `ConnectionError`（上游/凭证问题）则**只记日志、不重启**，避免重启风暴。
 
-> 关键判据：**能登录但调用全失败 → 本地状态坏了 → 重启**；**连登录都失败 → 上游问题 → 告警**。
-
-## 3. 三个方案
-
-| | A. 定时探活 + 重启 | B. HEALTHCHECK + autoheal | C. 进程内 watchdog |
-|---|---|---|---|
-| 检测 | 外部定时器（systemd timer / cron） | Docker 健康检查 | 服务内部线程 |
-| 恢复 | 脚本 `docker restart` | `willfarrell/autoheal` 监听 unhealthy 并重启 | 重建全部客户端状态 |
-| 依赖 | systemd + curl | 额外跑一个 autoheal 容器 | 无外部依赖 |
-| 成本 | 低（约 20 行） | 中（多一个常驻容器 + 重建镜像） | 中（改代码、需重新构建部署） |
-| 优点 | 最小改动；顺带保活会话 | 标准化，所有「假活」都能兜 | 不依赖外部组件，最接近 let-it-crash |
-| 缺点 | 只管这台容器 | Docker 的 HEALTHCHECK **本身不会重启容器**，必须有 autoheal | 进程整体损坏（如本例）时线程本身可能也失效 |
-
-**推荐 A**：成本最低，且探活本身就让 DSM 会话保持热，把「闲置过期」这个触发条件一起消掉。
-等 MCP 服务变多、或迁到编排平台（K8s livenessProbe 会自动重启）再升级。
+> ⚠️ 探针必须解析 JSON，不能 grep 字符串：MCP 响应的内层 JSON 是**转义字符串**
+> （`\"available\": true`），直接 grep `"available": true` 永远匹配不上 —— 第一版脚本就踩了这个坑。
 
 ## 4. 探活频率：10 分钟没必要
 
-探针有两个作用：**检测延迟** 和 **会话保活**。
-
-- **会话保活**：只要间隔显著小于 DSM 闲置超时即可。本次实测闲置 **29 天**才过期，
-  说明 DSM 的超时是「小时～天」量级，不是分钟级。**10 分钟属于过度设计。**
-- **检测延迟**：决定坏了多久被发现。内部只读工具，30 分钟完全够；1 小时也可接受。
+实测 DSM 会话闲置超时约 **2 小时**（03:38 登录 → 05:46 报 `Session timeout`）。
 
 | 间隔 | 每天次数 | 最长发现延迟 | 评价 |
 |---|---|---|---|
-| 10 分钟 | 144 | 10 分钟 | 没必要 |
-| **30 分钟** | **48** | **30 分钟（或 60 分钟，若要求连续 2 次失败才重启）** | **推荐** |
-| 1 小时 | 24 | 1 小时（或 2 小时） | 可接受，更安静 |
+| 10 分钟 | 144 | 10 分钟 | 没必要（超时是小时级） |
+| **30 分钟** | **48** | 30 分钟（连续 2 次失败 → 约 60 分钟） | **已采用** |
+| 1 小时 | 24 | 1 小时（→ 约 2 小时） | 可接受，余量只剩 2× |
 
-补充：每次探活只是列 1 项目录，负载可忽略；真正的取舍是**恢复延迟 vs 抖动容忍**。
-建议 **30 分钟间隔 + 连续 2 次失败才重启**：偶发一次 NAS 抖动不会误重启，真挂了最长约 1 小时恢复。
+30 分钟相对 2 小时超时是 4× 余量，即使偶尔漏一次也不会过期；1 小时也安全但余量更小。
+负载可忽略：每次只列 1 项目录。
 
-## 5. 实施草图（方案 A）
+## 5. 失败分类（别盲目重启）
 
-**探活脚本**（放在 VPS，例如 `/usr/local/bin/nas-mcp-healthcheck.sh`）：
+| 类型 | 表现 | 正确动作 |
+|---|---|---|
+| 进程崩溃 | 容器退出 | `restart=unless-stopped` 已覆盖 |
+| 假活（本模块） | 进程在、HTTP 200，但功能全废 | 代码自愈 + 探活重启 |
+| 上游故障 | 登录都失败 / 连不上 NAS | **不要重启**，告警（脚本已区分） |
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-set -a; . /opt/nas-mcp/.env; set +a          # 只取 NAS_MCP_TOKEN 等
-STATE=/run/nas-mcp-health.fail
+## 6. 更标准的演进方向
 
-resp=$(curl -sS -m 60 -X POST http://127.0.0.1:8402/mcp \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $NAS_MCP_TOKEN" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"nas_health","arguments":{}}}' || true)
+- **Docker `HEALTHCHECK` + `willfarrell/autoheal`**：标准化「假活」自愈，但要额外跑一个 autoheal 容器。
+- **Kubernetes `livenessProbe`**：探针失败由 kubelet 自动重启，是当前最标准的做法；单机小服务上 K8s 过重。
+- **应用内 watchdog 线程**：不依赖外部组件，但进程整体损坏时线程也可能失效。
+- 当前选择 systemd timer：成本最低，**同时保活会话**，且能区分上游故障。
 
-if printf '%s' "$resp" | grep -q '"available": true'; then
-  rm -f "$STATE"
-  exit 0
-fi
+## 7. 验证记录（2026-11-03）
 
-n=$(( $(cat "$STATE" 2>/dev/null || echo 0) + 1 ))
-echo "$n" > "$STATE"
-if [ "$n" -ge 2 ]; then
-  logger -t nas-mcp-health "unavailable x$n, restarting"
-  docker restart nas-mcp
-  rm -f "$STATE"
-fi
-```
-
-**systemd timer**：
-
-```ini
-# /etc/systemd/system/nas-mcp-healthcheck.service
-[Unit]
-Description=nas_mcp healthcheck
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/nas-mcp-healthcheck.sh
-
-# /etc/systemd/system/nas-mcp-healthcheck.timer
-[Unit]
-Description=Run nas_mcp healthcheck every 30 minutes
-[Timer]
-OnBootSec=5min
-OnUnitActiveSec=30min
-[Install]
-WantedBy=timers.target
-```
-
-启用：`systemctl daemon-reload && systemctl enable --now nas-mcp-healthcheck.timer`。
-
-> 注意：探针必须是**真实 NAS 调用**（`nas_health`），不能只探 HTTP 200 —— 本次故障 HTTP 层一直是好的。
-> 另外脚本里 `docker restart` 前应能区分「登录失败」：若日志是 `LoginError` / 连接错误，说明上游坏了，
-> 此时重启无用，应只告警。（当前简化版未区分，必要时再加。）
-
-## 6. 顺带发现的代码问题（未修，待评估）
-
-`tool_list_shares()` 里 `fetch()` 闭包绑定了旧的 `c`，`globals()["_nas"] = None` 后重试**仍在用旧客户端**：
-
-```python
-c = nas_client()
-def fetch():
-    r = c.get_list_share(...)      # 闭包捕获旧的 c
-try:
-    return fetch()
-except NasError:
-    globals()["_nas"] = None
-    out = fetch()                   # 还是旧的 c，换汤不换药
-```
-
-这解释了 11-02 00:00 `nas_list_shares` 在别的工具已重登成功后仍然失败。**但这不是 11-03 全挂的原因**
-（`nas_health` 走 `list_strict`，重登逻辑是正确的，同样失败）。属于独立的小 bug，可另开单修。
-
-## 7. 验证
-
-1. 手动跑一次探活脚本，确认返回 `available: true` 时退出码 0、不重启。
-2. 临时把脚本里的判断反向或停掉 NAS 可达性，确认连续 2 次失败后触发重启。
-3. `systemctl list-timers | grep nas-mcp` 确认定时器生效。
-4. 观察一周日志，确认无 `Invalid session`。
+- 外部 HTTPS 真实调用：`nas_health` available=true、`nas_list_shares` 2 个共享、`nas_list_folder` 正常。
+- 强制登出回归：`nas_health` / `nas_list_shares` 均自动恢复。
+- 故障演练：`docker stop nas-mcp` → 第 1 次探活计 x1 → 第 2 次触发 `restarting nas-mcp` → 容器自动拉起、健康恢复。
+- 定时器：`systemctl list-timers` 显示下一次 30 分钟后执行。
