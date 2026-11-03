@@ -72,3 +72,8 @@
 ## 6. 离职账号名单 & 在职保留
 
 不在文档里硬编码（PII）。以 **Google Sheet 台账「账号主清单」** 为准：待删填 `清理`；做完改 `已清理` / `已清(遗留)`。`保留` / `不取消` 即使状态=离职也不删。执行前先读该 worksheet。
+
+## 7. 内容读写与新增账号
+
+- 本模块只管**共享权限**。读写文件夹里的 Markdown / Google Sheet 用 `drive_folder_ops/`（见其 `README.md` / `AGENT_HANDOFF.md`）。
+- 给另一个 Google 账号的文件夹授权给现有机器人：**不需要新凭证**，登录目标账号把文件夹共享给 `colab-gsheets@gsheets-351101.iam.gserviceaccount.com`（编辑者）即可。完整步骤与边界见 [`docs/reference/share-folder-with-service-account.md`](docs/reference/share-folder-with-service-account.md)。

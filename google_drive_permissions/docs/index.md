@@ -26,6 +26,7 @@ title: Google Drive 权限管理 — 文档索引
 | Agent 快速上手（凭证、sheet_id、脚本函数表、API 机制、边界） | [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) |
 | 踩过的坑与正确姿势 | [lessons.md](lessons.md) |
 | 本次操作时间线（背景/过程/结果/残留） | [log.md](log.md) |
+| 把另一个 Google 账号的文件夹共享给现有机器人（无需新凭证） | [reference/share-folder-with-service-account.md](reference/share-folder-with-service-account.md) |
 | 可复用脚本 | [../scripts/](../scripts/) |
 
 ## 关键结论速览
