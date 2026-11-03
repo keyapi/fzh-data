@@ -68,7 +68,7 @@
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
 - 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
 
-### 6.1 full_supply_facts v6 阶段明细与正式刷新（2026-11-03，RULE/IMPL 2026-11-03.1）
+### 6.1 full_supply_facts v6 阶段明细与正式刷新（2026-11-03，RULE/IMPL 2026-11-03.2）
 
 - 离线入口：`supply_pipeline`；正式 EN 只读刷新入口：`supply_snapshot_refresh`。后者先加载
   ABC/权威 scope，再采集分页，并校验稳定 `snapshot_id`、版本、总数、连续性和权限；任何
@@ -76,11 +76,15 @@
 - 主数据集 `full_supply_facts.parquet` 改为阶段明细：item×uom×warehouse×purpose×tt_sku×branch×stage×doc_line/batch_id；含 doc_type/doc_name/doc_line/batch_id/source_identity/stage_fact_id。
 - 历史目标汇总迁为独立兼容数据集 `supply_target_summary.parquet/json`；原字段/四层资格保留。
 - 阶段只允许 open_po/waiting_shipment/in_transit/received/on_hand；open_po 仅核账不计供给；signed 未通途入库归 in_transit（signed_at）；received 只认通途入库时间；on_hand 只认库存快照。同一物理批次只允许一个 counted_as_supply 当前阶段。
-- observed_at/eta/available_at/signed_at/received_at 严格分离；naive/date-only 不假定 UTC。
+- 身份三层：`fact_identity`（单据/工单/运单/签收名）只证明事实身份；仅显式 batch/lineage、合法分配或父链生成 `physical_lineage_id`；WO/DN/Shipment/receipt 名称不得写成 batch_id。未证明 lineage 的事实保留但 `counted_as_supply=false`。
+- 库存包含只认同一已证 `physical_lineage_id` 或显式 `inclusion_proof`；不同批次互不闭合，聚合库存无法证明批次 → inclusion=unknown。
+- `stage_fact_id` 只由稳定事实身份生成；数量/时间/状态进 `payload_hash`。同键同载荷重放去重，异载荷 `payload_conflict` 且不计数、不切换 latest。
+- 时间冲突：`received_at<signed_at` → `receipt_before_signed`；received 早于 in_transit actual → `time_order_conflict`；waiting actual 晚于 in_transit/received actual → `stage_regression`；保留原始时间但不计数。
+- observed_at/eta/available_at/signed_at/received_at 严格分离；observed_at 只用于新鲜度、不选阶段；actual 优先于 estimate；naive/date-only 不假定 UTC。
 - purpose 支持 branch/fba/cg；owner_status/cg_stale/cg_eligible/cg_blocking_reasons 显式；stale CG 保留观察但不抵扣。
 - 发布/reader 同时校验阶段主数据集、目标汇总、position、timeline；manifest 含 as_of/run_id/输入版本/SHA/行数/阶段唯一键/freshness/stage/unknown/conflict/overlap/CG 统计。
 - 统一 `manifest.json`（`supply-publication/v5`）。市场/形态纳入目标唯一键。
-- A/B/C（`abc-frozen/v3`）：观察量/归属量/当前可用/下单四层分开；C 必须
+- A/B/C（`abc-frozen/v4`）：观察量/归属量/当前可用/下单四层分开；C 必须
   join_full + source_ref + 数量 + UoM 才可归属，否则 `c_not_qualified` 且可信/当前
   均为 null；B/C 单位必须一致才可归属；naive/date-only 不算精确时间；缺身份只进
   未归属池；CG 池不复制；B/C 版本冲突显式。

@@ -66,12 +66,13 @@ FULL_INT_COLUMNS = ("inventory_date_age_days",)
 
 TARGET_KEY = FULL_KEY
 STAGE_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
-             "stage", "doc_line", "batch_id", "stage_fact_id")
+             "stage", "stage_fact_id")
 STAGE_STRING_COLUMNS = (
     "item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
     "market", "product_form", "pool", "scope", "stage",
     "doc_type", "doc_name", "doc_line", "batch_id",
-    "batch_identity_status", "lineage_id", "qty_status", "confidence",
+    "stage_fact_id", "physical_lineage_id", "lineage_status", "payload_hash",
+    "inclusion_proof", "qty_status", "confidence",
     "counted_reason", "observed_at_raw", "observed_at_time_status",
     "eta_raw", "eta_time_status", "available_at_raw",
     "available_at_time_status", "signed_at_raw", "signed_at_time_status",
@@ -82,9 +83,11 @@ STAGE_DECIMAL_COLUMNS = ("qty",)
 STAGE_TIME_COLUMNS = ("observed_at", "eta", "available_at", "signed_at",
                       "received_at", "actual_at", "expected_at")
 STAGE_JSON_LIST_COLUMNS = ("cg_blocking_reasons", "unknown_reasons",
-                           "conflicts", "blockers")
-STAGE_JSON_DICT_COLUMNS = ("source_identity",)
-STAGE_BOOL_COLUMNS = ("counted_as_supply", "cg_stale", "cg_eligible")
+                           "conflicts", "blockers", "payload_hashes",
+                           "payload_candidates")
+STAGE_JSON_DICT_COLUMNS = ("source_identity", "fact_identity")
+STAGE_BOOL_COLUMNS = ("counted_as_supply", "cg_stale", "cg_eligible",
+                      "payload_conflict")
 
 POSITION_STRING_COLUMNS = ("item_code", "tt_sku", "warehouse", "purpose", "uom",
                            "as_of", "mapping_version", "inventory_inclusion_status",
@@ -998,6 +1001,20 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
         timeline_rows = _json_copy((full_result.get("timeline") or {}).get("rows") or [])
         _assert_unique(stage_rows, STAGE_KEY, "duplicate stage fact key")
         _assert_unique(target_rows, FULL_KEY, "duplicate target summary key")
+        blocking = {"source_payload_conflict", "receipt_before_signed",
+                    "time_order_conflict", "stage_regression"}
+        blocked = [row for row in stage_rows
+                   if row.get("payload_conflict")
+                   or blocking.intersection(row.get("conflicts") or ())]
+        if blocked:
+            raise CorruptedPublication(
+                "stage conflict blocks publication: "
+                + ",".join(sorted({reason for row in blocked
+                                   for reason in (row.get("conflicts") or ())
+                                   if reason in blocking}
+                                  | {"source_payload_conflict"
+                                     if any(row.get("payload_conflict")
+                                            for row in blocked) else ""})))
         _assert_unique(position_rows, POSITION_KEY, "duplicate position target key")
         _assert_unique(timeline_rows, FULL_KEY, "duplicate timeline target key")
         files = {}

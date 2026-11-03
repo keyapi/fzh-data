@@ -193,7 +193,7 @@ JSON/Parquet 逐字段一致校验；失败不切 `latest.json`。reader 返回
 `healthy/stale/partial/corrupted/incompatible_version/refresh_failed_using_previous`，
 并用 `allow_stale` 显式控制是否可读；行级 freshness 每次读取按当前时间重算。
 
-本地冻结 A/B/C 通过 `abc_inputs.load_frozen_abc` 接入（`abc-frozen/v3`，
+本地冻结 A/B/C 通过 `abc_inputs.load_frozen_abc` 接入（`abc-frozen/v4`，
 `full-supply-facts/v6`，`supply-publication/v5`，`supply-pipeline/v5`）：
 - **观察/归属/当前可用/下单四层分开**：`inventory_observed_qty`（C 原始数量+单位）、
   `attribution_status`/`inventory_qty`（B 单位/身份资格 + C join_full/source_ref/数量）、
@@ -216,6 +216,17 @@ JSON/Parquet 逐字段一致校验；失败不切 `latest.json`。reader 返回
   必须一致，按 allocation 身份去重后不得超容量；同目标内同样校验，重放幂等，冲突为
   `source_allocation_conflict`。DN/PO 以 instance+DN+DN Item 为物理身份，PO 作废重建
   只增加关系证据，不重复供应；缺身份保持 unknown。
+- **事实身份与物理批次分离**：单据名/工单号/运单号/签收号只写 `fact_identity`；只有显式
+  batch/lineage、合法分配或父链生成 `physical_lineage_id`。未证明 lineage 的事实保留但
+  `counted_as_supply=false`，不跨阶段累加。
+- **库存包含只认同线**：同一已证 `physical_lineage_id` 或显式 `inclusion_proof`；不同批次
+  互不闭合，聚合库存无法证明批次 → inclusion=unknown。
+- **阶段单调**：`observed_at` 只用于新鲜度；actual 优先于 expected；waiting actual 晚于
+  in_transit/received actual → `stage_regression`；received 早于 in_transit actual →
+  `time_order_conflict`；`received_at<signed_at` → `receipt_before_signed`。冲突保留原始时间、
+  不计数、拒绝发布。
+- **稳定主键**：`stage_fact_id` 只由稳定事实身份生成；数量/时间/状态进 `payload_hash`。
+  同键同载荷去重，异载荷 `payload_conflict` 且不切换 latest；跨快照同事实 ID 不变。
 - 输入契约：混版页拒绝；**分页截断**（truncated/未 exhausted/pagination.partial）
   拒收；**合法业务 partial**（分页已 exhausted）不拒收，该层汇总 unknown、已证片段
   保留，`partial_reason=business_partial` 透出 manifest/reader；来源状态保守聚合。

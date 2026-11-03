@@ -521,8 +521,10 @@ def build_production(supply, b_rows):
                 item, uom, warehouse, identity,
                 source_ref=wo.get("wo") or wo.get("name"),
                 work_order=wo.get("wo") or wo.get("name"),
-                batch_id=wo.get("wo") or wo.get("name"),
+                # WO name is fact identity only; never promoted to a batch.
+                batch_id=wo.get("batch_id"),
                 qty=qty, evidence_status=status,
+                actual_at=evidence.get("completed_at"),
                 available_date=evidence.get("completed_at")
                 or evidence.get("started_at"),
                 observed_at=evidence.get("observed_at")
@@ -551,8 +553,8 @@ def build_transit(supply, b_rows):
             row.get("item_code"), row.get("uom"), row.get("warehouse"), identity,
             source_ref=row.get("source_record") or row.get("batch_key"),
             waybill=waybills[0] if len(waybills) == 1 else None,
-            batch_id=(waybills[0] if len(waybills) == 1
-                      else (row.get("source_record") or row.get("batch_key"))),
+            # Waybill/DN names are fact identity only, not a physical batch.
+            batch_id=row.get("batch_id"),
             qty=qty,
             source_status="known" if qty is not None else "unknown",
             reason=("multi_waybill_allocation_unknown"
@@ -594,16 +596,12 @@ def build_receipts(supply, b_rows):
                            if len(receipt_values) == 1 else None)
         identity = _b_identity(b_rows, row.get("item_code"), row.get("uom"),
                                row.get("warehouse"))
-        shipments = sorted({_text(item.get("shipment"))
-                            for item in progresses
-                            if _text(item.get("shipment"))})
-        batch_id = (shipments[0] if len(shipments) == 1
-                    else (row.get("batch_key") or row.get("source_record")))
         out.append(_record(
             row.get("item_code"), row.get("uom"), row.get("warehouse"), identity,
             source_ref=row.get("source_record") or row.get("batch_key"),
             receipt_id=row.get("batch_key") or row.get("source_record"),
-            batch_id=batch_id,
+            # Shipment/receipt names are fact identity only, not a physical batch.
+            batch_id=row.get("batch_id"),
             qty=(_dec(row.get("qty"))
                  if row.get("qty_status") in (None, "known") else None),
             signed_at=signed,

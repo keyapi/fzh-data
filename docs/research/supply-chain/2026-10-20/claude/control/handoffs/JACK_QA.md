@@ -473,6 +473,19 @@ POD、受限 HTTP、规模与生产部署仍 pending。
 验证：完整依赖 **458 passed / 20 subtests**；最小依赖另行统计。未创建真实 PO、未写
 EN/通途业务数据、未合并 main。
 
+### [W1-FULL-FACTS-V6-REREVIEW-2026-11-03] D6 复审五项整改
+
+| 问题 | 修复 | 反例/结果 |
+|---|---|---|
+| 单据名被当成物理批次 | `fact_identity` 仅证事实；`physical_lineage_id` 只来自显式 batch/lineage、合法分配或父链；适配层移除 WO/DN/Shipment/receipt 名派生 batch_id | WO+DN+receipt+inventory 无共同批次 → 四阶段事实均 unproven、无 counted；不再出现 waiting 5+on_hand 5=10 |
+| 库存按目标/时间闭合 | 只认同 lineage 或显式 inclusion_proof | receipt A + inventory B → received inclusion=unknown，不闭合；同批 A 才 included |
+| 入库早于签收仍计数 | `received_at<signed_at` → `receipt_before_signed`，数量/置信度 conflict/unknown、不计供应 | 真实 `ZMT26071090` signed 2026-08-11 / 入库 2026-07-10 → 冲突、received_qty=null；完整正向链仍 not_found |
+| 阶段被 ETA/观察时间回退 | `observed_at` 只用于新鲜度；actual 优先；waiting actual 晚于 transit/received actual → `stage_regression`；received 早于 transit → `time_order_conflict` | waiting ETA 12-01 + transit signed 11-01 → transit 计数、waiting 不计数；production actual 11-05 + transit 11-01 → stage_regression |
+| 稳定键混入数量/时间 | `stage_fact_id` 只用稳定事实身份；数量/时间/状态进 `payload_hash`；同键同载荷去重、异载荷 `payload_conflict` | 同身份 3/4 → 同 stage_fact_id、不同 payload_hash、冲突不计数；跨快照同事实 ID 不变；冲突发布拒绝、latest 不切换 |
+
+验证：完整依赖 **473 passed / 20 subtests**；最小依赖 **414 passed / 58 skipped / 20
+subtests**。未创建真实 PO、未写 EN/通途业务数据、未合并 main、未部署生产。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

@@ -266,8 +266,8 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 ### `full_supply_facts` v6（阶段明细 + 兼容目标汇总）
 
 模块：`supply_chain_visibility/full_supply_facts.py`，schema
-`full-supply-facts/v6`，`RULE=2026-11-03.1`，
-`IMPLEMENTATION=fzh.full_supply_facts@2026-11-03.1`。发布/读取：
+`full-supply-facts/v6`，`RULE=2026-11-03.2`，
+`IMPLEMENTATION=fzh.full_supply_facts@2026-11-03.2`。发布/读取：
 `supply_chain_visibility/publication.py`（`supply-publication/v5`）。
 主数据集 `full_supply_facts.parquet` 为阶段明细；历史目标汇总迁移为独立兼容数据集
 `supply_target_summary.parquet/json`，不丢失旧能力。目标唯一键为
@@ -277,18 +277,38 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 #### D6 阶段明细契约
 
 - 主数据集粒度：`item_code×uom×warehouse×purpose×tt_sku×branch×stage×doc_line/batch_id`；
-  另含 `doc_type/doc_name/doc_line/batch_id/source_identity/stage_fact_id`。
+  另含 `doc_type/doc_name/doc_line/batch_id/source_identity/fact_identity/stage_fact_id/
+  physical_lineage_id/lineage_status/payload_hash`。
+- **身份分层**：单据名/工单号/运单号/签收号只构成 `fact_identity`，不自动成为物理批次。
+  仅当存在显式 `batch_id`/`lineage_id`、合法分配（`allocation_id`+`allocated_qty`+`source_qty`）
+  或父级链证据时才生成 `physical_lineage_id`（`lineage_status=proven_*`）；否则
+  `lineage_status=unproven`，事实保留但 `counted_as_supply=false`。适配层不得把 WO/DN/
+  Shipment/receipt 名称写成 `batch_id`。
 - 阶段只允许 `open_po/waiting_shipment/in_transit/received/on_hand`。
   `open_po` 仅核账，`counted_as_supply=false`；`signed_pending_tongtool_receipt` 归
   `in_transit` 并填 `signed_at`；`received` 只认通途入库时间；`on_hand` 只认库存快照。
-- 同一物理批次（有明确 `batch_id`）跨阶段只允许一个 `counted_as_supply=true` 的当前阶段；
-  未证明身份时保持 `overlap_status=unknown`。
+- **库存包含证明**：只有同一已证 `physical_lineage_id`（或显式 `inclusion_proof`）才能让
+  received/in_transit 与 on_hand 互相闭合；禁止仅凭 item/uom/warehouse/purpose/tt_sku/
+  branch+时间判定。不同批次互不闭合；聚合库存无法证明具体批次 → `inventory_inclusion_status=unknown`。
+- 同一物理批次跨阶段只允许一个 `counted_as_supply=true` 的当前阶段；未证明身份时保持
+  `overlap_status=unknown`，不同来源的事实也不跨阶段累加。
 - `observed_at`、`eta`、`available_at`、`signed_at`、`received_at` 五个时间字段严格分开；
-  禁止互相回填；无时区/date-only 保留 raw + time_status，不假定 UTC。
+  禁止互相回填；无时区/date-only 保留 raw + time_status，不假定 UTC。`observed_at` 只用于
+  新鲜度，**不参与阶段选择**；生产/在途已有 actual 时间时优先于 expected/eta。
+- **时间冲突**：`received_at < signed_at` → `receipt_before_signed`；received 早于
+  in_transit actual → `time_order_conflict`；waiting_shipment actual 晚于 in_transit/received
+  actual → `stage_regression`。三者保留原始时间但数量/置信度置 conflict/unknown 且不计入供应，
+  不得猜测当前阶段。
+- **稳定主键**：`stage_fact_id` 只由稳定事实身份（含单据/明细/批次/来源）生成，不含数量、
+  时间、状态；数量/时间/状态写入独立的 `payload_hash`。同 `stage_fact_id` 同载荷重放去重；
+  异载荷 → `payload_conflict=true`，保留 `payload_hashes`/`payload_candidates`，数量 null 且不计入。
+  跨快照同一事实 `stage_fact_id` 不变，载荷变化只改变 `payload_hash`。
 - `purpose` 支持 `branch/fba/cg`：branch 唯一 owner；FBA 不得绑定 branch；CG 不得复制给
   branch/FBA。字段 `owner_status/cg_stale/cg_eligible/cg_blocking_reasons` 显式；
   stale CG 保留观察量但 `counted_as_supply=false`。
 - 目标汇总数据集保留原有字段与四层资格；reader 同时校验阶段主数据集与目标汇总。
+  `payload_conflict` 或 `source_payload_conflict/receipt_before_signed/time_order_conflict/
+  stage_regression` 存在的批次拒绝发布，`latest.json` 保持上一成功版本。
 
 ### 1.6 正式只读刷新入口（2026-11-02）
 
@@ -320,7 +340,7 @@ schema/粒度不同。**
 #### 唯一键与身份
 
 - 目标汇总唯一键：`item_code × uom × warehouse × purpose × tt_sku × branch × market × product_form`；
-  阶段主数据集唯一键：`item_code × uom × warehouse × purpose × tt_sku × branch × stage × doc_line × batch_id × stage_fact_id`；重复键直接失败。
+  阶段主数据集唯一键：`item_code × uom × warehouse × purpose × tt_sku × branch × stage × stage_fact_id`；重复键直接失败。
 - 非权威业务来源（SO/生产/库存/在途/签收）**只按完整键精确挂接**，不得填补缺失的
   branch/tt_sku。只有 B/A 的显式身份可以在**完整候选集合唯一**时填补 DN/PO 空维度；
   多个候选保持未归属并标 `target_key_ambiguous`。
