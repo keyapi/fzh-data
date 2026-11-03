@@ -135,6 +135,6 @@ J5展示同商品不同仓以及无预测仍可查催单；J6验证源修改/断
 - **业务 partial**：分页已 exhausted 的 partial 不拒收，该层汇总 unknown、已证片段
   保留，`partial_reason=business_partial`；分页截断仍拒收。
 - 版本：`full-supply-facts/v4`、`abc-frozen/v3`、`supply-publication/v3`、
-  `supply-pipeline/v4`；真实 A/B/C 工作簿验收仍 pending。
+  `supply-pipeline/v5`；真实 A/B/C 工作簿验收仍 pending。
 - **真实 A/B/C 冻结工作簿当前不可用，真实链路验收 pending**；不以合成数据冒充。
   D 预测仍未接入；`forecast_connected/netting_ready/auto_order=false`。

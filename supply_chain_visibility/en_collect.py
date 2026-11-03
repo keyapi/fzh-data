@@ -521,6 +521,7 @@ def build_production(supply, b_rows):
                 item, uom, warehouse, identity,
                 source_ref=wo.get("wo") or wo.get("name"),
                 work_order=wo.get("wo") or wo.get("name"),
+                batch_id=wo.get("wo") or wo.get("name"),
                 qty=qty, evidence_status=status,
                 available_date=evidence.get("completed_at")
                 or evidence.get("started_at"),
@@ -550,6 +551,8 @@ def build_transit(supply, b_rows):
             row.get("item_code"), row.get("uom"), row.get("warehouse"), identity,
             source_ref=row.get("source_record") or row.get("batch_key"),
             waybill=waybills[0] if len(waybills) == 1 else None,
+            batch_id=(waybills[0] if len(waybills) == 1
+                      else (row.get("source_record") or row.get("batch_key"))),
             qty=qty,
             source_status="known" if qty is not None else "unknown",
             reason=("multi_waybill_allocation_unknown"
@@ -577,15 +580,34 @@ def build_receipts(supply, b_rows):
                                 for item in proven_progress
                                 if _text(item.get("shipment_signed_at"))})
         signed = signed_values[0] if len(signed_values) == 1 else None
+        received_at = None
+        if row.get("stage") in ("tongtool_received", "delivered_sellable"):
+            receipt_values = sorted({
+                _text(item.get("tongtool_receipt_at")
+                      or item.get("tongtool_first_receipt_at")
+                      or item.get("tongtool_last_receipt_at"))
+                for item in progresses
+                if _text(item.get("tongtool_receipt_at")
+                         or item.get("tongtool_first_receipt_at")
+                         or item.get("tongtool_last_receipt_at"))})
+            received_at = (receipt_values[0]
+                           if len(receipt_values) == 1 else None)
         identity = _b_identity(b_rows, row.get("item_code"), row.get("uom"),
                                row.get("warehouse"))
+        shipments = sorted({_text(item.get("shipment"))
+                            for item in progresses
+                            if _text(item.get("shipment"))})
+        batch_id = (shipments[0] if len(shipments) == 1
+                    else (row.get("batch_key") or row.get("source_record")))
         out.append(_record(
             row.get("item_code"), row.get("uom"), row.get("warehouse"), identity,
             source_ref=row.get("source_record") or row.get("batch_key"),
             receipt_id=row.get("batch_key") or row.get("source_record"),
+            batch_id=batch_id,
             qty=(_dec(row.get("qty"))
                  if row.get("qty_status") in (None, "known") else None),
             signed_at=signed,
+            received_at=received_at,
             pod_uploaded_at=None,
             receipt_basis=("tongtool_received" if row.get("stage")
                            in ("tongtool_received", "delivered_sellable")

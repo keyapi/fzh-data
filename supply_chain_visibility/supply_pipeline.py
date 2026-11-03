@@ -21,7 +21,7 @@ from supply_chain_visibility.full_supply_facts import build_full_supply_facts
 from supply_chain_visibility.publication import publish, read_publication, source_freshness
 from supply_chain_visibility.supply_position import assemble_input, build_position
 
-SCHEMA_VERSION = "supply-pipeline/v4"
+SCHEMA_VERSION = "supply-pipeline/v5"
 MAPPING_STUB = {"source": "not_provided", "version": "unknown", "rows": []}
 
 

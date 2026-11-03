@@ -16,6 +16,7 @@ from supply_chain_visibility.publication import (
     full_schema,
     publish,
     read_publication,
+    target_summary_schema,
 )
 
 AS_OF = "2026-11-02T00:00:00+00:00"
@@ -113,13 +114,14 @@ class PublicationTests(unittest.TestCase):
             self.assertEqual(published["status"], "ok")
             latest = json.loads((Path(tmp) / "latest.json").read_text(encoding="utf-8"))
             manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
-            self.assertEqual(manifest["schema_version"], "supply-publication/v4")
+            self.assertEqual(manifest["schema_version"], "supply-publication/v5")
             self.assertEqual(manifest["versions"]["full_supply_facts"], SCHEMA_VERSION)
             self.assertFalse(manifest["netting_ready"])
             self.assertFalse(manifest["auto_order"])
             self.assertIsNone(manifest["output_summary"]["cross_layer_total"])
             self.assertEqual(set(manifest["datasets"]), {
                 "full_supply_facts.parquet", "full_supply_facts.json",
+                "supply_target_summary.parquet", "supply_target_summary.json",
                 "supply_position.parquet", "supply_position.json",
                 "timeline.json"})
             for name, entry in manifest["datasets"].items():
@@ -135,7 +137,12 @@ class PublicationTests(unittest.TestCase):
             self.assertIn("{out}", " ".join(manifest["rerun"]["argv"]))
             table = pq.read_table(Path(latest["run_dir"]) / "full_supply_facts.parquet")
             self.assertTrue(table.schema.equals(full_schema()))
-            self.assertEqual(table.num_rows, 1)
+            self.assertEqual(table.num_rows, len(full["stage_rows"]))
+            self.assertGreater(table.num_rows, 0)
+            target_table = pq.read_table(
+                Path(latest["run_dir"]) / "supply_target_summary.parquet")
+            self.assertTrue(target_table.schema.equals(target_summary_schema()))
+            self.assertEqual(target_table.num_rows, 1)
             state = read_publication(tmp, as_of=AS_OF, max_age_seconds=900)
             self.assertEqual(state["status"], "healthy", state["warnings"])
             self.assertFalse(state["full_chain_ready"])
@@ -151,9 +158,13 @@ class PublicationTests(unittest.TestCase):
             table = pq.read_table(Path(latest["run_dir"]) / "full_supply_facts.parquet")
             self.assertTrue(table.schema.equals(full_schema()))
             self.assertEqual(table.num_rows, 0)
-            data = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+            data = json.loads((Path(latest["run_dir"]) / "supply_target_summary.json")
                               .read_text(encoding="utf-8"))
             self.assertEqual(data, [])
+            stage_data = json.loads(
+                (Path(latest["run_dir"]) / "full_supply_facts.json")
+                .read_text(encoding="utf-8"))
+            self.assertEqual(stage_data, [])
             self.assertEqual(read_publication(tmp, as_of=AS_OF,
                                               max_age_seconds=900)["status"],
                              "healthy")
@@ -182,7 +193,7 @@ class PublicationTests(unittest.TestCase):
             publish(tmp, full_result=full, position_result=pos,
                     inputs=inputs(), pipeline_as_of=AS_OF)
             latest = json.loads((Path(tmp) / "latest.json").read_text(encoding="utf-8"))
-            data = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+            data = json.loads((Path(latest["run_dir"]) / "supply_target_summary.json")
                               .read_text(encoding="utf-8"))
             first = next(row for row in data if row["item_code"] == "I")
             second = next(row for row in data if row["item_code"] == "J")
@@ -511,16 +522,16 @@ class PublicationTests(unittest.TestCase):
             second = publish(tmp, full_result=full, position_result=pos,
                              inputs=inputs(), pipeline_as_of=AS_OF)
             self.assertNotEqual(first["run_dir"], second["run_dir"])
-            for name in ("full_supply_facts.json", "supply_position.json",
-                         "timeline.json"):
+            for name in ("full_supply_facts.json", "supply_target_summary.json",
+                         "supply_position.json", "timeline.json"):
                 self.assertEqual(
                     dataset_sha(first["run_dir"], name),
                     dataset_sha(second["run_dir"], name), name)
             rows_first = json.loads((Path(first["run_dir"])
-                                     / "full_supply_facts.json")
+                                     / "supply_target_summary.json")
                                     .read_text(encoding="utf-8"))
             rows_second = json.loads((Path(second["run_dir"])
-                                      / "full_supply_facts.json")
+                                      / "supply_target_summary.json")
                                      .read_text(encoding="utf-8"))
             self.assertEqual(rows_first, rows_second)
 

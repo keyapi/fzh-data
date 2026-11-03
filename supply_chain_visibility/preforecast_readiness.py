@@ -23,7 +23,7 @@ B_TARGET_ALIASES = {
     "purpose": B_PURPOSE_ALIASES,
     "tt_sku": B_TT_SKU_ALIASES,
 }
-VALID_PURPOSES = ("branch", "fba")
+VALID_PURPOSES = ("branch", "fba", "cg")
 
 
 def _number(value):

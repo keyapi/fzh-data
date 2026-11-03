@@ -204,13 +204,18 @@ class StageDateTests(unittest.TestCase):
         self.assertEqual(fragment["date_kind"], "expected")
         self.assertEqual(fragment["date_confidence"], "expected")
 
-    def test_signed_receipt_date_is_actual(self):
+    def test_signed_receipt_is_in_transit_not_received(self):
         result = build_full_supply_facts(position(), receipts=[layer(
             qty=5, signed_at="2026-11-05T00:00:00+00:00")])
         row = row_of(result)
-        self.assertEqual(row["available_date_kind"], "actual")
-        self.assertEqual(row["date_confidence"], "confirmed")
-        self.assertEqual(row["receipt_basis"], "signed_assumed")
+        self.assertIsNone(row["received_qty"])
+        self.assertEqual(row["signed_pending_qty"], "5")
+        self.assertEqual(row["receipt_basis"], "signed_pending")
+        fact = next(fact for fact in result["stage_rows"]
+                    if fact["stage"] == "in_transit"
+                    and fact.get("signed_at"))
+        self.assertEqual(fact["signed_at"], "2026-11-05T00:00:00+00:00")
+        self.assertIsNone(fact["received_at"])
 
 
 class DemandSupplyTests(unittest.TestCase):
@@ -780,8 +785,10 @@ class SourceTargetIdentityTests(unittest.TestCase):
             self.assertEqual(len(result["rows"]), 2)
             for row in result["rows"]:
                 self.assertIsNone(row["received_qty"])
+                self.assertIsNone(row["signed_pending_qty"])
                 self.assertIn("source_target_conflict", row["unknown_reasons"])
-            outputs.append(sorted((row["branch"], row["received_qty"])
+            outputs.append(sorted((row["branch"], row["received_qty"],
+                                   row["signed_pending_qty"])
                                   for row in result["rows"]))
         self.assertEqual(outputs[0], outputs[1])
 
@@ -954,7 +961,7 @@ class IdentityAndReplayTests(unittest.TestCase):
                 rows = {row["branch"]: row for row in result["rows"]}
                 self.assertEqual(set(rows), {"", "A", "B"}, layer_name)
                 field = {"so": "so_open_qty", "inventory": "inventory_qty",
-                         "receipt": "received_qty",
+                         "receipt": "signed_pending_qty",
                          "production": "in_production_qty"}[layer_name]
                 self.assertEqual(rows[""][field], "10", layer_name)
                 self.assertEqual(rows["A"][field], "2", layer_name)
@@ -1002,7 +1009,8 @@ class IdentityAndReplayTests(unittest.TestCase):
             "inventory": ("inventory", "qty", "inventory_qty",
                           {"as_of": "2026-11-02T00:00:00+00:00"}),
             "receipt": ("receipts", "qty", "received_qty",
-                        {"signed_at": "2026-11-02T00:00:00+00:00"}),
+                        {"signed_at": "2026-11-02T00:00:00+00:00",
+                         "received_at": "2026-11-03T00:00:00+00:00"}),
         }
         for name, (argument, input_field, output_field, extra) in cases.items():
             with self.subTest(layer=name):
@@ -1066,7 +1074,8 @@ class IdentityAndReplayTests(unittest.TestCase):
                 [{"item_code": "I", "uom": "个", "warehouse": "WH",
                   "purpose": "branch", "branch": "A", "tt_sku": "S1",
                   "qty": 5, "receipt_id": "RC-1",
-                  "signed_at": "2026-11-02T00:00:00+00:00"}],
+                  "signed_at": "2026-11-02T00:00:00+00:00",
+                  "received_at": "2026-11-03T00:00:00+00:00"}],
                 "receipts", "received_qty"),
         }
         for layer, (records, keyword, field) in cases.items():

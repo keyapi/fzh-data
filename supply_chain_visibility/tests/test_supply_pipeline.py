@@ -115,7 +115,7 @@ class PipelineTests(unittest.TestCase):
             manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
             self.assertFalse(manifest["netting_ready"])
             self.assertFalse(manifest["auto_order"])
-            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+            facts = json.loads((Path(latest["run_dir"]) / "supply_target_summary.json")
                                .read_text(encoding="utf-8"))
             row = next(r for r in facts if r["item_code"] == "SKU-1"
                        and r["tt_sku"] == "S1")
@@ -153,7 +153,7 @@ class PipelineTests(unittest.TestCase):
             rc = main(self._args(root, str(out), audit=_audit(lines=False)))
             self.assertEqual(rc, 0)
             latest = json.loads((out / "latest.json").read_text(encoding="utf-8"))
-            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+            facts = json.loads((Path(latest["run_dir"]) / "supply_target_summary.json")
                                .read_text(encoding="utf-8"))
             row = next(r for r in facts if r["item_code"] == "SKU-1"
                        and r["tt_sku"] == "S1")
@@ -186,7 +186,7 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("po_status", manifest["input_summary"]["not_provided"])
             self.assertIn("mapping", manifest["input_summary"]["not_provided"])
             self.assertTrue(manifest["output_summary"]["partial"])
-            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+            facts = json.loads((Path(latest["run_dir"]) / "supply_target_summary.json")
                                .read_text(encoding="utf-8"))
             row = next(r for r in facts if r["item_code"] == "SKU-1")
             self.assertEqual(row["dn_net_qty"], "5")
@@ -310,7 +310,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(
                 manifest["output_summary"]["layer_status"].get("production"),
                 "partial")
-            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+            facts = json.loads((Path(latest["run_dir"]) / "supply_target_summary.json")
                                .read_text(encoding="utf-8"))
             row = next(item for item in facts if item["tt_sku"] == "S1")
             self.assertIsNone(row["in_production_qty"])
@@ -386,7 +386,7 @@ class PipelineTests(unittest.TestCase):
             manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
             self.assertIn("inventory", manifest["input_summary"]["contract_incomplete"])
             self.assertTrue(manifest["output_summary"]["partial"])
-            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+            facts = json.loads((Path(latest["run_dir"]) / "supply_target_summary.json")
                                .read_text(encoding="utf-8"))
             row = next(r for r in facts if r["item_code"] == "SKU-1")
             self.assertIsNone(row["inventory_qty"])
@@ -418,7 +418,7 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("pagination_not_exhausted",
                           audit_entry["partial_reason"])
             self.assertTrue(manifest["output_summary"]["partial"])
-            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+            facts = json.loads((Path(latest["run_dir"]) / "supply_target_summary.json")
                                .read_text(encoding="utf-8"))
             row = next(r for r in facts if r["tt_sku"] == "S1")
             self.assertEqual(row["dn_net_qty"], "5")
@@ -472,7 +472,7 @@ class PipelineTests(unittest.TestCase):
                     hashlib.sha256(path.read_bytes()).hexdigest(),
                     item["frozen_sha256"])
             original_sha = hashlib.sha256(
-                (run_dir / "full_supply_facts.json").read_bytes()).hexdigest()
+                (run_dir / "supply_target_summary.json").read_bytes()).hexdigest()
             # Original inputs disappear; the frozen copies must still replay.
             for item in manifest["inputs"]:
                 if item.get("path"):
@@ -484,7 +484,7 @@ class PipelineTests(unittest.TestCase):
             replay_latest = json.loads((replay_out / "latest.json")
                                        .read_text(encoding="utf-8"))
             replay_sha = hashlib.sha256(
-                (Path(replay_latest["run_dir"]) / "full_supply_facts.json")
+                (Path(replay_latest["run_dir"]) / "supply_target_summary.json")
                 .read_bytes()).hexdigest()
             self.assertEqual(original_sha, replay_sha)
 
@@ -571,7 +571,7 @@ class PipelineTests(unittest.TestCase):
             manifest = json.loads(Path(latest["manifest"]).read_text(encoding="utf-8"))
             roles = {item["role"] for item in manifest["inputs"]}
             self.assertTrue({"A", "B", "C"}.issubset(roles))
-            facts = json.loads((Path(latest["run_dir"]) / "full_supply_facts.json")
+            facts = json.loads((Path(latest["run_dir"]) / "supply_target_summary.json")
                                .read_text(encoding="utf-8"))
             skilled = next(r for r in facts if r["item_code"] == "SKU-1"
                            and r["tt_sku"] == "S1")

@@ -194,7 +194,7 @@ JSON/Parquet 逐字段一致校验；失败不切 `latest.json`。reader 返回
 并用 `allow_stale` 显式控制是否可读；行级 freshness 每次读取按当前时间重算。
 
 本地冻结 A/B/C 通过 `abc_inputs.load_frozen_abc` 接入（`abc-frozen/v3`，
-`full-supply-facts/v4`，`supply-publication/v3`，`supply-pipeline/v4`）：
+`full-supply-facts/v6`，`supply-publication/v5`，`supply-pipeline/v5`）：
 - **观察/归属/当前可用/下单四层分开**：`inventory_observed_qty`（C 原始数量+单位）、
   `attribution_status`/`inventory_qty`（B 单位/身份资格 + C join_full/source_ref/数量）、
   `inventory_current_available_qty`/`current_available_eligible`（时间证明）、

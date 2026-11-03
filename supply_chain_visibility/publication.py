@@ -30,6 +30,7 @@ from supply_chain_visibility.full_supply_facts import (
     _qty,
     _time_parts,
     assess_freshness,
+    assess_stage_freshness,
 )
 from supply_chain_visibility.supply_position import (
     IMPLEMENTATION_VERSION as POSITION_IMPLEMENTATION,
@@ -39,7 +40,8 @@ from supply_chain_visibility.supply_position import (
     position_table,
 )
 
-PUBLICATION_SCHEMA = "supply-publication/v4"
+PUBLICATION_SCHEMA = "supply-publication/v5"
+TARGET_SUMMARY_SCHEMA = "supply-target-summary/v1"
 FULL_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
             "market", "product_form")
 FULL_STRING_COLUMNS = (
@@ -61,6 +63,28 @@ FULL_JSON_DICT_COLUMNS = ("source_status",)
 FULL_BOOL_COLUMNS = ("forecast_connected", "netting_ready", "auto_order",
                      "inventory_current_available", "inventory_time_proven")
 FULL_INT_COLUMNS = ("inventory_date_age_days",)
+
+TARGET_KEY = FULL_KEY
+STAGE_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
+             "stage", "doc_line", "batch_id", "stage_fact_id")
+STAGE_STRING_COLUMNS = (
+    "item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
+    "market", "product_form", "pool", "scope", "stage",
+    "doc_type", "doc_name", "doc_line", "batch_id",
+    "batch_identity_status", "lineage_id", "qty_status", "confidence",
+    "counted_reason", "observed_at_raw", "observed_at_time_status",
+    "eta_raw", "eta_time_status", "available_at_raw",
+    "available_at_time_status", "signed_at_raw", "signed_at_time_status",
+    "received_at_raw", "received_at_time_status", "overlap_status",
+    "inventory_inclusion_status", "owner_status", "source_status",
+)
+STAGE_DECIMAL_COLUMNS = ("qty",)
+STAGE_TIME_COLUMNS = ("observed_at", "eta", "available_at", "signed_at",
+                      "received_at", "actual_at", "expected_at")
+STAGE_JSON_LIST_COLUMNS = ("cg_blocking_reasons", "unknown_reasons",
+                           "conflicts", "blockers")
+STAGE_JSON_DICT_COLUMNS = ("source_identity",)
+STAGE_BOOL_COLUMNS = ("counted_as_supply", "cg_stale", "cg_eligible")
 
 POSITION_STRING_COLUMNS = ("item_code", "tt_sku", "warehouse", "purpose", "uom",
                            "as_of", "mapping_version", "inventory_inclusion_status",
@@ -238,7 +262,7 @@ def canonical_full_rows(rows):
     return _sorted_rows([canonical_full_row(row) for row in rows], FULL_KEY)
 
 
-def full_schema():
+def target_summary_schema():
     import pyarrow as pa
     return pa.schema([
         *[(name, pa.string()) for name in FULL_STRING_COLUMNS],
@@ -305,10 +329,108 @@ def _canonical_from_parquet(record):
     return out
 
 
-def full_table(rows):
+def target_summary_table(rows):
     import pyarrow as pa
     records = [_full_record(row) for row in rows]
-    return pa.Table.from_pylist(records, schema=full_schema())
+    return pa.Table.from_pylist(records, schema=target_summary_schema())
+
+
+def canonical_stage_row(row):
+    out = {}
+    for name in STAGE_STRING_COLUMNS:
+        out[name] = row.get(name)
+    for name in STAGE_DECIMAL_COLUMNS:
+        out[name] = _qty(row.get(name), signed=True)
+    for name in STAGE_TIME_COLUMNS:
+        out[name] = _iso(row.get(name))
+    for name in STAGE_BOOL_COLUMNS:
+        out[name] = bool(row.get(name))
+    for name in STAGE_JSON_LIST_COLUMNS:
+        value = _json_copy(row.get(name) or [])
+        out[name] = value if isinstance(value, list) else []
+    for name in STAGE_JSON_DICT_COLUMNS:
+        value = _json_copy(row.get(name) or {})
+        out[name] = value if isinstance(value, dict) else {}
+    return out
+
+
+def canonical_stage_rows(rows):
+    return _sorted_rows([canonical_stage_row(row) for row in rows], STAGE_KEY)
+
+
+def stage_schema():
+    import pyarrow as pa
+    return pa.schema([
+        *[(name, pa.string()) for name in STAGE_STRING_COLUMNS],
+        *[(name, pa.decimal128(38, 6)) for name in STAGE_DECIMAL_COLUMNS],
+        *[(name, pa.timestamp("us", tz="UTC")) for name in STAGE_TIME_COLUMNS],
+        *[(name, pa.bool_()) for name in STAGE_BOOL_COLUMNS],
+        *[(name, pa.string()) for name in
+          (*STAGE_JSON_LIST_COLUMNS, *STAGE_JSON_DICT_COLUMNS)],
+    ])
+
+
+def full_schema():
+    return stage_schema()
+
+
+def _stage_record(row):
+    record = {}
+    for name in STAGE_STRING_COLUMNS:
+        record[name] = row.get(name)
+    for name in STAGE_DECIMAL_COLUMNS:
+        value = row.get(name)
+        if value is None:
+            record[name] = None
+        else:
+            with localcontext() as context:
+                context.prec = 38
+                record[name] = Decimal(value).quantize(DECIMAL_SCALE)
+    for name in STAGE_TIME_COLUMNS:
+        value = row.get(name)
+        record[name] = datetime.fromisoformat(value) if value else None
+    for name in STAGE_BOOL_COLUMNS:
+        record[name] = bool(row.get(name))
+    for name in (*STAGE_JSON_LIST_COLUMNS, *STAGE_JSON_DICT_COLUMNS):
+        record[name] = json.dumps(row.get(name), ensure_ascii=False,
+                                  sort_keys=True)
+    return record
+
+
+def _stage_from_parquet(record):
+    out = {}
+    for name in STAGE_STRING_COLUMNS:
+        out[name] = record.get(name)
+    for name in STAGE_DECIMAL_COLUMNS:
+        value = record.get(name)
+        out[name] = _qty(value, signed=True) if value is not None else None
+    for name in STAGE_TIME_COLUMNS:
+        value = record.get(name)
+        if value is None:
+            out[name] = None
+        elif value.tzinfo is None:
+            raise CorruptedPublication("naive timestamp in parquet: " + name)
+        else:
+            out[name] = value.astimezone(timezone.utc).isoformat()
+    for name in STAGE_BOOL_COLUMNS:
+        out[name] = bool(record.get(name))
+    for name in STAGE_JSON_LIST_COLUMNS:
+        raw = record.get(name)
+        out[name] = json.loads(raw) if raw else []
+    for name in STAGE_JSON_DICT_COLUMNS:
+        raw = record.get(name)
+        out[name] = json.loads(raw) if raw else {}
+    return out
+
+
+def stage_table(rows):
+    import pyarrow as pa
+    records = [_stage_record(row) for row in rows]
+    return pa.Table.from_pylist(records, schema=stage_schema())
+
+
+def full_table(rows):
+    return stage_table(rows)
 
 
 def canonical_position_row(row):
@@ -369,16 +491,32 @@ def _compare_rows(left, right, message):
 
 def _verify_full(root, json_rows):
     import pyarrow.parquet as pq
+    path = root / "supply_target_summary.parquet"
+    if not path.is_file():
+        raise CorruptedPublication("missing supply_target_summary.parquet")
+    table = pq.read_table(path)
+    if not table.schema.equals(target_summary_schema()):
+        raise CorruptedPublication("supply_target_summary parquet schema mismatch")
+    parquet_rows = _sorted_rows(
+        [_canonical_from_parquet(record) for record in table.to_pylist()],
+        FULL_KEY)
+    _assert_unique(parquet_rows, FULL_KEY, "duplicate target summary key")
+    _compare_rows(json_rows, parquet_rows, "supply_target_summary json/parquet")
+    return len(parquet_rows)
+
+
+def _verify_stage(root, json_rows):
+    import pyarrow.parquet as pq
     path = root / "full_supply_facts.parquet"
     if not path.is_file():
         raise CorruptedPublication("missing full_supply_facts.parquet")
     table = pq.read_table(path)
-    if not table.schema.equals(full_schema()):
+    if not table.schema.equals(stage_schema()):
         raise CorruptedPublication("full_supply_facts parquet schema mismatch")
     parquet_rows = _sorted_rows(
-        [_canonical_from_parquet(record) for record in table.to_pylist()],
-        FULL_KEY)
-    _assert_unique(parquet_rows, FULL_KEY, "duplicate full target key")
+        [_stage_from_parquet(record) for record in table.to_pylist()],
+        STAGE_KEY)
+    _assert_unique(parquet_rows, STAGE_KEY, "duplicate stage fact key")
     _compare_rows(json_rows, parquet_rows, "full_supply_facts json/parquet")
     return len(parquet_rows)
 
@@ -487,7 +625,9 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
                    position_result, position_rows, timeline_rows,
                    files, freshness, rerun_argv, rerun_template,
                    effective_args, frozen_inputs, max_age_seconds,
-                   abc_report=None):
+                   abc_report=None, stage_rows=None, target_rows=None):
+    stage_rows = list(stage_rows or [])
+    target_rows = list(target_rows or [])
     full_summary = full_result["summary"]
     position_report = position_result.get("report") or {}
     observed_values = []
@@ -573,22 +713,79 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
         "failed_inputs": failed_inputs,
         "closure_missing_inputs": closure_missing,
     }
+    stage_stats = {
+        "partial": partial,
+        "rows": len(stage_rows),
+        "stage_summary": full_result.get("stage_summary"),
+        "failed_inputs": failed_inputs,
+    }
     datasets = {
         "full_supply_facts.parquet": _dataset_entry(
             file="full_supply_facts.parquet", fmt="parquet",
             dataset="full_supply_facts", role="primary",
             schema_version=FULL_SCHEMA, rule_version=FULL_RULE,
             implementation_version=FULL_IMPLEMENTATION,
-            grain="item_code×uom×warehouse×purpose×tt_sku×branch×market×product_form",
-            unique_key=FULL_KEY, rows=len(full_result["rows"]),
+            grain="item_code×uom×warehouse×purpose×tt_sku×branch×stage×doc_line/batch_id",
+            unique_key=STAGE_KEY, rows=len(stage_rows),
             sha256=files["full_supply_facts.parquet"],
             source_versions=source_versions, source_hashes=source_hashes,
             as_of=pipeline_as_of, observed_at=observed_at,
             freshness=freshness, stale=stale,
-            stats=full_stats,
+            stats=stage_stats,
             relations=[{"to": "full_supply_facts.json", "type": "trace_copy"},
-                       {"to": "timeline.json", "type": "derived_by"},
-                       {"to": "supply_position.parquet", "type": "input_dataset"}],
+                       {"to": "supply_target_summary.parquet",
+                        "type": "compatible_summary"},
+                       {"to": "supply_position.parquet",
+                        "type": "input_dataset"}],
+            extra={"decimal_columns": list(STAGE_DECIMAL_COLUMNS),
+                   "decimal_scale": 6,
+                   "time_columns": list(STAGE_TIME_COLUMNS),
+                   "time_timezone": "UTC",
+                   "bool_columns": list(STAGE_BOOL_COLUMNS),
+                   "json_columns": list(STAGE_JSON_LIST_COLUMNS
+                                        + STAGE_JSON_DICT_COLUMNS),
+                   "counted_as_supply":
+                       "at most one current stage per proven physical batch; "
+                       "open_po is reconciliation only",
+                   "null_policy": "null means unknown; zero is a separate value"}),
+        "full_supply_facts.json": _dataset_entry(
+            file="full_supply_facts.json", fmt="json",
+            dataset="full_supply_facts", role="trace",
+            schema_version=FULL_SCHEMA, rule_version=FULL_RULE,
+            implementation_version=FULL_IMPLEMENTATION,
+            grain="item_code×uom×warehouse×purpose×tt_sku×branch×stage×doc_line/batch_id",
+            unique_key=STAGE_KEY, rows=len(stage_rows),
+            sha256=files["full_supply_facts.json"],
+            source_versions=source_versions, source_hashes=source_hashes,
+            as_of=pipeline_as_of, observed_at=observed_at,
+            freshness=freshness, stale=stale,
+            stats=stage_stats,
+            relations=[{"to": "full_supply_facts.parquet",
+                        "type": "trace_of_primary"}],
+            extra={"decimal_columns": list(STAGE_DECIMAL_COLUMNS),
+                   "decimal_scale": 6,
+                   "time_columns": list(STAGE_TIME_COLUMNS),
+                   "time_timezone": "UTC",
+                   "bool_columns": list(STAGE_BOOL_COLUMNS),
+                   "json_columns": list(STAGE_JSON_LIST_COLUMNS
+                                        + STAGE_JSON_DICT_COLUMNS),
+                   "null_policy": "null means unknown; zero is a separate value"}),
+        "supply_target_summary.parquet": _dataset_entry(
+            file="supply_target_summary.parquet", fmt="parquet",
+            dataset="supply_target_summary", role="compatible",
+            schema_version=TARGET_SUMMARY_SCHEMA, rule_version=FULL_RULE,
+            implementation_version=FULL_IMPLEMENTATION,
+            grain="item_code×uom×warehouse×purpose×tt_sku×branch×market×product_form",
+            unique_key=FULL_KEY, rows=len(target_rows),
+            sha256=files["supply_target_summary.parquet"],
+            source_versions=source_versions, source_hashes=source_hashes,
+            as_of=pipeline_as_of, observed_at=observed_at,
+            freshness=freshness, stale=stale,
+            stats=full_stats,
+            relations=[{"to": "supply_target_summary.json",
+                        "type": "trace_copy"},
+                       {"to": "full_supply_facts.parquet",
+                        "type": "compatible_view"}],
             extra={"decimal_columns": list(FULL_DECIMAL_COLUMNS),
                    "decimal_scale": 6,
                    "time_columns": list(FULL_TIME_COLUMNS),
@@ -597,19 +794,19 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
                    "json_columns": list(FULL_JSON_LIST_COLUMNS
                                         + FULL_JSON_DICT_COLUMNS),
                    "null_policy": "null means unknown; zero is a separate value"}),
-        "full_supply_facts.json": _dataset_entry(
-            file="full_supply_facts.json", fmt="json",
-            dataset="full_supply_facts", role="trace",
-            schema_version=FULL_SCHEMA, rule_version=FULL_RULE,
+        "supply_target_summary.json": _dataset_entry(
+            file="supply_target_summary.json", fmt="json",
+            dataset="supply_target_summary", role="trace",
+            schema_version=TARGET_SUMMARY_SCHEMA, rule_version=FULL_RULE,
             implementation_version=FULL_IMPLEMENTATION,
             grain="item_code×uom×warehouse×purpose×tt_sku×branch×market×product_form",
-            unique_key=FULL_KEY, rows=len(full_result["rows"]),
-            sha256=files["full_supply_facts.json"],
+            unique_key=FULL_KEY, rows=len(target_rows),
+            sha256=files["supply_target_summary.json"],
             source_versions=source_versions, source_hashes=source_hashes,
             as_of=pipeline_as_of, observed_at=observed_at,
             freshness=freshness, stale=stale,
             stats=full_stats,
-            relations=[{"to": "full_supply_facts.parquet",
+            relations=[{"to": "supply_target_summary.parquet",
                         "type": "trace_of_primary"}],
             extra={"decimal_columns": list(FULL_DECIMAL_COLUMNS),
                    "decimal_scale": 6,
@@ -714,9 +911,12 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
             "frozen_count": len(frozen_inputs),
         },
         "output_summary": {
-            "full_supply_facts_rows": len(full_result["rows"]),
+            "full_supply_facts_rows": len(stage_rows),
+            "supply_target_summary_rows": len(target_rows),
             "supply_position_rows": len(position_rows),
             "timeline_rows": len(timeline_rows),
+            "stage_summary": full_result.get("stage_summary"),
+            "stage_unique_key": list(STAGE_KEY),
             "by_purpose": full_summary.get("by_purpose"),
             "by_coverage": full_summary.get("by_coverage"),
             "attribution_distribution": full_summary.get("attribution_distribution"),
@@ -740,7 +940,11 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
              "type": "input_dataset"},
             {"from": "full_supply_facts.json", "to": "full_supply_facts.parquet",
              "type": "trace_copy"},
-            {"from": "timeline.json", "to": "full_supply_facts.parquet",
+            {"from": "supply_target_summary.parquet",
+             "to": "full_supply_facts.parquet", "type": "compatible_view"},
+            {"from": "supply_target_summary.json",
+             "to": "supply_target_summary.parquet", "type": "trace_copy"},
+            {"from": "timeline.json", "to": "supply_target_summary.parquet",
              "type": "derived_from"},
         ],
         "rerun": {
@@ -758,6 +962,7 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
             "full_supply_facts": FULL_SCHEMA,
             "full_supply_facts_rule": FULL_RULE,
             "full_supply_facts_implementation": FULL_IMPLEMENTATION,
+            "supply_target_summary": TARGET_SUMMARY_SCHEMA,
             "supply_position": POSITION_SCHEMA,
             "supply_position_rule": POSITION_RULE,
             "supply_position_implementation": POSITION_IMPLEMENTATION,
@@ -786,15 +991,18 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
     tmp_dir = Path(tempfile.mkdtemp(prefix=".publish-", dir=str(out)))
     renamed = False
     try:
-        full_rows = canonical_full_rows(full_result["rows"])
+        target_rows = canonical_full_rows(full_result["rows"])
+        stage_rows = canonical_stage_rows(full_result.get("stage_rows") or [])
         position_rows = canonical_position_rows(position_result.get("rows") or [])
         timeline_rows = _json_copy((full_result.get("timeline") or {}).get("rows") or [])
-        _assert_unique(full_rows, FULL_KEY, "duplicate full target key")
+        _assert_unique(stage_rows, STAGE_KEY, "duplicate stage fact key")
+        _assert_unique(target_rows, FULL_KEY, "duplicate target summary key")
         _assert_unique(position_rows, POSITION_KEY, "duplicate position target key")
         _assert_unique(timeline_rows, FULL_KEY, "duplicate timeline target key")
         files = {}
         paths = {
-            "full_supply_facts.json": full_rows,
+            "full_supply_facts.json": stage_rows,
+            "supply_target_summary.json": target_rows,
             "supply_position.json": position_rows,
             "timeline.json": timeline_rows,
         }
@@ -804,11 +1012,19 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
             files[name] = _sha256(path)
         import pyarrow.parquet as pq
         full_path = tmp_dir / "full_supply_facts.parquet"
-        full_table_for_write = full_table(full_rows)
+        full_table_for_write = stage_table(stage_rows)
         pq.write_table(full_table_for_write, full_path, compression="zstd")
         if not pq.read_table(full_path).equals(full_table_for_write):
             raise CorruptedPublication("full parquet readback mismatch")
         files["full_supply_facts.parquet"] = _sha256(full_path)
+        target_path = tmp_dir / "supply_target_summary.parquet"
+        target_table_for_write = target_summary_table(target_rows)
+        pq.write_table(target_table_for_write, target_path,
+                       compression="zstd")
+        if not pq.read_table(target_path).equals(target_table_for_write):
+            raise CorruptedPublication(
+                "target summary parquet readback mismatch")
+        files["supply_target_summary.parquet"] = _sha256(target_path)
         position_path = tmp_dir / "supply_position.parquet"
         position_table_for_write = position_table(position_result)
         pq.write_table(position_table_for_write, position_path, compression="zstd")
@@ -828,13 +1044,15 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
             timeline_rows=timeline_rows, files=files, freshness=freshness,
             rerun_argv=rerun_argv, rerun_template=rerun_template,
             effective_args=effective_args, frozen_inputs=frozen_inputs,
-            max_age_seconds=max_age_seconds, abc_report=abc_report)
+            max_age_seconds=max_age_seconds, abc_report=abc_report,
+            stage_rows=stage_rows, target_rows=target_rows)
         if extra_manifest:
             manifest.update(extra_manifest)
         _write_json(tmp_dir / "manifest.json", manifest)
         manifest_sha256 = _sha256(tmp_dir / "manifest.json")
         # Full readback and cross-format verification before publishing.
-        _verify_full(tmp_dir, full_rows)
+        _verify_stage(tmp_dir, stage_rows)
+        _verify_full(tmp_dir, target_rows)
         _verify_position(tmp_dir, position_result, position_rows)
         _verify_timeline(tmp_dir, timeline_rows)
         run_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -850,6 +1068,7 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
             "run_id": run_id,
             "schema_version": PUBLICATION_SCHEMA,
             "full_supply_facts_schema": FULL_SCHEMA,
+            "supply_target_summary_schema": TARGET_SUMMARY_SCHEMA,
         }
         latest_tmp = out / ".latest.json.tmp"
         _write_json(latest_tmp, pointer)
@@ -922,10 +1141,17 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
             raise IncompatiblePublication(
                 "full facts schema " + str(
                     manifest_versions.get("full_supply_facts")))
+        if (manifest_versions.get("supply_target_summary")
+                != TARGET_SUMMARY_SCHEMA):
+            raise IncompatiblePublication(
+                "target summary schema " + str(
+                    manifest_versions.get("supply_target_summary")))
         if manifest.get("publish_status") != "succeeded":
             raise CorruptedPublication("manifest is not a successful publication")
         datasets = manifest.get("datasets") or {}
         required = {"full_supply_facts.parquet", "full_supply_facts.json",
+                    "supply_target_summary.parquet",
+                    "supply_target_summary.json",
                     "supply_position.parquet", "supply_position.json",
                     "timeline.json"}
         if not required.issubset(set(datasets)):
@@ -938,20 +1164,34 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
                 raise CorruptedPublication("sha256 mismatch " + name)
             expected_schema = {
                 "full_supply_facts": FULL_SCHEMA,
+                "supply_target_summary": TARGET_SUMMARY_SCHEMA,
                 "supply_position": POSITION_SCHEMA,
                 "timeline": FULL_SCHEMA,
             }.get(entry.get("dataset"))
             if expected_schema and entry.get("schema_version") != expected_schema:
                 raise IncompatiblePublication(
                     "%s schema %s" % (name, entry.get("schema_version")))
-        full_json = _load(run_dir / "full_supply_facts.json")
-        full_json_rows = _sorted_rows(full_json, FULL_KEY)
-        _assert_unique(full_json_rows, FULL_KEY, "duplicate full target key")
-        if len(full_json_rows) != datasets["full_supply_facts.json"]["rows"]:
+        stage_json = _load(run_dir / "full_supply_facts.json")
+        stage_json_rows = _sorted_rows(stage_json, STAGE_KEY)
+        _assert_unique(stage_json_rows, STAGE_KEY, "duplicate stage fact key")
+        if len(stage_json_rows) != datasets["full_supply_facts.json"]["rows"]:
             raise CorruptedPublication("full_supply_facts.json row count mismatch")
-        if _verify_full(run_dir, full_json_rows) != datasets[
+        if _verify_stage(run_dir, stage_json_rows) != datasets[
                 "full_supply_facts.parquet"]["rows"]:
-            raise CorruptedPublication("full_supply_facts.parquet row count mismatch")
+            raise CorruptedPublication(
+                "full_supply_facts.parquet row count mismatch")
+        target_json = _load(run_dir / "supply_target_summary.json")
+        target_json_rows = _sorted_rows(target_json, FULL_KEY)
+        _assert_unique(target_json_rows, FULL_KEY,
+                       "duplicate target summary key")
+        if len(target_json_rows) != datasets[
+                "supply_target_summary.json"]["rows"]:
+            raise CorruptedPublication(
+                "supply_target_summary.json row count mismatch")
+        if _verify_full(run_dir, target_json_rows) != datasets[
+                "supply_target_summary.parquet"]["rows"]:
+            raise CorruptedPublication(
+                "supply_target_summary.parquet row count mismatch")
         position_json = canonical_position_rows(_load(run_dir / "supply_position.json"))
         if len(position_json) != datasets["supply_position.json"]["rows"]:
             raise CorruptedPublication("supply_position.json row count mismatch")
@@ -992,8 +1232,11 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
         publish_row_level = freshness.get("row_level") or {}
         # Row freshness is recomputed against THIS read time; the publish-time
         # snapshot is never trusted and a fresh file header cannot mask it.
-        row_level = assess_freshness(
-            full_json_rows, as_of=as_of,
+        row_level = assess_stage_freshness(
+            stage_json_rows, as_of=as_of,
+            max_age_seconds=max_age_seconds)
+        target_row_level = assess_freshness(
+            target_json_rows, as_of=as_of,
             max_age_seconds=max_age_seconds)["summary"]
         row_issues = sum(int(row_level.get(key) or 0) for key in
                          ("stale", "unknown", "future"))
@@ -1034,6 +1277,9 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
                                      or manifest.get("business_unknown") or []),
                 "freshness": freshness, "row_level": row_level,
                 "publish_row_level": publish_row_level,
+                "target_row_level": target_row_level,
+                "target_summary_rows": (manifest.get("output_summary") or {})
+                .get("supply_target_summary_rows"),
                 "partial_reason": (manifest.get("partial_reason")
                                    or (manifest.get("output_summary") or {})
                                    .get("partial_reason") or []),

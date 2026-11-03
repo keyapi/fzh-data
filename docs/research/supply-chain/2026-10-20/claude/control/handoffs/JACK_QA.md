@@ -454,6 +454,25 @@ key_test/delivery_plan。PR #318 保持 draft。
 验证：完整依赖 **403 passed / 17 subtests**；最小依赖 **354 passed / 49 skipped /
 17 subtests**。`git diff --check`、995 文件凭证扫描与四类 diff 凭证模式均通过。
 
+### [W1-FULL-FACTS-V6-STAGE-2026-11-03] D6 阶段明细消费契约
+
+| 问题 | 修复 | 反例/结果 |
+|---|---|---|
+| full facts 只有目标汇总 | 主数据集改为阶段明细 item×uom×warehouse×purpose×tt_sku×branch×stage×doc_line/batch_id；目标汇总迁为独立 `supply_target_summary` | 阶段 JSON/Parquet 行数、唯一键、全字段一致；目标汇总仍可读 |
+| 阶段口径混杂 | 仅 open_po/waiting_shipment/in_transit/received/on_hand；open_po 仅核账；signed 未通途入库归 in_transit；received 只认通途入库；on_hand 只认库存快照 | 同批跨五阶段只 1 个 counted_as_supply；open_po 不计入 transit/on_hand |
+| 时间互相回填 | observed_at/eta/available_at/signed_at/received_at 五字段分离；naive/date-only 保留 raw/status | 签收不冒充入库；ETA 不覆盖实际；naive 不假定 UTC |
+| 同目标同阶段单据被合并 | 阶段事实按 doc_line/batch_id 分开；同身份重放去重、异载荷冲突 | 两张 WO 同阶段保留两行；同身份 3/4 冲突 |
+| 库存/签收重复计量 | 按 inventory_as_of 与 received_at 比较 included/post_snapshot/unknown；未知时保留 on_hand 并标 unknown | 入库晚于库存→post_snapshot 计签收；早于→included 只计 on_hand；未知→on_hand 计数、签收 unknown |
+| purpose 只有 branch/fba | 增加 cg；owner_status/cg_stale/cg_eligible/cg_blocking_reasons；branch 唯一 owner、FBA 不绑 branch、CG 不复制、stale 不抵扣 | 双 branch→branch_conflict；FBA+branch→conflict；CG fresh 计数、stale/unknown 不抵扣 |
+| 混合/重复/回读失败切 latest | 阶段/目标汇总版本校验；重复阶段键、阶段回读失败均保留旧 latest | mixed target schema→incompatible；duplicate stage key/readback failure→latest 不变 |
+
+真实 PO→waiting→in_transit→signed→receipt 完整样例：本地保存快照与测试站只读数据
+**not_found**（仅有 signed + 入库日期片段，无 PO），未用合成样例冒充。真实 A/B/C 工作簿、
+POD、受限 HTTP、规模与生产部署仍 pending。
+
+验证：完整依赖 **458 passed / 20 subtests**；最小依赖另行统计。未创建真实 PO、未写
+EN/通途业务数据、未合并 main。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

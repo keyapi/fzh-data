@@ -6,6 +6,9 @@ title: supply_chain_visibility 变更日志
 
 # 变更日志
 
+## 2026-11-03
+- D6 阶段明细消费契约：`full_supply_facts.parquet` 改为 item×uom×warehouse×purpose×tt_sku×branch×stage×doc_line/batch_id 粒度，新增 doc_type/doc_name/doc_line/batch_id/source_identity/stage_fact_id；原目标汇总迁为独立兼容数据集 `supply_target_summary`。阶段收敛为 open_po/waiting_shipment/in_transit/received/on_hand，open_po 仅核账；signed 未通途入库归 in_transit（signed_at）；received 只认通途入库时间；同一物理批次只允许一个 counted_as_supply 当前阶段。observed_at/eta/available_at/signed_at/received_at 严格分离，naive/date-only 不假定 UTC。purpose 支持 branch/fba/cg，新增 owner_status/cg_stale/cg_eligible/cg_blocking_reasons，stale CG 不抵扣。发布/reader 同时校验阶段主数据集与目标汇总；manifest 增加阶段唯一键与 stage/unknown/conflict/overlap/CG 统计。版本 `full-supply-facts/v6`、RULE/IMPL `2026-11-03.1`、`supply-publication/v5`、`supply-pipeline/v5`、`abc-frozen/v4`。458 passed / 20 subtests（PyArrow+openpyxl）。真实 PO→waiting→in_transit→signed→receipt 完整样例：本地/测试站只读数据 **not_found**（仅有 signed+入库日期片段，无 PO）；真实 A/B/C/POD 仍 pending。
+
 ## 2026-11-02
 - 接管 Claude 中断的正式刷新实现：修复中间页 exhausted 误判，新增 supply 稳定来源水位线
   `snapshot_id` 与跨页漂移拒绝；ABC/权威 scope 必须先于 DN 采集，禁止从已观察交付反推

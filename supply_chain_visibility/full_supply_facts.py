@@ -1,11 +1,23 @@
 # -*- coding: utf-8 -*-
-"""Full supply facts v3: DN/PO position joined with SO, production, inventory,
-transit, receipts and local frozen A/B/C, keeping per-stage quantity/date
-fragments.
+"""Full supply facts v6: stage-detail facts plus a compatible target summary.
+
+``build_full_supply_facts`` keeps the historical target-grained rows (now
+published as ``supply_target_summary``) and adds ``stage_rows`` at
+item×uom×warehouse×purpose×tt_sku×branch×stage×doc_line/batch grain for the
+primary ``full_supply_facts`` dataset.
 
 Rules:
-* purpose must come from an approved mapping; missing/unknown/invalid stays
-  ``unknown`` and never defaults to branch/in-house;
+* only open_po / waiting_shipment / in_transit / received / on_hand are stages;
+  open_po is reconciliation only and never additive supply;
+* signed-but-not-Tongtool-received is in_transit with signed_at; received needs
+  a proven Tongtool receipt time; on_hand needs a proven inventory snapshot;
+* observed_at / eta / available_at / signed_at / received_at are separate and
+  are never substituted for one another; naive/date-only times are not UTC;
+* one physical batch has at most one counted_as_supply current stage; cross
+  stage evidence is grouped by batch identity and open_po is never counted;
+* purpose supports branch/fba/cg; branch has one owner, FBA never binds a
+  branch, CG is never copied into branch/FBA, stale CG keeps its observation
+  but is not nettable;
 * non-authoritative sources attach by exact full key only; they never fill a
   missing branch/tt_sku. Only explicit B/A identity may fill a blank DN/PO row,
   and only when the complete candidate set agrees on one identity;
@@ -20,23 +32,37 @@ Rules:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
-SCHEMA_VERSION = "full-supply-facts/v5"
-RULE_VERSION = "2026-11-02.7"
-IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-02.7"
+SCHEMA_VERSION = "full-supply-facts/v6"
+RULE_VERSION = "2026-11-03.1"
+IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-03.1"
 QUANTITY_SCALE = 6
 
-VALID_PURPOSES = ("branch", "fba")
+VALID_PURPOSES = ("branch", "fba", "cg")
+STAGE_VALUES = ("open_po", "waiting_shipment", "in_transit", "received",
+                "on_hand")
+STAGE_RANK = {"open_po": 0, "waiting_shipment": 1, "in_transit": 2,
+              "received": 3, "on_hand": 4}
+FRAGMENT_STAGE = {
+    "po_open": "open_po",
+    "po_completed_assumed": "waiting_shipment",
+    "in_production": "waiting_shipment",
+    "in_production_estimated": "waiting_shipment",
+    "in_transit": "in_transit",
+    "received": "received",
+    "inventory": "on_hand",
+}
 QTY_FIELDS = ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty",
               "unresolved_qty", "so_open_qty", "in_production_qty",
               "in_production_estimated_qty", "inventory_qty",
               "inventory_observed_qty", "inventory_current_available_qty",
-              "in_transit_qty", "received_qty")
+              "in_transit_qty", "received_qty", "signed_pending_qty")
 LAYER_FIELDS = {
     "dn_po": ("dn_net_qty", "po_completed_assumed_qty", "open_po_qty"),
     "so_demand": ("so_open_qty",),
@@ -44,11 +70,11 @@ LAYER_FIELDS = {
     "production_estimated": ("in_production_estimated_qty",),
     "inventory": ("inventory_qty", "inventory_current_available_qty"),
     "in_transit": ("in_transit_qty",),
-    "receipt": ("received_qty",),
+    "receipt": ("received_qty", "signed_pending_qty"),
 }
 _STATUS_RANK = {
     "known": 0, "proven": 0, "estimated": 0, "ok": 0,
-    "partial": 1, "pod_only": 1,
+    "partial": 1, "pod_only": 1, "signed_pending": 1,
     "unknown": 2, "unqueried": 2,
     "unavailable": 3, "missing": 3,
     "conflict": 4, "failed": 4, "source_error": 4,
@@ -150,7 +176,8 @@ def _key(item_code, uom, warehouse, purpose, tt_sku=None, branch="",
 
 def _row_base(key):
     purpose = key[3]
-    scope = {"branch": "in_house", "fba": "external_fba"}.get(purpose, "unknown")
+    scope = {"branch": "in_house", "fba": "external_fba",
+             "cg": "cg_pool"}.get(purpose, "unknown")
     reasons = []
     if purpose == "unknown":
         reasons.append("purpose_unknown")
@@ -209,11 +236,15 @@ def _add_qty(row, field, layer, qty):
 def _add_stage(row, stage, qty, date_value=None, date_kind=None, *,
                source_identity=None, replay=False, conflict=False,
                identity_status=None, observed_at=None,
-               inventory_inclusion_status="unknown"):
+               inventory_inclusion_status="unknown", signed_at=None,
+               received_at=None):
     """Append a quantity/date fragment only; aggregates are handled separately."""
     if qty is None:
         return
     parsed, raw, status = _time_parts(date_value)
+    signed_parsed, signed_raw, signed_status = _time_parts(signed_at)
+    received_parsed, received_raw, received_status = _time_parts(received_at)
+    observed_parsed, observed_raw, observed_status = _time_parts(observed_at)
     fragment = {"stage": stage, "qty": _qty(qty),
                 "date": parsed.isoformat() if parsed else None,
                 "date_raw": raw, "date_status": status,
@@ -226,7 +257,17 @@ def _add_stage(row, stage, qty, date_value=None, date_kind=None, *,
                               if parsed and date_kind == "actual" else None),
                 "expected_at": (parsed.isoformat()
                                 if parsed and date_kind == "expected" else None),
-                "observed_at": _iso(observed_at),
+                "observed_at": (observed_parsed.isoformat()
+                                if observed_parsed else None),
+                "observed_at_raw": observed_raw,
+                "observed_at_time_status": observed_status,
+                "signed_at": signed_parsed.isoformat() if signed_parsed else None,
+                "signed_at_raw": signed_raw,
+                "signed_at_time_status": signed_status,
+                "received_at": (received_parsed.isoformat()
+                                if received_parsed else None),
+                "received_at_raw": received_raw,
+                "received_at_time_status": received_status,
                 "overlap_status": "conflict" if conflict else "unknown",
                 "inventory_inclusion_status": inventory_inclusion_status,
                 "replay": bool(replay), "conflict": bool(conflict),
@@ -381,9 +422,12 @@ def _dedupe_layer(records, *, layer, source_groups, identity_groups,
             for record in allocation["records"]:
                 allocation_id = record["_allocation_id"]
                 merged = dict(record)
+                identity = dict(source_identity, allocation_id=allocation_id)
+                batch = _text(record.get("batch_id"))
+                if batch:
+                    identity["batch_id"] = batch
                 merged.update({
-                    "_source_identity": dict(source_identity,
-                                             allocation_id=allocation_id),
+                    "_source_identity": identity,
                     "_split": len(allocation["records"]) > 1})
                 effective.append(merged)
             continue
@@ -406,36 +450,45 @@ def _dedupe_layer(records, *, layer, source_groups, identity_groups,
             target_conflicts += 1
             for target_values, target_items in sorted(by_target.items()):
                 merged = dict(target_items[0])
+                identity = dict(source_identity)
+                batch = _text(target_items[0].get("batch_id"))
+                if batch:
+                    identity["batch_id"] = batch
                 merged.update({
                     "_conflict": True,
                     "_conflict_reason": "source_target_conflict",
                     "_records": target_items,
                     "_conflict_candidates": items,
-                    "_source_identity": source_identity})
+                    "_source_identity": identity})
                 effective.append(merged)
             continue
         if len(payloads) > 1:
             conflicts += 1
             target_values, target_items = next(iter(by_target.items()))
             merged = dict(target_items[0])
+            identity = dict(source_identity)
+            batch = _text(target_items[0].get("batch_id"))
+            if batch:
+                identity["batch_id"] = batch
             merged.update({
                 "_conflict": True,
                 "_conflict_reason": "source_payload_conflict",
                 "_records": target_items,
                 "_conflict_candidates": items,
-                "_source_identity": source_identity})
+                "_source_identity": identity})
             effective.append(merged)
             continue
         target_values, target_items = next(iter(by_target.items()))
         if len(target_items) > 1:
             replayed += len(target_items) - 1
         merged = dict(target_items[0])
+        identity = dict(source_identity, **_source_identity(
+            tuple(group[0] for group in identity_groups), target_values))
+        batch = _text(target_items[0].get("batch_id"))
+        if batch:
+            identity["batch_id"] = batch
         merged.update({
-            "_source_identity": dict(source_identity,
-                                     **_source_identity(
-                                         tuple(group[0] for group in
-                                               identity_groups),
-                                         target_values)),
+            "_source_identity": identity,
             "_replay_count": len(target_items)})
         effective.append(merged)
     for record in missing:
@@ -575,14 +628,17 @@ def _rebuild_position_from_tranches(row, mapped):
         stage = {"po_completed_assumed_qty": "po_completed_assumed",
                  "open_po_qty": "po_open"}.get(bucket)
         if stage:
+            identity = {"instance": identity[0],
+                        "delivery_note": identity[1],
+                        "dn_item": identity[2]}
+            if _text(tranche.get("batch_id")):
+                identity["batch_id"] = _text(tranche.get("batch_id"))
             _add_stage(
                 row, stage, _dec(tranche.get("qty"), signed=True),
                 tranche.get("_position_as_of") if stage == "po_completed_assumed"
                 else None,
                 "observation" if stage == "po_completed_assumed" else None,
-                source_identity={"instance": identity[0],
-                                 "delivery_note": identity[1],
-                                 "dn_item": identity[2]})
+                source_identity=identity)
 
 
 def _merge_unique(existing, incoming):
@@ -819,6 +875,9 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
     for identity, raw_items in sorted(by_identity.items()):
         items = sorted(raw_items, key=_event_sort_key)
         identity_dict = _source_identity(WAYBILL_IDENTITY_FIELDS, identity)
+        batch = _text(items[0].get("batch_id"))
+        if batch:
+            identity_dict["batch_id"] = batch
         waybills = sorted({_text(item.get("waybill") or item.get("shipment"))
                            for item in items
                            if _text(item.get("waybill") or item.get("shipment"))})
@@ -907,10 +966,46 @@ def collapse_waybills(events: Iterable[dict]) -> list[dict]:
             "source_identity": _source_identity(
                 WAYBILL_IDENTITY_FIELDS, _waybill_identity(base)),
             "_replay_count": 1})
+        if _text(base.get("batch_id")):
+            merged["source_identity"]["batch_id"] = _text(base.get("batch_id"))
         out.append(merged)
     return sorted(out, key=lambda item: (
         _waybill_identity(item), _text(item.get("waybill")
                                        or item.get("shipment"))))
+
+
+def _add_receipt_stage(row, record, *, source_identity=None, conflict=False,
+                       identity_status=None):
+    """Received only when the Tongtool receipt time is proven; signed-only is
+    in_transit with signed_at (never a received fact)."""
+    qty = _dec(record.get("qty"))
+    if qty is None:
+        return
+    signed = _aware(record.get("signed_at"))
+    received = _aware(record.get("received_at"))
+    identity = (source_identity if source_identity is not None
+                else record.get("_source_identity"))
+    if received:
+        _add_stage(
+            row, "received", qty, received.isoformat(), "actual",
+            source_identity=identity, conflict=conflict,
+            identity_status=identity_status,
+            observed_at=record.get("observed_at"),
+            signed_at=signed.isoformat() if signed else None,
+            received_at=received.isoformat(),
+            inventory_inclusion_status="unknown")
+    elif signed:
+        _add_stage(
+            row, "in_transit", qty, signed.isoformat(), "actual",
+            source_identity=identity, conflict=conflict,
+            identity_status=identity_status,
+            observed_at=record.get("observed_at"),
+            signed_at=signed.isoformat(),
+            inventory_inclusion_status="unknown")
+
+
+def _receipt_proven(receipt):
+    return _aware(receipt.get("received_at")) is not None
 
 
 def _pod_evidence(receipt):
@@ -976,6 +1071,559 @@ def _contract_unknown(layer_status, layer, rows):
         _mark_unknown(row, layer, reason)
         if layer == "production":
             row["in_production_estimated_qty"] = None
+
+
+def _stage_owner(row):
+    purpose = row.get("purpose")
+    branch = _text(row.get("branch"))
+    if purpose == "branch":
+        owner = "branch_owner" if branch else "branch_unknown"
+    elif purpose == "fba":
+        owner = "fba_branch_conflict" if branch else "fba"
+    elif purpose == "cg":
+        owner = "cg_branch_conflict" if branch else "cg"
+    else:
+        owner = "unknown"
+    cg_stale = False
+    cg_eligible = False
+    reasons = []
+    if purpose == "cg":
+        fresh = row.get("inventory_freshness")
+        cg_stale = fresh == "stale"
+        cg_eligible = bool(fresh == "fresh"
+                           and row.get("attribution_status") == "attributed")
+        if fresh == "stale":
+            reasons.append("cg_stale")
+        elif fresh != "fresh":
+            reasons.append("cg_time_unknown")
+        if row.get("attribution_status") != "attributed":
+            reasons.append("cg_not_attributed")
+    if owner.endswith("conflict"):
+        reasons.append(owner)
+    return owner, cg_stale, cg_eligible, reasons
+
+
+def _stage_documents(identity, evidence):
+    identity = {key: value for key, value in (identity or {}).items()
+                if value not in (None, "")}
+    evidence = evidence or {}
+    dn = _text(identity.get("delivery_note"))
+    dn_item = _text(identity.get("dn_item"))
+    wo = _text(identity.get("work_order") or identity.get("wo")
+               or identity.get("name"))
+    shipment = _text(identity.get("shipment") or identity.get("waybill")
+                     or identity.get("logistic_number"))
+    receipt = _text(identity.get("receipt_id"))
+    receipt_line = _text(identity.get("line_id")
+                         or identity.get("receipt_line"))
+    po = _text(identity.get("po_code") or evidence.get("po_code"))
+    snapshot = _text(identity.get("snapshot_id"))
+    ref = _text(identity.get("source_ref"))
+    tracking = _text(identity.get("tracking")
+                     or identity.get("tracking_number"))
+    doc_type = doc_name = doc_line = None
+    if dn:
+        doc_type, doc_name, doc_line = "Delivery Note", dn, dn_item or None
+    elif wo:
+        doc_type, doc_name = "Work Order", wo
+    elif shipment:
+        doc_type, doc_name = "Shipment", shipment
+    elif receipt:
+        doc_type, doc_name = "Tongtool Receipt", receipt
+        doc_line = receipt_line or None
+    elif po:
+        doc_type, doc_name = "Purchase Order", po
+    elif snapshot or ref:
+        doc_type, doc_name = "Inventory Snapshot", snapshot or ref
+    batch = _text(identity.get("batch_id") or evidence.get("batch_id"))
+    if not batch:
+        if tracking:
+            batch = "TRACK:" + tracking
+        elif dn:
+            batch = "DN:%s:%s" % (dn, dn_item)
+        elif wo:
+            batch = "WO:" + wo
+        elif shipment:
+            batch = "SHIP:" + shipment
+        elif receipt:
+            batch = "RC:%s:%s" % (receipt, receipt_line)
+        elif snapshot or ref:
+            batch = "ST:%s:%s" % (snapshot, ref)
+        elif po:
+            batch = "PO:" + po
+    if not batch:
+        status = "missing"
+    elif batch.startswith("PO:"):
+        status = "accounting_only"
+    else:
+        status = "proven"
+    return (doc_type, doc_name, doc_line, batch or None, status,
+            batch if status == "proven" else None)
+
+
+def _time_field(fact, prefix, value, raw=None, status=None):
+    parsed, auto_raw, auto_status = _time_parts(value)
+    fact[prefix] = parsed.isoformat() if parsed else None
+    fact[prefix + "_raw"] = raw if raw is not None else auto_raw
+    fact[prefix + "_time_status"] = (status if status is not None
+                                     else auto_status)
+    return parsed
+
+
+def _stage_base(row, *, stage, qty, identity, evidence, confidence,
+                qty_status, source_status):
+    doc_type, doc_name, doc_line, batch, batch_status, lineage = (
+        _stage_documents(identity, evidence))
+    owner, cg_stale, cg_eligible, cg_reasons = _stage_owner(row)
+    fact = {
+        "item_code": row.get("item_code"), "uom": row.get("uom"),
+        "warehouse": row.get("warehouse"), "purpose": row.get("purpose"),
+        "tt_sku": row.get("tt_sku"), "branch": row.get("branch") or "",
+        "market": row.get("market"), "product_form": row.get("product_form"),
+        "pool": row.get("pool"), "scope": row.get("scope"),
+        "stage": stage,
+        "doc_type": doc_type, "doc_name": doc_name, "doc_line": doc_line,
+        "batch_id": batch, "batch_identity_status": batch_status,
+        "lineage_id": lineage,
+        "source_identity": dict(identity or {}),
+        "qty": _qty(qty, signed=True), "qty_status": qty_status,
+        "confidence": confidence, "counted_as_supply": False,
+        "counted_reason": "", "source_status": source_status,
+        "observed_at": None, "observed_at_raw": None,
+        "observed_at_time_status": "missing",
+        "eta": None, "eta_raw": None, "eta_time_status": "missing",
+        "available_at": None, "available_at_raw": None,
+        "available_at_time_status": "missing",
+        "signed_at": None, "signed_at_raw": None,
+        "signed_at_time_status": "missing",
+        "received_at": None, "received_at_raw": None,
+        "received_at_time_status": "missing",
+        "actual_at": None, "expected_at": None,
+        "overlap_status": ("distinct/proven" if batch_status == "proven"
+                           else "unknown"),
+        "inventory_inclusion_status": ("included" if stage == "on_hand"
+                                       else "unknown"),
+        "owner_status": owner, "cg_stale": cg_stale,
+        "cg_eligible": cg_eligible,
+        "cg_blocking_reasons": list(cg_reasons),
+        "unknown_reasons": [], "conflicts": [],
+        "blockers": list(cg_reasons),
+        "_stage_time": None,
+    }
+    fact["stage_fact_id"] = _stage_fact_id(fact)
+    return fact
+
+
+def _stage_fact_id(fact):
+    payload = {key: fact.get(key) for key in (
+        "item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
+        "stage", "doc_type", "doc_name", "doc_line", "batch_id",
+        "source_identity", "qty", "observed_at", "eta", "available_at",
+        "signed_at", "received_at", "actual_at", "expected_at")}
+    return hashlib.sha1(json.dumps(
+        payload, sort_keys=True, ensure_ascii=False, default=str
+    ).encode("utf-8")).hexdigest()[:24]
+
+
+def _source_observed(row, layer, identity):
+    for source in row.get("sources") or ():
+        if source.get("layer") != layer:
+            continue
+        if identity and source.get("source_identity") != identity:
+            continue
+        if source.get("observed_at"):
+            return source
+    return None
+
+
+def _row_observed(row, layers):
+    for layer in layers:
+        source = _source_observed(row, layer, None)
+        if source:
+            return (source.get("observed_at"), source.get("observed_at_raw"),
+                    source.get("time_status"))
+    return None, None, "missing"
+
+
+def _fragment_fact(row, fragment):
+    raw_stage = _text(fragment.get("stage"))
+    stage = FRAGMENT_STAGE.get(raw_stage)
+    if stage is None:
+        return None
+    if (raw_stage == "received" and not fragment.get("received_at")
+            and fragment.get("signed_at")):
+        stage = "in_transit"
+    qty = _dec(fragment.get("qty"), signed=True)
+    if qty is None:
+        return None
+    identity = fragment.get("source_identity") or {}
+    evidence = {}
+    for source in row.get("sources") or ():
+        if (source.get("source_identity") == fragment.get("source_identity")
+                and source.get("evidence")):
+            evidence = source["evidence"]
+            break
+    conflict = bool(fragment.get("conflict"))
+    if raw_stage == "in_production_estimated":
+        confidence, qty_status = "estimated", "estimated"
+    elif conflict:
+        confidence, qty_status = "conflict", "unknown"
+    elif raw_stage == "in_production":
+        confidence, qty_status = "proven", "known"
+    elif raw_stage in ("po_completed_assumed", "po_open"):
+        confidence, qty_status = "observed", "known"
+    elif raw_stage == "inventory":
+        confidence = ("proven" if row.get("inventory_time_proven")
+                      and row.get("attribution_status") == "attributed"
+                      else "observed")
+        qty_status = "known"
+    elif raw_stage == "received":
+        if fragment.get("received_at"):
+            confidence, qty_status = "proven", "known"
+        else:
+            confidence, qty_status = "unknown", "unknown"
+    else:
+        confidence = "proven" if not conflict else "conflict"
+        qty_status = "known" if not conflict else "unknown"
+    fact = _stage_base(
+        row, stage=stage, qty=qty, identity=identity, evidence=evidence,
+        confidence=confidence, qty_status=qty_status,
+        source_status=("conflict" if conflict
+                       else ("known" if qty_status == "known" else "unknown")))
+    observed = fragment.get("observed_at")
+    observed_raw = fragment.get("observed_at_raw")
+    observed_status = fragment.get("observed_at_time_status")
+    if not observed and not observed_raw:
+        layer = {
+            "po_completed_assumed": "dn_po", "po_open": "dn_po",
+            "in_production": "production",
+            "in_production_estimated": "production",
+            "in_transit": "in_transit", "received": "receipt",
+            "inventory": "inventory"}.get(raw_stage, "dn_po")
+        observed, observed_raw, observed_status = _row_observed(
+            row, [layer, "dn_po"])
+    if stage == "on_hand" and not observed:
+        observed = row.get("inventory_as_of")
+        observed_raw = row.get("inventory_as_of_raw")
+        observed_status = row.get("inventory_time_status")
+    _time_field(fact, "observed_at", observed,
+                raw=observed_raw, status=observed_status)
+    eta = fragment.get("expected_at") if stage != "on_hand" else None
+    _time_field(fact, "eta", eta,
+                raw=(fragment.get("date_raw")
+                     if fragment.get("date_kind") == "expected" else None),
+                status=(fragment.get("date_status")
+                        if fragment.get("date_kind") == "expected" else None))
+    _time_field(fact, "signed_at", fragment.get("signed_at"),
+                raw=fragment.get("signed_at_raw"),
+                status=fragment.get("signed_at_time_status"))
+    _time_field(fact, "received_at", fragment.get("received_at"),
+                raw=fragment.get("received_at_raw"),
+                status=fragment.get("received_at_time_status"))
+    fact["actual_at"] = fragment.get("actual_at")
+    fact["expected_at"] = fragment.get("expected_at")
+    if stage == "on_hand":
+        _time_field(fact, "available_at", row.get("inventory_as_of"),
+                    raw=row.get("inventory_as_of_raw"),
+                    status=row.get("inventory_time_status"))
+    elif stage == "received":
+        _time_field(fact, "available_at", fragment.get("received_at"),
+                    raw=fragment.get("received_at_raw"),
+                    status=fragment.get("received_at_time_status"))
+    if fragment.get("replay"):
+        fact["overlap_status"] = "same/proven"
+    if conflict:
+        fact["overlap_status"] = "conflict"
+        fact["conflicts"] = ["source_payload_conflict"]
+        fact["unknown_reasons"].append("source_payload_conflict")
+    if (fragment.get("identity_status") == "missing"
+            or fact["batch_identity_status"] == "missing"):
+        fact["unknown_reasons"].append("batch_identity_missing")
+    fact["_stage_time"] = _stage_time(
+        stage, fact.get("available_at"), fact.get("actual_at"),
+        fact.get("signed_at"), fact.get("received_at"),
+        fact.get("eta"), fact.get("observed_at"))
+    return fact
+
+
+def _stage_time(stage, available, actual, signed, received, eta, observed):
+    if stage == "on_hand":
+        return _aware(available)
+    if stage == "received":
+        return _aware(received)
+    if stage == "in_transit":
+        return (_aware(actual) or _aware(signed) or _aware(observed)
+                or _aware(eta))
+    if stage == "waiting_shipment":
+        return _aware(actual) or _aware(eta) or _aware(observed)
+    return None
+
+
+def _position_stage_facts(row):
+    facts = []
+    tranches = (row.get("_stage_position_tranches")
+                or row.get("_position_tranches") or ())
+    if tranches:
+        for tranche in tranches:
+            qty = _dec(tranche.get("qty"), signed=True)
+            if qty is None or qty == 0:
+                continue
+            identity = {
+                "instance": tranche.get("instance"),
+                "delivery_note": tranche.get("delivery_note"),
+                "dn_item": tranche.get("dn_item")}
+            if _text(tranche.get("batch_id")):
+                identity["batch_id"] = _text(tranche.get("batch_id"))
+            source = _source_observed(row, "dn_line", {
+                key: value for key, value in identity.items()
+                if value not in (None, "")})
+            if source is None:
+                source = _source_observed(row, "dn_po", None)
+            evidence = (source or {}).get("evidence") or {}
+            fact = _stage_base(
+                row, stage="in_transit", qty=qty, identity=identity,
+                evidence=evidence, confidence="observed", qty_status="known",
+                source_status="known")
+            _time_field(fact, "observed_at",
+                        (source or {}).get("observed_at"))
+            fact["_stage_time"] = _stage_time(
+                "in_transit", None, None, None, None, None,
+                fact.get("observed_at"))
+            facts.append(fact)
+        return facts
+    qty = _dec(row.get("dn_net_qty"), signed=True)
+    if qty is None or qty == 0:
+        return facts
+    source = _source_observed(row, "dn_line", None)
+    if source is None:
+        source = _source_observed(row, "dn_po", None)
+    identity = (source or {}).get("source_identity") or {}
+    fact = _stage_base(
+        row, stage="in_transit", qty=qty, identity=identity,
+        evidence=(source or {}).get("evidence") or {},
+        confidence="observed", qty_status="known", source_status="known")
+    _time_field(fact, "observed_at", (source or {}).get("observed_at"))
+    fact["_stage_time"] = _stage_time(
+        "in_transit", None, None, None, None, None, fact.get("observed_at"))
+    facts.append(fact)
+    return facts
+
+
+def _stage_inventory_inclusion(facts):
+    groups = defaultdict(list)
+    for fact in facts:
+        groups[(fact["item_code"], fact["uom"], fact["warehouse"],
+                fact["purpose"], fact["tt_sku"], fact["branch"])].append(fact)
+    for items in groups.values():
+        on_hand = [fact for fact in items if fact["stage"] == "on_hand"]
+        on_hand_times = [_aware(fact.get("available_at")) for fact in on_hand]
+        on_hand_times = [value for value in on_hand_times if value is not None]
+        on_hand_time = max(on_hand_times) if on_hand_times else None
+        has_on_hand = bool(on_hand)
+        for fact in items:
+            if fact["stage"] == "on_hand":
+                fact["inventory_inclusion_status"] = "included"
+            elif fact["stage"] == "received":
+                received = _aware(fact.get("received_at"))
+                if not has_on_hand:
+                    fact["inventory_inclusion_status"] = "not_applicable"
+                elif on_hand_time is None or received is None:
+                    fact["inventory_inclusion_status"] = "unknown"
+                elif on_hand_time >= received:
+                    fact["inventory_inclusion_status"] = "included"
+                else:
+                    fact["inventory_inclusion_status"] = "post_snapshot"
+            elif fact["stage"] == "in_transit":
+                event = (_aware(fact.get("actual_at"))
+                         or _aware(fact.get("signed_at"))
+                         or _aware(fact.get("observed_at")))
+                if not has_on_hand:
+                    fact["inventory_inclusion_status"] = "not_applicable"
+                elif on_hand_time is None or event is None:
+                    fact["inventory_inclusion_status"] = "unknown"
+                elif on_hand_time >= event:
+                    fact["inventory_inclusion_status"] = "included"
+                else:
+                    fact["inventory_inclusion_status"] = "post_snapshot"
+            else:
+                fact["inventory_inclusion_status"] = "not_applicable"
+
+
+def _select_stage_facts(facts):
+    owner_map = defaultdict(set)
+    for fact in facts:
+        if (fact["batch_id"]
+                and fact["batch_identity_status"] == "proven"):
+            owner_map[(fact["batch_id"], fact["item_code"],
+                       fact["uom"])].add(
+                (fact["purpose"], fact["branch"] or ""))
+    for fact in facts:
+        owners = owner_map.get((fact["batch_id"], fact["item_code"],
+                                fact["uom"]))
+        if not owners:
+            continue
+        branches = {branch for purpose, branch in owners
+                    if purpose == "branch"}
+        purposes = {purpose for purpose, _ in owners
+                    if purpose in ("branch", "fba", "cg")}
+        if len(branches) > 1:
+            fact["owner_status"] = "branch_conflict"
+            fact["blockers"].append("branch_owner_conflict")
+        if len(purposes) > 1:
+            fact["owner_status"] = "owner_purpose_conflict"
+            fact["blockers"].append("owner_purpose_conflict")
+
+    groups = defaultdict(list)
+    for fact in facts:
+        if (fact["batch_id"]
+                and fact["batch_identity_status"] in ("proven",
+                                                      "accounting_only")):
+            key = (fact["item_code"], fact["uom"], fact["warehouse"],
+                   fact["purpose"], fact["tt_sku"], fact["branch"],
+                   fact["batch_id"])
+        else:
+            key = ("fact", fact["stage_fact_id"])
+        groups[key].append(fact)
+
+    for items in groups.values():
+        on_hand = [fact for fact in items if fact["stage"] == "on_hand"]
+        unknown_inclusion = any(
+            fact["inventory_inclusion_status"] == "unknown"
+            for fact in items
+            if fact["stage"] in ("received", "in_transit"))
+        if on_hand and unknown_inclusion:
+            chosen_stage = "on_hand"
+        else:
+            timed = [fact for fact in items if fact["_stage_time"]]
+            if timed:
+                latest = max(fact["_stage_time"] for fact in timed)
+                candidates = [fact for fact in timed
+                              if fact["_stage_time"] == latest]
+            else:
+                candidates = items
+            chosen_stage = max(
+                (fact["stage"] for fact in candidates),
+                key=lambda stage: STAGE_RANK[stage])
+        chosen = {id(fact) for fact in items
+                  if fact["stage"] == chosen_stage}
+        for fact in items:
+            fact["overlap_status"] = (
+                "same/proven" if len(items) > 1
+                and fact["batch_identity_status"] == "proven"
+                else ("distinct/proven"
+                      if fact["batch_identity_status"] == "proven"
+                      else "unknown"))
+            if id(fact) in chosen:
+                fact["counted_as_supply"] = True
+                fact["counted_reason"] = "current_stage"
+            else:
+                fact["counted_as_supply"] = False
+                fact["counted_reason"] = "superseded_by_stage:" + chosen_stage
+                if (fact["stage"] in ("received", "in_transit")
+                        and fact["inventory_inclusion_status"] == "unknown"
+                        and on_hand):
+                    fact["unknown_reasons"].append(
+                        "inventory_inclusion_unknown")
+
+    for fact in facts:
+        if fact["stage"] == "open_po":
+            fact["counted_as_supply"] = False
+            fact["counted_reason"] = "open_po_reconciliation_only"
+        if (fact["stage"] == "waiting_shipment"
+                and fact["confidence"] == "estimated"):
+            fact["counted_as_supply"] = False
+            fact["counted_reason"] = "estimated_not_proven"
+        if fact["conflicts"] or fact["qty_status"] != "known":
+            fact["counted_as_supply"] = False
+            fact["counted_reason"] = (fact["counted_reason"]
+                                      if fact["counted_reason"] != "current_stage"
+                                      else "source_conflict")
+        if fact["owner_status"].endswith("conflict"):
+            fact["counted_as_supply"] = False
+            fact["counted_reason"] = (fact["counted_reason"]
+                                      if fact["counted_reason"] != "current_stage"
+                                      else fact["owner_status"])
+        if fact["owner_status"] in ("branch_unknown", "unknown"):
+            fact["counted_as_supply"] = False
+            fact["counted_reason"] = (fact["counted_reason"]
+                                      if fact["counted_reason"] != "current_stage"
+                                      else fact["owner_status"])
+        if fact["purpose"] == "cg" and not fact["cg_eligible"]:
+            fact["counted_as_supply"] = False
+            fact["counted_reason"] = (fact["counted_reason"]
+                                      if fact["counted_reason"] != "current_stage"
+                                      else (fact["cg_blocking_reasons"][0]
+                                            if fact["cg_blocking_reasons"]
+                                            else "cg_not_eligible"))
+        if (fact["counted_as_supply"]
+                and fact["inventory_inclusion_status"] == "included"
+                and fact["stage"] != "on_hand"):
+            fact["counted_as_supply"] = False
+            fact["counted_reason"] = "inventory_inclusion_included"
+        fact["blockers"] = sorted(set(
+            list(fact.get("blockers") or ())
+            + list(fact.get("cg_blocking_reasons") or ())
+            + list(fact.get("conflicts") or ())))
+        fact.pop("_stage_time", None)
+
+
+def build_stage_facts(rows):
+    facts = []
+    for row in rows:
+        for fragment in row.get("stage_quantities") or ():
+            fact = _fragment_fact(row, fragment)
+            if fact:
+                facts.append(fact)
+        facts.extend(_position_stage_facts(row))
+    unique = {}
+    for fact in facts:
+        unique.setdefault(fact["stage_fact_id"], fact)
+    facts = [unique[key] for key in sorted(unique)]
+    _stage_inventory_inclusion(facts)
+    _select_stage_facts(facts)
+    return sorted(facts, key=lambda fact: (
+        _text(fact["item_code"]), _text(fact["uom"]),
+        _text(fact["warehouse"]), _text(fact["purpose"]),
+        _text(fact["tt_sku"]), _text(fact["branch"]),
+        STAGE_RANK.get(fact["stage"], 99), _text(fact["doc_line"]),
+        _text(fact["batch_id"]), _text(fact["stage_fact_id"])))
+
+
+def summarize_stage_facts(facts):
+    counted = [fact for fact in facts if fact["counted_as_supply"]]
+    counted_qty = defaultdict(Decimal)
+    for fact in counted:
+        value = _dec(fact.get("qty"), signed=True)
+        if value is not None:
+            counted_qty[fact["stage"]] += value
+    return {
+        "rows": len(facts),
+        "stage_counts": dict(sorted(Counter(
+            fact["stage"] for fact in facts).items())),
+        "counted_stage_counts": dict(sorted(Counter(
+            fact["stage"] for fact in counted).items())),
+        "counted_qty_by_stage": {
+            stage: _qty(value, signed=True)
+            for stage, value in sorted(counted_qty.items())},
+        "unknown_rows": sum(1 for fact in facts if fact["unknown_reasons"]),
+        "conflict_rows": sum(1 for fact in facts if fact["conflicts"]),
+        "overlap_counts": dict(sorted(Counter(
+            fact["overlap_status"] for fact in facts).items())),
+        "owner_status_counts": dict(sorted(Counter(
+            fact["owner_status"] for fact in facts).items())),
+        "batch_identity_missing": sum(
+            1 for fact in facts
+            if fact["batch_identity_status"] == "missing"),
+        "cg_fresh": sum(1 for fact in facts
+                        if fact["purpose"] == "cg"
+                        and not fact["cg_stale"] and fact["cg_eligible"]),
+        "cg_stale": sum(1 for fact in facts
+                        if fact["purpose"] == "cg" and fact["cg_stale"]),
+        "cg_unknown": sum(1 for fact in facts
+                          if fact["purpose"] == "cg"
+                          and not fact["cg_stale"]
+                          and not fact["cg_eligible"]),
+    }
 
 
 def build_full_supply_facts(position_result: dict, *, so_balances=(),
@@ -1144,15 +1792,19 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         reason = ("abc_inventory_key_conflict" if conflict
                   else ("" if inventory_qty is not None
                         else "inventory_not_attributed"))
+        source_identity = {"source_ref": item.get("source_ref"),
+                           "item_code": item.get("item_code"),
+                           "pool": item.get("pool")}
+        if _text(item.get("batch_id")):
+            source_identity["batch_id"] = _text(item.get("batch_id"))
         _merge_source(row, "inventory", status, item.get("inventory_as_of"),
                       reason,
-                      source_identity={"source_ref": item.get("source_ref"),
-                                       "item_code": item.get("item_code"),
-                                       "pool": item.get("pool")})
+                      source_identity=source_identity)
         if observed is not None:
             _add_stage(row, "inventory", observed, item.get("inventory_as_of_raw"),
                        "observation",
-                       source_identity={"source_ref": item.get("source_ref")})
+                       source_identity=source_identity,
+                       observed_at=item.get("inventory_as_of"))
         for reason_text in item.get("reasons") or []:
             if reason_text not in row["unknown_reasons"]:
                 row["unknown_reasons"].append(reason_text)
@@ -1391,7 +2043,8 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
             ("source_ref",), ("receipt_id",), ("shipment",), ("item_code",),
             ("uom",), ("warehouse",), ("purpose",), ("tt_sku",),
             ("branch",)),
-        payload_fields=("qty", "signed_at", "pod_uploaded_at", "observed_at"))
+        payload_fields=("qty", "signed_at", "received_at", "pod_uploaded_at",
+                        "observed_at"))
     for receipt in receipt_effective:
         row = _row_for(rows, receipt.get("item_code"), receipt.get("uom"),
                        receipt.get("warehouse"), receipt.get("purpose"),
@@ -1406,38 +2059,50 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                           reason=reason)
             _mark_unknown(row, "receipt", reason)
             for record in receipt["_records"]:
-                evidence, signed = _pod_evidence(record)
-                _add_stage(row, "received", _dec(record.get("qty")),
-                           signed.isoformat() if signed else None, "actual",
-                           source_identity=receipt["_source_identity"],
-                           conflict=True)
+                _add_receipt_stage(
+                    row, record, source_identity=receipt["_source_identity"],
+                    conflict=True)
             continue
         if receipt.get("_identity_missing"):
             _merge_source(row, "receipt", "unknown",
                           receipt.get("observed_at"), "source_identity_missing")
             _mark_unknown(row, "receipt", "source_identity_missing")
-            evidence, signed = _pod_evidence(receipt)
-            _add_stage(row, "received", _dec(receipt.get("qty")),
-                       signed.isoformat() if signed else None, "actual",
-                       identity_status="missing")
+            _add_receipt_stage(
+                row, receipt, source_identity=receipt.get("_source_identity"),
+                identity_status="missing")
             continue
-        evidence, signed = _pod_evidence(receipt)
         qty = _dec(receipt.get("qty"))
-        if evidence == "proven" and qty is not None:
+        signed = _aware(receipt.get("signed_at"))
+        received = _aware(receipt.get("received_at"))
+        if qty is None:
+            _merge_source(row, "receipt", "unknown",
+                          receipt.get("observed_at"), "receipt_qty_unknown",
+                          source_identity=receipt["_source_identity"])
+            _mark_unknown(row, "receipt", "receipt_qty_unknown")
+            continue
+        if received:
             _merge_source(row, "receipt", "proven", receipt.get("observed_at"),
                           source_identity=receipt["_source_identity"])
             _add_qty(row, "received_qty", "receipt", qty)
-            row["receipt_basis"] = "signed_assumed"
-            _add_stage(row, "received", qty, signed.isoformat(), "actual",
-                       source_identity=receipt["_source_identity"],
-                           replay=receipt.get("_replay_count", 1) > 1,
-                           observed_at=receipt.get("observed_at"),
-                           inventory_inclusion_status="unknown")
+            row["receipt_basis"] = "tongtool_received"
+            _add_receipt_stage(
+                row, receipt, source_identity=receipt["_source_identity"])
+        elif signed:
+            _merge_source(row, "receipt", "signed_pending",
+                          receipt.get("observed_at"),
+                          source_identity=receipt["_source_identity"])
+            _add_qty(row, "signed_pending_qty", "receipt", qty)
+            row["receipt_basis"] = "signed_pending"
+            _add_receipt_stage(
+                row, receipt, source_identity=receipt["_source_identity"])
         else:
-            reason = ("receipt_qty_unknown" if evidence == "proven"
-                      else "receipt_" + evidence)
-            _merge_source(row, "receipt", evidence, receipt.get("observed_at"),
-                          reason, source_identity=receipt["_source_identity"])
+            status = ("pod_only" if receipt.get("pod_uploaded_at")
+                      else "unknown")
+            reason = ("receipt_pod_only" if status == "pod_only"
+                      else "receipt_unknown")
+            _merge_source(row, "receipt", status,
+                          receipt.get("observed_at"), reason,
+                          source_identity=receipt["_source_identity"])
             _mark_unknown(row, "receipt", reason)
 
     for code in approved_items or ():
@@ -1451,6 +2116,7 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         _contract_unknown(layer_status, layer, row_list)
 
     for row in rows.values():
+        row["_stage_position_tranches"] = row.get("_position_tranches")
         sources = row.pop("_inventory_sources", set())
         if len(sources) > 1:
             row["unknown_reasons"].append("multiple_inventory_sources")
@@ -1483,6 +2149,10 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                  row.get("product_form")) for row in ordered]
     if len(keys) != len(set(keys)):
         raise ValueError("duplicate_target_key")
+    stage_rows = build_stage_facts(ordered)
+    stage_summary = summarize_stage_facts(stage_rows)
+    for row in ordered:
+        row.pop("_stage_position_tranches", None)
     reason_counts = Counter(reason for row in ordered
                             for reason in row["unknown_reasons"])
     summary = {
@@ -1512,6 +2182,11 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                                   if row["order_eligibility"] == "blocked"),
         "source_reconciliation": reconciliation,
         "layer_status": dict(sorted((layer_status or {}).items())),
+        "stage_rows": len(stage_rows),
+        "stage_summary": stage_summary,
+        "stage_unique_key": ["item_code", "uom", "warehouse", "purpose",
+                             "tt_sku", "branch", "stage", "doc_line",
+                             "batch_id", "stage_fact_id"],
         "duplicate_keys": 0,
         "forecast_connected": False,
         "netting_ready": False,
@@ -1521,12 +2196,35 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         "note": ("SO balance is demand; stage dates stay separate; layers are "
                  "never summed; forecast not connected."),
     }
-    result = {"rows": ordered, "summary": summary,
+    result = {"rows": ordered, "stage_rows": stage_rows,
+              "stage_summary": stage_summary, "summary": summary,
               "timeline": build_timeline(ordered, as_of=as_of)}
     if as_of is not None and max_age_seconds is not None:
         result["freshness"] = assess_freshness(
             ordered, as_of=as_of, max_age_seconds=max_age_seconds)
+        result["stage_freshness"] = assess_stage_freshness(
+            stage_rows, as_of=as_of, max_age_seconds=max_age_seconds)
     return result
+
+
+def assess_stage_freshness(facts, *, as_of, max_age_seconds):
+    now = _aware(as_of)
+    if now is None:
+        raise ValueError("as_of must be an aware timestamp")
+    counts = Counter()
+    for fact in facts:
+        observed = _aware(fact.get("observed_at"))
+        if observed is None:
+            counts["unknown"] += 1
+        elif observed > now:
+            counts["future"] += 1
+        elif (now - observed).total_seconds() > max_age_seconds:
+            counts["stale"] += 1
+        else:
+            counts["fresh"] += 1
+    return {"rows": len(facts), "fresh": counts["fresh"],
+            "stale": counts["stale"], "unknown": counts["unknown"],
+            "future": counts["future"]}
 
 
 def build_timeline(rows, *, as_of=None):

@@ -68,14 +68,18 @@
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
 - 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
 
-### 6.1 full_supply_facts v5 与正式刷新（2026-11-02，RULE/IMPL 2026-11-02.7）
+### 6.1 full_supply_facts v6 阶段明细与正式刷新（2026-11-03，RULE/IMPL 2026-11-03.1）
 
 - 离线入口：`supply_pipeline`；正式 EN 只读刷新入口：`supply_snapshot_refresh`。后者先加载
   ABC/权威 scope，再采集分页，并校验稳定 `snapshot_id`、版本、总数、连续性和权限；任何
   采集/发布失败保留旧 latest。
-- 输出：`runs/<run>/full_supply_facts.parquet`；
-  JSON 为追溯副本；`supply_position.parquet/json` 保留独立 schema/粒度；`timeline.json`；
-  统一 `manifest.json`（`supply-publication/v4`）。市场/形态纳入 full facts 唯一键。
+- 主数据集 `full_supply_facts.parquet` 改为阶段明细：item×uom×warehouse×purpose×tt_sku×branch×stage×doc_line/batch_id；含 doc_type/doc_name/doc_line/batch_id/source_identity/stage_fact_id。
+- 历史目标汇总迁为独立兼容数据集 `supply_target_summary.parquet/json`；原字段/四层资格保留。
+- 阶段只允许 open_po/waiting_shipment/in_transit/received/on_hand；open_po 仅核账不计供给；signed 未通途入库归 in_transit（signed_at）；received 只认通途入库时间；on_hand 只认库存快照。同一物理批次只允许一个 counted_as_supply 当前阶段。
+- observed_at/eta/available_at/signed_at/received_at 严格分离；naive/date-only 不假定 UTC。
+- purpose 支持 branch/fba/cg；owner_status/cg_stale/cg_eligible/cg_blocking_reasons 显式；stale CG 保留观察但不抵扣。
+- 发布/reader 同时校验阶段主数据集、目标汇总、position、timeline；manifest 含 as_of/run_id/输入版本/SHA/行数/阶段唯一键/freshness/stage/unknown/conflict/overlap/CG 统计。
+- 统一 `manifest.json`（`supply-publication/v5`）。市场/形态纳入目标唯一键。
 - A/B/C（`abc-frozen/v3`）：观察量/归属量/当前可用/下单四层分开；C 必须
   join_full + source_ref + 数量 + UoM 才可归属，否则 `c_not_qualified` 且可信/当前
   均为 null；B/C 单位必须一致才可归属；naive/date-only 不算精确时间；缺身份只进
