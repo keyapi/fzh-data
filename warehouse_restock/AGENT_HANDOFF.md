@@ -143,3 +143,7 @@ BOM Excel 列名用 `, ` （逗号+空格）分隔。脚本需用 `norm_col` 统
 - `docs/solutions/architecture-patterns/demand-forecast-layer-d.md`
 - `docs/solutions/best-practices/censored-demand-cold-start-seasonality.md`
 
+美国需求归属与端到端策略（D 之后）：
+- `docs/solutions/architecture-patterns/us-owner-restatement-and-b2-scope.md` — 按当前 owner 重述美国需求；B2 品类范围与老品不补。
+- `docs/solutions/architecture-patterns/end-to-end-supply-chain-strategy-s1-s2.md` — 普船/快船/空运三分类、S1/S2 联合模拟、例外队列；Q95 分位≠全程 95% 服务。
+

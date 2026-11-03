@@ -30,3 +30,5 @@ timestamp: 2026-07-28
 | SKU 背贴 PDF 生成与通用名称查询模式 | [sku-label-pdf-generation-and-name-lookup.md](sku-label-pdf-generation-and-name-lookup.md) |
 | 供应链补货 A/B/C 数据管线：活跃宇宙→市场归属→库存归并→决策基座 | [supply-chain-a-b-c-data-pipeline.md](supply-chain-a-b-c-data-pipeline.md) |
 | D 需求预测层：状态分层、政策/数据/供给分离与 4 年历史 | [demand-forecast-layer-d.md](demand-forecast-layer-d.md) |
+| 美国需求按当前 owner 重述与 B2 品类范围 | [us-owner-restatement-and-b2-scope.md](us-owner-restatement-and-b2-scope.md) |
+| 端到端供应链策略层 S1/S2：三运输大类、联合模拟与例外队列 | [end-to-end-supply-chain-strategy-s1-s2.md](end-to-end-supply-chain-strategy-s1-s2.md) |

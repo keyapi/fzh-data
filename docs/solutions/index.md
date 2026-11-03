@@ -13,6 +13,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-03 | 美国需求按当前 owner 重述与 B2 品类范围 | [architecture-patterns/us-owner-restatement-and-b2-scope.md](architecture-patterns/us-owner-restatement-and-b2-scope.md) |
+| 2026-11-03 | 端到端供应链策略层 S1/S2：三运输大类、联合模拟与例外队列 | [architecture-patterns/end-to-end-supply-chain-strategy-s1-s2.md](architecture-patterns/end-to-end-supply-chain-strategy-s1-s2.md) |
 | 2026-11-02 | 删失需求、短史冷启动与季节/促销识别：D 的可复用方法 | [best-practices/censored-demand-cold-start-seasonality.md](best-practices/censored-demand-cold-start-seasonality.md) |
 | 2026-11-02 | D 需求预测层：状态分层、政策/数据/供给分离与 4 年历史 | [architecture-patterns/demand-forecast-layer-d.md](architecture-patterns/demand-forecast-layer-d.md) |
 | 2026-10-30 | 供应链补货 A/B/C 数据管线：活跃宇宙→市场归属→库存归并→决策基座 | [architecture-patterns/supply-chain-a-b-c-data-pipeline.md](architecture-patterns/supply-chain-a-b-c-data-pipeline.md) |
