@@ -717,6 +717,7 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
         "partial": partial,
         "rows": len(stage_rows),
         "stage_summary": full_result.get("stage_summary"),
+        "stage_freshness": full_result.get("stage_freshness"),
         "failed_inputs": failed_inputs,
     }
     datasets = {

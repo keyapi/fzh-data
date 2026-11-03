@@ -1548,6 +1548,12 @@ def _select_stage_facts(facts):
             fact["counted_reason"] = (fact["counted_reason"]
                                       if fact["counted_reason"] != "current_stage"
                                       else fact["owner_status"])
+        if fact["batch_identity_status"] == "missing":
+            fact["counted_as_supply"] = False
+            fact["counted_reason"] = (fact["counted_reason"]
+                                      if fact["counted_reason"]
+                                      not in ("current_stage", "")
+                                      else "batch_identity_missing")
         if fact["purpose"] == "cg" and not fact["cg_eligible"]:
             fact["counted_as_supply"] = False
             fact["counted_reason"] = (fact["counted_reason"]
