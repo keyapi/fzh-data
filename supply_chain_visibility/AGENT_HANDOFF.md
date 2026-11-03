@@ -68,7 +68,7 @@
 - 人工视图：SO Chain Overview 链条弹窗新增「数量阶段 / 节点 / 分批可售」，与批量入口调同一方法。
 - 测试站已部署验收（单 SO 0.63s；278 行全范围 0.72s）；**生产未部署**；9 SKU 待生产授权。
 
-### 6.1 full_supply_facts v6 阶段明细与正式刷新（2026-11-03，RULE/IMPL 2026-11-03.2）
+### 6.1 full_supply_facts v7 阶段明细与正式刷新（2026-11-03，RULE/IMPL 2026-11-03.3）
 
 - 离线入口：`supply_pipeline`；正式 EN 只读刷新入口：`supply_snapshot_refresh`。后者先加载
   ABC/权威 scope，再采集分页，并校验稳定 `snapshot_id`、版本、总数、连续性和权限；任何
@@ -83,7 +83,10 @@
 - observed_at/eta/available_at/signed_at/received_at 严格分离；observed_at 只用于新鲜度、不选阶段；actual 优先于 estimate；naive/date-only 不假定 UTC。
 - purpose 支持 branch/fba/cg；owner_status/cg_stale/cg_eligible/cg_blocking_reasons 显式；stale CG 保留观察但不抵扣。
 - 发布/reader 同时校验阶段主数据集、目标汇总、position、timeline；manifest 含 as_of/run_id/输入版本/SHA/行数/阶段唯一键/freshness/stage/unknown/conflict/overlap/CG 统计。
-- 统一 `manifest.json`（`supply-publication/v5`）。市场/形态纳入目标唯一键。
+- 统一 `manifest.json`（`supply-publication/v6`）。市场/形态纳入目标唯一键。
+- 同 lineage 同阶段按物理量核账：同量多链路只计一次（其余 evidence_only）、异量无 allocation → `same_stage_quantity_conflict` 全部不计、合法 allocation 才可相加；输出 stage_measured_qty/evidence_only/same_stage_reconciliation_status。
+- on_hand 成为当前阶段必须有意 aware 时间、proven、fresh、owner/UOM/lineage/库存资格；missing/naive/date-only/stale/future 不得覆盖 received/in_transit。
+- 业务冲突（payload/receipt_before_signed/time_order/stage_regression/same_stage）作为 conflict fact 成功发布，manifest partial + business_conflict_rows/原因分布，reader partial 可读；结构失败才保留旧 latest。
 - A/B/C（`abc-frozen/v4`）：观察量/归属量/当前可用/下单四层分开；C 必须
   join_full + source_ref + 数量 + UoM 才可归属，否则 `c_not_qualified` 且可信/当前
   均为 null；B/C 单位必须一致才可归属；naive/date-only 不算精确时间；缺身份只进

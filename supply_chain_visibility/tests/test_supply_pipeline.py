@@ -322,10 +322,10 @@ class PipelineTests(unittest.TestCase):
                                      max_age_seconds=900)
             self.assertIn("manifest_partial", state["warnings"])
             self.assertIn("business_partial", state["partial_reason"])
+            self.assertTrue(state["readable"])
             allowed = read_publication(str(out), as_of=AS_OF,
                                        max_age_seconds=900, allow_stale=True)
             self.assertTrue(allowed["readable"])
-            self.assertIn("business_partial", state["partial_reason"])
 
     def test_pagination_truncation_still_rejects_and_keeps_latest(self):
         with tempfile.TemporaryDirectory() as td:

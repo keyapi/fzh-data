@@ -266,9 +266,9 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 ### `full_supply_facts` v6（阶段明细 + 兼容目标汇总）
 
 模块：`supply_chain_visibility/full_supply_facts.py`，schema
-`full-supply-facts/v6`，`RULE=2026-11-03.2`，
-`IMPLEMENTATION=fzh.full_supply_facts@2026-11-03.2`。发布/读取：
-`supply_chain_visibility/publication.py`（`supply-publication/v5`）。
+`full-supply-facts/v7`，`RULE=2026-11-03.3`，
+`IMPLEMENTATION=fzh.full_supply_facts@2026-11-03.3`。发布/读取：
+`supply_chain_visibility/publication.py`（`supply-publication/v6`）。
 主数据集 `full_supply_facts.parquet` 为阶段明细；历史目标汇总迁移为独立兼容数据集
 `supply_target_summary.parquet/json`，不丢失旧能力。目标唯一键为
 `item_code×uom×warehouse×purpose×tt_sku×branch×market×product_form`；市场与形态
@@ -306,9 +306,22 @@ API filters：`sales_order`、`customer`、`item_code`、日期、关联/范围�
 - `purpose` 支持 `branch/fba/cg`：branch 唯一 owner；FBA 不得绑定 branch；CG 不得复制给
   branch/FBA。字段 `owner_status/cg_stale/cg_eligible/cg_blocking_reasons` 显式；
   stale CG 保留观察量但 `counted_as_supply=false`。
+- **同 lineage 同阶段核账**：按 `physical_lineage_id×stage` 汇总，而非把 chosen_stage
+  内所有事实都计数。同量多份链路证据只计一次，其余 `evidence_only=true`；异量且无
+  allocation 证明 → `same_stage_quantity_conflict`，该阶段全部不计；只有
+  `allocation_id+allocated_qty+source_qty` 合法且容量守恒才可相加。输出
+  `stage_measured_qty/evidence_only/same_stage_reconciliation_status`；
+  `counted_qty_by_stage` 使用核账后的物理量。
+- **on_hand 成为当前阶段的门槛**：必须同时具备已证 aware `available_at`、`known` 时间、
+  `inventory_time_proven`、`fresh` freshness、有效 owner/UOM/已证 lineage/库存资格。
+  missing/naive/date-only/stale/future on_hand 一律不得 supersede received/in_transit；
+  无法比较时 inclusion/current stage 保持 unknown，不按阶段序号猜选。
 - 目标汇总数据集保留原有字段与四层资格；reader 同时校验阶段主数据集与目标汇总。
-  `payload_conflict` 或 `source_payload_conflict/receipt_before_signed/time_order_conflict/
-  stage_regression` 存在的批次拒绝发布，`latest.json` 保持上一成功版本。
+  **业务冲突可发布**：`source_payload_conflict/receipt_before_signed/time_order_conflict/
+  stage_regression/same_stage_quantity_conflict` 作为 conflict fact 成功发布，
+  `manifest.partial=true` 并记录 `business_conflict_rows`/原因分布；reader 状态 partial、
+  默认可读。只有分页/采集失败、版本不兼容、未解决重复稳定键、输入/SHA/manifest 损坏、
+  写盘/回读失败才保留旧 `latest.json`。
 
 ### 1.6 正式只读刷新入口（2026-11-02）
 

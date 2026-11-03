@@ -194,7 +194,7 @@ JSON/Parquet 逐字段一致校验；失败不切 `latest.json`。reader 返回
 并用 `allow_stale` 显式控制是否可读；行级 freshness 每次读取按当前时间重算。
 
 本地冻结 A/B/C 通过 `abc_inputs.load_frozen_abc` 接入（`abc-frozen/v4`，
-`full-supply-facts/v6`，`supply-publication/v5`，`supply-pipeline/v5`）：
+`full-supply-facts/v7`，`supply-publication/v6`，`supply-pipeline/v5`）：
 - **观察/归属/当前可用/下单四层分开**：`inventory_observed_qty`（C 原始数量+单位）、
   `attribution_status`/`inventory_qty`（B 单位/身份资格 + C join_full/source_ref/数量）、
   `inventory_current_available_qty`/`current_available_eligible`（时间证明）、
@@ -226,7 +226,15 @@ JSON/Parquet 逐字段一致校验；失败不切 `latest.json`。reader 返回
   `time_order_conflict`；`received_at<signed_at` → `receipt_before_signed`。冲突保留原始时间、
   不计数、拒绝发布。
 - **稳定主键**：`stage_fact_id` 只由稳定事实身份生成；数量/时间/状态进 `payload_hash`。
-  同键同载荷去重，异载荷 `payload_conflict` 且不切换 latest；跨快照同事实 ID 不变。
+  同键同载荷去重，异载荷 `payload_conflict` 且不计数；跨快照同事实 ID 不变。
+- **同 lineage 同阶段核账**：同量多份链路证据只计一次（其余 `evidence_only`）；异量且无
+  allocation → `same_stage_quantity_conflict` 全部不计；合法 allocation 才可相加；
+  `counted_qty_by_stage` 使用核账后的物理量。
+- **on_hand 门槛**：只有已证 aware 时间、proven、fresh、owner/UOM/lineage/库存资格的
+  on_hand 才可成为当前阶段；missing/naive/date-only/stale/future 不得覆盖 received/in_transit。
+- **业务冲突 partial 发布**：conflict fact 成功发布，`manifest.partial=true` 且记录
+  `business_conflict_rows`/原因分布；reader 状态 partial、默认可读。分页/采集失败、版本
+  不兼容、重复稳定键、输入/SHA/manifest 损坏、写盘/回读失败才保留旧 latest。
 - 输入契约：混版页拒绝；**分页截断**（truncated/未 exhausted/pagination.partial）
   拒收；**合法业务 partial**（分页已 exhausted）不拒收，该层汇总 unknown、已证片段
   保留，`partial_reason=business_partial` 透出 manifest/reader；来源状态保守聚合。

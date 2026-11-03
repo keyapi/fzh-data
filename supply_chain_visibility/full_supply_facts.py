@@ -39,9 +39,9 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Iterable
 
-SCHEMA_VERSION = "full-supply-facts/v6"
-RULE_VERSION = "2026-11-03.2"
-IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-03.2"
+SCHEMA_VERSION = "full-supply-facts/v7"
+RULE_VERSION = "2026-11-03.3"
+IMPLEMENTATION_VERSION = "fzh.full_supply_facts@2026-11-03.3"
 QUANTITY_SCALE = 6
 
 VALID_PURPOSES = ("branch", "fba", "cg")
@@ -423,6 +423,14 @@ def _dedupe_layer(records, *, layer, source_groups, identity_groups,
                 allocation_id = record["_allocation_id"]
                 merged = dict(record)
                 identity = dict(source_identity, allocation_id=allocation_id)
+                allocated = _dec(record.get("allocated_qty"))
+                declared = _dec(record.get("source_qty"))
+                if declared is None:
+                    declared = _dec(record.get("total_qty"))
+                if allocated is not None:
+                    identity["allocated_qty"] = _qty(allocated)
+                if declared is not None:
+                    identity["source_qty"] = _qty(declared)
                 batch = _text(record.get("batch_id"))
                 if batch:
                     identity["batch_id"] = batch
@@ -1246,6 +1254,11 @@ def _stage_base(row, *, stage, qty, identity, evidence, confidence,
         "payload_hashes": [], "payload_candidates": [],
         "inclusion_proof": inclusion_proof or None,
         "source_identity": dict(identity or {}),
+        "inventory_freshness": row.get("inventory_freshness"),
+        "inventory_time_proven": bool(row.get("inventory_time_proven")),
+        "attribution_status": row.get("attribution_status"),
+        "stage_measured_qty": None, "evidence_only": False,
+        "same_stage_reconciliation_status": None,
         "qty": _qty(qty, signed=True), "qty_status": qty_status,
         "confidence": confidence, "counted_as_supply": False,
         "counted_reason": "", "source_status": source_status,
@@ -1380,9 +1393,6 @@ def _fragment_fact(row, fragment):
         fact["overlap_status"] = "same/proven"
     if conflict:
         fact["overlap_status"] = "conflict"
-        if "source_payload_conflict" not in fact["conflicts"]:
-            fact["conflicts"].append("source_payload_conflict")
-        fact["unknown_reasons"].append("source_payload_conflict")
     signed_dt = _aware(fact.get("signed_at"))
     received_dt = _aware(fact.get("received_at"))
     if (stage == "received" and signed_dt and received_dt
@@ -1393,6 +1403,11 @@ def _fragment_fact(row, fragment):
         fact["confidence"] = "conflict"
         fact["source_status"] = "conflict"
         fact["overlap_status"] = "conflict"
+    if conflict and not fact["conflicts"]:
+        # Generic conflict fragment (e.g. source target/allocation conflict);
+        # specific time conflicts above keep their own reason.
+        fact["conflicts"].append("source_payload_conflict")
+        fact["unknown_reasons"].append("source_payload_conflict")
     if fact["lineage_status"] == "unproven":
         fact["unknown_reasons"].append("physical_lineage_unproven")
     if fragment.get("identity_status") == "missing":
@@ -1520,7 +1535,7 @@ def _stage_inventory_inclusion(facts):
             continue
         if fact["stage"] == "on_hand":
             fact["inventory_inclusion_status"] = (
-                "included" if fact.get("physical_lineage_id") else "unknown")
+                "included" if _on_hand_time_usable(fact) else "unknown")
             continue
         if fact["stage"] not in ("received", "in_transit"):
             fact["inventory_inclusion_status"] = "not_applicable"
@@ -1531,7 +1546,8 @@ def _stage_inventory_inclusion(facts):
                 "unknown" if has_any_on_hand else "not_applicable")
             continue
         peers = [peer for peer in by_lineage.get(lineage, [])
-                 if peer["stage"] == "on_hand"]
+                 if peer["stage"] == "on_hand"
+                 and _on_hand_time_usable(peer)]
         if not peers:
             fact["inventory_inclusion_status"] = (
                 "unknown" if has_any_on_hand else "not_applicable")
@@ -1549,6 +1565,149 @@ def _stage_inventory_inclusion(facts):
             fact["inventory_inclusion_status"] = "included"
         else:
             fact["inventory_inclusion_status"] = "post_snapshot"
+
+
+def _on_hand_time_usable(fact):
+    """Aware proven fresh on-hand time; used for both inclusion and current stage."""
+    if fact["stage"] != "on_hand":
+        return False
+    if not (fact.get("physical_lineage_id")
+            and fact.get("lineage_status") != "unproven"):
+        return False
+    if fact.get("available_at_time_status") != "known":
+        return False
+    if _aware(fact.get("available_at")) is None:
+        return False
+    if not fact.get("inventory_time_proven"):
+        return False
+    if fact.get("inventory_freshness") != "fresh":
+        return False
+    if (fact.get("qty_status") != "known"
+            or _dec(fact.get("qty"), signed=True) is None):
+        return False
+    return True
+
+
+def _on_hand_current_eligible(fact):
+    """A proven, fresh, owned on-hand fact may supersede a receipt in transit."""
+    if not _on_hand_time_usable(fact):
+        return False
+    if fact.get("owner_status") not in ("branch_owner", "fba", "cg"):
+        return False
+    if fact["purpose"] == "cg" and not fact.get("cg_eligible"):
+        return False
+    if not _text(fact.get("uom")):
+        return False
+    if fact.get("inventory_inclusion_status") != "included":
+        return False
+    attribution = fact.get("attribution_status")
+    if attribution is not None and attribution != "attributed":
+        return False
+    if fact.get("payload_conflict") or fact.get("conflicts"):
+        return False
+    return True
+
+
+def _stage_allocation_measure(items, quantities):
+    """Return the conserved allocation sum, or None when proof is incomplete."""
+    allocation_ids = set()
+    declared = set()
+    total = Decimal(0)
+    for fact, qty in zip(items, quantities):
+        identity = fact.get("source_identity") or {}
+        allocation_id = _text(identity.get("allocation_id"))
+        allocated = _dec(identity.get("allocated_qty"), signed=True)
+        source_qty = _dec(identity.get("source_qty"), signed=True)
+        if (not allocation_id or allocated is None or source_qty is None
+                or allocated != qty or allocation_id in allocation_ids):
+            return None
+        allocation_ids.add(allocation_id)
+        declared.add(source_qty)
+        total += allocated
+    if len(declared) != 1:
+        return None
+    capacity = declared.pop()
+    if total <= 0 or total > capacity:
+        return None
+    return total
+
+
+def _reconcile_stage_quantities(facts):
+    """One physical quantity per physical_lineage_id x stage.
+
+    Multiple provenance chains are evidence, not additive supply. Only a valid
+    allocation ledger (allocation_id + allocated_qty + source_qty, conserved)
+    may be summed. Differing quantities without proof are a conflict.
+    """
+    grouped = defaultdict(list)
+    for fact in facts:
+        if (fact.get("physical_lineage_id")
+                and fact.get("lineage_status") != "unproven"):
+            grouped[(fact["physical_lineage_id"], fact["stage"])].append(fact)
+        else:
+            fact["stage_measured_qty"] = None
+            fact["evidence_only"] = False
+            fact["same_stage_reconciliation_status"] = "unproven_lineage"
+    for items in grouped.values():
+        def _representative_rank(item):
+            if item["stage"] == "on_hand":
+                return (0 if _on_hand_time_usable(item) else 1,
+                        _text(item["stage_fact_id"]))
+            if item["stage"] == "waiting_shipment":
+                return (0 if item["confidence"] in ("proven", "observed")
+                        else 1, _text(item["stage_fact_id"]))
+            return (0, _text(item["stage_fact_id"]))
+
+        items = sorted(items, key=_representative_rank)
+        quantities = [_dec(item.get("qty"), signed=True) for item in items]
+        if any(value is None for value in quantities):
+            for index, item in enumerate(items):
+                item["stage_measured_qty"] = None
+                item["evidence_only"] = index > 0
+                item["same_stage_reconciliation_status"] = "unknown_quantity"
+            continue
+        has_allocation = any(
+            _text((item.get("source_identity") or {}).get("allocation_id"))
+            for item in items)
+        if has_allocation:
+            total = _stage_allocation_measure(items, quantities)
+            if total is None:
+                for item in items:
+                    item["stage_measured_qty"] = None
+                    item["evidence_only"] = False
+                    item["same_stage_reconciliation_status"] = (
+                        "quantity_conflict")
+                    item["overlap_status"] = "conflict"
+                    item["conflicts"] = sorted(set(
+                        item["conflicts"] + ["same_stage_quantity_conflict"]))
+                    item["unknown_reasons"] = sorted(set(
+                        item["unknown_reasons"]
+                        + ["same_stage_quantity_conflict"]))
+                continue
+            measured = _qty(total, signed=True)
+            for item in items:
+                item["stage_measured_qty"] = measured
+                item["evidence_only"] = False
+                item["same_stage_reconciliation_status"] = "allocated_sum"
+            continue
+        distinct = set(quantities)
+        if len(distinct) == 1:
+            measured = _qty(quantities[0], signed=True)
+            for index, item in enumerate(items):
+                item["stage_measured_qty"] = measured
+                item["evidence_only"] = index > 0
+                item["same_stage_reconciliation_status"] = (
+                    "duplicate_evidence" if len(items) > 1 else "single")
+            continue
+        for item in items:
+            item["stage_measured_qty"] = None
+            item["evidence_only"] = False
+            item["same_stage_reconciliation_status"] = "quantity_conflict"
+            item["overlap_status"] = "conflict"
+            item["conflicts"] = sorted(set(
+                item["conflicts"] + ["same_stage_quantity_conflict"]))
+            item["unknown_reasons"] = sorted(set(
+                item["unknown_reasons"] + ["same_stage_quantity_conflict"]))
 
 
 def _select_stage_facts(facts):
@@ -1574,6 +1733,8 @@ def _select_stage_facts(facts):
         if len(purposes) > 1:
             fact["owner_status"] = "owner_purpose_conflict"
             fact["blockers"].append("owner_purpose_conflict")
+
+    _reconcile_stage_quantities(facts)
 
     groups = defaultdict(list)
     for fact in facts:
@@ -1639,18 +1800,39 @@ def _select_stage_facts(facts):
             continue
 
         present = {fact["stage"] for fact in items}
+        on_hand_facts = [fact for fact in items if fact["stage"] == "on_hand"]
+        on_hand_current = [fact for fact in on_hand_facts
+                           if _on_hand_current_eligible(fact)]
+        for fact in on_hand_facts:
+            if fact not in on_hand_current:
+                fact["inventory_inclusion_status"] = "unknown"
+                fact["unknown_reasons"] = sorted(set(
+                    fact["unknown_reasons"] + ["on_hand_not_current"]))
         chosen_stage = None
+        stage_unknown = None
         if "on_hand" in present:
-            chosen_stage = "on_hand"
-            on_times = [_aware(fact["available_at"]) for fact in items
-                        if fact["stage"] == "on_hand"
-                        and _aware(fact["available_at"])]
-            if (on_times and received_times
-                    and max(on_times) < min(received_times)):
+            if on_hand_current:
+                on_times = [_aware(fact["available_at"])
+                            for fact in on_hand_current
+                            if _aware(fact["available_at"])]
+                chosen_stage = "on_hand"
+                if (on_times and received_times
+                        and max(on_times) < min(received_times)):
+                    chosen_stage = "received"
+                elif (on_times and transit_times
+                      and max(on_times) < min(transit_times)):
+                    chosen_stage = "in_transit"
+                elif not received_times and not transit_times:
+                    # A fresh on-hand fact with no competing proven event time
+                    # is the only proven stage.
+                    chosen_stage = "on_hand"
+            elif "received" in present:
+                # Unproven/stale/naive/date-only on-hand never supersedes.
                 chosen_stage = "received"
-            elif (on_times and transit_times
-                  and max(on_times) < min(transit_times)):
+            elif "in_transit" in present:
                 chosen_stage = "in_transit"
+            else:
+                stage_unknown = "on_hand_time_unproven"
         elif "received" in present:
             chosen_stage = "received"
         elif "in_transit" in present:
@@ -1663,12 +1845,29 @@ def _select_stage_facts(facts):
         if chosen_stage:
             at_stage = [fact for fact in items
                         if fact["stage"] == chosen_stage]
-            if chosen_stage == "waiting_shipment":
+            if chosen_stage == "on_hand":
+                at_stage = [fact for fact in at_stage
+                            if fact in on_hand_current]
+            elif chosen_stage == "waiting_shipment":
                 strong = [fact for fact in at_stage
                           if fact["confidence"] in ("proven", "observed")]
                 if strong:
                     at_stage = strong
-            chosen_ids = {id(fact) for fact in at_stage}
+            statuses = {fact.get("same_stage_reconciliation_status")
+                        for fact in at_stage}
+            if statuses & {"quantity_conflict", "unknown_quantity"}:
+                chosen_ids = set()
+            elif "allocated_sum" in statuses:
+                chosen_ids = {id(fact) for fact in at_stage}
+            else:
+                ordered = sorted(at_stage,
+                                 key=lambda item: _text(item["stage_fact_id"]))
+                chosen_ids = {id(fact) for fact in ordered
+                              if not fact.get("evidence_only")}
+        if stage_unknown:
+            for fact in on_hand_facts:
+                fact["unknown_reasons"] = sorted(set(
+                    fact["unknown_reasons"] + [stage_unknown]))
         for fact in items:
             proven = bool(fact.get("physical_lineage_id")
                           and fact.get("lineage_status") != "unproven")
@@ -1680,13 +1879,17 @@ def _select_stage_facts(facts):
                 fact["counted_reason"] = "current_stage"
             else:
                 fact["counted_as_supply"] = False
-                fact["counted_reason"] = ("superseded_by_stage:"
-                                          + str(chosen_stage))
-                if (fact["stage"] in ("received", "in_transit")
-                        and fact["inventory_inclusion_status"] == "unknown"
-                        and "on_hand" in present):
-                    fact["unknown_reasons"].append(
-                        "inventory_inclusion_unknown")
+                if fact.get("evidence_only"):
+                    fact["counted_reason"] = "evidence_only_duplicate"
+                else:
+                    fact["counted_reason"] = (
+                        stage_unknown or ("superseded_by_stage:"
+                                          + str(chosen_stage)))
+            if (fact["stage"] in ("received", "in_transit")
+                    and fact["inventory_inclusion_status"] == "unknown"
+                    and "on_hand" in present):
+                fact["unknown_reasons"] = sorted(set(
+                    fact["unknown_reasons"] + ["inventory_inclusion_unknown"]))
 
     for fact in facts:
         if fact["stage"] == "open_po":
@@ -1701,10 +1904,13 @@ def _select_stage_facts(facts):
             fact["counted_reason"] = "source_payload_conflict"
         if fact["conflicts"] or fact["qty_status"] != "known":
             fact["counted_as_supply"] = False
-            fact["counted_reason"] = (fact["counted_reason"]
-                                      if fact["counted_reason"]
-                                      not in ("current_stage", "")
-                                      else "source_conflict")
+            if "same_stage_quantity_conflict" in fact["conflicts"]:
+                fact["counted_reason"] = "same_stage_quantity_conflict"
+            else:
+                fact["counted_reason"] = (fact["counted_reason"]
+                                          if fact["counted_reason"]
+                                          not in ("current_stage", "")
+                                          else "source_conflict")
         if fact["owner_status"].endswith("conflict"):
             fact["counted_as_supply"] = False
             fact["counted_reason"] = (fact["counted_reason"]
@@ -1769,6 +1975,20 @@ def summarize_stage_facts(facts):
         value = _dec(fact.get("qty"), signed=True)
         if value is not None:
             counted_qty[fact["stage"]] += value
+    measured_qty = defaultdict(Decimal)
+    measured_seen = set()
+    for fact in facts:
+        lineage = fact.get("physical_lineage_id")
+        value = _dec(fact.get("stage_measured_qty"), signed=True)
+        if not lineage or value is None:
+            continue
+        key = (lineage, fact["stage"])
+        if key in measured_seen:
+            continue
+        measured_seen.add(key)
+        measured_qty[fact["stage"]] += value
+    conflict_reasons = Counter(
+        reason for fact in facts for reason in (fact.get("conflicts") or ()))
     return {
         "rows": len(facts),
         "stage_counts": dict(sorted(Counter(
@@ -1778,6 +1998,15 @@ def summarize_stage_facts(facts):
         "counted_qty_by_stage": {
             stage: _qty(value, signed=True)
             for stage, value in sorted(counted_qty.items())},
+        "stage_measured_qty_by_stage": {
+            stage: _qty(value, signed=True)
+            for stage, value in sorted(measured_qty.items())},
+        "reconciliation_status_counts": dict(sorted(Counter(
+            fact.get("same_stage_reconciliation_status")
+            for fact in facts).items())),
+        "evidence_only_rows": sum(
+            1 for fact in facts if fact.get("evidence_only")),
+        "conflict_reason_distribution": dict(sorted(conflict_reasons.items())),
         "unknown_rows": sum(1 for fact in facts if fact["unknown_reasons"]),
         "conflict_rows": sum(1 for fact in facts if fact["conflicts"]),
         "payload_conflict_rows": sum(
@@ -2062,6 +2291,7 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         if item.get("_conflict"):
             reason = item.get("_conflict_reason") or "source_payload_conflict"
             _merge_source(row, "production", "conflict",
+                          item.get("observed_at"),
                           source_identity=item["_source_identity"],
                           reason=reason)
             _mark_unknown(row, "production", reason)
@@ -2070,7 +2300,9 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                 _add_stage(row, "in_production", _dec(record.get("qty")),
                            rec_actual or record.get("available_date"),
                            "actual" if rec_actual else "expected",
-                           source_identity=item["_source_identity"], conflict=True)
+                           source_identity=item["_source_identity"],
+                           conflict=True,
+                           observed_at=record.get("observed_at"))
             continue
         if item.get("_identity_missing"):
             _merge_source(row, "production", "unknown",
@@ -2149,6 +2381,22 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
                        items[0].get("purpose"), items[0].get("branch"),
                        items[0].get("tt_sku"), items[0].get("market"),
                        items[0].get("product_form"))
+        first = items[0]
+        parsed_as_of, _, as_of_status = _time_parts(first.get("as_of"))
+        proven = first.get("inventory_time_proven")
+        row["inventory_time_proven"] = (
+            (parsed_as_of is not None and as_of_status == "known")
+            if proven is None else bool(proven))
+        freshness = first.get("inventory_freshness")
+        if freshness is None:
+            now = _aware(as_of)
+            if parsed_as_of is None or as_of_status != "known":
+                freshness = "unknown_time"
+            elif now is not None and parsed_as_of > now:
+                freshness = "future"
+            else:
+                freshness = "fresh"
+        row["inventory_freshness"] = freshness
         statuses = {_text(item.get("source_status") or "known") for item in items}
         identities = {(_text(item.get("as_of")), _qty(item.get("qty")))
                       for item in items}
@@ -2383,8 +2631,7 @@ def build_full_supply_facts(position_result: dict, *, so_balances=(),
         "stage_rows": len(stage_rows),
         "stage_summary": stage_summary,
         "stage_unique_key": ["item_code", "uom", "warehouse", "purpose",
-                             "tt_sku", "branch", "stage", "doc_line",
-                             "batch_id", "stage_fact_id"],
+                             "tt_sku", "branch", "stage", "stage_fact_id"],
         "duplicate_keys": 0,
         "forecast_connected": False,
         "netting_ready": False,

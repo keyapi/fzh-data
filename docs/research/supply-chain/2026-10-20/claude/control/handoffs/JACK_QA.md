@@ -486,6 +486,17 @@ EN/通途业务数据、未合并 main。
 验证：完整依赖 **473 passed / 20 subtests**；最小依赖 **414 passed / 58 skipped / 20
 subtests**。未创建真实 PO、未写 EN/通途业务数据、未合并 main、未部署生产。
 
+### [W1-FULL-FACTS-V7-REREVIEW2-2026-11-03] D6 第二次复审三项整改
+
+| 问题 | 修复 | 反例/结果 |
+|---|---|---|
+| 同 lineage 同阶段重复计数 | 按 `physical_lineage_id×stage` 核账：同量多链路只计一次（其余 evidence_only）、异量无 allocation → `same_stage_quantity_conflict` 全部不计、合法 allocation 才可相加；输出 stage_measured_qty/evidence_only/状态 | B1 Shipment 5 + signed-pending 5 → 总计 5；5/6 无 allocation → 冲突计数 0；AL-1=2 + AL-2=3/source 5 → 5；跨仓重复仍只计 5 |
+| 无时间/stale 库存覆盖已证 receipt | on_hand 成为当前阶段必须有 aware/known 时间、proven、fresh、owner/UOM/lineage/库存资格；missing/naive/date-only/stale/future 不得 supersede | receipt 5 有 received_at + on_hand 缺 as_of → 只计 received；stale/future/date-only/naive 四种均只计 received |
+| 业务冲突被当结构失败 | 删除 publish 对 conflict fact 的整批拒绝；业务冲突成功发布，manifest partial + business_conflict_rows/原因分布，reader partial 可读 | receipt_before_signed / stage_regression / time_order_conflict / payload conflict 均发布成功且切新 latest；重复稳定键、回读失败、分页失败仍保留旧 latest |
+
+验证：完整依赖 **479 passed / 26 subtests**；最小依赖 **420 passed / 59 skipped / 24
+subtests**。未创建真实 PO、未写 EN/通途业务数据、未合并 main、未部署生产。
+
 ## 3. 更早的问答（归档）
 
 | 日期 | 内容 | 文档 |

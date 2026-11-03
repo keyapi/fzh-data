@@ -20,6 +20,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, localcontext
 from pathlib import Path
+from collections import Counter
 
 from supply_chain_visibility.full_supply_facts import (
     IMPLEMENTATION_VERSION as FULL_IMPLEMENTATION,
@@ -40,7 +41,7 @@ from supply_chain_visibility.supply_position import (
     position_table,
 )
 
-PUBLICATION_SCHEMA = "supply-publication/v5"
+PUBLICATION_SCHEMA = "supply-publication/v6"
 TARGET_SUMMARY_SCHEMA = "supply-target-summary/v1"
 FULL_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
             "market", "product_form")
@@ -65,6 +66,10 @@ FULL_BOOL_COLUMNS = ("forecast_connected", "netting_ready", "auto_order",
 FULL_INT_COLUMNS = ("inventory_date_age_days",)
 
 TARGET_KEY = FULL_KEY
+BUSINESS_CONFLICT_REASONS = (
+    "source_payload_conflict", "receipt_before_signed",
+    "time_order_conflict", "stage_regression",
+    "same_stage_quantity_conflict")
 STAGE_KEY = ("item_code", "uom", "warehouse", "purpose", "tt_sku", "branch",
              "stage", "stage_fact_id")
 STAGE_STRING_COLUMNS = (
@@ -73,6 +78,8 @@ STAGE_STRING_COLUMNS = (
     "doc_type", "doc_name", "doc_line", "batch_id",
     "stage_fact_id", "physical_lineage_id", "lineage_status", "payload_hash",
     "inclusion_proof", "qty_status", "confidence",
+    "stage_measured_qty", "same_stage_reconciliation_status",
+    "inventory_freshness", "attribution_status",
     "counted_reason", "observed_at_raw", "observed_at_time_status",
     "eta_raw", "eta_time_status", "available_at_raw",
     "available_at_time_status", "signed_at_raw", "signed_at_time_status",
@@ -87,7 +94,8 @@ STAGE_JSON_LIST_COLUMNS = ("cg_blocking_reasons", "unknown_reasons",
                            "payload_candidates")
 STAGE_JSON_DICT_COLUMNS = ("source_identity", "fact_identity")
 STAGE_BOOL_COLUMNS = ("counted_as_supply", "cg_stale", "cg_eligible",
-                      "payload_conflict")
+                      "payload_conflict", "evidence_only",
+                      "inventory_time_proven")
 
 POSITION_STRING_COLUMNS = ("item_code", "tt_sku", "warehouse", "purpose", "uom",
                            "as_of", "mapping_version", "inventory_inclusion_status",
@@ -624,6 +632,21 @@ def source_freshness(inputs, *, as_of, max_age_seconds):
     return {"status": overall, "sources": sources}
 
 
+def _business_conflict_stats(stage_rows):
+    """Count published conflict facts; these make the run partial, not failed."""
+    rows = 0
+    reasons = Counter()
+    for row in stage_rows:
+        found = {reason for reason in (row.get("conflicts") or ())
+                 if reason in BUSINESS_CONFLICT_REASONS}
+        if row.get("payload_conflict"):
+            found.add("source_payload_conflict")
+        if found:
+            rows += 1
+            reasons.update(found)
+    return rows, dict(sorted(reasons.items()))
+
+
 def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
                    position_result, position_rows, timeline_rows,
                    files, freshness, rerun_argv, rerun_template,
@@ -688,9 +711,13 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
     partial_reasons = sorted({
         reason for item in inputs or ()
         for reason in (item.get("partial_reason") or [])})
+    business_conflict_rows, business_conflict_reasons = (
+        _business_conflict_stats(stage_rows))
+    if business_conflict_rows:
+        partial_reasons = sorted(set(partial_reasons) | {"business_conflict"})
     partial = bool(full_summary.get("unknown_rows")) or bool(failed_inputs) \
         or bool(closure_missing) or bool(version_unknown) \
-        or bool(contract_incomplete)
+        or bool(contract_incomplete) or bool(business_conflict_rows)
     position_unknown_rows = sum(
         1 for row in position_rows
         if row.get("unknown_quantity_lines")
@@ -721,6 +748,8 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
         "rows": len(stage_rows),
         "stage_summary": full_result.get("stage_summary"),
         "stage_freshness": full_result.get("stage_freshness"),
+        "business_conflict_rows": business_conflict_rows,
+        "business_conflict_reasons": business_conflict_reasons,
         "failed_inputs": failed_inputs,
     }
     datasets = {
@@ -896,6 +925,8 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
         "auto_order": False,
         "publish_status": "succeeded",
         "partial_reason": partial_reasons,
+        "business_conflict_rows": business_conflict_rows,
+        "business_conflict_reasons": business_conflict_reasons,
         "max_age_seconds": max_age_seconds,
         "inputs": inputs,
         "input_summary": {
@@ -921,6 +952,8 @@ def build_manifest(*, run_id, run_dir, pipeline_as_of, inputs, full_result,
             "timeline_rows": len(timeline_rows),
             "stage_summary": full_result.get("stage_summary"),
             "stage_unique_key": list(STAGE_KEY),
+            "business_conflict_rows": business_conflict_rows,
+            "business_conflict_reasons": business_conflict_reasons,
             "by_purpose": full_summary.get("by_purpose"),
             "by_coverage": full_summary.get("by_coverage"),
             "attribution_distribution": full_summary.get("attribution_distribution"),
@@ -1001,20 +1034,6 @@ def publish(out, *, full_result, position_result, inputs, pipeline_as_of,
         timeline_rows = _json_copy((full_result.get("timeline") or {}).get("rows") or [])
         _assert_unique(stage_rows, STAGE_KEY, "duplicate stage fact key")
         _assert_unique(target_rows, FULL_KEY, "duplicate target summary key")
-        blocking = {"source_payload_conflict", "receipt_before_signed",
-                    "time_order_conflict", "stage_regression"}
-        blocked = [row for row in stage_rows
-                   if row.get("payload_conflict")
-                   or blocking.intersection(row.get("conflicts") or ())]
-        if blocked:
-            raise CorruptedPublication(
-                "stage conflict blocks publication: "
-                + ",".join(sorted({reason for row in blocked
-                                   for reason in (row.get("conflicts") or ())
-                                   if reason in blocking}
-                                  | {"source_payload_conflict"
-                                     if any(row.get("payload_conflict")
-                                            for row in blocked) else ""})))
         _assert_unique(position_rows, POSITION_KEY, "duplicate position target key")
         _assert_unique(timeline_rows, FULL_KEY, "duplicate timeline target key")
         files = {}
@@ -1267,8 +1286,17 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
         refresh_status = ("failed_using_previous"
                           if last_attempt.get("status") == "failed" else "succeeded")
         partial = bool((manifest.get("output_summary") or {}).get("partial"))
+        business_conflict_rows = (
+            (manifest.get("output_summary") or {}).get("business_conflict_rows")
+            or manifest.get("business_conflict_rows") or 0)
+        business_conflict_reasons = (
+            (manifest.get("output_summary") or {})
+            .get("business_conflict_reasons")
+            or manifest.get("business_conflict_reasons") or {})
         if partial:
             warnings.append("manifest_partial")
+        if business_conflict_rows:
+            warnings.append("business_conflicts:%s" % business_conflict_rows)
         if stale_sources or unknown_sources or row_issues:
             # Unknown/naive/date-only source time is never treated as fresh.
             status = "stale"
@@ -1278,7 +1306,7 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
             status = "refresh_failed_using_previous"
         else:
             status = "healthy"
-        readable = (status == "healthy" or
+        readable = (status in ("healthy", "partial") or
                     (allow_stale and status in ("stale", "partial",
                                                 "refresh_failed_using_previous")))
         if not readable:
@@ -1301,6 +1329,8 @@ def read_publication(out, *, as_of, max_age_seconds, allow_stale=False):
                 "partial_reason": (manifest.get("partial_reason")
                                    or (manifest.get("output_summary") or {})
                                    .get("partial_reason") or []),
+                "business_conflict_rows": business_conflict_rows,
+                "business_conflict_reasons": business_conflict_reasons,
                 "full_chain_ready": False,
                 "forecast_connected": False,
                 "netting_ready": False,

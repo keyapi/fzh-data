@@ -66,7 +66,8 @@ def receipt(**over):
 def inventory(**over):
     row = {**BASE, "source_ref": "ST-1", "snapshot_id": "S1",
            "batch_id": "B1", "qty": 5, "as_of": AS_OF,
-           "source_status": "known"}
+           "source_status": "known", "inventory_time_status": "known",
+           "inventory_time_proven": True, "inventory_freshness": "fresh"}
     row.update(over)
     return row
 
@@ -205,15 +206,17 @@ class ReceiptInventoryOverlapTests(unittest.TestCase):
         self.assertTrue(received["counted_as_supply"])
         self.assertFalse(on_hand["counted_as_supply"])
 
-    def test_unknown_inventory_time_keeps_on_hand_and_flags_unknown(self):
+    def test_unknown_inventory_time_does_not_supersede_receipt(self):
         full = self._full(None)
         received = stage_rows(full, "received")[0]
         on_hand = stage_rows(full, "on_hand")[0]
         self.assertEqual(received["inventory_inclusion_status"], "unknown")
-        self.assertFalse(received["counted_as_supply"])
+        self.assertTrue(received["counted_as_supply"])
         self.assertIn("inventory_inclusion_unknown",
                       received["unknown_reasons"])
-        self.assertTrue(on_hand["counted_as_supply"])
+        self.assertFalse(on_hand["counted_as_supply"])
+        self.assertIn("on_hand_not_current", on_hand["unknown_reasons"])
+        self.assertEqual(on_hand["inventory_inclusion_status"], "unknown")
 
 
 class TimeSeparationTests(unittest.TestCase):
@@ -545,14 +548,131 @@ class ReviewIdentityAndInclusionTests(unittest.TestCase):
         full = build_full_supply_facts({"rows": []}, production=[
             production(source_ref="WO-1", batch_id="B1", qty=3,
                        evidence_status="proven"),
-            production(source_ref="WO-2", batch_id="B1", qty=4,
+            production(source_ref="WO-2", batch_id="B2", qty=4,
                        evidence_status="estimated")])
-        facts = stage_rows(full, "waiting_shipment", "B1")
-        self.assertEqual(len(facts), 2)
-        counted = [fact for fact in facts if fact["counted_as_supply"]]
+        counted = [fact for fact in stage_rows(full, "waiting_shipment")
+                   if fact["counted_as_supply"]]
         self.assertEqual(len(counted), 1)
+        self.assertEqual(counted[0]["batch_id"], "B1")
         self.assertEqual(counted[0]["qty"], "3")
         self.assertEqual(counted[0]["confidence"], "proven")
+
+
+class ReviewSameStageAndOnHandTests(unittest.TestCase):
+    def test_duplicate_in_transit_chains_count_once(self):
+        full = build_full_supply_facts(
+            {"rows": []},
+            transit=[transit(batch_id="B1", qty=5)],
+            receipts=[receipt(batch_id="B1", qty=5,
+                              signed_at="2026-11-01T00:00:00+00:00",
+                              received_at=None)])
+        facts = stage_rows(full, "in_transit", "B1")
+        self.assertEqual(len(facts), 2)
+        self.assertEqual({fact["same_stage_reconciliation_status"]
+                          for fact in facts}, {"duplicate_evidence"})
+        self.assertEqual(sum(1 for fact in facts if fact["evidence_only"]), 1)
+        self.assertEqual(
+            full["stage_summary"]["counted_qty_by_stage"],
+            {"in_transit": "5"})
+
+    def test_duplicate_chain_across_targets_counts_once(self):
+        full = build_full_supply_facts({"rows": []}, transit=[
+            transit(batch_id="B1", warehouse="WH-1", qty=5,
+                    delivery_note="DN-1", waybill="W1"),
+            transit(batch_id="B1", warehouse="WH-2", qty=5,
+                    delivery_note="DN-2", waybill="W2")])
+        facts = stage_rows(full, "in_transit", "B1")
+        self.assertEqual(len(facts), 2)
+        self.assertEqual(sum(1 for fact in facts if fact["evidence_only"]), 1)
+        self.assertEqual(
+            full["stage_summary"]["counted_qty_by_stage"],
+            {"in_transit": "5"})
+
+    def test_same_stage_different_quantity_without_allocation_conflicts(self):
+        full = build_full_supply_facts(
+            {"rows": []},
+            transit=[transit(batch_id="B1", qty=5)],
+            receipts=[receipt(batch_id="B1", qty=6,
+                              signed_at="2026-11-01T00:00:00+00:00",
+                              received_at=None)])
+        facts = stage_rows(full, "in_transit", "B1")
+        self.assertTrue(all("same_stage_quantity_conflict" in fact["conflicts"]
+                            for fact in facts))
+        self.assertTrue(all(fact["same_stage_reconciliation_status"]
+                            == "quantity_conflict" for fact in facts))
+        self.assertFalse(any(fact["counted_as_supply"] for fact in facts))
+        self.assertEqual(full["stage_summary"]["counted_qty_by_stage"], {})
+
+    def test_valid_allocation_sums_within_same_stage(self):
+        full = build_full_supply_facts({"rows": []}, production=[
+            production(source_ref="WO-1", batch_id="B1", qty=2,
+                       allocation_id="AL-1", allocated_qty=2,
+                       source_qty=5),
+            production(source_ref="WO-1", batch_id="B1", qty=3,
+                       allocation_id="AL-2", allocated_qty=3,
+                       source_qty=5)])
+        facts = stage_rows(full, "waiting_shipment", "B1")
+        self.assertEqual(len(facts), 2)
+        self.assertEqual({fact["same_stage_reconciliation_status"]
+                          for fact in facts}, {"allocated_sum"})
+        self.assertEqual({fact["stage_measured_qty"] for fact in facts},
+                         {"5"})
+        self.assertTrue(all(fact["counted_as_supply"] for fact in facts))
+        self.assertEqual(
+            full["stage_summary"]["counted_qty_by_stage"],
+            {"waiting_shipment": "5"})
+
+    def test_missing_on_hand_time_does_not_supersede_receipt(self):
+        full = build_full_supply_facts(
+            {"rows": []},
+            receipts=[receipt(batch_id="B1", qty=5,
+                              signed_at="2026-10-31T00:00:00+00:00",
+                              received_at="2026-11-01T00:00:00+00:00")],
+            inventory=[inventory(batch_id="B1", qty=5, as_of=None,
+                                 inventory_time_status="missing",
+                                 inventory_time_proven=False,
+                                 inventory_freshness="unknown_time")])
+        received = stage_rows(full, "received", "B1")[0]
+        on_hand = stage_rows(full, "on_hand", "B1")[0]
+        self.assertTrue(received["counted_as_supply"])
+        self.assertFalse(on_hand["counted_as_supply"])
+        self.assertIn("on_hand_not_current", on_hand["unknown_reasons"])
+        self.assertEqual(on_hand["inventory_inclusion_status"], "unknown")
+
+    def test_unusable_on_hand_time_never_supersedes_receipt(self):
+        cases = {
+            "stale": {
+                "as_of": "2026-10-01T00:00:00+00:00",
+                "inventory_freshness": "stale"},
+            "future": {
+                "as_of": "2026-12-01T00:00:00+00:00",
+                "inventory_freshness": "future"},
+            "date_only": {
+                "as_of": "2026-11-01",
+                "inventory_freshness": "unknown_time",
+                "inventory_time_status": "date_only",
+                "inventory_time_proven": False},
+            "naive": {
+                "as_of": "2026-11-01T00:00:00",
+                "inventory_freshness": "unknown_time",
+                "inventory_time_status": "naive",
+                "inventory_time_proven": False},
+        }
+        for name, over in cases.items():
+            with self.subTest(case=name):
+                full = build_full_supply_facts(
+                    {"rows": []},
+                    receipts=[receipt(
+                        batch_id="B1", qty=5,
+                        signed_at="2026-10-31T00:00:00+00:00",
+                        received_at="2026-11-01T00:00:00+00:00")],
+                    inventory=[inventory(batch_id="B1", qty=5, **over)])
+                received = stage_rows(full, "received", "B1")[0]
+                on_hand = stage_rows(full, "on_hand", "B1")[0]
+                self.assertTrue(received["counted_as_supply"], name)
+                self.assertFalse(on_hand["counted_as_supply"], name)
+                self.assertEqual(
+                    on_hand["inventory_inclusion_status"], "unknown", name)
 
 
 class ReviewStableKeyTests(unittest.TestCase):
@@ -597,7 +717,7 @@ class ReviewStableKeyTests(unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec("pyarrow"),
                          "requires pyarrow")
-    def test_payload_conflict_does_not_switch_latest(self):
+    def test_payload_conflict_publishes_as_partial(self):
         pos, valid = StagePublicationTests._full()
         conflict = build_full_supply_facts({"rows": []}, production=[
             production(source_ref="WO-1", batch_id="B1", qty=3),
@@ -606,15 +726,27 @@ class ReviewStableKeyTests(unittest.TestCase):
             publish(tmp, full_result=valid, position_result=pos,
                     inputs=[], pipeline_as_of=AS_OF)
             before = (Path(tmp) / "latest.json").read_text(encoding="utf-8")
-            with self.assertRaises(CorruptedPublication):
-                publish(tmp, full_result=conflict, position_result=pos,
-                        inputs=[], pipeline_as_of=AS_OF)
-            self.assertEqual((Path(tmp) / "latest.json").read_text(
-                encoding="utf-8"), before)
+            published = publish(tmp, full_result=conflict, position_result=pos,
+                                inputs=[], pipeline_as_of=AS_OF)
+            self.assertEqual(published["status"], "ok")
+            after = (Path(tmp) / "latest.json").read_text(encoding="utf-8")
+            self.assertNotEqual(after, before)
+            manifest = published["manifest"]
+            self.assertTrue(manifest["output_summary"]["partial"])
+            self.assertEqual(
+                manifest["output_summary"]["business_conflict_rows"], 1)
+            self.assertIn("source_payload_conflict",
+                          manifest["output_summary"]
+                          ["business_conflict_reasons"])
+            state = read_publication(tmp, as_of=AS_OF,
+                                     max_age_seconds=900)
+            self.assertEqual(state["status"], "partial")
+            self.assertTrue(state["readable"])
+            self.assertEqual(state["business_conflict_rows"], 1)
 
     @unittest.skipUnless(importlib.util.find_spec("pyarrow"),
                          "requires pyarrow")
-    def test_receipt_time_conflict_does_not_switch_latest(self):
+    def test_receipt_conflict_publishes_as_partial(self):
         pos, valid = StagePublicationTests._full()
         conflict = build_full_supply_facts({"rows": []}, receipts=[receipt(
             signed_at="2026-08-11T00:00:00+00:00",
@@ -623,11 +755,62 @@ class ReviewStableKeyTests(unittest.TestCase):
             publish(tmp, full_result=valid, position_result=pos,
                     inputs=[], pipeline_as_of=AS_OF)
             before = (Path(tmp) / "latest.json").read_text(encoding="utf-8")
-            with self.assertRaises(CorruptedPublication):
-                publish(tmp, full_result=conflict, position_result=pos,
+            published = publish(tmp, full_result=conflict, position_result=pos,
+                                inputs=[], pipeline_as_of=AS_OF)
+            after = (Path(tmp) / "latest.json").read_text(encoding="utf-8")
+            self.assertNotEqual(after, before)
+            self.assertTrue(
+                published["manifest"]["output_summary"]["partial"])
+            self.assertIn("receipt_before_signed",
+                          published["manifest"]["output_summary"]
+                          ["business_conflict_reasons"])
+            state = read_publication(tmp, as_of=AS_OF,
+                                     max_age_seconds=900)
+            self.assertEqual(state["status"], "partial")
+            self.assertTrue(state["readable"])
+            self.assertIn("business_conflicts:1", state["warnings"])
+
+    @unittest.skipUnless(importlib.util.find_spec("pyarrow"),
+                         "requires pyarrow")
+    def test_stage_regression_and_time_order_publish_as_partial(self):
+        pos = StagePublicationTests._full()[0]
+        cases = {
+            "stage_regression": build_full_supply_facts(
+                {"rows": []},
+                production=[production(
+                    batch_id="B1", qty=5,
+                    actual_at="2026-11-05T00:00:00+00:00")],
+                receipts=[receipt(
+                    batch_id="B1", qty=5,
+                    signed_at="2026-11-01T00:00:00+00:00",
+                    received_at=None)]),
+            "time_order_conflict": build_full_supply_facts(
+                {"rows": []}, receipts=[
+                    receipt(source_ref="RC-A", receipt_id="RC-A",
+                            batch_id="B1", qty=5,
+                            signed_at="2026-10-31T00:00:00+00:00",
+                            received_at="2026-11-01T00:00:00+00:00"),
+                    receipt(source_ref="RC-B", receipt_id="RC-B",
+                            batch_id="B1", qty=5,
+                            signed_at="2026-11-05T00:00:00+00:00",
+                            received_at=None)]),
+        }
+        for reason, full in cases.items():
+            with self.subTest(reason=reason):
+                with tempfile.TemporaryDirectory() as tmp:
+                    published = publish(
+                        tmp, full_result=full, position_result=pos,
                         inputs=[], pipeline_as_of=AS_OF)
-            self.assertEqual((Path(tmp) / "latest.json").read_text(
-                encoding="utf-8"), before)
+                    manifest = published["manifest"]
+                    self.assertTrue(manifest["output_summary"]["partial"])
+                    self.assertIn(reason, manifest["output_summary"]
+                                  ["business_conflict_reasons"])
+                    state = read_publication(tmp, as_of=AS_OF,
+                                             max_age_seconds=900)
+                    self.assertEqual(state["status"], "partial")
+                    self.assertTrue(state["readable"])
+                    self.assertGreaterEqual(
+                        state["business_conflict_rows"], 1)
 
 
 class ReviewPublicationContractTests(unittest.TestCase):
@@ -648,7 +831,9 @@ class ReviewPublicationContractTests(unittest.TestCase):
             fields = {"fact_identity", "physical_lineage_id",
                       "lineage_status", "payload_hash",
                       "payload_conflict", "payload_hashes",
-                      "payload_candidates"}
+                      "payload_candidates", "stage_measured_qty",
+                      "evidence_only", "same_stage_reconciliation_status",
+                      "inventory_freshness", "inventory_time_proven"}
             self.assertTrue(fields.issubset(stage[0]))
             from supply_chain_visibility.publication import _stage_from_parquet
             import pyarrow.parquet as pq

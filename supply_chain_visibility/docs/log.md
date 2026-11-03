@@ -7,6 +7,18 @@ title: supply_chain_visibility 变更日志
 # 变更日志
 
 ## 2026-11-03
+- D6 第二次复审（同 lineage 同阶段防重复 / on_hand 门槛 / 业务冲突 partial）：按
+  `physical_lineage_id×stage` 核账，同量多链路只计一次（`evidence_only`）、异量无
+  allocation → `same_stage_quantity_conflict` 全部不计、合法 allocation 才可相加；
+  新增 `stage_measured_qty/evidence_only/same_stage_reconciliation_status`，`counted_qty_by_stage`
+  使用核账后物理量。on_hand 成为当前阶段必须有意 aware 时间、proven、fresh、owner/UOM/
+  lineage/库存资格；missing/naive/date-only/stale/future 不得覆盖 received/in_transit。
+  业务冲突作为 conflict fact 成功发布，`manifest.partial=true` 并记录
+  `business_conflict_rows`/原因分布，reader partial 默认可读；删除 publish 对业务冲突的
+  整批拒绝，仅分页/采集失败、版本不兼容、重复稳定键、输入/SHA/manifest 损坏、写盘/回读
+  失败保留旧 latest。版本 `full-supply-facts/v7`、RULE/IMPL `2026-11-03.3`、
+  `supply-publication/v6`、`supply-pipeline/v5`、`abc-frozen/v4`。完整依赖 479 passed /
+  26 subtests；最小依赖 420 passed / 59 skipped。
 - D6 复审整改（P0-1/P0-2/P0-3/P0-4/P1-5）：`fact_identity` 与 `physical_lineage_id` 分离，WO/DN/Shipment/receipt 名称只证明事实身份，适配层不再把单据名写成 `batch_id`；库存包含只认同线 lineage 或显式证明；`received_at<signed_at` → `receipt_before_signed`；received 早于 in_transit actual → `time_order_conflict`；waiting actual 晚于 in_transit/received actual → `stage_regression`；`observed_at` 只用于新鲜度、actual 优先于 expected；`stage_fact_id` 只由稳定事实身份生成，数量/时间/状态进 `payload_hash`，同键异载荷 `payload_conflict` 且拒绝发布。生产适配层新增 `actual_at`（completed_at）。真实样例 `ZMT26071090`（signed 2026-08-11 / 入库 2026-07-10）作为负向冲突样本，不计供应；完整正向链仍 not_found。版本 `full-supply-facts/v6`、RULE/IMPL `2026-11-03.2`、`supply-publication/v5`、`supply-pipeline/v5`、`abc-frozen/v4`。473 passed / 20 subtests（PyArrow+openpyxl）；最小依赖 414 passed / 58 skipped。
 - D6 阶段明细消费契约：`full_supply_facts.parquet` 改为 item×uom×warehouse×purpose×tt_sku×branch×stage×doc_line/batch_id 粒度，新增 doc_type/doc_name/doc_line/batch_id/source_identity/stage_fact_id；原目标汇总迁为独立兼容数据集 `supply_target_summary`。阶段收敛为 open_po/waiting_shipment/in_transit/received/on_hand，open_po 仅核账；signed 未通途入库归 in_transit（signed_at）；received 只认通途入库时间；同一物理批次只允许一个 counted_as_supply 当前阶段。observed_at/eta/available_at/signed_at/received_at 严格分离，naive/date-only 不假定 UTC。purpose 支持 branch/fba/cg，新增 owner_status/cg_stale/cg_eligible/cg_blocking_reasons，stale CG 不抵扣。发布/reader 同时校验阶段主数据集与目标汇总；manifest 增加阶段唯一键与 stage/unknown/conflict/overlap/CG 统计。版本 `full-supply-facts/v6`、RULE/IMPL `2026-11-03.2`、`supply-publication/v5`、`supply-pipeline/v5`、`abc-frozen/v4`。真实 PO→waiting→in_transit→signed→receipt 完整样例：本地/测试站只读数据 **not_found**（仅有 signed+入库日期片段，无 PO）；真实 A/B/C/POD 仍 pending。
 

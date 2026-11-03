@@ -138,7 +138,7 @@ class RefreshBoundaryTests(unittest.TestCase):
                 encoding="utf-8"))
             self.assertEqual(manifest["collection"]["supply_snapshot_id"],
                              "SUPPLY-EMPTY")
-            self.assertEqual(manifest["schema_version"], "supply-publication/v5")
+            self.assertEqual(manifest["schema_version"], "supply-publication/v6")
 
 
 if __name__ == "__main__":
