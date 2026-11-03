@@ -57,11 +57,13 @@ DATA_DIR = PROJECT_ROOT / "EN_API" / "out"
 ENV_URLS = {"test": "https://ensh.vilavi.cn", "prod": "https://erpnext.vilavi.cn"}
 
 # .env 候选: worktree 优先, 再退回主仓库 (worktree 里没有 .env)
-DEFAULT_ENV_FILES = (
-    PROJECT_ROOT / "EN_API" / ".env",
-    PROJECT_ROOT / ".env",
-    PROJECT_ROOT.parent / "EN_API" / ".env",
-    PROJECT_ROOT.parents[2] / "EN_API" / ".env",
+DEFAULT_ENV_FILES = tuple(
+    path for path in (
+        PROJECT_ROOT / "EN_API" / ".env",
+        PROJECT_ROOT / ".env",
+        PROJECT_ROOT.parent / "EN_API" / ".env",
+        PROJECT_ROOT.parents[2] / "EN_API" / ".env" if len(PROJECT_ROOT.parents) > 2 else None,
+    ) if path is not None
 )
 
 IN_CHUNK = 40             # in 过滤分块大小 (约束 4)

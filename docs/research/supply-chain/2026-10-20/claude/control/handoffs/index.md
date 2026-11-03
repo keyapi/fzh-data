@@ -11,6 +11,7 @@ date: 2026-10-23
 
 | 文档 | 给谁 | 内容 |
 |---|---|---|
+| [2026-10-26-codex-native-report-handoff](2026-10-26-codex-native-report-handoff.md) | Jack | 原生报表测试实现、75 项验证、PO 入库时间字段与防重复/防漏计后续任务 |
 | [**JACK_ENTRY**](JACK_ENTRY.md) | Jack | **唯一入口**：固定必读 4 个、硬规则、提问/答复协议、当前状态 |
 | [**JACK_QA**](JACK_QA.md) | Jack | **唯一问答日志**：当前有效结论速查 + 轮次记录 + 更正 |
 | [2026-10-26-merge-readiness](2026-10-26-merge-readiness.md) | 审核/合并会话 | W1 合并顺序、检查项、业务确认、禁止项 |

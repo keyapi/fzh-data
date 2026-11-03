@@ -24,6 +24,14 @@
 - `EN_API/fulfillment_query.py` + `EN_API/fulfillment/` —— 给通途 SKU 追「SO→PP→WO→JC→DN」，多输入/阶段/齐套/异常，**JSON 为权威输出**。
 - `EN_API/item_shipment_status.py` —— 单物料引擎（含 fixture 断言 + 单测，**不要整体搬迁**）。
 - `EN_API/docs/reference/en-order-to-shipment-chain.md` —— 链路导航。
+- `supply_chain_visibility/supply_position.py` —— 第二批 supply_position 消费表（创建清单×PO 状态，完成只关 included、部分不分摊、legacy 不伪造、快照防双计、A/B/C/D 构件）。
+- `supply_chain_visibility/po_status_refresh.py` —— PO 状态批量刷新（去重、10/批、断点、未查询显式）。
+- `supply_chain_visibility/abc_inputs.py` —— 本地冻结 A/B/C 归因：A 目标集合、B 身份权威、C 库存观测；缺维度 null/unknown、CG 池不复制、版本关系显式。
+- `supply_chain_visibility/publication.py` —— 统一发布/读取：`full_supply_facts.parquet`（主）+ JSON（追溯）+ `supply_position`（独立 schema）+ `timeline` + manifest/latest；回读/SHA/schema/唯一键校验，失败不切换。
+- `supply_chain_visibility/supply_snapshot_refresh.py` —— 正式只读刷新入口：先校验 ABC/权威 scope，再分页采集 EN、校验稳定快照与权限，成功后才原子发布；失败保留旧 latest。
+- `supply_chain_visibility/abc_datasets.py` —— A/B/C 版本化 JSON/Parquet 接口，严格字段、有限数、行数、SHA 与 B→C 依赖校验；Excel 仅作冻结回归适配。
+- `supply_chain_visibility/supply_pipeline.py` —— 可执行离线链路：保存 API + 可选 A/B/C→创建清单→PO 状态→#323 消费器→full_supply_facts v8/Timeline→Parquet/JSON 统一 manifest（失败保留旧版，`--inspect` 只读查看，`--replay-run` 冻结复跑）。
+- `supply_chain_visibility/full_supply_facts.py` —— full-supply-facts/v8：阶段明细主数据集（open_po/waiting_shipment/in_transit/received/on_hand，doc_line/batch_id 粒度，单批一当前阶段）+ 兼容目标汇总 `supply_target_summary`；观察/归属/当前可用/下单四层、C join_full 资格、时间五字段分离、事实身份/物理批次/目标归属分层（fact_identity/physical_lineage_id/payload_hash）、库存只认同线包含、阶段单调与时间冲突、同 lineage 同阶段物理量核账（evidence_only/quantity conflict/allocation sum）、on_hand 时间与新鲜度门槛、CG/stale 显式、重复键拒收、业务冲突 partial 发布、跨层不求和（预测未接）。
 
 ## 关键事实（先读，避免重复踩坑）
 

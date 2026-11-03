@@ -1,0 +1,15 @@
+{
+  "source": "origin/pr-312 / docs/research/supply-chain/2026-10-20/claude/experiments/supply_timeline/config/sample_skus.json",
+  "version": "jack_w1_sample9_2026-10-26",
+  "slots": [
+    {"slot": "S1_urgent", "sku": "TT0031038K0062927", "items": [{"item_code": "KS0156-NYBDSFH-52x52x5-BLACK"}]},
+    {"slot": "S2_overlap_1", "sku": "C/Linen-Natural-100-688-wow", "items": [{"item_code": "PK#KS0001-XMMBS-100-HEMPNATURAL"}]},
+    {"slot": "S2_overlap_2", "sku": "TT0312701K0064561", "items": [{"item_code": "ZTGJ5525-SOFALSHAPEDBRACKET-IRON-55x45x45"}]},
+    {"slot": "S3_in_production", "sku": "CENCord995-DKGrey-97", "items": [{"item_code": "PK#KS0001-QDKTR-100-DEEPGREY"}]},
+    {"slot": "S5_po_eta_uncertain", "sku": "C/Cord-White-100-706-wow", "items": [{"item_code": "PK#KS0001-CMKTR-100-WHITE"}]},
+    {"slot": "S6_zero_stock_1", "sku": "C/Velvet-White-100-664-wow", "items": [{"item_code": "PK#KS0001-PR-100-WHITE"}]},
+    {"slot": "S6_zero_stock_2", "sku": "TT0031010K0062880", "items": [{"item_code": "KS0121-KQC-194-WHITE"}]},
+    {"slot": "S7_in_stock_sufficient", "sku": "CEN1607NLinen-Ivory-194", "items": [{"item_code": "PK#KS0001-DM-194-IVORY"}]},
+    {"slot": "S8_in_stock_short", "sku": "CENKZ1323-LTGrey-97", "items": [{"item_code": "PK#KS0001-DM-100-GREY"}]}
+  ]
+}

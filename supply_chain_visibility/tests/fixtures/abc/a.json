@@ -1,0 +1,30 @@
+{
+  "schema_version": "abc-datasets/v1",
+  "dataset_version": "Av1",
+  "source": "synthetic",
+  "observed_at": "2026-11-02T00:00:00+00:00",
+  "as_of": "2026-11-02",
+  "row_count": 3,
+  "sha256": "5b5fb8c3d667b452d6801c10a9205d9bf66d56217049713ee8df82718a66b84c",
+  "dependency_versions": {},
+  "rows": [
+    {
+      "item_code": "ITEM-1",
+      "active": true,
+      "role": "finished",
+      "inclusion_reason": "active"
+    },
+    {
+      "item_code": "ITEM-2",
+      "active": false,
+      "role": "finished",
+      "inclusion_reason": "inactive"
+    },
+    {
+      "item_code": "ITEM-3",
+      "active": true,
+      "role": "finished",
+      "inclusion_reason": "active_without_bc"
+    }
+  ]
+}

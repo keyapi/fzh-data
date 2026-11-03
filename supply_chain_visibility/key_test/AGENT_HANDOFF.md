@@ -24,6 +24,8 @@
 
 ## 2. 状态
 
+> 本节以下为 2026-10-13 早期验证记录；既有功能已经生产发布，详见 §13–14。2026-10-26 新增过滤/权限与供应查询仍走 feature 分支测试，尚未生产发布。
+
 - ✅ **测试机（`上海测试-阿里云-FZH-ERPNext-frappe`，站点 `erpnext.vilavi.cn`）已部署并验证（2026-10-13）**：
   - `so_chain.py` 语法 OK；`sales_order.js` 190→250 行；备份 `/tmp/sales_order.js.bak_*`。
   - `bench --site erpnext.vilavi.cn clear-cache`。
@@ -32,7 +34,9 @@
   - **JS 挂载验证**：`GET /api/method/frappe.desk.form.load.getdoctype?doctype=Sales Order`
     → `__js` 含 `so-chain-summary` 与 `so_chain.get_so_chain` ✅。
   - ⏳ **浏览器视觉未验证**（需登录 desk）；建议人工开一张 Sales Order 确认区块渲染。
-- ⏳ **生产（`阿里云-FZH-ERPNext-frappe`）未部署**。
+- ✅ **既有版本生产已部署**：见 §13 的发布记录与 §14 的后续修复；新增 feature 功能单独验收。
+- ✅ **2026-10-27 生产同步 `c34fa53`（PR #2）**：`pull --ff-only` → `bench migrate` → `clear-cache` → `bench restart`；
+  Report 记录/冒烟通过；详见 `JACK_QA.md` 的 `P0-PROD-DEPLOY-2026-10-27`。
 
 ## 3. 部署到生产（需确认后执行）
 
@@ -68,7 +72,9 @@ ssh $H "cd /home/frappe/frappe-bench && sudo -n -u frappe bench --site erpnext.v
 ### 状态
 - ✅ **测试机已部署并验证（2026-10-13）**：`query_report.run` 返回 **10 列 / 107 行 / KPI / 柱图**（耗时 0.10s）。
   文件已搬到正确路径；`bench restart` 后生效。
-- ⏳ 生产未部署。
+- ✅ 既有版本生产已部署（见 §13）；新增 feature 功能不随本状态自动获发布许可。
+- ✅ **2026-10-27 已按用户授权同步 `c34fa53`**：`bench migrate` + `clear-cache` + `bench restart`；
+  `Supply Timeline` / `SO Chain Overview` 记录存在，REST 冒烟通过。
 
 ### 生产部署补丁（Stage 2）
 ```bash
@@ -210,3 +216,13 @@ SAP Fiori Tree Table https://help.sap.com/docs/ABAP_PLATFORM_NEW/468a97775123488
 - **部署前先 `git status` 干净 + 用真·原始基线**（`/tmp/sales_order.js.bak_20261013_112137`，190 行、不含 `SO_CHAIN_DEF_COLS`）；或直接用整份文件部署，别「基线+追加」累计。
 - **部署后必须验证服务端真值**：`getdoctype?doctype=Sales Order` 的 `__js` 是否含新代码、且无重复声明；再看浏览器 **console 无 error**。
 - **先在测试机验证无误，再动生产**（用户明确要求）。
+
+
+## 2026-10-26 复审后的库存证据字段
+
+Supply Timeline 的 qty_status 仅描述 qty；原始数量状态在 evidence_qty_status，未上报与仓库范围未知使用各自 source_layer。当前仍只读取库存证据，所有 B 资格为 false；无实时通途 API 调用，也不接入本仓库纯函数供给汇总。app 与扁平副本同时提交，测试站以已提交版本核对；生产不发布。本轮完整修复和测试记录见 JACK_QA 的 P0-REVIEW-FIX-2026-10-26。
+
+
+## 2026-10-27 测试部署已完成
+
+用户已授权同步测试系统：key_test 测试分支 Git HEAD 为 c34fa53，两个报表功能 .py 与提交一致、工作区干净。测试机已通过定向 sudo 权限执行完整路径 `/usr/local/bin/bench restart` 和 clear-cache。服务器标准库 unittest 的 41 项测试通过，真实 REST 验证 evidence_qty_status、qty_status 与缺失来源均已生效；报表页面 HTTP 200。生产未更新，PR 保持 draft。备份与回滚凭据路径、聚合验收记录见 JACK_QA 的 P0-TEST-DEPLOY-2026-10-27。

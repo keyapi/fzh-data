@@ -7,6 +7,13 @@ date: 2026-10-23
 
 # 控制面变更
 
+## 2026-10-27
+- 测试系统同步 c34fa53 并完成服务重启、41 项测试与实际 REST 字段/缺失来源验证；追加 JACK_QA 的 P0-TEST-DEPLOY-2026-10-27，生产不变。
+
+## 2026-10-26
+- Jack 复审修复：8 个反例及扩展边界回归通过，更新 JACK_QA 的 P0-REVIEW-FIX 条目；仍保持 draft 和生产只读。 Codex 交接
+- 按用户额度收尾要求固定 Jack 新交接，连接 JACK_ENTRY/JACK_QA：记录 app draft PR、测试部署、75 项验证、PO 秒级入库时间与来源不足；明确完整七阶段与库存自动修正尚未完成，生产不动。
+
 ## 2026-10-23
 
 - **新增**：按用户授权固定整体交付计划、证据看板和老板简报；工头负责持续更新，外部监督核真实证据。
@@ -43,10 +50,15 @@ date: 2026-10-23
 - **2026-10-26 Jack 答复 Q11**：`[W1-A11]` 已写入 `JACK_QA.md`；仓库 scope 语义（operator）、波兰仓 confidence→assumed、
   SC14 离线同步 + `tests/run_canonical_tests.py`、`sample_skus.json` as_of_note 已落地。代码 `e15b1b91`；draft PR #312。
   验证：233 行 / SC14 21/21 + 132 warning / SC04 差 0 / B_min 1,212 / B_max 2,762+433 / 19 passed 0 skip。
+- **2026-10-26 Jack P0 进展**：`[P0-A-2026-10-26]` 已写入 `JACK_QA.md`；入库证据/采集/对账/数据层/报表 UI 完成，
+  fzh-data `f5bf3dcc`（#314）、key_test `e7a4f6d`（#2），113+22 测试；测试站已文件级更新（REST 新列/页面 200，
+  bench restart 待 frappe 用户）。待决项见条目。
 - **2026-10-26 A11 验收**：工头判定通过；核心逻辑未改，数字沿用。合并顺序建议 `#311 → rebase #312 → #312`；
   #311/#312 仍 draft，等用户/审核会话批准。待业务确认：PO status=4、FZH-DANEEY 子仓运营方。
 - **2026-10-26 合并就绪清单**：新增 `handoffs/2026-10-26-merge-readiness.md`（#311 → rebase #312 → #312、
   检查项、业务确认、禁止项），给审核/合并会话直接使用。
+- **2026-10-27 key_test #2 生产部署**：`key_test` 生产同步 `c34fa53`（PR #2）；`bench migrate` + `clear-cache` +
+  `bench restart`；`SO Chain Overview` / `Supply Timeline` 冒烟通过。详见 `JACK_QA.md` 的 `P0-PROD-DEPLOY-2026-10-27`。
 
 - **2026-10-27 frePPLe 评估（只读研究，已按反馈修订）**：新增 `reviews/2026-10-27-frepple-evaluation.md`。
   事实：社区版 9.19.0（2026-10-09）为 MIT（8.0 起，7.x 为 AGPLv3），企业/云闭源；库存规划与承诺交期 UI 仅商业版；

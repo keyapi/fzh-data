@@ -1,0 +1,30 @@
+{
+  "schema_version": "abc-datasets/v1",
+  "dataset_version": "Cv1",
+  "source": "synthetic",
+  "observed_at": "2026-11-02T00:00:00+00:00",
+  "as_of": "2026-11-02",
+  "row_count": 1,
+  "sha256": "ffe3e98978cce84a2522740b278932463c670e944bdecbdf89d72e89a77723c4",
+  "dependency_versions": {
+    "B": {
+      "version": "Bv1",
+      "sha256": "2d403522e721f97752a333f4aeb105967a01c7bf216c5af0843ae3f160085aaf"
+    }
+  },
+  "rows": [
+    {
+      "item_code": "ITEM-1",
+      "pool": "WH-1",
+      "uom": "PCS",
+      "qty": 10,
+      "source_ref": "ST-1",
+      "snapshot_id": "SNAP-1",
+      "observed_at": "2026-11-02T00:00:00+00:00",
+      "join_class": "join_full",
+      "b_version": "Bv1",
+      "b_hash": "2d403522e721f97752a333f4aeb105967a01c7bf216c5af0843ae3f160085aaf",
+      "demand_eligibility": "independent"
+    }
+  ]
+}

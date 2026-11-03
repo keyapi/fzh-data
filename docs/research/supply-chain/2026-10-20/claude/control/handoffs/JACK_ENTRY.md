@@ -15,6 +15,8 @@ channel: docs/jack-w1-channel
 
 ## 1. 三步开始
 
+> **2026-10-26 Codex 新交接优先**：先读 [原生报表与 PO 入库时间交接](2026-10-26-codex-native-report-handoff.md)，位于 `feature/en-native-supply-report-plan`；下方切旧 docs 分支步骤仅用于原 W1 冻结复现，不要因此漏读新交接。生产库存/Parquet 已运行，新报表仅测试部署。
+
 ```bash
 git fetch origin
 git switch docs/jack-w1-channel
