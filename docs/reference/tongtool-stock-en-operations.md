@@ -45,6 +45,8 @@ tags: [tongtool, inventory, erpnext, operations, runbook, duckdb, parquet]
 
 **EN 数据库里没有“每日历史表”**。当前/运行是 MariaDB；历史是 Parquet。DuckDB 只是读 Parquet 的查询引擎（bench env 里的 Python 包），不是独立服务。
 
+> **2026-11-04 起，库存三类任务改走 OpenAPI**（`tongtool_integration/api/client.py`）：MCP 网关返回 `524 unknown不在白名单列表里`，同一 app_key 的 OpenAPI 正常。MCP 类仅保留作参考。OpenAPI 路径：`warehouseQuery` / `stocksQuery` / `stocksChangeDetailQuery`。
+
 Windows 侧：浏览器库存结存导出 02:17 仍保留；原 Windows API 全量任务 `FZH-TongtuStockApiDaily` 已禁用（手动回退）。测试站同步定时已关闭，只保留手动/复制备份。
 
 ## 2. 配置：Tongtool Settings
@@ -126,6 +128,7 @@ ls -lh /home/frappe/fzh-inventory
 - **12:00 欧洲（波兰）/ 18:00 美国（美东+美中）**各一次，只读，写独立的 `/home/frappe/fzh-inventory/stock_intraday.parquet`
 - `Tongtool Stock Run` 过滤 `job = stock_intraday_eu` / `stock_intraday_us`；`data_path` 指向该文件
 - **不改 05:17 的 `stock.parquet`**；两个文件分开，日快照仍是每天一份
+- **`Tongtool Stock Latest` 只由 05:17 更新**；盘中只写 `stock_intraday.parquet`，不碰 Latest。原因：Latest 是全表替换，盘中只抓 1–2 个仓，直接更新会清掉其他 12 仓；且 Latest 是早上下单的稳定基线，盘中变动会让决策不可复现。要看当前值用 `stock_intraday.parquet` 或后续独立的 Intraday Latest 视图。
 - 时间固定写在 `hooks.py`；要改时间改两行 cron + `bench restart`（slot 名仍是 `eu`/`us`，不随时间变）
 - **生产 2026-10-27 已部署并启用**：EU 手工冒烟 1,371 行 / 3m04；18:00 美国槽首次自动运行；`stock.parquet` 未被改动
 - **周一建议（暂不实施）**：若 18:00 仍赶不上周一的量，可后续加 `0 19 * * 1` 美国槽；当前统一 18:00

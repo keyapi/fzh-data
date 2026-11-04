@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: 通途库存变动任务的两个静默失效点——API 严格 7 天 + Frappe cron 方法名唯一
 date: 2026-10-27
+last_updated: 2026-11-04
 category: integration-issues
 module: tongtool_integration
 problem_type: integration_issue
@@ -99,6 +100,13 @@ bench --site <site> execute frappe.client.get_list --kwargs '{
 - `...retry_stock_snapshot_if_needed` → `17 7 * * *`
 
 失败 Run 的 `error_summary` 会逐仓列出 `527`；不要只看 `status`。
+
+## 2026-11-04 补记：MCP 524 与 OpenAPI 回退
+
+- 通途后台的新 MCP 服务显示“未开通/按员工分配”；旧 app_key MCP 在 **11/03 18:00** 起返回 `524 unknown不在白名单列表里`，MCP initialize 正常、业务 `tools/call` 才 524。
+- **同一 app_key 的 OpenAPI 正常**：`warehouseQuery` / `stocksQuery` / `stocksChangeDetailQuery` 均 200；字段与 MCP 一致（含凭证/操作人/四桶增减）。
+- 处理：库存三个模块改用 app 里的 OpenAPI 客户端（`api/client.py`），MCP 不再作为默认。
+- **教训**：MCP 是可选入口，不是 API 凭证的替代；MCP 报 524/未开通时，先用同一 app_key 测 OpenAPI，再决定是否切。新 MCP 按员工权限分配，也不适合服务器固定 app_key 自动化。
 
 ## Related
 

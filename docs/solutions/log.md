@@ -7,6 +7,9 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-04（MCP 524 → OpenAPI）
+- **更新**: `integration-issues/tongtool-stock-change-7day-limit-and-cron-registration.md`（`last_updated: 2026-11-04`）—— 补记通途 MCP 524/未开通与 OpenAPI 回退：同一 app_key 的 `warehouseQuery`/`stocksQuery`/`stocksChangeDetailQuery` 正常，库存三模块已切 OpenAPI。
+
 ## 2026-10-27（库存口径/分时快照/负证据/CG 数据源）
 - **新增**: `integration-issues/tongtool-stock-change-7day-limit-and-cron-registration.md` — 通途 API 527（严格 7 天）+ Frappe Scheduled Job Type 方法名唯一，两个静默失效点。
 - **新增**: `architecture-patterns/tongtool-inventory-semantics-and-snapshot-timing.md` — 可用/待发/物理口径；美欧操作节奏；05:17 + 12:00 + 18:00 快照；独立盘中 Parquet。

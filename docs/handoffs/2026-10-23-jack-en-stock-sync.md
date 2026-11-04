@@ -224,6 +224,8 @@ df -h /home/frappe
 
 ## 13. 盘中快照（12:00 欧洲 / 18:00 美国，app PR #10）
 
+> 2026-11-04 起，库存三类任务（快照/变动/盘中）改走 **OpenAPI**（`api/client.py`）；原因是通途 MCP 网关 524 `unknown不在白名单列表里`，同一 app_key 的 OpenAPI 正常。MCP 类仅保留参考。
+
 - 12:00 只抓波兰；18:00 只抓美东+美中；写独立 `stock_intraday.parquet`（`slot=eu/us`），按 `(日期, slot)` 覆盖。
 - **05:17 的 `stock.parquet` 不变**，日快照仍是每天一份。
 - `Tongtool Settings` 新增：`enable_stock_intraday`（默认 0）、`stock_intraday_eu_warehouses`、`stock_intraday_us_warehouses`；**时间固定写在 `hooks.py`**，改时间改两行 cron + restart，slot 名不变。
