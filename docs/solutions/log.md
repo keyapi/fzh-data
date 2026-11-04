@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-03（钉钉群采集 / claude stdin / worktree 计划任务）
+
+- **新增**: `tooling-decisions/dingtalk-group-harvest-dws-user-identity.md` —— 钉钉群历史消息/文件归档用 DWS 个人 OAuth 身份，而不是群机器人、企业内部应用或会话存档；完整性账本 + 水位 + 文件去重 + 数据落仓库外。
+- **新增**: `developer-experience/claude-headless-long-prompt-stdin.md` —— Windows 下 `claude -p` 长提示词塞进 argv 会超 32K 限制并静默回退；改为 `subprocess.run([cli, "-p"], input=prompt)`。
+- **新增**: `developer-experience/windows-schtasks-worktree-path-trap.md` —— 在 worktree 里注册 schtasks 会把任务指向临时目录；合并后必须在主仓库重跑安装脚本。
+
 ## 2026-10-27（供应分型 / frePPLe / 先搜分支）
 
 - **更新**: `workflow-issues/search-first-before-implementing.md`（`last_updated: 2026-10-27`）—— 补 Case 4：**main 上 grep 不到 ≠ 项目没有**。预测（statsforecast 2.1.1）、供应净额、库存政策、交期配置分别在本地的 `keyapi/forecast-refresh-oct27`、`keyapi/supply-integrate-oct27` 分支和 PR #300；先查 `git branch -a` / `git log --all` / `gh pr list --state all` / `git ls-tree`，再决定“复用 / 接线 / 重造”。
