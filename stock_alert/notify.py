@@ -159,14 +159,15 @@ def _egress_ip(timeout: float = 5.0) -> str | None:
 
 
 def failure_body(message: str, *, egress_ip: str | None = None) -> str:
-    """失败告警正文；524/白名单类错误附带出口 IP 与排查提示。"""
+    """失败告警正文；524 类错误附带排查提示（524 是未授权，不是限流）。"""
     if "524" not in message and "白名单" not in message:
         return message
     return (
         f"{message}\n\n"
-        f"出口 IP：{egress_ip or '未知'}\n"
-        "524 = 通途调用方白名单拒绝：请把该出口 IP 加入通途应用 IP 白名单，"
-        "或确认应用仍已发布、且有 ERP2 库存/基础资料权限。"
+        "524 不是限流（限流是 526），通常是**应用/调用方未授权**"
+        "（如「unknown不在白名单列表里」）。请核对通途开放平台：应用是否正常/已发布、"
+        "AppSecret 是否被重置、ERP2 库存/基础资料接口权限、以及 MCP 接入白名单。"
+        f"\n当前出口 IP：{egress_ip or '未知'}"
     )
 
 
