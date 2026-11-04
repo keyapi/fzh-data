@@ -17,7 +17,7 @@
     # 指定 Excel 路径 / 调整分档阈值
     uv run python -m stock_alert.cli run --notify --out out/低库存.xlsx --small-threshold 10
 
-    # 探测 erp2_stocks_stocksquery 的入参 schema 与 1 页真实响应
+    # 探测 OpenAPI（认证 / 仓库列表 / 1 页库存）
     uv run python -m stock_alert.cli probe --warehouse "美中-FZH-DANEEY"
 """
 
@@ -109,26 +109,30 @@ def cmd_run(args) -> int:
 
 
 def cmd_probe(args) -> int:
-    """探测工具 schema + 1 页真实响应，落 UTF-8 文件（避免控制台中文乱码）。"""
+    """探测 OpenAPI：认证 → 仓库列表(status=1) → 1 页库存；落 UTF-8 文件。"""
     _load_env()
-    from .client import TongtoolStockClient, business_code, extract_payload, get_tool_schema, rows_and_total
+    from tongtool_api.mcp_http import primary_credentials
+    from tongtool_api.openapi_client import TongtoolOpenApiClient
+    from .client import rows_and_total
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    schema = get_tool_schema()
-    schema_path = OUT_DIR / "probe_schema.json"
-    schema_path.write_text(json.dumps(schema, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[probe] schema → {schema_path}")
-    if not schema.get("name") or schema.get("found") is False:
-        print("[probe] 未找到 erp2_stocks_stocksquery；可用工具见上面的 schema 文件", file=sys.stderr)
-        return 1
+    key, secret = primary_credentials()
+    api = TongtoolOpenApiClient(key, secret, min_interval=args.min_interval)
+    merchant = api.authenticate()
+    print(f"[probe] merchantId={merchant}")
 
-    client = TongtoolStockClient(min_interval=args.min_interval)
-    payload = client._call({"warehouseName": args.warehouse, "pageNo": 1, "pageSize": args.page_size})
-    payload_path = OUT_DIR / "probe_sample.json"
-    payload_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    wh_payload = api.warehouses(page_size=200)
+    warehouses, _ = rows_and_total(wh_payload)
+    active = [w for w in warehouses if str(w.get("status")) == "1"]
+    wh_path = OUT_DIR / "probe_warehouses.json"
+    wh_path.write_text(json.dumps(wh_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[probe] 仓库 {len(warehouses)} 个（status=1: {len(active)}）→ {wh_path}")
+
+    payload = api.stocks(args.warehouse, 1, args.page_size)
     items, total = rows_and_total(payload)
-    print(f"[probe] 业务码={business_code(payload)} 行数={len(items)} total={total}")
-    print(f"[probe] 1 页样本 → {payload_path}")
+    sample_path = OUT_DIR / "probe_sample.json"
+    sample_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[probe] {args.warehouse}: 行数={len(items)} total={total} → {sample_path}")
     return 0
 
 

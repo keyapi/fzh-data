@@ -18,3 +18,7 @@ tags: [stock-alert, changelog, dingtalk, tongtool]
   对 HTTP 5xx / 网络错误加指数退避重试（4xx 仍直接抛）。
 - **2026-10-20** 容错：`tools/call` 返回 HTTP 400 `Server not initialized`（服务端丢会话）→
   `McpClient` 检测到后**重建会话再重试一次**，并纳入瞬时可重试分类。
+- **2026-11-04** 迁移：通途 **MCP 网关自 2026-11-03 起对全部 app_key 返回 `524 unknown不在白名单`**。
+  取数改为 **OpenAPI 直连**（`tongtool_api/openapi_client.py`：`devApp/appToken` →
+  `partnerOpenInfo/getAppBuyerList` → `POST /openapi/tongtool/stocksQuery`），不再依赖 MCP；
+  新增「524 失败告警附出口 IP + 排查提示」。

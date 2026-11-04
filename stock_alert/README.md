@@ -1,6 +1,6 @@
 # stock_alert —— 通途低库存汇总推送钉钉
 
-按仓库查询通途 ERP2 库存（`erp2_stocks_stocksquery`），筛出**可用库存 < 5** 的 SKU，
+按仓库查询通途 ERP2 库存（OpenAPI `stocksQuery`；MCP 自 2026-11-03 起已不可用），筛出**可用库存 < 5** 的 SKU，
 按仓汇总后推送钉钉；数量多时附一张**按仓库分 sheet 的 Excel**。
 
 ## 口径
