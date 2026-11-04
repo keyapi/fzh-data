@@ -146,11 +146,36 @@ def notify(
     return resp
 
 
+def _egress_ip(timeout: float = 5.0) -> str | None:
+    """尽力取当前公网出口 IP（仅失败告警诊断用；失败返回 None）。"""
+    import urllib.request
+
+    for url in ("https://api.ipify.org", "https://ifconfig.me/ip"):
+        try:
+            return urllib.request.urlopen(url, timeout=timeout).read().decode().strip()
+        except Exception:  # noqa: BLE001 - 诊断用，失败不影响告警
+            continue
+    return None
+
+
+def failure_body(message: str, *, egress_ip: str | None = None) -> str:
+    """失败告警正文；524/白名单类错误附带出口 IP 与排查提示。"""
+    if "524" not in message and "白名单" not in message:
+        return message
+    return (
+        f"{message}\n\n"
+        f"出口 IP：{egress_ip or '未知'}\n"
+        "524 = 通途调用方白名单拒绝：请把该出口 IP 加入通途应用 IP 白名单，"
+        "或确认应用仍已发布、且有 ERP2 库存/基础资料权限。"
+    )
+
+
 def notify_failure(message: str, *, title: str = "通途低库存任务失败") -> dict:
     """无人值守跑挂时的告警；凭证缺失会同样抛出，由调用方兜底打印。"""
     _robot_path()
     from send_dingtalk import send_markdown
 
+    body = failure_body(message, egress_ip=_egress_ip())
     webhook = os.environ.get(WEBHOOK_ENV, "").strip() or os.environ.get("DINGTALK_WEBHOOK", "").strip()
     secret = os.environ.get(SECRET_ENV, "").strip() or os.environ.get("DINGTALK_SECRET", "").strip()
-    return send_markdown(f"## {title}\n\n> {message}", title=title, webhook=webhook or None, secret=secret or None)
+    return send_markdown(f"## {title}\n\n{body}", title=title, webhook=webhook or None, secret=secret or None)

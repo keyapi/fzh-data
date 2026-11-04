@@ -138,3 +138,17 @@ def test_notify_file_mode_calls_send_file_card(monkeypatch, tmp_path):
     assert captured["webhook"].endswith("access_token=xxx")
     assert captured["secret"] == "SECtest"
     assert "共 **20** 个 SKU" in captured["text"]
+
+
+def test_failure_body_524_adds_ip_and_hint():
+    from stock_alert.notify import failure_body
+
+    body = failure_body("业务码 524：unknown不在白名单列表里", egress_ip="1.2.3.4")
+    assert "1.2.3.4" in body
+    assert "白名单" in body
+
+
+def test_failure_body_other_unchanged():
+    from stock_alert.notify import failure_body
+
+    assert failure_body("boom", egress_ip="1.2.3.4") == "boom"
