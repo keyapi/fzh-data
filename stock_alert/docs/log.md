@@ -22,3 +22,7 @@ tags: [stock-alert, changelog, dingtalk, tongtool]
   取数改为 **OpenAPI 直连**（`tongtool_api/openapi_client.py`：`devApp/appToken` →
   `partnerOpenInfo/getAppBuyerList` → `POST /openapi/tongtool/stocksQuery`），不再依赖 MCP；
   新增「524 失败告警附出口 IP + 排查提示」。
+- **2026-11-04** 主数据源改为 **EN `Tongtool Stock Latest`**（EN 每日同步 14 仓、字段一致）：
+  新增 `en_client.py` + **新鲜度门禁**（`Tongtool Stock Run` 最近 `job=stock_snapshot` 必须
+  `Success`/`complete=1`，且 `snapshot_at` 为今天；否则只发「库存同步未完成」）；
+  通途 OpenAPI 直连保留为**回退**（EN 不可达时启用）。

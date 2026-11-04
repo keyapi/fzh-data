@@ -180,3 +180,26 @@ def notify_failure(message: str, *, title: str = "通途低库存任务失败") 
     webhook = os.environ.get(WEBHOOK_ENV, "").strip() or os.environ.get("DINGTALK_WEBHOOK", "").strip()
     secret = os.environ.get(SECRET_ENV, "").strip() or os.environ.get("DINGTALK_SECRET", "").strip()
     return send_markdown(f"## {title}\n\n{body}", title=title, webhook=webhook or None, secret=secret or None)
+
+
+def sync_incomplete_body(detail: str, *, when: _dt.date | None = None) -> str:
+    day = when or _dt.date.today()
+    return (
+        f"## 通途低库存提醒 · {day.isoformat()}\n\n"
+        "⚠️ **库存同步未完成**，本次不生成低库存明细（避免把同步失败误报为断货）。\n\n"
+        f"> {detail}"
+    )
+
+
+def notify_sync_incomplete(detail: str, *, when: _dt.date | None = None, dry_run: bool = False) -> dict:
+    """EN 快照不新鲜时只发「同步未完成」，不发低库存明细。"""
+    day = when or _dt.date.today()
+    title = f"通途低库存提醒 · {day.isoformat()}"
+    text = sync_incomplete_body(detail, when=day)
+    if dry_run:
+        return {"errcode": 0, "dry_run": True, "mode": "sync_incomplete", "title": title, "text": text}
+    webhook, secret = _resolve_creds()
+    _robot_path()
+    from send_dingtalk import send_markdown
+
+    return send_markdown(text, title=title, webhook=webhook, secret=secret)

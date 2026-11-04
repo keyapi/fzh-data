@@ -1,6 +1,6 @@
 # stock_alert —— 通途低库存汇总推送钉钉
 
-按仓库查询通途 ERP2 库存（OpenAPI `stocksQuery`；MCP 自 2026-11-03 起已不可用），筛出**可用库存 < 5** 的 SKU，
+默认读 **EN 的 `Tongtool Stock Latest`**（通途库存每日同步，带新鲜度门禁；EN 不可达时回退通途 OpenAPI），筛出**可用库存 < 5** 的 SKU，
 按仓汇总后推送钉钉；数量多时附一张**按仓库分 sheet 的 Excel**。
 
 ## 口径
@@ -18,9 +18,10 @@
 ## 运行
 
 ```bash
-uv run python -m stock_alert.cli run --mock --dry-run     # 离线，不调 API / 不发群
-uv run python -m stock_alert.cli run --dry-run            # 真查通途，只出正文
+uv run python -m stock_alert.cli run --mock --dry-run     # 离线
+uv run python -m stock_alert.cli run --dry-run            # 真查（默认 EN，不可达回退 OpenAPI）
 uv run python -m stock_alert.cli run --notify             # 真查 + 真推
+uv run python -m stock_alert.cli run --source openapi --dry-run   # 强制走 OpenAPI
 uv run pytest stock_alert/tests -q
 ```
 
@@ -28,7 +29,8 @@ uv run pytest stock_alert/tests -q
 
 | 用途 | 位置 | 键 |
 |---|---|---|
-| 通途 ERP2 | `tongtool_api/.env` | `TONGTOOL_ERP2_PRIMARY_KEY` / `TONGTOOL_ERP2_PRIMARY_SECRET` |
+| EN 库存读取（**主**） | 仓库根 `.env` | `ERP_API_KEY` / `ERP_API_SECRET`（`ERP_URL` 默认生产） |
+| 通途 OpenAPI（**回退**） | `tongtool_api/.env` | `TONGTOOL_ERP2_PRIMARY_KEY` / `TONGTOOL_ERP2_PRIMARY_SECRET` |
 | 钉钉（默认复用原群） | 仓库根 `.env` | `DINGTALK_WEBHOOK` / `DINGTALK_SECRET` |
 | 钉钉专用群（可选覆盖） | 仓库根 `.env` | `DINGTALK_WEBHOOK_STOCK` / `DINGTALK_SECRET_STOCK` |
 | 发 Excel（上传 ERPNext） | 仓库根 `.env` | `ERP_API_KEY` / `ERP_API_SECRET` |

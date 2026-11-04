@@ -30,8 +30,16 @@ import sys
 from pathlib import Path
 
 from .client import StockRow
+from .en_client import EnStockClient, StockSyncIncomplete
 from .excel import write_low_stock_workbook
-from .notify import DEFAULT_SMALL_THRESHOLD, build_body, default_out_path, notify
+from .notify import (
+    DEFAULT_SMALL_THRESHOLD,
+    build_body,
+    default_out_path,
+    notify,
+    notify_sync_incomplete,
+    sync_incomplete_body,
+)
 from .scan import DEFAULT_THRESHOLD, DEFAULT_WAREHOUSES, scan
 
 OUT_DIR = Path(__file__).resolve().parents[1] / "stock_alert_output"
@@ -86,6 +94,25 @@ def _collect_rows(args) -> dict[str, list[StockRow]]:
     warehouses = _parse_warehouses(args.warehouses)
     if args.mock:
         return _synthetic_rows(warehouses, args.threshold)
+
+    source = getattr(args, "source", "en")
+    if source == "en":
+        try:
+            base = os.environ.get("ERP_URL", "https://erpnext.vilavi.cn")
+            key = os.environ.get("ERP_API_KEY", "").strip()
+            secret = os.environ.get("ERP_API_SECRET", "").strip()
+            if not key or not secret:
+                raise RuntimeError("缺少 ERP_API_KEY/ERP_API_SECRET（读 EN 库存）")
+            en = EnStockClient(base, key, secret)
+            ok, detail = en.check_freshness(args.when)
+            if not ok:
+                raise StockSyncIncomplete(detail)
+            return {wh: en.list_stocks(wh) for wh in warehouses}
+        except StockSyncIncomplete:
+            raise
+        except Exception as exc:  # EN 不可达/缺凭证 → 回退 OpenAPI
+            print(f"[warn] EN 读取失败，回退 OpenAPI：{type(exc).__name__}: {exc}", file=sys.stderr)
+
     from .client import TongtoolStockClient
 
     client = TongtoolStockClient(min_interval=args.min_interval)
@@ -94,7 +121,15 @@ def _collect_rows(args) -> dict[str, list[StockRow]]:
 
 def cmd_run(args) -> int:
     _load_env()
-    rows_by_wh = _collect_rows(args)
+    try:
+        rows_by_wh = _collect_rows(args)
+    except StockSyncIncomplete as exc:
+        if args.dry_run or not args.notify:
+            print(sync_incomplete_body(str(exc), when=args.when))
+            return 0
+        resp = notify_sync_incomplete(str(exc), when=args.when)
+        print(json.dumps(resp, ensure_ascii=False))
+        return 0 if resp.get("errcode") == 0 else 1
     result = scan(rows_by_wh, threshold=args.threshold)
     text, need_file = build_body(result, when=args.when, small_threshold=args.small_threshold)
     if args.dry_run or not args.notify:
@@ -151,6 +186,8 @@ def _make_parser() -> argparse.ArgumentParser:
     r.add_argument("--mock", action="store_true", help="离线样例，不调 API")
     r.add_argument("--dry-run", action="store_true", help="只打印正文（需要时也落 Excel），不发群")
     r.add_argument("--notify", action="store_true", help="推送钉钉（否则只打印）")
+    r.add_argument("--source", choices=["en", "openapi"], default="en",
+                   help="取数来源：en=Tongtool Stock Latest（默认，含新鲜度门禁）；openapi=直连通途")
     r.add_argument("--out", help="Excel 明细输出路径，默认 stock_alert_output/通途低库存_<日期>.xlsx")
     r.add_argument("--small-threshold", type=int, default=DEFAULT_SMALL_THRESHOLD,
                    help="低库存总数 ≤ 此值时正文直接列明细、不生成 Excel（默认 10）")

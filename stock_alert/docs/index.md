@@ -8,7 +8,7 @@ tags: [stock-alert, tongtool, erp2, dingtalk, inventory]
 
 # stock_alert
 
-按仓库查询通途 ERP2 库存（OpenAPI `stocksQuery`；MCP 自 2026-11-03 起已不可用），把**可用库存 < 阈值**（默认 5）
+默认读 **EN 的 `Tongtool Stock Latest`**（含新鲜度门禁；EN 不可达时回退通途 OpenAPI），把**可用库存 < 阈值**（默认 5）
 的 SKU 按仓汇总，用钉钉自定义机器人推送一条**仅汇总数量**的提醒。
 
 ## 口径（已与用户确认）
@@ -39,7 +39,8 @@ uv run pytest stock_alert/tests -q
 
 ## 目录
 
-- `client.py` —— 库存取数与归一化（OpenAPI `stocksQuery`，分页）
+- `en_client.py` —— 读 EN `Tongtool Stock Latest` + 新鲜度门禁（**主路径**）
+- `client.py` —— 库存取数与归一化（OpenAPI `stocksQuery`，**回退**）
 - （依赖）`tongtool_api/openapi_client.py` —— OpenAPI 认证/签名/限流/526 重试
 - `scan.py` —— 过滤 / 按仓聚合（纯函数，离线可测）
 - `excel.py` —— 生成按仓库分 sheet 的低库存明细 Excel

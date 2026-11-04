@@ -28,10 +28,26 @@ Excel：**每个仓库一个 sheet**，表头 `SKU | 可用库存 | 在途库存
 （内部先 `upload_to_erpnext` 再 `send_action_card`）。所以**发 Excel 需要 `ERP_API_KEY/SECRET`**
 （根 `.env`，指向 `erpnext.vilavi.cn`）——这几项尾程推送也已在用。
 
-## 数据来源（OpenAPI 直连）
+## 数据来源（默认读 EN；OpenAPI 回退）
 
-> ⚠️ 2026-11-03 起通途 **MCP 网关**对本 app_key 返回 `524 unknown不在白名单列表里`；
-> 同一凭证的 **OpenAPI 正常**。因此取数改用 OpenAPI，**不再使用 MCP**。
+**默认**读 EN 的 `Tongtool Stock Latest`（EN 每天把通途 14 仓库存同步到 MariaDB，字段一致）：
+
+- 认证：`Authorization: token <ERP_API_KEY>:<ERP_API_SECRET>`（根 `.env`；base `ERP_URL` 默认 `https://erpnext.vilavi.cn`）。
+- 查询：`GET /api/resource/Tongtool Stock Latest?filters=[["warehouse","=",<仓>]]&fields=[...]&limit_start&limit_page_length`（1000/页）。
+- 三主仓约 4,471 行；`in` 精确名可排除 `美中-FZH-DANEEY-退货产品仓`。
+- 优点：**不占通途 5 次/分钟、不受 MCP 524 影响、无需维护通途 Key**。
+
+⚠️ **新鲜度门禁（必须）**：
+
+- `GET /api/resource/Tongtool Stock Run?filters=[["job","=","stock_snapshot"]]&order_by=creation desc&limit_page_length=1`
+  最近一次必须 `status=Success` 且 `complete=1`；
+- 且 `Tongtool Stock Latest` 的 `max(snapshot_at)` 必须是**今天**；
+- 不过门禁 → 只发「库存同步未完成」，**不发低库存明细**（避免把同步失败误报为断货）。
+
+### 回退：OpenAPI 直连
+
+> ⚠️ 2026-11-03 起通途 **MCP 网关**对全部 app_key 返回 `524 unknown不在白名单列表里`；
+> 同一凭证的 **OpenAPI 正常**。EN 不可达/缺凭证时才回退到 OpenAPI，**不使用 MCP**。
 
 | 项 | 值 |
 |---|---|
