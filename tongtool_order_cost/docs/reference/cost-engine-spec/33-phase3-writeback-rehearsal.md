@@ -50,6 +50,10 @@ tags: [cost, writeback, phase3, rehearsal, lineage, unit-cost]
     任一差 >0.01 → `kit_report_mismatch` 阻断。
   - 同订单同时出现 TJ# 与子件行 → `kit_child_double_count` 双向阻断，禁止静默去重。
 - **多件不同变体**：同产品多个整件/皮壳 SKU（如不同颜色）→ `split_products`，逐件计价，不强行合并。
+- **同订单锚定（Phase 1）**：`-COVER` 别名同时命中 PPCotton/Foam 两条线时，用同订单组件行
+  （`Curve-Pillow-50-PPCotton`→KS0340、`Curve-Pillow-50-Foam`→KS0342）锁定；两条线都在时按平台 SKU
+  材质词/颜色词再区分，仍不唯一才阻断；Cover 与填充行 method 不一致时以非 Cover 行为准。
+  202608 锚定 9 行、Phase3 阻断/跳过/空白 = **0/0/0**（非商品配件 14 行零成本除外）。
 - **组件吸收**：通用海绵/PP棉行若同订单皮壳/成品行已定价且数量匹配 → `component_absorbed`，四列显式 0
   （成本已含在成品 BOM 内，避免重复计）。
 - **运费**：旧写回映射优先；缺失时用原始订单 `包裹总运费 / cost_qty`（单位化）。

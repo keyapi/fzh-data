@@ -29,6 +29,20 @@ tags: [cost, bom, phase2, disabled-item, curve-pillow, method-diff]
   - 锚定出多个 item / 无锚定 → `bom_item_ambiguous` **阻断**；禁止组内任选。
 - 通用组件锚定时**不按通用行自身的 product 过滤**（通用别名可能登记在别的变体上）；以同订单 Cover/成品行的唯一 item 为准。
 
+## 2.1 Phase1 同订单锚定（CURVE-PILLOW Cover 歧义）
+
+- `-COVER` 别名同时命中 `KS0340`（弧形PP棉靠枕-拉链款）与 `KS0342`（弧形海绵靠枕-拉链款）时，
+  Phase1 按顺序锚定，仍不唯一才阻断：
+  1. **同订单组件行**（`order_id`，其次 `order_common`）中唯一命中的候选产品 → 锁定；
+     例：`Curve-Pillow-50-PPCotton` → KS0340、`Curve-Pillow-50-Foam` → KS0342。
+  2. 两条线都在时，Cover 平台 SKU 含 **PPCotton/Foam** → 按候选 item_group 的「PP棉/海绵」锁定；
+  3. 平台 SKU 无材质词 → 用 Cover 平台 SKU 的颜色词匹配同订单组件行颜色，唯一命中才锁定。
+- 锚定后 `resolution_status=resolved`，`_anchor_source` 记 `same_order/material/color`。
+- **Cover 行与填充行 EN method 不同**（拆包裹常态）：合并组方法以**非 Cover 行**为准；
+  非 Cover 行仍不一致或无 → `mixed_methods` 阻断，不猜。
+- 2026-11-05 实测：202608 锚定 9 行（same_order 8 + color 1），歧义 0；202609 锚定 8 行，
+  剩 1 行（订单只有 Cover、平台无材质/颜色信号）保持阻断。
+
 ## 3. method / valuation 绑定（Phase 2.1 实测）
 
 - USNJ/USTX/PL 的 valuation_rate **等于**对应 `USNJBZCP#`/`USTXBZCP#`/`PLBZCP#` BOM 的 `total_cost`；与 `shipping_method` 无关。

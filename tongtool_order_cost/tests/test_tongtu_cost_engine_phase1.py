@@ -238,7 +238,8 @@ def test_method_missing_blocks_merge_and_cost(tmp_path):
     assert result.ok
 
 
-def test_mixed_methods_blocks_merge(tmp_path):
+def test_cover_fill_mixed_uses_fill_method(tmp_path):
+    """Cover 与填充行 method 不同 → 以非 Cover（填充）行为准，不再阻断。"""
     items = write_items(tmp_path, ITEMS)
     orders = write_orders(tmp_path, [
         ["ORD-1300001", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0],
@@ -249,9 +250,9 @@ def test_mixed_methods_blocks_merge(tmp_path):
         ["ORD-1300001", "TT001-FIN-Foam", "半成品"],
     ])
     result = run_merge_shadow(orders, items, en, month="202608")
-    assert result.stats["merged_groups"] == 0
-    assert result.stats["blocked_groups"] == 1
-    assert result.blocked[0].reason == "mixed_methods"
+    assert result.stats["merged_groups"] == 1
+    assert result.stats["blocked_groups"] == 0
+    assert result.groups[0].method == "半成品"
 
 
 # ── 歧义阻断：一个别名 → 两个产品 ──

@@ -26,8 +26,8 @@ EN 作废原单（aux）：
 from __future__ import annotations
 
 import re
-from collections import Counter
-from dataclasses import dataclass, field
+from collections import Counter, defaultdict
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Iterable, Mapping, Sequence
 
@@ -707,19 +707,105 @@ def load_orders(
             aux_rows.append(row)
             continue
         rows.append(row)
-        if resolution.status != _STATUS_RESOLVED:
-            key = (resolution.status, sku)
-            issue = issues.setdefault(key, {
-                "sku": sku,
-                "status": resolution.status,
-                "sku_raw": sku_raw,
-                "rows": 0,
-                "products": list(resolution.products),
-            })
-            issue["rows"] += 1
+
+    # 同订单锚定：Cover 别名同时命中 PPCotton/Foam 两条产品线时，用同订单组件行锁定
+    _anchor_same_order(rows, resolver)
+
+    for row in rows:
+        if row.resolution_status == _STATUS_RESOLVED:
+            continue
+        key = (row.resolution_status, row.sku)
+        issue = issues.setdefault(key, {
+            "sku": row.sku,
+            "status": row.resolution_status,
+            "sku_raw": row.sku_raw,
+            "rows": 0,
+            "products": list(resolver.resolve(row.sku_raw).products),
+        })
+        issue["rows"] += 1
 
     issues_list = sorted(issues.values(), key=lambda x: (x["status"], -x["rows"], x["sku"]))
     return LoadResult(rows=rows, aux_rows=aux_rows, sku_issues=issues_list)
+
+
+_ANCHOR_STOP = {
+    "CURVE", "PILLOW", "FOAM", "PPCOTTON", "LINEN", "VELVET",
+    "ZIPPERPILLOW", "ET", "COVER", "SET", "CUSHION", "PCS",
+}
+
+
+def _color_tokens(sku: object) -> set[str]:
+    """平台 SKU 中的颜色词（去掉品类/面料/兜底词与数字）。"""
+    parts = re.split(r"[^A-Za-z]+", str(sku or "").upper())
+    return {p for p in parts if len(p) > 1 and not p.isdigit() and p not in _ANCHOR_STOP}
+
+
+def _material_anchor(row: OrderRow, candidates: set[str], resolver: EnResolver) -> str:
+    """平台 SKU 含 PPCotton/Foam → 按候选产品 item_group 的「PP棉/海绵」锁定。"""
+    s = str(row.platform_sku or "").upper()
+    want = "PP棉" if "PPCOTTON" in s else ("海绵" if "FOAM" in s else "")
+    if not want:
+        return ""
+    hits = [c for c in candidates if want in resolver.item_group_for(c)]
+    return hits[0] if len(hits) == 1 else ""
+
+
+def _color_anchor(row: OrderRow, candidates: set[str], same: Sequence[OrderRow],
+                  resolver: EnResolver) -> str:
+    """同订单两条线都在时，用 Cover 平台 SKU 的颜色词匹配组件行颜色。"""
+    tokens = _color_tokens(row.platform_sku)
+    if not tokens:
+        return ""
+    hits: list[str] = []
+    for c in candidates:
+        other: set[str] = set()
+        for r in same:
+            if r.product_id == c:
+                other |= _color_tokens(r.platform_sku)
+        if tokens & other:
+            hits.append(c)
+    return hits[0] if len(hits) == 1 else ""
+
+
+def _anchor_same_order(rows: list[OrderRow], resolver: EnResolver) -> int:
+    """歧义行用同订单（优先 order_id，后 order_common）已解析产品锚定；仍不唯一不动。"""
+    if not rows:
+        return 0
+    by_order: dict[str, list[int]] = defaultdict(list)
+    by_common: dict[str, list[int]] = defaultdict(list)
+    for i, r in enumerate(rows):
+        by_order[r.order_id].append(i)
+        by_common[r.order_common].append(i)
+
+    anchored = 0
+    for i, row in enumerate(rows):
+        if row.resolution_status != _STATUS_AMBIGUOUS:
+            continue
+        candidates = set(resolver.resolve(row.sku_raw).products)
+        if not candidates:
+            continue
+        same = [rows[j] for j in by_order.get(row.order_id, []) if j != i]
+        hits = {r.product_id for r in same if r.product_id in candidates}
+        if not hits:
+            same = [rows[j] for j in by_common.get(row.order_common, []) if j != i]
+            hits = {r.product_id for r in same if r.product_id in candidates}
+        pick = next(iter(hits)) if len(hits) == 1 else ""
+        source = "same_order"
+        if not pick:
+            pick = _material_anchor(row, candidates, resolver)
+            source = "material"
+        if not pick:
+            pick = _color_anchor(row, candidates, same, resolver)
+            source = "color"
+        if not pick:
+            continue
+        rows[i] = replace(
+            row, product_id=pick, item_group=resolver.item_group_for(pick),
+            resolution_status=_STATUS_RESOLVED,
+            raw={**row.raw, "_anchor_source": source},
+        )
+        anchored += 1
+    return anchored
 
 
 # ─────────────────────────── 分组与载体 ───────────────────────────
@@ -858,8 +944,16 @@ def _pick_carrier(rows: Sequence) -> tuple[str, str, str, str]:
     if "" in methods:
         return "", "", "", "method_missing"
     if len(methods) > 1:
-        return "", "", "", "mixed_methods"
-    method = next(iter(methods))
+        # Cover 行与填充行 method 不同（拆包裹订单常态）：以非 Cover 行（填充/成品行）为准；
+        # 非 Cover 行仍不一致或无 → 阻断，不猜。
+        non_cover = [r for r in rows if sku_shape(r.sku) != SHAPE_COVER]
+        nc_methods = {r.shipping_method for r in non_cover}
+        if non_cover and len(nc_methods) == 1 and "" not in nc_methods:
+            method = next(iter(nc_methods))
+        else:
+            return "", "", "", "mixed_methods"
+    else:
+        method = next(iter(methods))
     if method not in METHODS:
         return "", "", "", "method_missing"
 
@@ -1771,6 +1865,10 @@ def build_merge_shadow(
         "rows_aux_original": len(aux_rows),
         "rows_unresolved": unresolved_rows,
         "rows_ambiguous": ambiguous_rows,
+        "rows_anchored": sum(1 for r in rows if r.raw.get("_anchor_source")),
+        "anchor_sources": dict(Counter(
+            r.raw.get("_anchor_source") for r in rows if r.raw.get("_anchor_source")
+        )),
         "sku_total": len(coverage),
         "sku_covered": sum(1 for c in coverage if c["已覆盖"]),
         "sku_uncovered": sum(1 for c in coverage if not c["已覆盖"]),
@@ -1911,6 +2009,7 @@ def summary_rows(result: MergeShadowResult) -> list[dict]:
         {"指标": "SKU 覆盖", "值": f"{s['sku_covered']} / {s['sku_total']}（未覆盖 {s['sku_uncovered']}）"},
         {"指标": "未登记 SKU / 行", "值": f"{s['sku_unresolved']} / {s['rows_unresolved']}"},
         {"指标": "歧义 SKU / 行", "值": f"{s['sku_ambiguous']} / {s['rows_ambiguous']}"},
+        {"指标": "同订单锚定行", "值": f"{s['rows_anchored']}（{s['anchor_sources'] or '无'}）"},
         {"指标": "断言结果", "值": " / ".join(
             f"{k}:{_STATUS_TEXT.get(v, v)}" for k, v in s["assertion_status"].items()
         )},
@@ -2022,7 +2121,8 @@ def render_markdown(result: MergeShadowResult, phase2=None) -> str:
         f"原单产品/method：{_STATUS_TEXT.get(s['original_method_status'], s['original_method_status'])}",
         f"- SKU 覆盖：{s['sku_covered']} / {s['sku_total']}（未覆盖 {s['sku_uncovered']}）；"
         f"未登记 {s['sku_unresolved']} 个 / {s['rows_unresolved']} 行，"
-        f"歧义 {s['sku_ambiguous']} 个 / {s['rows_ambiguous']} 行",
+        f"歧义 {s['sku_ambiguous']} 个 / {s['rows_ambiguous']} 行；"
+        f"同订单锚定 {s['rows_anchored']} 行（{s['anchor_sources'] or '无'}）",
         f"- 断言：{'无 fail' if result.ok else '**存在 fail，整体阻断**'}",
         "",
         "## 断言",

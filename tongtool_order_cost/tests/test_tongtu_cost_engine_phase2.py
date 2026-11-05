@@ -626,9 +626,11 @@ def test_ambiguous_cover_resolved_by_order_product_context(tmp_path):
          "cost_sxbzcp": 0, "usnj_valuation_rate": 2, "freight_2kk9fsq8ln": 3},
     ])
     p2 = compute_phase2(shadow, bom, items, write_wh_map(tmp_path))
-    cover = [r for r in p2.rows if r["SKU"] == "COVER-GEN"][0]
+    # Phase1 已按同订单 FOAM 行锚定封面到 KS910，两行合并成一组计价
+    cover = [r for r in p2.rows if "COVER-GEN" in str(r.get("SKU", ""))][0]
     assert cover["status"] == "ok"
     assert cover["item_fg"] == "KS910-A"   # 同订单 FOAM 锁定 KS910
+    assert shadow.stats["rows_anchored"] == 1
 
 
 def test_generic_component_absorbed_into_priced_cover(tmp_path):
