@@ -68,3 +68,149 @@ title: cost-engine-spec 变更日志
   - [10-glossary.md](10-glossary.md) —— **术语表（字段级）**：实体与编码（前缀/成本来源编码/头程编码/SKU 后缀）与 字段与列名（EN 字段/GS 列名/Colab 开关/报表列）两张速查表。
 
 > **时点声明**：本 bundle 的「线上事实」以 **2026-10-15** 为观测点；GS 快照另有明确时点（见 [01](01-overview-and-glossary.md) §4）。跨时点结论一律先声明时点。
+
+
+## 2026-11-04
+- **[32-phase2-bom-cost-policy.md](32-phase2-bom-cost-policy.md)**：Phase 2 成本快照与变体锁定策略定案。
+  - BOM 快照切到 `out/bom_cost_product_with_disabled.csv`（2358 行，含 disabled=1）：历史订单引用停用物料，不再误判 `bom_item_missing`（33/33 缺行 item_fg 均为 disabled）。
+  - 合并组统一用 Phase1 carrier_sku + product_id；透传通用组件（CURVE-PILLOW-*-PPCOTTON/-FOAM）用同订单 Cover/成品行锚定变体，唯一才用，否则阻断。
+  - EN BOM 独立重算 71/71 通过；valuation_rate = BZCP BOM `total_cost`，与 method 无关；method_diff 按 EN method 放行并输出审计差（两月合计 2,290.59）。
+  - 重跑：202608 可定价 10,689 / 阻断 3；202609 6,061 / 1；`bom_item_missing` 清零，剩余均为 `bom_item_ambiguous`（真正无法锁定变体）。
+
+## 2026-11-04（Phase 3.0）
+- **[33-phase3-writeback-rehearsal.md](33-phase3-writeback-rehearsal.md)**：本地写回演练落地。
+  - 166 列合同模板 + Phase1 合并明细行集合 + Phase2 四列（合计）；阻断/跳过四列留空写 reason，不沿用旧值/不填 0。
+  - 缺列按 `(order_common,平台SKU)`（透传优先精确 `订单号+通途SKU`）从旧写回映射；冲突/无来源留空并写 `unmapped_columns`。
+  - 血缘 100% 通过；差异归因按 列×method×合并/透传×disabled×status 输出。
+  - 演练：202608 10,854 行 / 可定价 10,689 / 阻断 3；202609 6,230 / 6,061 / 1；四列合计 2,228,516.09 / 1,362,992.16。
+
+## 2026-11-04（Phase 3.1）
+- **[33-phase3-writeback-rehearsal.md](33-phase3-writeback-rehearsal.md)** 修正：四列改为**单位成本**（合并行=Phase2 合计/pieces，透传=合计/qty），并补齐 `*数量`、`1件产品成本`、`产品成本*数量` 与按输入可得的 `订单总成本/订单利润`；缺列一律优先按 `(order_common,平台SKU)` 映射。
+- 新增断言：`per_unit×数量=Phase2 合计`、`1件成本=四列(除头程)之和`；两月单位成本恒等失败 0 行。
+- 重跑：202608 10,854 行 / 可定价 10,689 / 阻断 3；202609 6,230 / 6,061 / 1。订单总成本/利润因 `运费` 未映射分别留空 76/39 行（已写 reason）。
+
+## 2026-11-04（Phase 3.2）
+- **[33-phase3-writeback-rehearsal.md](33-phase3-writeback-rehearsal.md)** 补齐关键未映射列：是否皮壳全表非空（皮壳/否）、运费原始包裹总运费兜底、同组源行聚合、suffix/件套/产品发售日期等映射与产品级兜底；`未映射对比`/`映射缺口` sheet；新增关键列非空率、派生列可算率断言。
+- 结果：是否皮壳/运费空白 0；订单总成本/利润空白降至 165/169（仅阻断/跳过）；单位成本恒等失败 0；四列合计不变。
+
+## 2026-11-05（Phase 3.3）
+- **[33-phase3-writeback-rehearsal.md](33-phase3-writeback-rehearsal.md)**：清跳过/阻断。
+  - method 兜底：EN shipping_method 空 → item_group_branch（branch 空向上找祖先），标 item_group_fallback；铁架 TT0312701K0064561 96 行 → 成品。
+  - alias 刷新：TT0312687K0064377-COVER/-FOAM → KS0495…（白日梦躺椅）；TT0312614K0064240 → KS0455…。
+  - 非商品配件（BUTTONKIT/PP*LB/DLZYFX001/COTTON-EU）四列显式 0；TJ# 套件未展开 → pending_bundle；歧义/多载体输出建议白名单。
+  - 结果：202608 可定价 10,819 / 阻断 3 / 跳过 6 / 0成本 14 / 待审 5；202609 6,184 / 1 / 4 / 39 / 0。单位成本恒等失败 0。
+
+## 2026-11-05（Phase 3.4）
+- **[33-phase3-writeback-rehearsal.md](33-phase3-writeback-rehearsal.md)**：最后清理剩余 19 行。
+  - `TT0031186K0063918-COVER` 用同订单 FOAM/PPCotton 锁定产品线（KS0342/KS0340 变体）。
+  - 同产品多颜色整件/皮壳 → `split_products` 逐件计价（YUS 4 行、OSFD 3 行）；通用内胆按 1:1 数量吸收为零成本。
+  - TJ# 套件用 EN Product Bundle 展开（5 子件）按子件 BOM 成本求和。
+  - 结果：两月 blocked/skipped/pending 均 **0**；可定价 10,830 / 6,188；四列合计 2,252,841.53 / 1,374,012.26；单位成本恒等失败 0。
+
+## 2026-11-05（Phase 3.5）
+- **[33-phase3-writeback-rehearsal.md](33-phase3-writeback-rehearsal.md)**：套件分支固化。
+  - `product_bundles.csv` 增加 bundle creation/modified + 子件 hash → `bundle_version`。
+  - `kit_method`：子件 method 全一致才取；混合/空/缺版本 → pending。
+  - 子件求和计价（不新增列），并与 `bom_cost_product_with_kits.csv` 套件行逐项对账（>0.01 阻断）。
+  - 同订单 TJ# + 子件行 → `kit_child_double_count` 阻断。
+  - 202608：套件 priced 5 / pending 0，kit_method 成品 5，对账差 0，双计 0；202609 无套件订单。四列合计不变（2,252,841.53 / 1,374,012.26）。
+
+## 2026-11-05（Phase 4.0）
+- **[34-phase4-run-package-canary.md](34-phase4-run-package-canary.md)**：生产写回演练（run 包 + canary，不写 GS）。
+  - 输入 manifest/hash + 月末版本 + bundle_version；不可变 `out/runs/<run_id>/`（manifest/audit/summary/diff/readback）。
+  - 门禁：版本锁、非空 run 拒绝覆盖、重复 fingerprint 检测；写后回读 6/6 通过。
+  - 202608 + USNJ（4,138 行）canary；四列 242,735.26 / 30,363.86 / 748,411.06 / 801.05；非商品配件 7 行四列 0；利润空白 7 行只写 reason。
+
+## 2026-11-05（Phase 4.1）
+- **[34-phase4-run-package-canary.md](34-phase4-run-package-canary.md)**：canary 差异行级解释。
+  - `diff_explain.xlsx/md` 入 run 包；按 item_fg + 原因分类（旧写回陈旧/BOM 月末版本/method 兜底/disabled/变体/包装口径）。
+  - 覆盖率 100%，未解释 0；随机 10 行 BOM 手算 40/40 通过。
+  - 皮壳 -40,674.69：旧写回陈旧 50.0% + BOM 月末版本 48.7% + 包装口径 1.0% + method 兜底 0.2%；成品 +4,131.25 主要是铁架 method 兜底（+4,128）。
+  - 写前要求（覆盖率≥95%）已满足，仍未写 GS。
+
+## 2026-11-05（Phase 4.FBA）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：FBA 桥接与 78 列 shadow。
+  - EN FBA 明细为成本源；GS FBA 销量表作骨架；通途 FBA 导出做覆盖。
+  - 月份+国家+归一化 SKU 桥接；同键多 MSKU 按 qty 分摊；套件头程走子件 FBA freight。
+  - 202608：FBA 146 行（priced 106 / pending 40），合并 10,993，重复 0；GS/EN/TT 2,066/2,159/2,173；四列 72,333.89/62,936.80/91,312.54/0。
+  - 202609：FBA 133（98/35），合并 6,361，重复 0；1,328/1,367/1,328；四列 45,310.29/44,974.45/66,236.64/0。
+  - 待审主要为旧 FBA SKU 未登记（EN erp_item_code=NULL、成本 0）与 BOM 缺行；未静默补值。
+
+## 2026-11-05（Phase 4.FBA 修复）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：两处口径/查找 bug 修复 + 重跑。
+  - 绍兴二次不再硬编码 0：FBA 行统一按 **BOM 成品口径**（`method=成品`；套件用 `kit_method`）——
+    皮壳=`cost_fg`、绍兴二次=`sx_cost_all−cost_fg`、二次加工=FBA valuation=0、头程=对应 FBA freight；
+    `1件 = 皮壳+绍兴二次+二次` 恒等断言，绍兴二次 ≤0 → pending `sx_zero`。
+  - BOM 查找改用 EN 明细 **exact `erp_item_code`**（大小写敏感，`...x...` 不再被大写化）；归一化只用于别名解析。
+  - 202608：114/146 可定价，priced 覆盖 GS 90.7%，绍兴二次 69,837.29，重复 0，断言违例 0。
+  - 202609：103/133，91.5%，48,319.45，重复 0，违例 0。
+  - 覆盖率天花板 91.3%/91.8%：33 个未登记旧 FBA SKU（287 件）EN erp_item_code=NULL，需业务登记别名才能上 98%。
+
+## 2026-11-05（Phase 4.FBA.2）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：白名单 + 直采成品例外 + 合并键。
+  - 新增 `fba_whitelist_<month>.csv` 与跨月 `out/fba_shadow/fba_whitelist_template.csv`：
+    month/site/MSKU/SKU/产品名/数量/EN 行状态/候选物料/审批位；候选按尺寸+面料+颜色+有无扣
+    从 BOM 物料名生成，逐级放宽；**只建议不映射**（55 行全部有候选）。
+  - 直采成品（`cost_fg==sx_cost_all` 且 `cost_sxbzcp==0`）允许绍兴二次=0，`reason=direct_purchase_zero`，不计 pending。
+  - 合并 shadow 每行补 `unique_key`（重复源键追加 `#n`）、`pending_flag`，保留 fulfillment/business_key/duplicate_flag。
+  - 202608：可定价 117 / 待审 29（全部 en_item_missing，179 件），priced 覆盖 GS 91.3%，绍兴二次 69,837.29；
+    202609：106 / 27（108 件 en_item_missing + 1 件 no_en），91.8%，48,319.45。
+  - 直采 0 行 3+3；合并唯一键 10,993/6,361 无重复；业务键重复 0；恒等违例 0。
+  - 91.3%/91.8% 为 exact 物料口径天花板；上 98% 需业务按白名单登记别名。
+
+## 2026-11-05（Phase 4.FBA.3）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：候选改用 Colab 名称解析 + 有无扣 superset 自动映射。
+  - 产品名称解析（4.2/4.7.2 思路）：品类（EN item_group 基名，长名优先 + 弧形/带圆柱改写）→ 尺寸
+    （去品类/清噪声/多段取大/排除件套，三角 138→140）→ 面料（BOM 面料词表，海绵末位）→ 有无扣（仅三角）。
+  - 再按 EN Item（item_group 基名 + item_fg_name）匹配；颜色做偏好；逐级放宽。
+  - 同一款只差有无扣（同后缀存在无扣项与 KS0001）→ 自动映射 KS0001，`auto_pref=superset`，仅 FBA。
+  - 202608：priced 124 / 待审 22，覆盖 **91.3%→94.2%**，自动映射 7 SKU，绍兴二次 71,903.76。
+  - 202609：114 / 19，**91.8%→95.0%**，自动 8 SKU，49,744.89。
+  - 跨月自动映射 8 SKU / 仍待确认 25 SKU；合并唯一键/重复不变（SELF 不改）。
+
+## 2026-11-05（Phase 4.FBA.4）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：单一候选强依据自动映射（`single_candidate`）。
+  - 规则：`candidate_count==1` 且 `candidate_basis` 含「尺寸+面料+颜色」→ 自动映射，`auto_pref=single_candidate`；
+    尺寸/面料未命中的单一候选不自动；`superset` 规则保留；多候选仍待确认。
+  - 202608：priced 145/146，覆盖 **94.2%→99.95%**，自动映射 28 SKU（superset 7 + single 21），绍兴二次 76,646.88。
+  - 202609：130/133，**95.0%→99.77%**，自动 24 SKU（superset 8 + single 16），52,232.10。
+  - 跨月自动 30 SKU；仍待确认 3 SKU（FUDE-huxingdima-wh-200 8 候选、SUK-SFZCD 2 候选、OSKBG 弱依据）
+    + 9 月 1 件 no_en。合并唯一键/重复不变，SELF 不改。
+
+## 2026-11-05（Phase 4.FBA.c）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：FBA canary run 包（本地，不写 GS）。
+  - `domain/fba_run_package.py` + CLI `fba-canary`：按站点选最小桶、排除待确认 SKU、78 列骨架 + 状态列。
+  - 写前旧值备份 + hash、7 输入 manifest（含 263 bundle_version 与白名单 sha）、diff；写后 10 项回读模拟。
+  - 202608 / AMZStruseryDE：1 行 / 3 件；四列 72.183 / 62.8014 / 0 / 42.9；diff 成本 +12.4944、头程 -43.35；
+    门禁 8/8、回读 10/10；重复键 0。run 包 `out/runs/fba-202608-AMZStruseryDE-<ts>/`。
+  - 待审行留空不补 0、直采行保留 `direct_purchase_zero` 状态；仍不写 GS/EN。
+
+## 2026-11-05（Phase 4.FBA.d）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：canary 旧值来源修正 + alias 归一化 + 登记 dry-run。
+  - canary 旧值改为目标写回表 FBA 行（`merged_202608.csv`），diff 重算：单件 皮壳 23.008→24.061、
+    绍兴侧 17.95→20.9338、头程 14.3 不变；金额 +3.159 / +8.9514 / 0 / 1件 +12.1104；门禁 9/9、回读 10/10。
+  - `EnResolver` 别名键改为去空格/连字符/下划线 + 大写；样例 SKU 四种写法均命中 KS0001-DM-45-GREY；
+    FBA 数据无仅归一化差异项 → 自动解析增量 0，覆盖 99.95%/99.77% 不变。
+  - 新增 `alias_dryrun`（CLI `fba-alias-dryrun`，不写 EN）：3 项提案（2 add_alias + 1 cost_borrow），
+    old/new customer_code + hash + 影响 1/1/1；30 个 auto SKU 全部真正缺登记。
+
+## 2026-11-05（Phase 4.FBA.e）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：alias dry-run 扩展到全部 auto SKU。
+  - 30 个 auto_mapped SKU 各生成 add_alias 提案；目标 item 已登记且归一化后别名存在 → `noop`，否则 `needs_review`。
+  - FUDE-huxingdima-wh-200 增加 add_alias → KS0007-DM-200-IVORY（note=cost_borrow_white→ivory），与 cost_borrow 并列。
+  - 输出 `proposals_all.csv`（34 行：add_alias 33 + cost_borrow 1；noop 0 / needs_review 33）。
+  - 仍不写 EN/GS；item_group 优先取 item_refcode，缺失时回退 BOM item_fg_name 前缀。
+
+## 2026-11-05（Phase 4.FBA.f）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：EN 别名登记后重跑（item_refcode 刷新）。
+  - 202608：priced 145/146，覆盖 99.95%，待审 1（OSKBG），重复 0；白名单 22 SKU（alias 16 + single 5）。
+  - 202609：131/133，覆盖 99.85%（+0.08pp），待审 2（SUK + no_en），重复 0；白名单 19 SKU（alias 14 + single 4）。
+  - 33 个提案 SKU 中 26 个已可别名直读；5 个仍单一候选（目标物料别名未出现在导出）、2 个仍待审。
+
+## 2026-11-05（Phase 4.FBA.g）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：item_refcode 扩到 2621 物料后重跑。
+  - 33 个曾提案 SKU 全部别名直读；202608 priced 146/146（**100.00%**）、待审 0；202609 132/133（**99.92%**），
+    仅剩 1 件 `no_en_fba_rows`；重复 0，恒等违例 0。
+  - 白名单 22/19 SKU 全部 `auto_pref=alias`；四列合计 79,755.82/76,707.28/0/70,291.65 与
+    52,785.94/52,395.90/0/48,715.70。
+  - `fba_pending_*.csv` 空结果也写表头（0 行时下游可读）。

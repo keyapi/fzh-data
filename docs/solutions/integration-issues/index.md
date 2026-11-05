@@ -32,3 +32,4 @@ tags: [integration, solutions, index]
 | ChatGPT Edu 账号 CLIProxyAPI 429 限流机制调研 | [chatgpt-edu-cliproxyapi-429-rate-limit.md](chatgpt-edu-cliproxyapi-429-rate-limit.md) |
 | 钉钉 SSO 登录 new-api（OIDC Bridge 桥接方案） | [dingtalk-sso-new-api-oidc-bridge.md](dingtalk-sso-new-api-oidc-bridge.md) |
 | 2026-10-17 | 通途SKU↔EN物料 权威映射（ref_code / importBOMCostList.客户物料号）与 gsheet 源头修正 | `tongtu-en-item-mapping-and-gsheet-source-fix.md` |
+| 2026-11-05 | FBA SKU 别名归一化、KS0001 优先与 EN 客户物料号登记 | [tongtu-fba-alias-normalization-registration.md](tongtu-fba-alias-normalization-registration.md) |

@@ -14,3 +14,7 @@ tags: [solutions, architecture-patterns, log]
 ## 2026-09-22
 
 - **新增**: `public-private-agent-knowledge-split.md` — 公开仓、私有 Markdown 知识仓与 secret manager 三层分离；普通 clone + bootstrap 代替 submodule，保留 Agent 检索和非技术同事使用体验。
+
+## 2026-11-05
+
+- **新增**: `tongtu-cost-engine-local-migration.md` — Colab 成本引擎迁移本地包：合并成一件成品 + 月末 BOM 单位成本 × 件数；四列（皮壳/头程/目的地加工/绍兴侧加成）语义与恒等式；套件/FBA 分支；canary 旧值必须取目标写回表。

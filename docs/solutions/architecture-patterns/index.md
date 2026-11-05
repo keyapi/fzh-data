@@ -30,3 +30,4 @@ timestamp: 2026-07-28
 | ERPNext 工作流配置完整指南 | [erpnext-workflow-configuration.md](erpnext-workflow-configuration.md) |
 | SKU 背贴 PDF 生成与通用名称查询模式 | [sku-label-pdf-generation-and-name-lookup.md](sku-label-pdf-generation-and-name-lookup.md) |
 | 美中 USTX 成本三方案离线对比（口径不对称 / 差异即结论 / 歧义键 fail-closed） | [ustx-cost-caliber-comparison.md](ustx-cost-caliber-comparison.md) |
+| 通途订单成本引擎：Colab 迁移本地包的四列口径与合并/BOM 架构 | [tongtu-cost-engine-local-migration.md](tongtu-cost-engine-local-migration.md) |

@@ -55,3 +55,6 @@ metadata:
 
 - `docs/solutions/workflow-issues/tongtool-sku-rename-gsheet-remap.md` —— 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet
 - `docs/solutions/architecture-patterns/ustx-cost-caliber-comparison.md` —— 美中 USTX 三方案成本对比：**先验测算表是手填还是公式再定等价闸门**（人工测算与 import 重建不等 ⇒ 差异即结论）、歧义维表键 fail-closed、闸门分级
+- `docs/solutions/architecture-patterns/tongtu-cost-engine-local-migration.md` —— 本地成本引擎：合并成品+BOM 单位成本×件数、四列语义、套件/FBA、canary 旧值来源
+- `docs/solutions/workflow-issues/tongtu-order-universe-invalid-split-fba.md` —— 订单全集：作废原单/拆分子单/原始表 vs 写回表/FBA 明细 vs 销量表
+- `docs/solutions/integration-issues/tongtu-fba-alias-normalization-registration.md` —— FBA SKU 别名归一化、KS0001 优先、EN 客户物料号登记

@@ -128,3 +128,12 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 - 口径 **直连优先、旧键兜底**：`ustx-compare` 的 `--direct-map` / 默认取 `客户物料号`；`--no-direct` 关。7 月美中直连覆盖 **99.9%**（4367/4372），相对旧键 ΔB2 264,912→268,610。
 - **改 gsheet 前**：`import皮壳成本` 是 `IMPORTRANGE` 拉的，**改它无效**；改源工作簿 `财务部绍兴成本核算表单2023`（`皮壳成本平均…`/`品类使用面料`/`材料价格明细`），且**源表+成本表成对改**。
 - 详见 `docs/reference/cost-engine-spec/`（27/28 页）与 `docs/solutions/integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md`。
+
+## 通途订单成本引擎迁移（`tongtu_cost_engine`，2026-11-05 起）
+
+- 目标：Colab 成本引擎 → 本地包；主路径 **合并成一件成品 + 月末 BOM 单位成本 × 件数**；EN 订单行存储成本只作对账（会陈旧，如 CENTRADE 0 vs BOM 165.128）。
+- 四列：皮壳=BOM `cost_fg`；头程=BOM 头程列；二次加工=目的地 `valuation_rate`（FBA=0、美国海外仓=USTX）；绍兴二次=皮壳 0 / 半成品包装半成品 / 成品包装成品 / FBA `sx_cost_all−cost_fg`。恒等式：四列（除头程）= 1件产品成本。
+- 订单全集：EN 有效单（`invalid=1` 只作 aux 校验）；拆分子单 `_1/_2` 保留；GS 原始表作业务骨架，`写回…` 只对拍；FBA 成本用 EN 明细，GS FBA 销量表作 78 列骨架。
+- 套件：Product Bundle 全子件 method 一致才派生；TJ# 与子件不得双计；`show_kit_items` 报表可对账。
+- Canary：旧值必须取目标写回表（不是销量报表）；写前备份/hash/锁，写后回读；不一致用备份整体回滚。
+- 代码：`tongtool_order_cost/tongtu_cost_engine/`；文档：`docs/reference/cost-engine-spec/32-35`；经验：`docs/solutions/architecture-patterns/tongtu-cost-engine-local-migration.md` 等三篇。

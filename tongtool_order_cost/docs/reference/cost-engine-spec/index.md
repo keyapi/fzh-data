@@ -59,6 +59,14 @@ tags: [reference, index, cost-engine]
 | 剔除额是什么？影响半成品发货成本吗？ | [deduction-and-sxbzcp-adjustments.md](deduction-and-sxbzcp-adjustments.md)；[04](04-cost-decision-tables.md) §4 |
 | EN 内部自己一致吗？ | [en-branching-and-warehouse-config.md](en-branching-and-warehouse-config.md)；[09](09-known-issues-register.md) |
 
+| [32-phase2-bom-cost-policy.md](32-phase2-bom-cost-policy.md) | **Phase 2 成本策略**：BOM 快照 include disabled（历史订单引用停用物料）；合并组统一 carrier/product；通用组件按同订单 Cover/成品锚定；method_diff 放行规则；写回仅对账 |
+
+| [33-phase3-writeback-rehearsal.md](33-phase3-writeback-rehearsal.md) | **Phase 3 写回演练**：166 列合同模板 + Phase1 行集合 + Phase2 四列；阻断/跳过留空；缺列按 order_common+平台SKU 映射并标注；血缘 100% + 差异归因 |
+
+| [34-phase4-run-package-canary.md](34-phase4-run-package-canary.md) | **Phase 4 run 包 + canary**：输入 manifest/hash、版本锁、不可变 `out/runs/<run_id>/`；202608 USNJ canary 逐行/逐列 diff、金额分层、门禁与写后回读 |
+
+| [35-phase4-fba-shadow.md](35-phase4-fba-shadow.md) | **Phase 4.FBA**：EN 明细 exact 物料 + BOM 成品口径（含直采成品例外）；未登记 SKU 白名单（候选仅建议）；78 列 FBA/合并 shadow（唯一键/pending）、三方对账与重复检测 |
+
 ## 相邻文档（不在本 bundle）
 
 - 专项调查：[../en-ustx-no-bom-items-spec.md](../en-ustx-no-bom-items-spec.md)、[../en-pl-finished-processing-nonzero-spec.md](../en-pl-finished-processing-nonzero-spec.md)、[../en-material-request-type-spec.md](../en-material-request-type-spec.md)、[../en-shaoxing-shipment-cost-logic-spec.md](../en-shaoxing-shipment-cost-logic-spec.md)、[../en-shaoxing-ship-method-taxonomy-spec.md](../en-shaoxing-ship-method-taxonomy-spec.md)
