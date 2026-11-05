@@ -181,7 +181,8 @@ def main() -> int:
         base = {
             "product_id": r.get("product_id"), "pool": pool,
             "physical_form": r.get("形态"), "canonical_uom": r.get("UOM"),
-            "action": action, "mode": mode, "route_status": route,
+            "action": action, "mode": mode, "chosen_mode": mode,
+            "route_status": route,
             "supply_join_status": join, "q95": r.get("q95"),
             "net_need_95": r.get("净需求95"), "c_supply": r.get("C可发供给"),
             "need_date": r.get("需要日"), "order_date": r.get("下单日"),
@@ -202,6 +203,7 @@ def main() -> int:
                 mode = "专线"
                 pl_route = True
                 base["mode"] = mode
+                base["chosen_mode"] = mode
                 base["route_basis"] = "empirical_zhuanxian:n=120"
             else:
                 rows.append({**base, "status": "route_unknown",
@@ -345,7 +347,9 @@ def main() -> int:
             else:
                 status = "pass_route_contract"
                 reason = (reason + "；" if reason else "") + "时间可行，待承运商合同确认"
+        _, chosen_head_basis = get_head(head, pool, chosen_mode)
         rows.append({**base, "status": status, "reason": reason, "remedy": remedy,
+                     "chosen_mode": chosen_mode,
                      "q_sim": qty * (uplift or 1.0), "arrival_prob": res["arrival_prob"],
                      "no_stockout_prob": res["no_stockout"],
                      "fill_rate": res["fill_rate"],
@@ -353,7 +357,8 @@ def main() -> int:
                      "mean_inventory": res["mean_inventory"],
                      "q_uplift": uplift, "mode_upgrade": upgrade,
                      "eta_basis": eta_basis, "production_basis": prod_basis,
-                     "headhaul_basis": head_basis, "need_days": need_days,
+                     "headhaul_basis": chosen_head_basis,
+                     "need_days": need_days,
                      "order_delay_days": order_delay})
 
     out = pd.DataFrame(rows)

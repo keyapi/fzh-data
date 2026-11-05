@@ -126,10 +126,7 @@ def main() -> int:
                  "tsb": "间歇需求 TSB", "ma3": "近3月均值",
                  "ets_ann": "年季节指数平滑", "naive": "上期值"}
     ev["方法说明"] = ev["adopted_model"].map(method_cn).fillna("见模型名")
-    ev["建议运输方式"] = np.where(
-        ev["mode_upgrade"].astype(str).str.startswith("→"),
-        ev["mode_upgrade"].astype(str).str.replace("→", "", regex=False),
-        ev["mode"].astype(str))
+    ev["建议运输方式"] = ev["chosen_mode"].astype(str)
     q180 = pd.to_numeric(ev["近180天销量"], errors="coerce").fillna(0)
     ev["销量档（长尾）"] = np.where(q180 <= 0, "无销量",
                              np.where(q180 <= 10, "极低量/长尾",
@@ -152,10 +149,7 @@ def main() -> int:
         "2026-11-06", cand["下单日"].astype(str))
     cand["是否需人工确认"] = "是"
     cand["自动下单"] = False
-    cand["建议运输方式"] = np.where(
-        cand["mode_upgrade"].astype(str).str.startswith("→"),
-        cand["mode_upgrade"].astype(str).str.replace("→", "", regex=False),
-        cand["mode"].astype(str))
+    cand["建议运输方式"] = cand["chosen_mode"].astype(str)
     cols = ["product_id", "pool", "physical_form", "canonical_uom", "需求形态",
             "放行等级", "建议动作", "建议下单时点", "建议下单日", "remedy",
             "q_sim", "q95", "净需求95", "C可发供给", "en_stock在途+待发",
@@ -169,7 +163,8 @@ def main() -> int:
         "q_sim": "建议数量", "q95": "需求q95", "mode": "原运输方式",
         "route_warning": "路线小样本提示", "arrival_prob": "到货赶上概率",
         "no_stockout_prob": "周期无断货概率", "fill_rate": "需求满足率",
-        "mean_stockout_days": "平均断货天数", "mean_inventory": "平均库存"}).sort_values(
+        "mean_stockout_days": "平均断货天数", "mean_inventory": "平均库存",
+        "headhaul_basis": "交期依据"}).sort_values(
         ["放行等级", "建议数量"], ascending=[True, False])
     top50 = cand.head(50).copy()
     top50.insert(0, "优先级", range(1, len(top50) + 1))
@@ -184,12 +179,14 @@ def main() -> int:
                "销量档（长尾）", "历史销量", "预测方法", "方法说明", "区间校准",
                "同类历史误差样本数（池化）", "服务水平", "q95", "净需求95",
                "C可发供给", "en_stock在途+待发", "PO追加(去重)", "在途ETA_p50",
-               "在途/PO单据核实", "ETA来源", "mode", "建议运输方式", "建议数量", "建议下单日", "arrival_prob",
+               "在途/PO单据核实", "ETA来源", "mode", "建议运输方式", "headhaul_basis",
+               "建议数量", "建议下单日", "arrival_prob",
                "no_stockout_prob", "fill_rate", "为什么补", "人工确认什么"]
     ev_cand = ev_cand[[c for c in ev_cols if c in ev_cand.columns]].rename(columns={
         "pool": "池", "physical_form": "形态", "canonical_uom": "UOM",
         "q95": "需求q95", "mode": "原运输方式", "arrival_prob": "到货赶上概率",
-        "no_stockout_prob": "周期无断货概率", "fill_rate": "需求满足率"})
+        "no_stockout_prob": "周期无断货概率", "fill_rate": "需求满足率",
+        "headhaul_basis": "交期依据"})
     ev_cand["数据截止"] = "2026-11-02"
     ev_cand["自动下单"] = False
 
@@ -217,14 +214,15 @@ def main() -> int:
 
     def humanize(frame, extra):
         keep = ["product_id", "pool", "physical_form", "canonical_uom", "action",
-                "mode", "q_sim", "q95", "C可发供给", "en_stock在途+待发",
+                "mode", "chosen_mode", "q_sim", "q95", "C可发供给", "en_stock在途+待发",
                 "PO追加(去重)", "在途ETA_p50", "需要日", "下单日",
                 "route_status", "route_basis", "status", "reason",
                 "route_warning"] + extra
         keep = [c for c in keep if c in frame.columns]
         return frame[keep].rename(columns={
             "pool": "池", "physical_form": "形态", "canonical_uom": "UOM",
-            "action": "D6动作", "mode": "运输方式", "q_sim": "涉及数量",
+            "action": "D6动作", "mode": "原运输方式",
+            "chosen_mode": "建议运输方式", "q_sim": "涉及数量",
             "q95": "需求q95", "route_warning": "路线小样本提示",
             "route_basis": "路线依据", "status": "状态", "reason": "原因"})
 
