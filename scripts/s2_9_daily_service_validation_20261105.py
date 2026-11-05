@@ -33,12 +33,14 @@ DN = BASE / "leadtime/dn_leadtime_rows.csv"
 ZMT = BASE / "zmt_shipment_snapshot_20261102.csv"
 OUTDIR = BASE / "S2_9-daily-service-20261105"
 AS_OF = pd.Timestamp("2026-11-02")
+DECISION = pd.Timestamp("2026-11-06")  # actual decision/delivery day
+START_DELAY = int((DECISION - AS_OF).days)
 H = 97
 N = 2000
 SEED = 42
 TARGET = 0.95
-PLANNING_DAYS = {"普船": 55, "快船": 30, "空运": 14}
-MODE_NEXT = {"普船": "快船", "快船": "空运", "空运": None}
+PLANNING_DAYS = {"普船": 55, "快船": 30, "空运": 14, "专线": 60}
+MODE_NEXT = {"普船": "快船", "快船": "空运", "空运": None, "专线": None}
 POOL_REGION = {"美东USNJ": "美东", "美中USTX": "美中", "波兰": "波兰"}
 POOL_OF_CUSTOMER = {"CENTRADE": "美东USNJ", "DANEEY": "美中USTX", "波兰公司": "波兰"}
 
@@ -57,6 +59,8 @@ def classify_transport(transport: str, carrier: str) -> str:
     if any(k in x for k in ("海运", "FBA海运")) or any(
             k in c for k in ("COSCO", "EVERGREEN", "OOCL", "ZIM", "APL", "MSC", "ANL")):
         return "普船"
+    if "快递" in x or "专线" in x:
+        return "专线"
     return "unknown"
 
 
@@ -98,7 +102,7 @@ def get_head(head: dict, pool: str, mode: str) -> tuple[np.ndarray, str]:
     return np.array([PLANNING_DAYS[mode]], float), f"planning_default:{mode}"
 
 
-def simulate(p50, q95, on_hand, receipts, qty, prod, head, order_delay, rng):
+def simulate(p50, q95, on_hand, receipts, qty, prod, head, order_delay, need_days, rng):
     """Return dict of service metrics; receipts=[(day, qty)], prod/head arrays N."""
     n = len(prod)
     p50 = float(p50) if pd.notna(p50) and p50 > 0 else 0.0
@@ -153,7 +157,7 @@ def simulate(p50, q95, on_hand, receipts, qty, prod, head, order_delay, rng):
         fill_rate=float(np.mean(fill)),
         mean_stockout_days=float(np.mean(stockout_days)),
         mean_inventory=float(np.mean(inv_sum / H)),
-        arrival_prob=float(np.mean(arrival <= H)) if qty and qty > 0 else 1.0,
+        arrival_prob=float(np.mean(arrival <= need_days)) if qty and qty > 0 else 1.0,
     )
 
 
@@ -181,7 +185,7 @@ def main() -> int:
             "supply_join_status": join, "q95": r.get("q95"),
             "net_need_95": r.get("净需求95"), "c_supply": r.get("C可发供给"),
             "need_date": r.get("需要日"), "order_date": r.get("下单日"),
-            "remedy": "",
+            "remedy": "", "route_basis": "",
         }
         if action in ("不补", "观察"):
             rows.append({**base, "status": "not_action", "reason": "动作=不补/观察",
@@ -189,14 +193,25 @@ def main() -> int:
             continue
         route_warning = "small_sample" in route
         base["route_warning"] = route_warning
+        pl_route = False
         if route and ("route_unavailable" in route or "route_pending" in route
                       or "路线待确认" in route):
-            rows.append({**base, "status": "route_unknown",
-                         "reason": f"路线未定：{route}", "q_sim": qty})
-            continue
+            if pool == "波兰" and "route_unavailable" in route:
+                # 波兰历史主运输只有“快递/专线”，用完成运单建立第四类经验情景；
+                # 时间可行性可算，承运商合同仍需人工确认。
+                mode = "专线"
+                pl_route = True
+                base["mode"] = mode
+                base["route_basis"] = "empirical_zhuanxian:n=120"
+            else:
+                rows.append({**base, "status": "route_unknown",
+                             "reason": f"路线未定：{route}", "q_sim": qty})
+                continue
         if action == "催已有":
+            qexp = pd.to_numeric(r.get("催已有量"), errors="coerce")
             rows.append({**base, "status": "expedite_pending",
-                         "reason": "催已有 ETA 未证；需单据级核实", "q_sim": qty})
+                         "reason": "催已有 ETA 未证；需单据级核实",
+                         "q_sim": qexp})
             continue
         if join.startswith("unknown"):
             rows.append({**base, "status": "supply_unknown",
@@ -235,7 +250,8 @@ def main() -> int:
         need = pd.to_datetime(r.get("需要日"), errors="coerce")
         need_days = max(1, int((need - AS_OF).days)) if pd.notna(need) else H
         order = pd.to_datetime(r.get("下单日"), errors="coerce")
-        order_delay = max(0, int((order - AS_OF).days)) if pd.notna(order) else 0
+        order_delay = (START_DELAY + max(0, int((order - DECISION).days))
+                       if pd.notna(order) else START_DELAY)
 
         prod_arr = prod.get(pool, {}).get("raw")
         prod_basis = f"so_dn_events:{pool}:n={len(prod_arr)}" if prod_arr is not None else "fallback"
@@ -247,7 +263,7 @@ def main() -> int:
         prod_sample = rng.choice(prod_arr, N, replace=True)
         head_sample = rng.choice(head_arr, N, replace=True)
         res = simulate(p50, q95, on_hand, receipts, qty, prod_sample, head_sample,
-                       order_delay, rng)
+                       order_delay, need_days, rng)
         if res["arrival_prob"] < TARGET:
             status = "fail_arrival"
         elif res["no_stockout"] >= TARGET and res["fill_rate"] >= TARGET:
@@ -260,13 +276,14 @@ def main() -> int:
         uplift = None
         upgrade = ""
         remedy = ""
+        chosen_mode = mode
 
         def evaluate(delay, mult, m):
             arr_m, _ = get_head(head, pool, m)
             rng2 = np.random.default_rng(seed)
             rr = simulate(p50, q95, on_hand, receipts, qty * mult,
                           rng2.choice(prod_arr, N, replace=True),
-                          rng2.choice(arr_m, N, replace=True), delay, rng2)
+                          rng2.choice(arr_m, N, replace=True), delay, need_days, rng2)
             st = ("fail_arrival" if rr["arrival_prob"] < TARGET
                   else "pass_cycle" if rr["no_stockout"] >= TARGET and rr["fill_rate"] >= TARGET
                   else "pass_fill" if rr["fill_rate"] >= TARGET
@@ -276,33 +293,58 @@ def main() -> int:
         if status in ("fail_service", "fail_arrival"):
             attempts = []
             if order_delay > 0:
-                attempts.append(("提前下单至今天", 0, 1.0, mode))
+                attempts.append(("提前下单至今天", START_DELAY, 1.0, mode))
             if status == "fail_service":
                 for mult in (1.25, 1.5, 2.0, 3.0):
                     attempts.append((f"加量x{mult:g}", order_delay, mult, mode))
                 if order_delay > 0:
                     for mult in (1.25, 1.5, 2.0, 3.0):
-                        attempts.append((f"提前下单+加量x{mult:g}", 0, mult, mode))
+                        attempts.append((f"提前下单+加量x{mult:g}", START_DELAY, mult, mode))
             else:
                 nxt = MODE_NEXT.get(mode)
                 while nxt:
                     attempts.append((f"升舱至{nxt}", order_delay, 1.0, nxt))
                     if order_delay > 0:
-                        attempts.append((f"提前下单+升舱至{nxt}", 0, 1.0, nxt))
+                        attempts.append((f"提前下单+升舱至{nxt}", START_DELAY, 1.0, nxt))
                     nxt = MODE_NEXT.get(nxt)
+                if pl_route:
+                    attempts.append(("空运情景（规划14天，需合同/报价）", START_DELAY, 1.0, "空运"))
+                    attempts.append(("按D6下单+空运情景", order_delay, 1.0, "空运"))
             for label, delay2, mult2, mode2 in attempts:
                 rr, st = evaluate(delay2, mult2, mode2)
                 if st in ("pass_cycle", "pass_fill"):
                     status, res, reason, remedy = st, rr, label, label
+                    chosen_mode = mode2
                     if mult2 != 1.0:
                         uplift = mult2
                     if mode2 != mode:
                         upgrade = f"→{mode2}"
                     break
             else:
-                reason = ("空运仍赶不上需要日（impossible_by_date）；需提前下单/接受风险"
-                          if status == "fail_arrival"
-                          else "加量/提前下单/升舱组合仍不足；需人工复核需求/供给")
+                rank = {"pass_cycle": 4, "pass_fill": 3,
+                        "fail_service": 2, "fail_arrival": 1}
+                best_rr, best_st = res, status
+                for label, delay2, mult2, mode2 in attempts:
+                    rr, st = evaluate(delay2, mult2, mode2)
+                    if rank.get(st, 0) > rank.get(best_st, 0):
+                        best_rr, best_st = rr, st
+                        chosen_mode = mode2
+                        if mult2 != 1.0:
+                            uplift = mult2
+                res, status = best_rr, best_st
+                if status == "fail_service":
+                    reason = "到货可赶上，但数量仍不足（满足率<95%）；需加量或复核需求"
+                elif pl_route:
+                    reason = "专线经验尾部超出保护窗，空运情景仍不足；需提前下单或接受风险"
+                else:
+                    reason = "所有方案到货仍晚于需要日；需提前下单/接受风险"
+        if pl_route and status in ("pass_cycle", "pass_fill"):
+            if chosen_mode == "空运":
+                status = "pass_air_scenario"
+                reason = (reason + "；" if reason else "") + "空运为规划情景，需报价/合同"
+            else:
+                status = "pass_route_contract"
+                reason = (reason + "；" if reason else "") + "时间可行，待承运商合同确认"
         rows.append({**base, "status": status, "reason": reason, "remedy": remedy,
                      "q_sim": qty * (uplift or 1.0), "arrival_prob": res["arrival_prob"],
                      "no_stockout_prob": res["no_stockout"],
@@ -348,7 +390,9 @@ def main() -> int:
                    "zmt": {"path": str(ZMT), "sha256": sha(ZMT)}},
         "outputs": {p.name: sha(p) for p in OUTDIR.iterdir() if p.is_file()},
         "counts": summary.to_dict("records"),
-        "params": {"N": N, "H": H, "seed": SEED, "target": TARGET},
+        "params": {"N": N, "H": H, "seed": SEED, "target": TARGET,
+                   "as_of": str(AS_OF.date()), "decision_date": str(DECISION.date())},
+        "generator": {"path": str(Path(__file__).resolve()), "sha256": sha(__file__)},
     }
     (OUTDIR / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=1, default=str), encoding="utf-8")

@@ -47,7 +47,7 @@ def test_simulate_never_stockout_with_abundant_stock():
     rng = np.random.default_rng(1)
     res = s2.simulate(10, 30, on_hand=10_000, receipts=[], qty=0,
                       prod=np.zeros(50), head=np.zeros(50),
-                      order_delay=0, rng=rng)
+                      order_delay=0, need_days=97, rng=rng)
     assert res["no_stockout"] == 1.0
     assert res["fill_rate"] > 0.99
 
@@ -57,7 +57,7 @@ def test_simulate_stockout_without_stock_or_order():
     rng = np.random.default_rng(2)
     res = s2.simulate(10, 30, on_hand=0, receipts=[], qty=0,
                       prod=np.zeros(50), head=np.zeros(50),
-                      order_delay=0, rng=rng)
+                      order_delay=0, need_days=97, rng=rng)
     assert res["no_stockout"] < 0.05
     assert res["fill_rate"] < 0.05
 
@@ -67,5 +67,5 @@ def test_simulate_long_lead_fails_arrival():
     rng = np.random.default_rng(3)
     res = s2.simulate(10, 30, on_hand=10_000, receipts=[], qty=10,
                       prod=np.full(50, 200.0), head=np.zeros(50),
-                      order_delay=0, rng=rng)
+                      order_delay=0, need_days=97, rng=rng)
     assert res["arrival_prob"] == 0.0
