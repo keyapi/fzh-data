@@ -41,7 +41,7 @@ def main() -> int:
     d6k = d6.rename(columns={"池": "pool", "形态": "physical_form", "UOM": "canonical_uom"})[
         keys + ["需求形态", "C可发供给", "en_stock在途+待发", "PO追加(去重)",
                 "在途ETA_p50", "净需求95", "需要日", "下单日", "推荐main_haul",
-                "路线状态", "建议动作"]]
+                "路线状态", "建议动作", "动作原因", "b2_scope"]]
     s = s.merge(d6k, on=keys, how="left", suffixes=("", "_d6"))
 
     # ---------- evidence chain: category, long-tail, sales, forecast method
@@ -136,6 +136,12 @@ def main() -> int:
                + pd.to_numeric(ev["PO追加(去重)"], errors="coerce").fillna(0))
     ev["在途/PO单据核实"] = np.where(inb_sum > 0, "是：需发运日/PO号/阶段", "无")
     ev["ETA来源"] = ev["eta_basis"].astype(str)
+    no_hist_floor = (pd.to_numeric(ev["p50"], errors="coerce").fillna(0) <= 0) &                     ev["interval_level"].astype(str).str.startswith("asof_us_total")
+    ev["需求依据"] = np.where(
+        no_hist_floor,
+        "无本品历史：按美国同形态池残差95分位作需求情景（政策，非本品实测）",
+        np.where(pd.to_numeric(ev["p50"], errors="coerce").fillna(0) > 0,
+                 "本品历史预测 + 同步总需求校准", "无足够历史"))
 
     pass_mask = s["status"].isin(["pass_cycle", "pass_fill"])
     cand = s[pass_mask].copy()
@@ -176,7 +182,7 @@ def main() -> int:
         "2026-11-06", ev_cand["下单日"].astype(str))
     ev_cols = ["product_id", "pool", "physical_form", "canonical_uom",
                "品类", "面料", "B2范围", "活跃分类", "需求形态_人话",
-               "销量档（长尾）", "历史销量", "预测方法", "方法说明", "区间校准",
+               "销量档（长尾）", "历史销量", "需求依据", "预测方法", "方法说明", "区间校准",
                "同类历史误差样本数（池化）", "服务水平", "q95", "净需求95",
                "C可发供给", "en_stock在途+待发", "PO追加(去重)", "在途ETA_p50",
                "在途/PO单据核实", "ETA来源", "mode", "建议运输方式", "headhaul_basis",
@@ -231,8 +237,22 @@ def main() -> int:
     not_released = humanize(not_released, ["缺什么证据", "责任方"])
 
     no_action = s[s["status"] == "not_action"].copy()
+    no_action = no_action.merge(ev[keys + ["需求依据"]], on=keys, how="left")
     no_new = no_action[no_action["建议动作"] == "不补"].copy()
     observe = no_action[no_action["建议动作"] == "观察"].copy()
+
+    def action_view(frame):
+        keep = ["product_id", "pool", "physical_form", "canonical_uom",
+                "建议动作", "动作原因", "b2_scope", "净需求95", "需求依据"]
+        keep = [c for c in keep if c in frame.columns]
+        out = frame[keep].rename(columns={
+            "pool": "池", "physical_form": "形态", "canonical_uom": "UOM",
+            "b2_scope": "B2范围"})
+        out["责任方"] = "业务/计划（按动作原因确认）"
+        return out
+
+    no_new_out = action_view(no_new)
+    observe_out = action_view(observe)
 
     summary = pd.DataFrame([
         ("可批准候选（A 周期95%）", int((cand["放行等级"] == "A级-周期95%").sum()),
@@ -246,7 +266,7 @@ def main() -> int:
         ("未放行（路线/供给/服务）", len(not_released),
          float(pd.to_numeric(not_released["涉及数量"], errors="coerce").fillna(0).sum())),
         ("不补（覆盖足够）", len(no_new), 0.0),
-        ("观察（政策/范围外）", len(observe), 0.0),
+        ("观察（政策/数据/共享/CG）", len(observe), 0.0),
     ], columns=["类别", "键数", "数量"])
     summary["说明"] = [
         "P(全程无断货)>=95% 且 到货赶上>=95%",
@@ -255,7 +275,7 @@ def main() -> int:
         "已有供给可催；ETA/单据需核实，不新增",
         "见逐项缺证与责任方",
         "净需求<=0；无需新增",
-        "政策排除/范围外/共享/CG；不进入本次补货",
+        "政策排除/数据未覆盖/共享/CG；逐行动作原因见 6_观察",
     ]
 
     notice = pd.DataFrame([
@@ -270,6 +290,9 @@ def main() -> int:
         ("数据来源", "销量=D3b v3.5 当前owner日销量；预测=D5 v6.4；库存=C刷新4_可发供给；EN供给=EN库存快照2026-11-02；服务=S2.9模拟"),
         ("路线限制", "波兰 506 键已用 120 条完成运单建立“专线”经验情景；3 键时间可行待合同，其余经验尾部超出保护窗；美中 82 条快递派送 + 29 条空运尾程"),
         ("未放行", "缺路线/供给/服务证据；逐项列责任方，不当作 0 或已批准"),
+        ("唯一键", "(product_id, 池, 形态, UOM)；不是仅 product_id（1,217 个产品对应 1,749 行）"),
+        ("波兰口径", "全池 735：可动用 506（3 时间可行 + 12 催已有 + 491 到货失败），另 199 不补 + 30 观察"),
+        ("非成品行", "246 个美国候选中 8 行为皮壳/成品+皮壳，需按下单/工单口径单独确认"),
         ("数量口径", "个；成品 MOQ=n/a（自有绍兴工厂）"),
     ], columns=["项", "内容"])
 
@@ -282,8 +305,8 @@ def main() -> int:
         pl_cand.to_excel(w, sheet_name="2c_波兰路线候选", index=False)
         expedite.to_excel(w, sheet_name="3_催已有", index=False)
         not_released.to_excel(w, sheet_name="4_未放行", index=False)
-        no_new.to_excel(w, sheet_name="5_无需新增", index=False)
-        observe.to_excel(w, sheet_name="6_观察", index=False)
+        no_new_out.to_excel(w, sheet_name="5_无需新增", index=False)
+        observe_out.to_excel(w, sheet_name="6_观察", index=False)
 
     lines = [
         "# 补货交付包（人工审核）2026-11-06", "",
