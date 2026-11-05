@@ -7,6 +7,11 @@ tags: [solutions, architecture-patterns, log]
 
 # architecture-patterns 变更日志
 
+## 2026-11-05
+
+- **更新**: `us-owner-restatement-and-b2-scope.md` —— 补 F1：US 区间校准必须用同步总需求目标，不能拼两历史仓残差（96 个双历史产品/形态/单位受影响）。
+- **更新**: `end-to-end-supply-chain-strategy-s1-s2.md` —— 补 2026-11-05 返修（F1-F6）；S2.4 的 332/154/178 旧数字 superseded，新模拟 A 58 / B 210 / 催已有 66 / 未放行 731。
+
 ## 2026-11-03
 
 - **新增**: `us-owner-restatement-and-b2-scope.md` —— 美国需求按当前 owner 重述（1,853→1,749）、A/B/C 三方案与 B2 品类范围；84,343 件/181 产品迁移、53 特例、31,033 件 US_unassigned 不猜。
