@@ -36,11 +36,12 @@ tags: [fba, alias, customer-code, ks0001, disabled-bom, product-bundle]
 3. **单候选强依据才自动**：`candidate_count==1` 且依据同时命中尺寸+面料+颜色才自动（`auto_pref=single_candidate`）；弱依据仍待审。
 4. **BOM 快照 include disabled**：历史订单可能引用停用物料；用 `show_disabled=1` 冻结 2,358 行，33/33 缺行补齐，并标记 `disabled_source`。
 5. **套件**：Product Bundle 子件 method 全一致才派生 `kit_method`；混合/空 → 待审；订单只有 TJ# 时子件不另计。
-6. **登记流程**：先 dry-run（旧/新 customer_code、hash、影响 SKU/行/件）→ 逐条取当前值、`WHERE customer_code=旧值` 乐观锁 → 写入 → 回读校验 → `clear-cache`。33 条/31 物料全部成功，备份在 `out/en_alias_register_20261105/`。
+6. **登记流程（权威源是子表，不是文本字段）**：先 dry-run → 在 `tabItem Customer Detail`（页面「客户物料」子表）追加 `ref_code` + `customer_group`，旧值/行数/hash 备份 → 写入 → 回读子表 → `clear-cache`。**不要只改 `Item.customer_code` 文本字段**：页面不显示、引擎若读文本会误判"未登记"（本次踩过：33 条先写错字段，后补子表）。
 7. **特殊借成本**：无白色物料时，先将别名挂到象牙白（同组/同面料/同尺寸），标 `cost_borrow_white→ivory`，成本借用、语义可回滚。
 
 ## Why This Works
 
+- 子表 `Item Customer Detail.ref_code` 才是页面与 EN 映射的权威源；`Item.customer_code` 只是汇总文本，不能单独作为登记依据。
 - 归一化把"同一 SKU 的多种写法"合并，避免无谓登记；KS0001 优先符合业务"更全"的口径。
 - 只在强依据/已登记别名时自动，其余待审，防误映射。
 - disabled 快照保证历史可复现；BOM 仍是成本主源，不用存储行字段。
