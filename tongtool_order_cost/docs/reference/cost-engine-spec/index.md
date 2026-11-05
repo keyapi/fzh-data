@@ -66,6 +66,8 @@ tags: [reference, index, cost-engine]
 | [34-phase4-run-package-canary.md](34-phase4-run-package-canary.md) | **Phase 4 run 包 + canary**：输入 manifest/hash、版本锁、不可变 `out/runs/<run_id>/`；202608 USNJ canary 逐行/逐列 diff、金额分层、门禁与写后回读 |
 
 | [35-phase4-fba-shadow.md](35-phase4-fba-shadow.md) | **Phase 4.FBA**：EN 明细 exact 物料 + BOM 成品口径（含直采成品例外）；未登记 SKU 白名单（候选仅建议）；78 列 FBA/合并 shadow（唯一键/pending）、三方对账与重复检测 |
+| [36-phase3.6-fill-tables.md](36-phase3.6-fill-tables.md) | **Phase 3.6**：self 166 / FBA 95 / merged 78 三表补全成本+系数块；公式与系数轨恒等；系数按行/crosswalk 继承、合并组取载体并阻断冲突；crosswalk/填充率/空白清单 |
+| [37-phase3.7-gs-ready.md](37-phase3.7-gs-ready.md) | **Phase 3.7**：作废原单保留行/销售、清空成本与系数轨并标 invalid_original；95↔78 聚合对账 + FBA/非FBA 重叠检查；严格 166/95/78 列 GS-ready 输出 |
 
 ## 相邻文档（不在本 bundle）
 

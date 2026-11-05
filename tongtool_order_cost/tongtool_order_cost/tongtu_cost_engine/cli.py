@@ -116,6 +116,11 @@ def main(argv=None) -> int:
     fc.add_argument("--runs-root", default=None)
     fc.add_argument("--allow-duplicate", action="store_true")
 
+    ft = sub.add_parser("fill-tables", help="Phase 3.6 成本+系数补全（self/FBA/merged，本地）")
+    ft.add_argument("--month", required=True)
+    ft.add_argument("--root", default=".")
+    ft.add_argument("--out-dir", default=None)
+
     ad = sub.add_parser("fba-alias-dryrun", help="EN alias 登记 dry-run（不写 EN/GS）")
     ad.add_argument("--root", default=".")
     ad.add_argument("--month", action="append", default=None)
@@ -192,6 +197,16 @@ def main(argv=None) -> int:
             "gates": {g["gate"]: g["status"] for g in pkg.gates},
             "readback": {c["check"]: c["status"] for c in pkg.readback},
         }, ensure_ascii=False))
+        return 0
+
+    if args.cmd == "fill-tables":
+        from .domain.phase36_fill import build_phase36
+
+        res = build_phase36(
+            month=args.month, root=Path(args.root),
+            out_dir=Path(args.out_dir) if args.out_dir else None,
+        )
+        print(json.dumps({"ok": True, **res["summary"]}, ensure_ascii=False))
         return 0
 
     if args.cmd == "fba-alias-dryrun":
