@@ -67,6 +67,8 @@ def main() -> int:
         "no_stockout_prob": "周期无断货概率", "fill_rate": "需求满足率",
         "mean_stockout_days": "平均断货天数", "mean_inventory": "平均库存"}).sort_values(
         ["放行等级", "建议数量"], ascending=[True, False])
+    top50 = cand.head(50).copy()
+    top50.insert(0, "优先级", range(1, len(top50) + 1))
 
     expedite = s[s["status"] == "expedite_pending"].copy()
     expedite["待确认"] = "催后 ETA、对应单据、目的仓"
@@ -140,6 +142,7 @@ def main() -> int:
         notice.to_excel(w, sheet_name="0_说明", index=False)
         summary.to_excel(w, sheet_name="1_汇总", index=False)
         cand.to_excel(w, sheet_name="2_可批准候选", index=False)
+        top50.to_excel(w, sheet_name="2b_Top50优先", index=False)
         expedite.to_excel(w, sheet_name="3_催已有", index=False)
         not_released.to_excel(w, sheet_name="4_未放行", index=False)
         no_new.to_excel(w, sheet_name="5_无需新增", index=False)
