@@ -10,7 +10,7 @@ tags: [solutions, architecture-patterns, log]
 ## 2026-11-05
 
 - **更新**: `us-owner-restatement-and-b2-scope.md` —— 补 F1：US 区间校准必须用同步总需求目标，不能拼两历史仓残差（96 个双历史产品/形态/单位受影响）。
-- **更新**: `end-to-end-supply-chain-strategy-s1-s2.md` —— 补 2026-11-05 返修（F1-F6）；S2.4 的 332/154/178 旧数字 superseded，新模拟 A 58 / B 210 / 催已有 66 / 未放行 731。
+- **更新**: `end-to-end-supply-chain-strategy-s1-s2.md` —— 补 2026-11-05 返修（F1-F6）；S2.4 的 332/154/178 旧数字 superseded，新模拟 A 49 / B 197 / 波兰情景 3 / 催已有 78 / 未放行 738。
 
 ## 2026-11-03
 

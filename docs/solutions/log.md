@@ -9,7 +9,7 @@ tags: [solutions, log]
 
 ## 2026-11-05（外部审核返修 F1-F6）
 - **更新**: `architecture-patterns/us-owner-restatement-and-b2-scope.md` —— US 区间校准必须用同步总需求目标，不能拼两历史仓残差。
-- **更新**: `architecture-patterns/end-to-end-supply-chain-strategy-s1-s2.md` —— 返修 F1-F6；154/178 旧结果 superseded；新模拟 A 58 / B 210 / 催已有 66 / 未放行 731。
+- **更新**: `architecture-patterns/end-to-end-supply-chain-strategy-s1-s2.md` —— 返修 F1-F6；154/178 旧结果 superseded；新模拟 A 49 / B 197 / 波兰情景 3 / 催已有 78 / 未放行 738。
 
 ## 2026-11-03（美国 owner 重述 + S1/S2 策略层）
 - **新增**: `architecture-patterns/us-owner-restatement-and-b2-scope.md` —— 美国需求按当前 owner 重述（as-of 1,853 → current 1,749）；A/B/C 三方案，B 为生产候选；84,343 件/181 产品迁移、53 特例、31,033 件 US_unassigned 不猜；B2 品类范围定稿。
