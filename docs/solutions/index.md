@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-05 | EN 服务器 git push 报 Permission denied (publickey) —— 密钥没问题，是 GitHub SSH 链路间歇性阻断 | [integration-issues/github-ssh-intermittent-publickey-denied.md](integration-issues/github-ssh-intermittent-publickey-denied.md) |
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |
 | 2026-10-27 | 供应分型与断货证据 — 先排费用/组件，再按角色分型；PJ 检查点不是每周 | [workflow-issues/supply-sku-segmentation-and-stockout-evidence.md](workflow-issues/supply-sku-segmentation-and-stockout-evidence.md) |
 | 2026-10-27 | frePPLe 评估 — 社区 MIT、企业闭源；借求解逻辑，不部署 | [tooling-decisions/frepple-evaluation-and-borrow-logic.md](tooling-decisions/frepple-evaluation-and-borrow-logic.md) |
