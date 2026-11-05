@@ -195,9 +195,10 @@ def main() -> int:
 
     expedite = s[s["status"] == "expedite_pending"].copy()
     pl_cand = s[s["status"].isin(["pass_route_contract", "pass_air_scenario"])].copy()
-    pl_cand["路线状态说明"] = pl_cand["status"].map({
-        "pass_route_contract": "专线经验可行，待承运商合同确认",
-        "pass_air_scenario": "空运规划情景可行，待报价/合同确认"})
+    pl_cand["路线状态说明"] = np.where(
+        pl_cand["status"].eq("pass_route_contract"),
+        "专线经验可行，待承运商合同确认",
+        "空运规划情景可行，待报价/合同确认")
     pl_cand["建议动作"] = "补货（时间可行，合同待确认）"
     expedite["待确认"] = "催后 ETA、对应单据、目的仓"
     expedite["建议动作"] = "催已有（不新增）"
