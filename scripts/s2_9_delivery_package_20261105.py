@@ -113,7 +113,7 @@ def main() -> int:
     ev["需求形态_人话"] = ev["需求形态"].map(pattern_cn).fillna(ev["需求形态"].astype(str))
     ev["预测方法"] = ev["model"].astype(str) + "（采用 " + ev["adopted_model"].astype(str) + "）"
     ev["区间校准"] = ev["interval_level"].map(calib_cn).fillna(ev["interval_level"].astype(str))
-    ev["同类历史误差样本数"] = ev["calibration_n"]
+    ev["同类历史误差样本数（池化）"] = ev["calibration_n"]
     ev["为什么补"] = [human_reason(r) for r in ev.to_dict("records")]
     ev["人工确认什么"] = [human_confirm(r) for r in ev.to_dict("records")]
     ev["历史销量"] = ("近90天 " + pd.to_numeric(ev["近90天销量"], errors="coerce")
@@ -182,7 +182,7 @@ def main() -> int:
     ev_cols = ["product_id", "pool", "physical_form", "canonical_uom",
                "品类", "面料", "B2范围", "活跃分类", "需求形态_人话",
                "销量档（长尾）", "历史销量", "预测方法", "方法说明", "区间校准",
-               "同类历史误差样本数", "服务水平", "q95", "净需求95",
+               "同类历史误差样本数（池化）", "服务水平", "q95", "净需求95",
                "C可发供给", "en_stock在途+待发", "PO追加(去重)", "在途ETA_p50",
                "在途/PO单据核实", "ETA来源", "mode", "建议运输方式", "建议数量", "建议下单日", "arrival_prob",
                "no_stockout_prob", "fill_rate", "为什么补", "人工确认什么"]
@@ -269,6 +269,7 @@ def main() -> int:
         ("可批准候选", "A 级为周期服务 95%；B 级为满足率 95%，两者不可混同"),
         ("主要建议", "绝大多数候选需要“提前下单至今天”才能达到服务目标；D6 原下单日不足以覆盖交期尾部"),
         ("证据链", "2a 表逐行列出品类/需求形态/历史销量/预测方法/校准样本/库存/在途/为什么补/人工确认什么"),
+        ("数据来源", "销量=D3b v3.5 当前owner日销量；预测=D5 v6.4；库存=C刷新4_可发供给；EN供给=EN库存快照2026-11-02；服务=S2.9模拟"),
         ("路线限制", "波兰 506 键已用 120 条完成运单建立“专线”经验情景；3 键时间可行待合同，其余经验尾部超出保护窗；美中 82 条快递派送 + 29 条空运尾程"),
         ("未放行", "缺路线/供给/服务证据；逐项列责任方，不当作 0 或已批准"),
         ("数量口径", "个；成品 MOQ=n/a（自有绍兴工厂）"),
