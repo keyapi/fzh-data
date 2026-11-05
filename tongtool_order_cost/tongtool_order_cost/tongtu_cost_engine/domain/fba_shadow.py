@@ -57,7 +57,7 @@ EXTRA_COLUMNS: tuple[str, ...] = (
     "fulfillment", "source_key", "business_key", "bridge_status", "bridge_reason",
     "canonical_sku", "gs_sku", "gs_msku", "site", "country", "en_rows", "gs_share",
     "duplicate_flag", "product_id", "bundle_item", "bundle_version",
-    "en_item_code", "kit_method", "unique_key", "pending_flag", "auto_pref",
+    "en_item_code", "kit_method", "unique_key", "pending_flag", "auto_pref", "en_month",
 )
 
 SITE_COUNTRY_RE = re.compile(r"(US|DE|FR|IT|ES|NL|BE|UK|CA|JP)$", re.IGNORECASE)
@@ -71,6 +71,10 @@ PENDING_COLUMNS: tuple[str, ...] = (
     "month", "site", "msku", "sku", "product_name", "canonical_sku", "qty", "reason",
 )
 UNMATCHED_EN_COLUMNS: tuple[str, ...] = ("month", "country", "canonical_sku", "en_qty", "en_rows")
+CROSS_MONTH_COLUMNS: tuple[str, ...] = (
+    "month", "country", "canonical_sku", "site", "msku", "sku", "gs_qty",
+    "en_month", "en_rows_used", "en_qty_used", "en_month_total_qty", "qty_diff",
+)
 WH_COUNTRY = {
     "美国FBA": "US", "德国FBA": "DE", "法国FBA": "FR", "意大利FBA": "IT",
     "西班牙FBA": "ES", "荷兰FBA": "NL", "比利时FBA": "BE", "英国FBA": "UK",
@@ -360,8 +364,20 @@ def _load_fba_tables(month: str, root: Path):
     en = pd.read_csv(root / "out" / "en_items_all_089.csv", dtype=str, low_memory=False, keep_default_na=False)
     en = en[en["warehouse_name"].str.contains("FBA", case=False, na=False)].copy()
     en["month"] = en["despatch_complete_time"].map(_month_of)
-    en = en[en["month"] == month]
+    # 保留全部月份：同月优先，找不到时用 ±1 月窗口跨月桥接
     return gs, tt, en
+
+
+def _shift_month(month: str, delta: int) -> str:
+    year, mon = int(month[:4]), int(month[4:6])
+    mon += delta
+    while mon < 1:
+        mon += 12
+        year -= 1
+    while mon > 12:
+        mon -= 12
+        year += 1
+    return f"{year:04d}{mon:02d}"
 
 
 def _canonical(sku: str, resolver: EnResolver, en_keys: set[str]) -> tuple[str, str]:
@@ -411,9 +427,9 @@ def build_fba_shadow(
             canonical = normalize_sku(items[0]) if len(items) == 1 else normalize_sku(rec.get("tongtool_sku"))
         en_rows.append({**rec, "country": country, "canonical": canonical, "exact_item": exact})
     en_keys = {r["canonical"] for r in en_rows if r["canonical"]}
-    en_groups: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    en_groups: dict[tuple[str, str, str], list[dict]] = defaultdict(list)
     for r in en_rows:
-        en_groups[(r["country"], r["canonical"])].append(r)
+        en_groups[(r["month"], r["country"], r["canonical"])].append(r)
 
     # GS rows → canonical/country
     gs_rows = []
@@ -426,20 +442,22 @@ def build_fba_shadow(
         gs_groups[(r["country"], r["canonical"])].append(r)
 
     # 未登记组预解析：Colab 商品名 → 候选 EN Item；同款仅差有无扣 → KS0001 自动映射（superset）
+    # 注意：同月无 EN 行的组也要解析（跨月桥接 / BOM 兜底需要产品唯一性）
     auto_prep: dict[str, dict] = {}
     for gkey, grows in gs_groups.items():
         country, canonical = gkey
         if not canonical:
             continue
-        egroups = en_groups.get(gkey, [])
-        if not egroups or any(_text(r.get("exact_item")) for r in egroups):
+        egroups = en_groups.get((month, country, canonical), [])
+        if any(_text(r.get("exact_item")) for r in egroups):
             continue
         name = _text(grows[0].get("产品名称"))
         gs_sku = _text(grows[0].get("SKU"))
         fields = _parse_product_name(name, bases, fabrics)
         cands, basis, count = _match_candidates(fields, name, bom_names)
         # 已登记别名（归一化：去空格/连字符/下划线 + 大写）直接命中 → 优先于候选推断
-        alias_items = [i for i in resolver.items_for_sku(gs_sku) if i in bom_index or i in bundles]
+        # 不按 BOM 存在性过滤：别名命中但缺 BOM 应报 bom_missing，而不是产品歧义
+        alias_items = list(resolver.items_for_sku(gs_sku))
         pick = ""
         auto_pref = ""
         if len(alias_items) == 1:
@@ -465,32 +483,55 @@ def build_fba_shadow(
     bridge_rows: list[dict] = []
     pending: list[dict] = []
     whitelist_rows: list[dict] = []
+    cross_month_recon: list[dict] = []
     used_en: set[int] = set()
     cost_identity_violations = 0
     direct_purchase_zero_rows = 0
     for gkey, grows in sorted(gs_groups.items()):
         country, canonical = gkey
         gqty = sum(_num(r.get("销量")) or 0.0 for r in grows)
-        egroups = en_groups.get(gkey, []) if canonical else []
+        egroups = en_groups.get((month, country, canonical), []) if canonical else []
+        en_month_used = month
+        bridge_kind = ""
+        # 同月无 EN FBA 行 → ±1 月窗口找同产品行（按 GS 数量逐行分配，已用行不重复计）
+        if canonical and not egroups:
+            for adj in (_shift_month(month, -1), _shift_month(month, 1)):
+                cand = [r for r in en_groups.get((adj, country, canonical), [])
+                        if id(r) not in used_en]
+                if not cand:
+                    continue
+                picked: list[dict] = []
+                acc = 0.0
+                for rr in cand:
+                    picked.append(rr)
+                    acc += _num(rr.get("quantity")) or 0.0
+                    if acc >= gqty:
+                        break
+                egroups = picked
+                en_month_used = adj
+                bridge_kind = "cross_month_bridge"
+                break
+            if not egroups:
+                bridge_kind = "gs_only_bom_fallback"
+                en_month_used = ""
         exact_items = {_text(r.get("exact_item")) for r in egroups if _text(r.get("exact_item"))}
         exact_item = next(iter(exact_items), "")
         if not canonical:
             status, reason = "pending", "gs_sku_unresolved"
-        elif not egroups:
-            status, reason = "pending", "no_en_fba_rows"
         elif len(exact_items) > 1:
             status, reason = "pending", "en_item_ambiguous"
         elif gqty <= 0:
             status, reason = "pending", "gs_qty_zero"
         else:
-            status, reason = "ok", ""
+            status, reason = "ok", bridge_kind
         en_qty = sum(_num(r.get("quantity")) or 0.0 for r in egroups)
-        if status == "ok" and en_qty <= 0:
+        if status == "ok" and en_month_used == month and egroups and en_qty <= 0:
             status, reason = "pending", "en_qty_zero"
         # 成品口径单位成本（BOM exact 查表）
         unit_costs = None
         kit_method = ""
         direct_rows: list[dict] = []
+        is_direct = False
         auto_info = auto_prep.get(canonical) if canonical else None
         auto_pref = ""
         if status == "ok":
@@ -531,9 +572,23 @@ def build_fba_shadow(
             if status == "ok" and unit_costs is not None and unit_costs["sx"] <= 0:
                 # 直采成品（cost_fg == sx_cost_all 且 cost_sxbzcp == 0）允许绍兴二次=0
                 if _direct_purchase(direct_rows):
-                    reason = "direct_purchase_zero"
+                    is_direct = True
+                    if not reason:
+                        reason = "direct_purchase_zero"
                 else:
                     status, reason = "pending", "sx_zero"
+        if status == "ok" and bridge_kind == "cross_month_bridge":
+            group_all = en_groups.get((en_month_used, country, canonical), [])
+            used_qty = sum(_num(x.get("quantity")) or 0.0 for x in egroups)
+            cross_month_recon.append({
+                "month": month, "country": country, "canonical_sku": canonical,
+                "site": _text(grows[0].get("站点")), "msku": _text(grows[0].get("MSKU")),
+                "sku": _text(grows[0].get("SKU")), "gs_qty": round(gqty, 6),
+                "en_month": en_month_used, "en_rows_used": len(egroups),
+                "en_qty_used": round(used_qty, 6),
+                "en_month_total_qty": round(sum(_num(x.get("quantity")) or 0.0 for x in group_all), 6),
+                "qty_diff": round(gqty - used_qty, 6),
+            })
         product_id = resolver.product_for_item(exact_item or canonical) if canonical else ""
         bundle_item = exact_item if exact_item in bundles else ""
         bundle_version = bundles[bundle_item].version if bundle_item else ""
@@ -541,7 +596,7 @@ def build_fba_shadow(
         for r in grows:
             qty = _num(r.get("销量")) or 0.0
             share = (qty / gs_share_total) if gs_share_total else 0.0
-            if status == "ok" and en_qty > 0:
+            if status == "ok":
                 shell = unit_costs["shell"] * qty
                 sx = unit_costs["sx"] * qty
                 process = unit_costs["processing"] * qty
@@ -597,6 +652,7 @@ def build_fba_shadow(
                 "en_item_code": exact_item,
                 "kit_method": kit_method,
                 "auto_pref": auto_pref,
+                "en_month": en_month_used,
             })
             if status == "ok":
                 units = qty or 1.0
@@ -609,7 +665,7 @@ def build_fba_shadow(
                     status, reason = "pending", "cost_identity_broken"
                     fba["bridge_status"], fba["bridge_reason"] = status, reason
                 else:
-                    if reason == "direct_purchase_zero":
+                    if is_direct:
                         direct_purchase_zero_rows += 1
                     fba.update({
                         "皮壳成本": unit_shell,
@@ -630,8 +686,8 @@ def build_fba_shadow(
                 "month": month, "country": country, "canonical_sku": canonical,
                 "site": _text(r.get("站点")), "msku": _text(r.get("MSKU")),
                 "gs_sku": _text(r.get("SKU")), "gs_qty": qty,
-                "en_qty": en_qty, "en_rows": len(egroups), "share": share,
-                "status": status, "reason": reason,
+                "en_qty": en_qty, "en_rows": len(egroups), "en_month": en_month_used,
+                "share": share, "status": status, "reason": reason,
             })
             if status != "ok":
                 pending.append({
@@ -680,9 +736,11 @@ def build_fba_shadow(
             "note": note,
         })
 
-    # EN 未覆盖
+    # EN 未覆盖（仅当月；跨月借用行不计入当月未匹配）
     unmatched_en = []
-    for (country, canonical), rows in en_groups.items():
+    for (m, country, canonical), rows in en_groups.items():
+        if m != month:
+            continue
         if any(id(r) in used_en for r in rows):
             continue
         unmatched_en.append({
@@ -709,9 +767,9 @@ def build_fba_shadow(
             "gs_head": _num(r.get("头程费用")), "tt_head": _num(t.get("头程费用")) if t else None,
             "tt_missing": t is None,
         })
-    # EN vs GS by country/canonical
+    # EN vs GS by country/canonical（当月）
     for (country, canonical), grows in gs_groups.items():
-        egroups = en_groups.get((country, canonical), [])
+        egroups = en_groups.get((month, country, canonical), [])
         if not egroups:
             continue
         en_qty = sum(_num(x.get("quantity")) or 0.0 for x in egroups)
@@ -764,7 +822,7 @@ def build_fba_shadow(
 
     priced_qty = sum(float(r.get("发货数量") or 0.0) for r in fba_rows if r["bridge_status"] == "ok")
     gs_qty = sum(_num(r.get("销量")) or 0.0 for r in gs_rows)
-    en_qty_all = sum(_num(r.get("quantity")) or 0.0 for r in en_rows)
+    en_qty_all = sum(_num(r.get("quantity")) or 0.0 for r in en_rows if r.get("month") == month)
     tt_qty_all = sum(_num(r.get("销量")) or 0.0 for r in tt_norm)
     pending_reasons = dict(Counter(r["reason"] for r in pending))
     recon_top = sorted(
@@ -791,6 +849,14 @@ def build_fba_shadow(
         "en_qty_coverage_gs": round(gs_qty / en_qty_all, 6) if en_qty_all else 0.0,
         "tt_qty_coverage_gs": round(gs_qty / tt_qty_all, 6) if tt_qty_all else 0.0,
         "pending_reasons": pending_reasons,
+        "cross_month_rows": sum(1 for r in fba_rows if r.get("bridge_reason") == "cross_month_bridge"),
+        "cross_month_qty": round(sum(
+            float(r.get("发货数量") or 0.0) for r in fba_rows
+            if r.get("bridge_reason") == "cross_month_bridge"), 6),
+        "gs_only_rows": sum(1 for r in fba_rows if r.get("bridge_reason") == "gs_only_bom_fallback"),
+        "gs_only_qty": round(sum(
+            float(r.get("发货数量") or 0.0) for r in fba_rows
+            if r.get("bridge_reason") == "gs_only_bom_fallback"), 6),
         "cost_identity_violations": cost_identity_violations,
         "direct_purchase_zero_rows": direct_purchase_zero_rows,
         "whitelist_rows": len(whitelist_rows),
@@ -833,6 +899,8 @@ def build_fba_shadow(
             out_dir / f"fba_pending_{month}.csv", index=False, encoding="utf-8-sig")
         pd.DataFrame(unmatched_en, columns=list(UNMATCHED_EN_COLUMNS)).to_csv(
             out_dir / f"fba_unmatched_en_{month}.csv", index=False, encoding="utf-8-sig")
+        pd.DataFrame(cross_month_recon, columns=list(CROSS_MONTH_COLUMNS)).to_csv(
+            out_dir / f"fba_cross_month_{month}.csv", index=False, encoding="utf-8-sig")
         wl_df = pd.DataFrame(whitelist_rows, columns=list(WHITELIST_COLUMNS))
         wl_df.to_csv(out_dir / f"fba_whitelist_{month}.csv", index=False, encoding="utf-8-sig")
         # 合并模板：按月覆盖，保留其它月份已有登记
@@ -878,6 +946,7 @@ def build_fba_shadow(
             pd.DataFrame(recon).to_excel(w, sheet_name="三方对账", index=False)
             pd.DataFrame(pending).to_excel(w, sheet_name="待审", index=False)
             pd.DataFrame(unmatched_en).to_excel(w, sheet_name="EN未匹配", index=False)
+            pd.DataFrame(cross_month_recon).to_excel(w, sheet_name="跨月桥接", index=False)
             pd.DataFrame(recon_top).to_excel(w, sheet_name="对账Top", index=False)
             wl_df.to_excel(w, sheet_name="未登记SKU", index=False)
         lines = [
@@ -889,6 +958,8 @@ def build_fba_shadow(
             f"priced 覆盖 GS {stats['qty_coverage_gs_priced']:.2%}；GS/EN {stats['en_qty_coverage_gs']:.2%}；"
             f"GS/TT {stats['tt_qty_coverage_gs']:.2%}",
             f"- 待审原因: {stats['pending_reasons']}",
+            f"- 跨月桥接: {stats['cross_month_rows']} 行 / {stats['cross_month_qty']:g} 件；"
+            f"BOM 兜底: {stats['gs_only_rows']} 行 / {stats['gs_only_qty']:g} 件",
             f"- 未登记白名单: {stats['whitelist_skus']} SKU / {stats['whitelist_rows']} 行 / {stats['whitelist_qty']:g} 件；"
             f"自动映射 {stats['auto_mapped_skus']} SKU（alias {stats['auto_alias_skus']} + "
             f"superset {stats['auto_superset_skus']} + single {stats['auto_single_candidate_skus']}）；"

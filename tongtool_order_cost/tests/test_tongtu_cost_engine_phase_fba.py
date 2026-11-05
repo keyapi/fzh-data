@@ -448,3 +448,113 @@ def test_fba_whitelist_alias_auto_pref(tmp_path):
     assert w["auto_pref"] == "alias"
     assert w["approved_by"] == "auto:alias"
     assert "别名" in w["note"]
+
+
+def _files_for(tmp_path: Path, *, month: str, gs_row: dict, en_rows: list[dict],
+               ref_rows: list[dict], bom_rows: list[dict]) -> Path:
+    out = tmp_path / "out"
+    out.mkdir(exist_ok=True)
+    pd.DataFrame(ref_rows).to_csv(out / "item_refcode.csv", index=False, encoding="utf-8")
+    pd.DataFrame(bom_rows, columns=BOM_COLS).to_csv(
+        out / "bom_cost_product_with_kits.csv", index=False, encoding="utf-8")
+    pd.DataFrame(columns=["bundle_item", "component_item", "qty", "bundle_version"]).to_csv(
+        out / "product_bundles.csv", index=False, encoding="utf-8")
+    pd.DataFrame(columns=["item_fg", "cost_fg"]).to_csv(out / "kit.csv", index=False)
+    pd.DataFrame(en_rows, columns=["order_id_code", "warehouse_name", "despatch_complete_time",
+                                   "package_id", "tongtool_sku", "erp_item_code", "quantity",
+                                   "shipping_method", "cost_fg", "cost_sxbzcp", "cost_sxbzbcp",
+                                   "sx_cost_all", "sx_shipping_cost",
+                                   "split_package_cost_factor"]).to_csv(
+        out / "en_items_all_089.csv", index=False, encoding="utf-8")
+    for m in ("202608", "202609"):
+        pd.DataFrame([gs_row] if m == month else []).to_csv(
+            out / f"raw_fba_{m}.csv", index=False, encoding="utf-8")
+        pd.DataFrame(columns=list(gs_row)).to_csv(out / f"fba_export_{m}.csv", index=False,
+                                                  encoding="utf-8")
+    return out
+
+
+def _en_row(order: str, sku: str, item: str, qty: str = "1") -> dict:
+    return {"order_id_code": order, "warehouse_name": "美国FBA仓",
+            "despatch_complete_time": "2026-08-11 09:32:40", "package_id": order,
+            "tongtool_sku": sku, "erp_item_code": item, "quantity": qty,
+            "shipping_method": "皮壳", "cost_fg": "0", "cost_sxbzcp": "0",
+            "cost_sxbzbcp": "0", "sx_cost_all": "0", "sx_shipping_cost": "0",
+            "split_package_cost_factor": "1"}
+
+
+def _gs(month: str, sku: str, qty: str = "1") -> dict:
+    return {"MSKU": "M1", "SKU": sku, "站点": "AMZDANEEYUS", "销量": qty,
+            "销售额": "100", "产品名称": "三角有扣 荷兰绒 45cm 深蓝色 靠枕",
+            "成本": "0", "头程费用": "0"}
+
+
+def test_fba_cross_month_bridge_to_adjacent_en(tmp_path):
+    """当月无 EN FBA 行 → ±1 月窗口借行，按 GS 数量分配，标 cross_month_bridge。"""
+    gs = _gs("202609", "CM-SKU", qty="1")
+    en = [_en_row("O1", "CM-OTHER", "KS-CM-1"), _en_row("O2", "CM-OTHER", "KS-CM-1")]
+    ref = [{"name": "KS-CM-1", "customer_code": "CM-SKU", "item_group": "三角靠枕",
+            "variant_of": "KS-CM-1"}]
+    bom = [_bom_row("KS-CM-1", cost_fg=10, sx_cost_all=14, name="三角靠枕-荷兰绒-45-深蓝色")]
+    out = _files_for(tmp_path, month="202609", gs_row=gs, en_rows=en, ref_rows=ref, bom_rows=bom)
+    res = build_fba_shadow(month="202609", root=tmp_path, nonfba_csv=None,
+                           bom_csv=out / "bom_cost_product_with_kits.csv",
+                           ref_map_csv=out / "item_refcode.csv",
+                           bundle_csv=out / "product_bundles.csv",
+                           kit_report_csv=out / "kit.csv",
+                           out_dir=out / "fba_shadow" / "202609")
+    assert res.stats["fba_priced"] == 1
+    assert res.stats["cross_month_rows"] == 1
+    assert res.stats["cross_month_qty"] == 1.0
+    assert res.stats["fba_pending"] == 0
+    row = res.fba_rows[0]
+    assert row["bridge_reason"] == "cross_month_bridge"
+    assert row["en_month"] == "202608"
+    assert float(row["绍兴二次加工成本*数量"]) == 4  # (14−10)×1
+    cm = pd.read_csv(out / "fba_shadow" / "202609" / "fba_cross_month_202609.csv",
+                     dtype=str, keep_default_na=False)
+    assert len(cm) == 1
+    assert cm.iloc[0]["en_month"] == "202608"
+    assert cm.iloc[0]["en_rows_used"] == "1"          # 按 GS 数量只消费 1 行
+    assert float(cm.iloc[0]["en_month_total_qty"]) == 2.0
+    assert float(cm.iloc[0]["qty_diff"]) == 0.0
+
+
+def test_fba_gs_only_bom_fallback(tmp_path):
+    """无同月/相邻 EN 行，但产品唯一 + BOM 存在 → BOM 定价，标 gs_only_bom_fallback。"""
+    gs = _gs("202608", "FB-SKU", qty="2")
+    ref = [{"name": "KS-FB-1", "customer_code": "FB-SKU", "item_group": "三角靠枕",
+            "variant_of": "KS-FB-1"}]
+    bom = [_bom_row("KS-FB-1", cost_fg=10, sx_cost_all=14, name="三角靠枕-荷兰绒-45-深蓝色")]
+    out = _files_for(tmp_path, month="202608", gs_row=gs, en_rows=[], ref_rows=ref, bom_rows=bom)
+    res = build_fba_shadow(month="202608", root=tmp_path, nonfba_csv=None,
+                           bom_csv=out / "bom_cost_product_with_kits.csv",
+                           ref_map_csv=out / "item_refcode.csv",
+                           bundle_csv=out / "product_bundles.csv",
+                           kit_report_csv=out / "kit.csv",
+                           out_dir=out / "fba_shadow" / "202608")
+    assert res.stats["fba_priced"] == 1
+    assert res.stats["gs_only_rows"] == 1
+    assert res.stats["gs_only_qty"] == 2.0
+    row = res.fba_rows[0]
+    assert row["bridge_reason"] == "gs_only_bom_fallback"
+    assert row["en_month"] == ""
+    assert row["en_rows"] == 0
+    assert float(row["绍兴二次加工成本*数量"]) == 8  # (14−10)×2
+
+
+def test_fba_fallback_missing_bom_pending(tmp_path):
+    """无 EN 行且 BOM 缺失 → pending bom_missing（不静默）。"""
+    gs = _gs("202608", "NB-SKU", qty="1")
+    ref = [{"name": "KS-NB-1", "customer_code": "NB-SKU", "item_group": "三角靠枕",
+            "variant_of": "KS-NB-1"}]
+    out = _files_for(tmp_path, month="202608", gs_row=gs, en_rows=[], ref_rows=ref, bom_rows=[])
+    res = build_fba_shadow(month="202608", root=tmp_path, nonfba_csv=None,
+                           bom_csv=out / "bom_cost_product_with_kits.csv",
+                           ref_map_csv=out / "item_refcode.csv",
+                           bundle_csv=out / "product_bundles.csv",
+                           kit_report_csv=out / "kit.csv",
+                           out_dir=out / "fba_shadow" / "202608")
+    assert res.stats["fba_priced"] == 0
+    assert res.stats["fba_pending"] == 1
+    assert res.fba_rows[0]["bridge_reason"] == "bom_missing"

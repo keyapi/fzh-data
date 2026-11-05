@@ -40,7 +40,13 @@ tags: [cost, fba, bridge, shadow, reconciliation, phase4]
 - 同键多 GS 行（MSKU/账号）按 `qty` 分摊 EN 成本；EN 总成本守恒到组。
 - 桥接表字段：month/country/canonical_sku/site/MSKU/SKU/qty/en_qty/en_rows/share/
   product_id/bundle_item/bundle_version/status/reason。
-- 缺失/歧义（GS SKU 未登记、EN 无对应行、EN item 多候选、BOM 缺行、绍兴二次为 0、qty 0）→ pending，不补值。
+- **跨月桥接（Phase 4.FBA.h）**：同月无 EN FBA 行时，按产品在 **±1 个月窗口**找 EN FBA 行；
+  按 GS 数量逐行分配（已消费行不重复计），定价仍用 BOM 成品口径，标
+  `bridge_reason=cross_month_bridge`，并记录 `en_month` / `en_rows_used` / `en_qty_used`。
+- **BOM 兜底**：仍无相邻 EN 行，但产品唯一（别名/唯一候选）且 BOM 存在 → 按 BOM 定价，
+  标 `bridge_reason=gs_only_bom_fallback`，不静默；只有缺 BOM / 产品歧义 / 直采零异常才 pending。
+- **跨月数量核对**：`fba_cross_month_<month>.csv` 记录每次借用的 EN 月、行数、数量与该 EN 组总量；
+  成本 = BOM 单价 × GS 数量，不累加 EN 成本，Aug/Sep 不会双计（`qty_diff` 应 ≥ 0 覆盖）。
 - **未登记 SKU 白名单**（Phase 4.FBA.2/4.FBA.3）：`en_item_missing` 的 GS 行落
   `fba_whitelist_<month>.csv` + 汇总模板 `out/fba_shadow/fba_whitelist_template.csv` + SKU 级
   `fba_whitelist_skus.csv`，字段 month/site/country/msku/sku/product_name/qty/en_rows/en_qty/
@@ -68,38 +74,37 @@ tags: [cost, fba, bridge, shadow, reconciliation, phase4]
 - `merged_shadow_<month>.csv`：78 列合并 shadow（SELF + FBA），每行带 `fulfillment`、`source_key`、
   `unique_key`（行级唯一，重复源键追加 `#n`）、`pending_flag`、`business_key`、`duplicate_flag`。
 - `fba_bridge_<month>.csv`、`fba_recon_<month>.csv`、`fba_pending_<month>.csv`、
-  `fba_unmatched_en_<month>.csv`、`fba_whitelist_<month>.csv`
+  `fba_unmatched_en_<month>.csv`、`fba_whitelist_<month>.csv`、`fba_cross_month_<month>.csv`
 - `fba_shadow_<month>.xlsx`（汇总/ FBA行/合并行/桥接/三方对账/待审/EN未匹配/对账Top/未登记SKU）与 `.md`
 - `out/fba_shadow/fba_whitelist_template.csv`：跨月白名单模板（按月覆盖，保留其它月已登记）
 - `out/fba_shadow/fba_whitelist_skus.csv`：SKU 级汇总（一行一个未登记 SKU，含月/站点/数量/候选）
 
-## 4. 2026-11-05 结果（Phase 4.FBA.g，item_refcode 扩到 2621 物料）
+## 4. 2026-11-05 结果（Phase 4.FBA.h，跨月桥接 + BOM 兜底）
 
 | 指标 | 202608 | 202609 |
 |---|---:|---:|
-| FBA 行 / 可定价 / 待审 | 146 / 146 / 0 | 133 / 132 / 1 |
-| 待审原因 | — | `no_en_fba_rows` 1 |
-| 待审数量 | 0 | 1 件 |
+| FBA 行 / 可定价 / 待审 | 146 / 146 / 0 | 133 / 133 / 0 |
+| 待审原因 | — | — |
+| 跨月桥接（行 / 件） | 0 / 0 | 1 / 1（EN 202608） |
+| BOM 兜底（行 / 件） | 0 / 0 | 0 / 0 |
 | 直采成品绍兴二次=0 行 | 3（13 件） | 3（4 件） |
-| 未登记白名单 | 22 SKU / 22 行 / 110 件 | 19 SKU / 19 行 / 82 件 |
-| 其中 alias 自动映射 | 22 SKU | 19 SKU |
-| 其中单一候选自动映射 | 0 | 0 |
-| 仍待业务确认 | 0 | 0 |
+| 未登记白名单（全部 alias） | 22 SKU / 22 行 / 110 件 | 19 SKU / 19 行 / 82 件 |
 | 合并行 / 唯一键 / 重复键 | 10,993 / 10,993 / 0 | 6,361 / 6,361 / 0 |
-| 合并 pending 行 | 0 | 1 |
+| 合并 pending 行 | 0 | 0 |
 | 业务键重复行（FBA/自发货同键） | 0 | 0 |
 | GS / EN / TT 数量 | 2,066 / 2,159 / 2,173 | 1,328 / 1,367 / 1,328 |
-| priced 覆盖 GS 数量 | **100.00%** | **99.92%** |
+| priced 覆盖 GS 数量 | **100.00%** | **100.00%** |
 | GS/EN 数量覆盖 | 95.7% | 97.1% |
 | GS/TT 数量覆盖 | 95.1% | 100% |
-| FBA 四列合计（皮壳 / 绍兴二次 / 二次 / 头程） | 79,755.82 / 76,707.28 / 0 / 70,291.65 | 52,785.94 / 52,395.90 / 0 / 48,715.70 |
-| 绍兴二次非零行 / 恒等违例 | 143/146 · 0 | 129/132 · 0 |
+| FBA 四列合计（皮壳 / 绍兴二次 / 二次 / 头程） | 79,755.82 / 76,707.28 / 0 / 70,291.65 | 52,818.95 / 52,426.99 / 0 / 48,745.45 |
+| 绍兴二次非零行 / 恒等违例 | 143/146 · 0 | 130/133 · 0 |
 | EN 未匹配组 | 6 | 4 |
 | GS vs TT 成本差 / 头程差 | -9,597.42 / -3,314.50 | -60.90 / 0 |
 
-**别名登记完成**：`item_refcode.csv` 扩到 **2,621 个物料**（含 BOM/套件/目标物料），
-33 个曾提案 SKU **全部**可按归一化别名直读；白名单 22/19 个 SKU 全部 `auto_pref=alias`，
-无单一候选启发式；202608 待审归零，202609 仅剩 1 件 `no_en_fba_rows`（EN 本月无该物料行）。
+**最后 1 件待审原因已闭环**：GS 202609 `BNUSFBA-Velvet-Blue-100` 按付款在 9 月，
+EN FBA 明细在 2026-08（8/11 美国FBA），属跨月错位——现按 ±1 月窗口借用 202608 EN 行
+（按 GS 1 件分配 1/40 行），标 `cross_month_bridge`，`qty_diff=0`；无 Aug/Sep 双计。
+202608 待审与跨月桥接均为 0。
 
 - `direct_purchase_zero`：`KS0523-KQCLXGBS-36x60x10-{BLUE,GREY,WHITE}` BOM 为直采成品
   （`method=成品`、`cost_fg = sx_cost_all = 48`、`cost_sxbzcp = 0`），允许绍兴二次=0 并定价。

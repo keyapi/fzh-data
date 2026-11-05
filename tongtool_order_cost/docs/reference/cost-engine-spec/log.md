@@ -214,3 +214,11 @@ title: cost-engine-spec 变更日志
   - 白名单 22/19 SKU 全部 `auto_pref=alias`；四列合计 79,755.82/76,707.28/0/70,291.65 与
     52,785.94/52,395.90/0/48,715.70。
   - `fba_pending_*.csv` 空结果也写表头（0 行时下游可读）。
+
+## 2026-11-05（Phase 4.FBA.h）
+- **[35-phase4-fba-shadow.md](35-phase4-fba-shadow.md)**：跨月桥接 + BOM 兜底，待审归零。
+  - 同月无 EN FBA 行 → ±1 月窗口按产品借行（按 GS 数量逐行分配，标 cross_month_bridge）；
+    仍无 → 产品唯一且 BOM 存在则 BOM 定价（gs_only_bom_fallback）；仅缺 BOM/歧义才 pending。
+  - 跨月核对输出 `fba_cross_month_<month>.csv`；成本=BOM 单价×GS 数量，不累加 EN 成本，避免双计。
+  - 202608：146/146（100.00%），待审 0；202609：133/133（100.00%），跨月 1 行/1 件
+    （BNUSFBA-Velvet-Blue-100 → EN 202608，1/40 行，qty_diff 0）；重复 0、恒等违例 0。
