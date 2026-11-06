@@ -11,7 +11,10 @@ date: 2026-11-06
 
 ## 已知证据
 
-- 13 个 EN DN 的 `custom_tongtool_purchase_order` 有值，对应 13 个唯一通途 PO，样本呈 1:1；
+- **14 个 EN DN** 的 `custom_tongtool_purchase_order` 有值（2026-11-06 查询：PO021725–PO021748 中的 14 个），样本均 1 DN 对 1 PO；
+- 其中 **11 个 DN** 能落到 2026-11-05 的未结 PO 队列（71 条 PO 行、51 条 Shipment）；缺的 3 个是：
+  - DN-26-00087 / PO021724：PO 不在未结队列（无 open 行）；
+  - DN-26-00134 / PO021747、DN-26-00135 / PO021748：DN 创建于 2026-11-06，晚于 PO 快照 2026-11-05；
 - EN `Tongtool PO Creation` 仅 2 条创建审计，均 1 DN，样本呈 1:1；
 - 更早的 PO 没有该字段；客户 PO（NJHY/TXHY/PL）不是通途 PO，不能反推；
 - 钉钉 `2026年下单表/物流信息表` 提供 PO→ZMT 物流号/方式/目的地/件数/签收，可补运输链，但不直接给 DN；
@@ -39,12 +42,12 @@ cardinality, status(未找到/候选/已确认/冲突), operator, updated_at, ro
 
 ## 下一轮三步
 
-1. 对现有 13 DN 去重并追溯原始关联依据（PO Creation、DN 字段、明细数量）。
+1. 对现有 14 DN 去重并追溯原始关联依据（PO Creation、DN 字段、明细数量）；先补齐 3 个未落入未结队列的 DN。
 2. 定向核查拆单/合单/部分发货，分别检验 DN→PO、PO→DN 两个方向的基数。
 3. 生成只读试算清单，人工验收后按边界分批回填；保留操作日志与回滚。
 
 ## 当前只读试算
 
-- 13 DN → 13 PO；71 条 PO 行；51 条可接 Shipment；
-- 文件：`analysis/po_dn_stage_audit_20261106.csv`；
+- 14 DN → 14 PO（样本 1:1）；其中 11 DN 落到未结队列，71 条 PO 行，51 条可接 Shipment；
+- 文件：`analysis/po_dn_stage_audit_20261106.csv`、`D_补货交付包_2026-11-06_final_v14.xlsx` 的 `10a_PO核对`；
 - 本轮不写 EN。
