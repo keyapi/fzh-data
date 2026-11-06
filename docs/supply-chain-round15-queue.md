@@ -30,11 +30,15 @@ date: 2026-11-07
 - 输出：`analysis/round15_firstlate_rescue.md/.csv`。
 - **未改 v15/v2**；待并入 v3/v16。
 
-## W3 60cm 4,001 键 + DN/PO 全链路
+## W3 60cm 4,001 键 + DN/PO 全链路（已完成）
 
-- 4,001 保留原键：C/EN/PO exact vs missing 统计，列 Top 缺口。
-- DN↔PO：14 EN DN vs 11 台账/71 PO 行/51 Shipment；阶段核销与缺失原因。
-- 只读；输出 `analysis/round15_60cm_dnpo_audit.md` + CSV。
+- 4,001 件 = 20 个 `kept_no_target` 键的 `qty_v3_5` 合计。
+- C/EN 各 **20/20 exact_full**，均 239（同一波兰物理池，不可相加）。
+- PO **3/20 exact_full**（DEEPGREY 60、DEEPBLUE 70、COFFEE 10）；**17 键无 PO，缺 2,417 件**。
+- Top 缺口：ANTHRACITE 680、IVORY 555、BLUE 511（前三占 43.7%）。
+- DN：台账 11 个 DN 全 1:1 / 71 行 / 6,731 open；51 行 Shipment / 4,637 open；EN 14 DN 中 3 个缺失（PO021724 不在未结队列；PO021747/748 为 11-06 新建晚于快照）。
+- 阶段：DN 日期 71/71；Shipment 51/71；depart 10/71；**arrive/warehouse_in 全空**，到货/入仓不可自动确认。
+- 输出：`analysis/round15_60cm_dnpo_audit.md/.csv`；已并入 `D_老板版补货建议_2026-11-09_v3b.xlsx` 的 `10_60cm与DN-PO审计`。
 
 ## Gate
 
