@@ -275,20 +275,26 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
     for rec in self_t.to_dict("records"):
         row = dict(rec)
         k = _key(rec.get("订单号"), rec.get("通途SKU"))
-        srow = src_by_key.get(k) or src_by_key.get(
-            _key_pt(rec.get("订单号"), rec.get("平台SKU_统一") or rec.get("平台SKU")))
+        srow = src_by_key.get(k)
+        if srow is None:
+            srow = src_by_key.get(
+                _key_pt(rec.get("订单号"), rec.get("平台SKU_统一") or rec.get("平台SKU")))
         if srow is None:
             cands = src_by_order.get(str(rec.get("订单号") or "").strip().upper(), [])
             if len(cands) == 1:
                 srow = cands[0]
         if srow is None:
-            ridx = raw_by_key.get(k) or raw_by_key.get(
-                _key_pt(rec.get("订单号"), rec.get("平台SKU") or rec.get("平台SKU_统一")))
+            ridx = raw_by_key.get(k)
+            if ridx is None:
+                ridx = raw_by_key.get(
+                    _key_pt(rec.get("订单号"), rec.get("平台SKU") or rec.get("平台SKU_统一")))
             if ridx is not None:
                 srow = src_by_row.get(ridx)
         qty = _clamp_qty(rec.get("发货数量"))
-        old_row = old_by_key.get(k) or old_by_key.get(
-            _key_pt(rec.get("订单号"), rec.get("平台SKU_统一") or rec.get("平台SKU")))
+        old_row = old_by_key.get(k)
+        if old_row is None:
+            old_row = old_by_key.get(
+                _key_pt(rec.get("订单号"), rec.get("平台SKU_统一") or rec.get("平台SKU")))
         if srow is None:
             oid = str(rec.get("订单号") or "").strip().upper()
             if oid in invalid_ids:

@@ -178,3 +178,27 @@ def test_phase36_fills_cost_and_coef_blocks(tmp_path):
         assert list(gs.columns) == cols
     gs_m = pd.read_csv(out / "gs_ready" / "merged_202608.csv", dtype=str, keep_default_na=False)
     assert "cost_status" not in gs_m.columns and len(gs_m) == 6
+
+
+def test_raw_row_index_zero_still_resolves(tmp_path):
+    """回归：raw 行索引为 0 时不能被 `or` 当成分支未命中。"""
+    _setup(tmp_path)
+    out = tmp_path / "out"
+    raw = pd.DataFrame([{"订单号": "O5", "平台SKU": "P5", "通途SKU": "S5"}])
+    raw.to_csv(out / "snapshots" / "202608" / "raw_202608.csv",
+               index=False, encoding="utf-8")
+    for name in ("wb_fresh_202608.csv", "merged_202608.csv"):
+        p = out / name
+        df = pd.read_csv(p, dtype=str, keep_default_na=False)
+        extra = {c: "" for c in df.columns}
+        extra.update({"订单号": "O5", "平台SKU": "P5", "通途SKU": "S5",
+                      "发货数量": "1"})
+        pd.concat([df, pd.DataFrame([extra])], ignore_index=True).to_csv(
+            p, index=False, encoding="utf-8")
+    res = build_phase36(month="202608", root=tmp_path)
+    s = pd.read_csv(Path(res["out_dir"]) / "wb_fresh_202608.csv",
+                    dtype=str, keep_default_na=False)
+    o5 = s[s["通途SKU"] == "S5"].iloc[0].to_dict()
+    # 命中 source_row=0 的源行（组内非载体 → 成本显式 0），不能落成 crosswalk_missing
+    assert o5["cost_status"] == "ok"
+    assert o5["皮壳成本"] == "0"
