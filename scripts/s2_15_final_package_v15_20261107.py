@@ -145,10 +145,15 @@ def main() -> int:
                "人工确认"]]
 
     r7 = rescue[rescue["状态"].isin(["cycle95", "fill95"])].copy()
-    r7["需确认"] = "确认空运舱位/运价/合同"
+    r7["执行状态"] = r7["可执行补救状态"]
+    r7["需确认"] = "确认空运舱位/运价/合同；普船二批下单日已过需重排"
+    exec_rescue = rescue[rescue["可执行补救状态"].isin(["cycle95", "fill95"])]
+    blocked_rescue = rescue[rescue["可执行补救状态"].eq("阻塞-第二批下单日已过")]
 
     # ---------- 2_候选总表：状态/服务指标全部回填 v7
     cand = frames["2_可批准候选"].copy()
+    cand = cand.merge(d5[KEYS + ["p50"]], on=KEYS, how="left").rename(
+        columns={"p50": "forecast_p50"})
     tj2 = traj[KEYS + ["评估天数", "窗口止", "状态", "无断货概率", "满足率",
                        "首批到仓", "需求异常类型"]].rename(
         columns={"评估天数": "轨迹评估天数", "窗口止": "轨迹窗口止",
@@ -253,10 +258,12 @@ def main() -> int:
          f"{len(risk_rows)} 条全部已验证运输都晚于断货日；是总量子集，不能与上面相加"),
         ("  其中：可换运输-待重模拟", len(remedy_rows), round(remedy_qty, 1), np.nan,
          "选定运输晚于断货日，但更快运输可赶上；需重模拟，不直接解禁"),
-        ("  其中：补救重模拟通过", int(rescue["状态"].isin(["cycle95", "fill95"]).sum()),
-         float(pd.to_numeric(rescue.loc[rescue["状态"].isin(["cycle95", "fill95"]),
-                                       "数量"], errors="coerce").fillna(0).sum()), np.nan,
-         "8 键改空运后 7 键过（5 cycle/2 fill）、1 fail；仍不自动解禁"),
+        ("  其中：可执行补救通过", len(exec_rescue),
+         float(pd.to_numeric(exec_rescue["数量"], errors="coerce").fillna(0).sum()), np.nan,
+         "3 键（快船二批）通过；4 个普船方案二批下单日已过，另列阻塞"),
+        ("  其中：补救被第二批下单日阻塞", len(blocked_rescue),
+         float(pd.to_numeric(blocked_rescue["数量"], errors="coerce").fillna(0).sum()), np.nan,
+         "普船第二批下单日 2026-10-23 已过，需重排，不算可执行"),
         ("  其中：可执行但风险隔离", len(risk_pass), round(risk_pass_qty, 1), risk_pass_traj,
          "轨迹过但风险未消；按风险隔离处理，不计入净可执行"),
         ("净可执行（剔除风险隔离）", net_keys, net_plan, net_traj,
@@ -403,7 +410,7 @@ def main() -> int:
         ("PO", "10a_PO核对看 14/11/3 的差异；10_PO逐单台账逐单看 open_qty/ETA/匹配"),
         ("运输补救", "16_运输补救：8 个选定运输晚于断货日但更快运输可赶上的键，单独重模拟；不直接解禁"),
         ("新增资格", "18_60cm新增补货资格：19 个供给恢复后 观察→补 的键，单独复审，不在 257 春节包"),
-        ("人工复审", "19_人工复审_31 / 20_人工复审_7：31 个可确认 + 7 个换运输候选，逐键服务目标/日期/数量"),
+        ("人工复审", "19_人工复审_31 / 20_人工复审_7：31 个可确认 + 7 个换运输模拟通过（其中 3 可执行、4 因普船二批下单日已过阻塞）"),
     ], columns=["看哪张", "看什么"])
 
     # ---------- 12_已知限制
@@ -427,7 +434,7 @@ def main() -> int:
         ("60cm 287", "KS0001-DM-60-COFFEE/波兰 287 件保留原键、保留预测历史；零中位数待验证，方案量0"),
         ("60cm 覆盖", "保留原键 4,001 件（含 287）仍需按 D1b/C/EN/PO 逐键确认覆盖；本包只对平需求口径"),
         ("新增资格", "19 个 60cm 供给恢复后 观察→补 的键；不在 257 春节包，需单独资格复审"),
-        ("人工复审", "31 个可确认 + 7 个换运输候选；逐键服务目标/日期/数量见 19/20 表"),
+        ("人工复审", "31 个可确认 + 7 个换运输模拟通过（3 可执行、4 普船二批下单日已过阻塞）；见 19/20 表"),
         ("操作边界", "不自动下单、不写 EN、不写通途"),
     ], columns=["项", "已知限制"])
 
@@ -452,10 +459,13 @@ def main() -> int:
                                        & cny9["可执行状态"].eq("可执行-待人工确认")).sum()), 0),
         ("2 服务指标与 v7 不一致", metric_mismatch, 0),
         ("2 旧服务列已移除", int(any(c in cand.columns for c in ["轨迹无断货", "轨迹满足率"])), 0),
-        ("2 零中位数原q95保留", int((zm & (cand["forecast_q95"] > 0)).sum()), 66),
+        ("2 零中位数原q95保留", int((zm & (cand["forecast_p50"] <= 0)
+                                       & (cand["forecast_q95"] > 0)).sum()), 66),
         ("2 零中位数建议量>0", int((zm & (cand["建议数量"] > 0)).sum()), 0),
         ("9 可换运输键", int(cny9["是否可换运输"].sum()), 8),
         ("16 运输补救行", len(rescue), 8),
+        ("16 第二批下单日已过", len(blocked_rescue), 4),
+        ("20 可执行补救", len(exec_rescue), 3),
         ("60cm 供给恢复键", len(rec), 20),
         ("18 新增资格键", len(qual), 19),
         ("18 新增资格误入257", int(qual["在257"].sum()), 0),

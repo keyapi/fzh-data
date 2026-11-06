@@ -264,6 +264,9 @@ def main() -> int:
         key = (r["product_id"], r["pool"], r["physical_form"], r["canonical_uom"])
         ns, fill, _ = simulate(key_rng(key + ("rescue",)), Hh, d50, d95, on_hand,
                                receipts, [(d1, q1), (d2, q2)])
+        second_order = pd.to_datetime(r.get("最迟下单日"), errors="coerce")
+        past_second = bool(pd.notna(second_order) and second_order < DECISION)
+        sim_status = status_of(ns, fill, sigma)
         rescue_rows.append(dict(
             product_id=r["product_id"], 池=r["pool"], 形态=r["physical_form"],
             UOM=r["canonical_uom"], 数量=q1 + q2,
@@ -275,9 +278,11 @@ def main() -> int:
             补救第二批到仓=arr2.date().isoformat() if hasattr(arr2, "date") else str(arr2),
             首批下单日=DECISION.date().isoformat(),
             第二批下单日=r.get("最迟下单日", ""),
+            第二批下单日已过=past_second,
             运输方案=f"首批{mode}；第二批{r['建议运输']}",
             无断货概率=round(ns, 4), 满足率=round(fill, 4),
-            状态=status_of(ns, fill, sigma)))
+            状态=sim_status,
+            可执行补救状态=("阻塞-第二批下单日已过" if past_second else sim_status)))
     rescue = pd.DataFrame(rescue_rows)
 
     out = pd.DataFrame(rows)
