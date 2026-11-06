@@ -11,7 +11,7 @@
 """
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -173,13 +173,22 @@ def build_writeback_rehearsal(
 ) -> WritebackRehearsal:
     old = pd.read_csv(old_writeback_csv, dtype=str, low_memory=False, keep_default_na=False)
     template = list(old.columns)
-    by_group, by_row, by_product = _wb_index(old)
+    # 只允许有效订单行参与映射；作废原单/模板独有行不得把运费、身份带进有效子单
+    valid_ids = {r.order_id for r in shadow.rows}
+    old_active = old[old["订单号"].isin(valid_ids)]
+    by_group, by_row, by_product = _wb_index(old_active)
     nonempty_cols = {
         c for c in template
         if any(_nonempty(v) for v in old[c].tolist())
     }
     disabled = set(disabled_items or ())
     by_index = {r.index: r for r in shadow.rows}
+    # 模板运费池：同一 (订单号, 通途SKU) 可能多行，按出现次数消费
+    freight_pool: dict[tuple[str, str], list[str]] = {}
+    for rec in old_active.to_dict("records"):
+        key = (_nonempty(rec.get("订单号")), normalize_sku(rec.get("通途SKU")))
+        freight_pool.setdefault(key, []).append(_nonempty(rec.get("运费")))
+    freight_used: dict[tuple[str, str], int] = defaultdict(int)
 
     rows: list[dict] = []
     for detail, p2 in zip(shadow.detail_rows, phase2.rows):
@@ -203,6 +212,23 @@ def build_writeback_rehearsal(
 
         src_idx = _source_indices(detail.get("source_rows", ""))
         src_rows = [by_index[i] for i in src_idx if i in by_index]
+        # 运费：按源行从模板逐行取（同一键可多行，按出现顺序消费）。
+        # 合并组必须把组件行的尾程运费求和到载体行，否则中间表会少计。
+        freight_sum = 0.0
+        freight_found = False
+        for src in src_rows:
+            key = (src.order_id, src.sku)
+            values = freight_pool.get(key, [])
+            idx_used = freight_used[key]
+            if idx_used < len(values):
+                value = _to_float(values[idx_used])
+                freight_used[key] = idx_used + 1
+                if value is not None:
+                    freight_sum += value
+                    freight_found = True
+        if freight_found:
+            freight_text = f"{freight_sum:.6f}".rstrip("0").rstrip(".")
+            out["运费"] = freight_text if merged else (out.get("运费") or freight_text)
         # 原始订单：同一组内任一源行有值即带出（唯一才用，冲突留待旧写回/留空）
         for col in template:
             if col in PRIMARY_COST_COLUMNS or col in COST_DERIVED_COLUMNS:
@@ -253,16 +279,16 @@ def build_writeback_rehearsal(
                 if status == "ok":
                     out[col] = value
 
-        # 运费兜底：旧写回映射不到时，用原始订单包裹总运费 / cost_qty（单位化）
-        if not out.get("运费"):
+        # 运费兜底：只有模板完全没有该行时，才用原始订单包裹总运费（行总额）。
+        # 合并组只要任一源行命中模板，就不能再加兜底，否则会把组件运费重复计。
+        if not out.get("运费") and not freight_found:
             pkg_values = [
                 _to_float(r.raw.get("包裹总运费")) for r in src_rows
                 if _nonempty(r.raw.get("包裹总运费"))
             ]
             pkg_values = [v for v in pkg_values if v is not None]
-            qty_hint = _to_float(detail.get("pieces") or detail.get("发货数量")) or 0.0
-            if pkg_values and qty_hint > 0:
-                out["运费"] = f"{sum(pkg_values) / qty_hint:g}"
+            if pkg_values:
+                out["运费"] = f"{sum(pkg_values):.6f}".rstrip("0").rstrip(".")
         # suffix / 件套：原始订单/旧写回都没有时，从平台SKU/产品名推导
         if not out.get("suffix"):
             import re
@@ -329,12 +355,14 @@ def build_writeback_rehearsal(
                 one_piece = units["皮壳成本"] + units["绍兴二次加工成本"] + units["二次加工成本"]
                 out["1件产品成本"] = f"{one_piece:.6f}".rstrip("0").rstrip(".")
                 out["产品成本*数量"] = f"{one_piece * cost_qty:g}"
-                freight_unit = _to_float(out.get("运费"))
-                if freight_unit is None:
+                freight_total = _to_float(out.get("运费"))
+                if freight_total is None:
                     derived_reason.append("订单总成本:运费未映射")
                     derived_reason.append("订单利润:订单总成本不可得")
                 else:
-                    order_total = (sum(units.values()) + freight_unit) * cost_qty
+                    # 运费是行总额（不乘数量）；海外仓成本是单位成本（乘数量）
+                    overseas_unit = _to_float(out.get("海外仓成本")) or 0.0
+                    order_total = (sum(units.values()) + overseas_unit) * cost_qty + freight_total
                     out["订单总成本"] = f"{order_total:g}"
                     revenue_values = [
                         _to_float(by_index[i].raw.get("收入(人民币)"))
@@ -394,6 +422,7 @@ def build_writeback_rehearsal(
         _assert_cost_blanks(rows),
         _assert_per_unit(rows, phase2.rows),
         _assert_one_piece(rows),
+        _assert_conservation(rows, old, shadow),
         _assert_key_columns(rows),
         _assert_derived_rates(rows),
     ]
@@ -566,6 +595,78 @@ KEY_MAPPING_COLUMNS: tuple[str, ...] = (
     "是否皮壳", "运费", "suffix", "件套", "当月是否新品",
     "虚拟跟踪号", "物流商单号", "产品发售日期",
 )
+
+
+def _assert_conservation(
+    rows: Sequence[dict], old: pd.DataFrame, shadow: MergeShadowResult,
+) -> Assertion:
+    """合并前后销售额与尾程运费必须守恒。
+
+    - 销售额：以有效源行（shadow.rows）为基准；
+    - 运费：以模板按源行逐行消费为基准（同一键多行按出现顺序），
+      模板完全没有该行时才允许用「包裹总运费」兜底。
+    """
+    by_index = {r.index: r for r in shadow.rows}
+    valid_ids = {r.order_id for r in shadow.rows}
+    cols = (
+        {c: (c in rows[0]) for c in ("售价", "售价(人民币)", "运费")}
+        if rows else {c: False for c in ("售价", "售价(人民币)", "运费")}
+    )
+    pool: dict[tuple[str, str], list[float | None]] = defaultdict(list)
+    for rec in old.to_dict("records"):
+        if _nonempty(rec.get("订单号")) not in valid_ids:
+            continue
+        key = (_nonempty(rec.get("订单号")), normalize_sku(rec.get("通途SKU")))
+        pool[key].append(_to_float(rec.get("运费")))
+    used: dict[tuple[str, str], int] = defaultdict(int)
+    expected_freight = 0.0
+    for detail in shadow.detail_rows:
+        found = False
+        for i in _source_indices(detail.get("source_rows", "")):
+            src = by_index.get(i)
+            if src is None:
+                continue
+            key = (src.order_id, src.sku)
+            values = pool.get(key, [])
+            if used[key] < len(values):
+                value = values[used[key]]
+                used[key] += 1
+                if value is not None:
+                    expected_freight += value
+                    found = True
+        if not found:
+            expected_freight += sum(
+                _to_float(src.raw.get("包裹总运费")) or 0.0
+                for i in _source_indices(detail.get("source_rows", ""))
+                for src in (by_index.get(i),)
+                if src is not None and _nonempty(src.raw.get("包裹总运费"))
+            )
+    t_sale = sum(r.sale for r in shadow.rows)
+    t_sale_cny = sum(r.sale_cny for r in shadow.rows)
+    n_sale = sum(_to_float(r.get("售价")) or 0.0 for r in rows) if cols.get("售价") else 0.0
+    n_sale_cny = (
+        sum(_to_float(r.get("售价(人民币)")) or 0.0 for r in rows) if cols.get("售价(人民币)") else 0.0
+    )
+    n_freight = sum(_to_float(r.get("运费")) or 0.0 for r in rows) if cols.get("运费") else 0.0
+    diffs = {}
+    if cols.get("售价"):
+        diffs["售价"] = round(n_sale - t_sale, 4)
+    if cols.get("售价(人民币)"):
+        diffs["售价(人民币)"] = round(n_sale_cny - t_sale_cny, 4)
+    if cols.get("运费"):
+        diffs["运费"] = round(n_freight - expected_freight, 4)
+    bad = {k: v for k, v in diffs.items() if abs(v) > 0.01}
+    detail = (
+        f"售价 {t_sale:.2f}→{n_sale:.2f}；售价(人民币) {t_sale_cny:.2f}→{n_sale_cny:.2f}；"
+        f"运费（源行模板合计） {expected_freight:.2f}→{n_freight:.2f}"
+    )
+    return Assertion(
+        name="销售额与尾程运费守恒",
+        status="fail" if bad else "pass",
+        checked=len(diffs) or 1,
+        detail=detail + ("；差异 " + str(bad) if bad else "；合并前后一致"),
+        violations=[{"field": k, "diff": v} for k, v in bad.items()],
+    )
 
 
 def _assert_key_columns(rows: Sequence[dict]) -> Assertion:

@@ -216,8 +216,8 @@ def test_missing_columns_mapped_or_flagged(tmp_path):
     # 成本来源编码按 (order_common, 平台SKU) 映射
     assert merged["成本来源编码"] == "COST-US"
     assert passthru["成本来源编码"] == "COST-US"
-    # 组键冲突 → 回退精确行键（承运行）
-    assert merged["运费"] == "5"       # ORD-1000001_1 的旧写回运费
+    # 合并组运费 = 各组件行之和（5 + 7），不是只取承运行
+    assert merged["运费"] == "12"
     assert passthru["运费"] == "3"
     assert "运费:conflict" not in merged["unmapped_columns"]
     # 小模板里的列都已被原始订单/映射/兜底补齐
@@ -292,9 +292,9 @@ def test_order_total_and_profit_when_inputs_available(tmp_path):
     assert row["发货数量"] == "3"
     assert row["皮壳成本"] == "5"
     assert row["运费"] == "2"
-    # (5 + 7 + 2 + 1 + 运费 2) × 3 = 51
-    assert row["订单总成本"] == "51"
-    assert row["订单利润"] == "49"       # 收入 100 − 51
+    # 运费是行总额，不乘数量：(5 + 7 + 2 + 1) × 3 + 2 = 47
+    assert row["订单总成本"] == "47"
+    assert row["订单利润"] == "53"       # 收入 100 − 47
     assert row["derived_reason"] == ""
     assert rehearsal.stats["derived_blank_counts"]["订单总成本"] == 0
 
@@ -319,7 +319,7 @@ def test_freight_raw_fallback_when_writeback_missing(tmp_path):
     ])
     rehearsal = build_writeback_rehearsal(shadow, p2, old, month="202608")
     row = rehearsal.rows[0]
-    assert row["运费"] == "5"   # 包裹总运费 10 / qty 2
+    assert row["运费"] == "10"   # 包裹总运费（行总额，不除数量）
     assert row["订单总成本"] != ""
 
 
