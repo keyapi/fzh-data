@@ -15,6 +15,7 @@ metadata:
 
 ## 必须先做
 
+0. **订单成本口径先读** [docs/reference/tongtool-order-canon/index.md](../../../docs/reference/tongtool-order-canon/index.md)：订单身份/分组合并/计价矩阵/冲突登记。本 skill 只做触发与命令，不复制口径。
 1. 读 `tongtool_order_cost/AGENT_HANDOFF.md`。
 2. Google Sheet 读写前确认本机有 `secrets/gsheets-service-account.json`（gitignored）。没有则运行 bootstrap，**不要**把 notebook 里的私钥提交进 git。
 3. 写回 Google Sheet 必须用户确认：工作表名单、只改哪一列、dry-run 计数。默认 `--dry-run`。
