@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "W1 frozen snapshot (values are local only)",
+  "description": "Schema for the local-only frozen values file. The public repo must not contain row-level quantities; see D33.",
+  "type": "object",
+  "required": ["version", "source", "stock", "po", "wo"],
+  "additionalProperties": true,
+  "properties": {
+    "version": {"type": "string"},
+    "source": {"type": "string"},
+    "note": {"type": "string"},
+    "stock": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sku", "warehouse", "available", "intransit", "waiting", "defects"],
+        "additionalProperties": true,
+        "properties": {
+          "sku": {"type": "string"},
+          "warehouse": {"type": "string"},
+          "available": {"type": "number"},
+          "intransit": {"type": "number"},
+          "waiting": {"type": "number"},
+          "defects": {"type": "number"}
+        }
+      }
+    },
+    "po": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sku", "warehouse", "ponum", "quantity", "in_quantity", "status"],
+        "additionalProperties": true,
+        "properties": {
+          "sku": {"type": "string"},
+          "warehouse": {"type": "string"},
+          "ponum": {"type": "string"},
+          "quantity": {"type": "number"},
+          "in_quantity": {"type": "number"},
+          "status": {"type": "string"},
+          "willArriveDate": {"type": ["string", "null"]},
+          "b_max_only": {"type": "boolean"}
+        }
+      }
+    },
+    "wo": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sku", "item_code", "wo", "qty", "produced_qty", "status"],
+        "additionalProperties": true,
+        "properties": {
+          "sku": {"type": "string"},
+          "item_code": {"type": "string"},
+          "wo": {"type": "string"},
+          "qty": {"type": "number"},
+          "produced_qty": {"type": "number"},
+          "status": {"type": "string"},
+          "production_conflict": {"type": "boolean"},
+          "conflict_note": {"type": "string"},
+          "sample10_wo_not_listed": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}
