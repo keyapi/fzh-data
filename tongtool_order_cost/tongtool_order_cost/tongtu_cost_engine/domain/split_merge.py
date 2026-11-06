@@ -39,10 +39,11 @@ from ...ustx_cost_compare import group_split_rows, order_common_part
 
 TOL = 1e-6
 
-# 载体形态（仅用于组内挑行，不代表交付语义）
+# 载体形态（仅用于组内挑行 / 单品后缀计价，不代表交付语义）
 SHAPE_FINISHED = "finished"
 SHAPE_COVER = "cover"
 SHAPE_FOAM = "foam"
+SHAPE_PPCOTTON = "ppcotton"
 
 # EN shipping_method 的三种交付语义（定价唯一依据）
 METHOD_COVER = "皮壳"
@@ -215,15 +216,18 @@ def sku_base(sku: object) -> str:
 
 
 def sku_shape(sku: object) -> str:
-    """SKU 形态（仅供挑载体）：含 COVER→皮壳、含 FOAM→海绵、其余→成品形态。
+    """SKU 形态：含 COVER→皮壳、含 FOAM→海绵、含 PPCOTTON→PP棉、其余→成品形态。
 
     注意：这不是交付语义；交付语义一律取 EN `shipping_method`。
+    单品后缀计价（EN `order_sync.py:2941-3003`）只对非 FBA、非合并组生效。
     """
     base = sku_base(sku)
     if _COVER_SKU_RE.search(base):
         return SHAPE_COVER
     if _FOAM_SKU_RE.search(base):
         return SHAPE_FOAM
+    if "PPCOTTON" in base:
+        return SHAPE_PPCOTTON
     return SHAPE_FINISHED
 
 
@@ -405,6 +409,27 @@ def load_method_map(en_items_csv: str | Path) -> dict[tuple[str, str], str]:
             continue
         seen.setdefault(key, set()).add(method)
     return {k: next(iter(v)) if len(v) == 1 else "" for k, v in seen.items()}
+
+
+def load_en_line_map(en_items_csv: str | Path) -> dict[tuple[str, str], frozenset[str]]:
+    """`(order_id_code, 归一化通途SKU) → EN 行 erp_item_code 集合`。
+
+    EN 订单明细行是**行级权威**（单独卖皮壳/海绵/PP棉时，只有 EN 行知道卖的是哪一个物料）。
+    同一键出现多个不同 `erp_item_code` 时保留多值，调用方必须阻断，不得取 first。
+    列不存在或值为空 → 空集合（回退别名解析）。
+    """
+    df = pd.read_csv(en_items_csv, dtype=str, low_memory=False, keep_default_na=False)
+    if "erp_item_code" not in df.columns:
+        return {}
+    out: dict[tuple[str, str], set[str]] = {}
+    for rec in df.to_dict("records"):
+        oid = str(rec.get("order_id_code") or "").strip()
+        sku = normalize_sku(rec.get("tongtool_sku"))
+        item = str(rec.get("erp_item_code") or "").strip()
+        if not oid or not sku or not item or item.upper() in {"NULL", "NONE", "-"}:
+            continue
+        out.setdefault((oid, sku), set()).add(item)
+    return {k: frozenset(v) for k, v in out.items()}
 
 
 # ─────────────────────────── EN 作废原单（aux） ───────────────────────────
@@ -621,6 +646,7 @@ class LoadResult:
     rows: list[OrderRow]              # 全部非作废行（含未登记/歧义，保证不丢行）
     aux_rows: list[OrderRow]          # invalid=1 且仍出现在 raw 的原单，只作校验
     sku_issues: list[dict]            # 未登记/歧义 SKU 汇总
+    en_line_stats: dict = field(default_factory=dict)  # EN 行级身份采用/冲突计数
 
 
 def _to_float(value: object) -> float:
@@ -660,16 +686,59 @@ def load_orders(
         raise ValueError(f"订单表缺列: {missing}")
 
     method_map = load_method_map(en_items_csv)
+    en_line_map = load_en_line_map(en_items_csv)
     invalid_map = _read_invalid_map(flags_csv)
     rows: list[OrderRow] = []
     aux_rows: list[OrderRow] = []
     issues: dict[tuple[str, str], dict] = {}
+    en_line_stats = {
+        "en_line_used": 0, "en_line_override": 0, "alias_en_conflict": 0,
+        "en_item_unmapped": 0, "en_item_multi": 0, "en_line_skipped_cover_in_group": 0,
+    }
+    # 同一原始订单里若同时有 Cover 与 填充行（Foam/PPCotton），Cover 行的 EN 物料号常被
+    # 默认成另一条产品线；此时产品身份应以填充行为准（后续 _anchor_same_order 锚定）。
+    records = df.to_dict("records")
+    order_has_filler: dict[str, bool] = {}
+    for rec in records:
+        common = order_common_part(str(rec.get("订单号") or "").strip())
+        if sku_shape(rec.get("通途SKU")) in (SHAPE_FOAM, SHAPE_PPCOTTON):
+            order_has_filler[common] = True
 
-    for index, rec in enumerate(df.to_dict("records")):
+    for index, rec in enumerate(records):
         order_id = str(rec.get("订单号") or "").strip()
         sku_raw = str(rec.get("通途SKU") or "").strip()
         sku = normalize_sku(sku_raw)
         resolution = resolver.resolve(sku_raw)
+        anchor_source = ""
+        en_item_for_row = ""
+        en_items = en_line_map.get((order_id, sku), frozenset())
+        cover_in_group = (
+            sku_shape(sku_raw) == SHAPE_COVER
+            and order_has_filler.get(order_common_part(order_id), False)
+        )
+        if len(en_items) > 1:
+            # EN 行自身给了多个物料：不猜，保持别名结果；若别名也不唯一 → 阻断
+            en_line_stats["en_item_multi"] += 1
+        elif len(en_items) == 1 and cover_in_group:
+            # 拆单组内的 Cover 行：产品身份交给填充行锚定，不采信 Cover 行的 EN 物料号
+            en_line_stats["en_line_skipped_cover_in_group"] += 1
+        elif len(en_items) == 1:
+            en_item = next(iter(en_items))
+            en_item_for_row = en_item
+            en_product = resolver.product_for_item(en_item)
+            if not en_product:
+                en_line_stats["en_item_unmapped"] += 1
+            else:
+                if resolution.status == _STATUS_RESOLVED and resolution.product_id != en_product:
+                    en_line_stats["alias_en_conflict"] += 1
+                if resolution.status != _STATUS_RESOLVED or resolution.product_id != en_product:
+                    anchor_source = "en_line"
+                    en_line_stats["en_line_override"] += 1
+                resolution = Resolution(
+                    sku, _STATUS_RESOLVED, product_id=en_product,
+                    item_names=(en_item,), products=(en_product,),
+                )
+                en_line_stats["en_line_used"] += 1
         method = method_map.get((order_id, sku), "")
         method_source = "en" if method else ""
         if not method:
@@ -701,7 +770,11 @@ def load_orders(
             resolution_status=resolution.status,
             shipping_method=method,
             method_source=method_source,
-            raw=dict(rec),
+            raw={
+                **dict(rec),
+                **({"_anchor_source": anchor_source} if anchor_source else {}),
+                **({"_en_item": en_item_for_row} if en_item_for_row else {}),
+            },
         )
         if invalid_map.get(order_id, False):
             aux_rows.append(row)
@@ -725,7 +798,10 @@ def load_orders(
         issue["rows"] += 1
 
     issues_list = sorted(issues.values(), key=lambda x: (x["status"], -x["rows"], x["sku"]))
-    return LoadResult(rows=rows, aux_rows=aux_rows, sku_issues=issues_list)
+    return LoadResult(
+        rows=rows, aux_rows=aux_rows, sku_issues=issues_list,
+        en_line_stats=en_line_stats,
+    )
 
 
 _ANCHOR_STOP = {
@@ -1957,10 +2033,12 @@ def run_merge_shadow(
     aux_rows = load_aux_original(en_items_csv, invalid_ids, resolver)
     aux_entries = build_aux_entries(aux_rows)
     en_sub_index = load_en_sub_index(en_items_csv, invalid_ids, resolver)
-    return build_merge_shadow(
+    result = build_merge_shadow(
         loaded.rows, loaded.aux_rows, loaded.sku_issues,
         aux_entries=aux_entries, en_sub_index=en_sub_index, month=month,
     )
+    result.stats.update(loaded.en_line_stats)
+    return result
 
 
 # ─────────────────────────── 报告输出（xlsx / md） ───────────────────────────

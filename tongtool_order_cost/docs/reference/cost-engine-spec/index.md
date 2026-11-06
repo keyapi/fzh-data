@@ -68,6 +68,7 @@ tags: [reference, index, cost-engine]
 | [35-phase4-fba-shadow.md](35-phase4-fba-shadow.md) | **Phase 4.FBA**：EN 明细 exact 物料 + BOM 成品口径（含直采成品例外）；未登记 SKU 白名单（候选仅建议）；78 列 FBA/合并 shadow（唯一键/pending）、三方对账与重复检测 |
 | [36-phase3.6-fill-tables.md](36-phase3.6-fill-tables.md) | **Phase 3.6**：self 166 / FBA 95 / merged 78 三表补全成本+系数块；公式与系数轨恒等；系数按行/crosswalk 继承、合并组取载体并阻断冲突；crosswalk/填充率/空白清单 |
 | [37-phase3.7-gs-ready.md](37-phase3.7-gs-ready.md) | **Phase 3.7**：作废原单保留行/销售、清空成本与系数轨并标 invalid_original；95↔78 聚合对账 + FBA/非FBA 重叠检查；严格 166/95/78 列 GS-ready 输出 |
+| [38-en-line-identity-and-single-item-suffix.md](38-en-line-identity-and-single-item-suffix.md) | **EN 行级身份 + 单品后缀**：EN `erp_item_code` 行级权威（共享皮壳不再算歧义）；单独卖 `-COVER`/`-FOAM`/`-PPCOTTON` 按 EN 特例计价；拆单组内 Cover 让位填充行；FBA 绕过；含 202608 A/B |
 
 ## 相邻文档（不在本 bundle）
 

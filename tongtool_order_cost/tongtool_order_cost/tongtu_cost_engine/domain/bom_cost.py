@@ -37,6 +37,7 @@ from .split_merge import (
     SHAPE_COVER,
     SHAPE_FINISHED,
     SHAPE_FOAM,
+    SHAPE_PPCOTTON,
     TOL,
     Assertion,
     EnResolver,
@@ -334,6 +335,10 @@ def item_for_detail(
       用同订单的 Cover/成品行锚定变体（唯一才用，否则阻断）。禁止组内任选。
     """
     product_id = str(detail.get("product_id") or "")
+    en_item = str(detail.get("_en_item") or "").strip()
+    if en_item:
+        # EN 订单行已声明物料：直接用它查 BOM（行级权威，别名/产品只作校验）
+        return (en_item, "") if en_item in bom_index else ("", "bom_item_missing")
     if detail.get("merged"):
         carrier = normalize_sku(detail.get("carrier_sku"))
         carrier_items = _same_product(set(resolver.items_for_sku(carrier)), product_id, resolver)
@@ -433,6 +438,21 @@ def _unit_costs(
     if sx is None:
         return None, "bom_value_missing"
 
+    # 单品后缀特例（EN `order_sync.py:2941-3003`，**仅非 FBA**）：
+    # -COVER：绍兴发货成本=皮壳成本、头程=皮壳头程、加工成本=0 → sx/processing 归零
+    # -FOAM ：绍兴发货成本=绍兴包装半成品/成品成本、头程=总额−皮壳 → 皮壳成本归零
+    # -PPCOTTON（仅 method=皮壳）：绍兴发货成本=0、头程=0 → 皮壳/绍兴二次/头程归零
+    if bucket not in FBA_BUCKETS:
+        if shape == SHAPE_COVER:
+            sx = 0.0
+            processing = 0.0
+        elif shape == SHAPE_FOAM:
+            shell = 0.0
+        elif shape == SHAPE_PPCOTTON and method == METHOD_COVER:
+            shell = 0.0
+            sx = 0.0
+            freight = 0.0
+
     costs = {"shell": shell, "freight": freight, "processing": processing, "sx": sx}
     if any(v < 0 for v in costs.values()):
         return None, "negative_cost"
@@ -507,6 +527,7 @@ def compute_phase2(
     for r in shadow.rows:
         rows_by_common.setdefault(r.order_common, []).append(r)
     identity_violations: list[dict] = []
+    suffix_violations: list[dict] = []
     for detail in shadow.detail_rows:
         item_fg = ""
         method = str(detail.get("pricing_method") or "")
@@ -705,30 +726,50 @@ def compute_phase2(
                                 alt_delta = round(
                                     (sum(alt_costs.values()) - sum(costs.values())) * units, 6
                                 )
-                        # 用 BOM 原始字段独立重算恒等式
-                        en_unit = (
-                            (_num(bom.get("cost_fg")) or 0.0)
-                            + (_num(bom.get("sx_cost_all")) or 0.0)
-                            - (_num(bom.get("cost_fg")) or 0.0)
-                            if bucket in FBA_BUCKETS
-                            else (_num(bom.get("cost_fg")) or 0.0)
-                            + (
+                        # 用 BOM 原始字段独立重算恒等式（与 _unit_costs 同一后缀矩阵）
+                        if bucket in FBA_BUCKETS:
+                            en_shell = _num(bom.get("sx_cost_all")) or 0.0
+                            en_sx, en_proc = 0.0, 0.0
+                        else:
+                            en_shell = _num(bom.get("cost_fg")) or 0.0
+                            en_sx = (
                                 (_num(bom.get("cost_sxbzbcp")) or 0.0) if method == METHOD_SEMI
                                 else (_num(bom.get("cost_sxbzcp")) or 0.0) if method == METHOD_FINISHED
                                 else 0.0
                             )
-                            + (
-                                0.0 if bucket in FBA_BUCKETS
-                                else (_num(bom.get("usnj_valuation_rate")) or 0.0) if bucket == "USNJ"
+                            en_proc = (
+                                (_num(bom.get("usnj_valuation_rate")) or 0.0) if bucket == "USNJ"
                                 else (_num(bom.get("ustx_valuation_rate")) or 0.0) if bucket in ("USTX", US_OVERSEAS)
                                 else (_num(bom.get("pl_valuation_rate")) or 0.0)
                             )
-                        )
+                            if shape == SHAPE_COVER:
+                                en_sx, en_proc = 0.0, 0.0
+                            elif shape == SHAPE_FOAM:
+                                en_shell = 0.0
+                            elif shape == SHAPE_PPCOTTON and method == METHOD_COVER:
+                                en_shell, en_sx = 0.0, 0.0
+                        en_unit = en_shell + en_sx + en_proc
                         if abs(identity - en_unit) > 1e-6:
                             identity_violations.append({
                                 "group_id": detail.get("group_id"),
                                 "identity": round(identity, 6),
                                 "en_unit": round(en_unit or 0.0, 6),
+                            })
+                        # 后缀硬闸门：防止两侧同错自洽
+                        suffix_errors: list[str] = []
+                        if bucket not in FBA_BUCKETS:
+                            if shape == SHAPE_COVER and (costs["sx"] != 0 or costs["processing"] != 0):
+                                suffix_errors.append("cover_sx_processing_nonzero")
+                            if shape == SHAPE_FOAM and costs["shell"] != 0:
+                                suffix_errors.append("foam_shell_nonzero")
+                            if (shape == SHAPE_PPCOTTON and method == METHOD_COVER
+                                    and (costs["shell"] != 0 or costs["sx"] != 0 or costs["freight"] != 0)):
+                                suffix_errors.append("ppcotton_nonzero")
+                        if suffix_errors:
+                            suffix_violations.append({
+                                "group_id": detail.get("group_id"),
+                                "sku": detail.get("skus"),
+                                "errors": suffix_errors,
                             })
                         rows.append({
                             **{c: None for c in PHASE2_COLUMNS},
@@ -993,6 +1034,17 @@ def compute_phase2(
                 else f"{len(identity_violations)} 行不满足恒等式"
             ),
             violations=identity_violations[:20],
+        ),
+        Assertion(
+            name="单品后缀成本口径",
+            status="fail" if suffix_violations else ("skip" if not priced else "pass"),
+            checked=len(priced),
+            detail=(
+                "-COVER 绍兴二次/二次=0；-FOAM 皮壳=0；-PPCOTTON(皮壳) 皮壳/绍兴二次/头程=0（仅非 FBA）"
+                if not suffix_violations
+                else f"{len(suffix_violations)} 行违反后缀口径"
+            ),
+            violations=suffix_violations[:20],
         ),
         Assertion(
             name="写回对账（仅对账）",

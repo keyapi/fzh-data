@@ -259,3 +259,9 @@ title: cost-engine-spec 变更日志
 - `gs_ready/` 输出严格 166/95/78 列；审计版（+2 列）保留顶层。
 - 202608：作废 11、其他缺失 2；GS-ready 10,870/1,966/12,836。
   202609：作废 9、skipped 1；GS-ready 6,246/1,269/7,515。恒等违例 0。
+
+## 2026-11-06（EN 行级身份 + 单品后缀）
+- 新增 [38](38-en-line-identity-and-single-item-suffix.md)：EN 订单行 `erp_item_code` 作行级身份；
+  单独卖 `-COVER`/`-FOAM`/`-PPCOTTON` 按 `order_sync.py:2941-3003` 计价；拆单组内 Cover 让位填充行；
+  非 FBA 生效、FBA 绕过、合并组不套后缀。
+- 修正 202608 self/merged（订单总成本 −18,040.63，110 行）；202609 唯一 Cover 歧义单改为皮壳计价。

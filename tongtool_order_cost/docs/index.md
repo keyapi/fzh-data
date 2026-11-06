@@ -19,3 +19,4 @@ timestamp: 2026-08-14
 | 经验教训 | [lessons/](lessons/) |
 | 变更历史 | [log.md](log.md) |
 | 通途成本引擎本地迁移（四列/合并/BOM/FBA） | [reference/cost-engine-spec/32-phase2-bom-cost-policy.md](reference/cost-engine-spec/32-phase2-bom-cost-policy.md) · [33](reference/cost-engine-spec/33-phase3-writeback-rehearsal.md) · [34](reference/cost-engine-spec/34-phase4-run-package-canary.md) · [35](reference/cost-engine-spec/35-phase4-fba-shadow.md) |
+| EN 行级身份 + 单独卖皮壳/海绵/PP棉 | [reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md](reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md) |

@@ -5,6 +5,10 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-11-06
+- **新增** `cost-engine-spec/38-en-line-identity-and-single-item-suffix.md`：EN 订单行 `erp_item_code` 行级身份；单独卖 `-COVER`/`-FOAM`/`-PPCOTTON` 按 EN `order_sync.py:2941-3003` 计价；拆单组内 Cover 让位填充行；FBA 绕过；含 202608 A/B（订单总成本 −18,040.63）。
+- **修正** `AGENT_HANDOFF.md`：新增「单独卖皮壳/海绵/PP棉 ≠ 产品歧义」坑位；文档范围改为 32-38。
+
 ## 2026-11-05
 - **新增 Phase 2-4.FBA 文档**：`32-phase2-bom-cost-policy.md`、`33-phase3-writeback-rehearsal.md`、`34-phase4-run-package-canary.md`、`35-phase4-fba-shadow.md` — 本地成本引擎（合并成品+BOM）、四列语义、套件/FBA、canary 旧值来源与 EN 别名登记。
 - **经验沉淀**：`docs/solutions/architecture-patterns/tongtu-cost-engine-local-migration.md`、`workflow-issues/tongtu-order-universe-invalid-split-fba.md`、`integration-issues/tongtu-fba-alias-normalization-registration.md`。

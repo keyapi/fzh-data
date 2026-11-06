@@ -211,8 +211,8 @@ def test_cover_pass_row_uses_cover_freight_and_zero_sx(tmp_path):
     row = p2.rows[0]
     assert row["皮壳成本"] == 8
     assert row["头程运费金额"] == 4       # cover 2 × 2
-    assert row["二次加工成本"] == 2
-    assert row["绍兴二次加工成本"] == 0   # 皮壳 → 0
+    assert row["二次加工成本"] == 0       # -COVER：加工成本清 0
+    assert row["绍兴二次加工成本"] == 0   # -COVER：绍兴发货成本 = 皮壳成本
 
 
 # ── 阻断 ──
@@ -814,3 +814,156 @@ def test_bundle_version_hash(tmp_path):
     expected = hashlib.sha256("A:1|B:2".encode()).hexdigest()[:12]
     assert info.child_hash == expected
     assert info.version == f"2026-01-01|{expected}"
+
+
+# ── EN 行级身份 + 单品后缀（单独卖皮壳/海绵/PP棉） ──
+
+
+def write_items_custom(tmp_path: Path, rows: list[dict]) -> Path:
+    path = tmp_path / "items_custom.csv"
+    pd.DataFrame(rows, columns=["name", "customer_code", "item_group", "variant_of"]).to_csv(
+        path, index=False, encoding="utf-8")
+    return path
+
+
+def test_en_line_resolves_ambiguous_cover_as_standalone(tmp_path):
+    """同一 Cover 别名挂两个产品 → EN 行 erp_item_code 唯一指定 KS-B，按单独卖皮壳计价。"""
+    items = write_items_custom(tmp_path, [
+        {"name": "KS-A-COVER", "customer_code": "SHARED-COVER", "item_group": "靠枕", "variant_of": "KS-A"},
+        {"name": "KS-B-COVER", "customer_code": "SHARED-COVER", "item_group": "靠枕", "variant_of": "KS-B"},
+    ])
+    orders = write_orders(tmp_path, [
+        ["ORD-3000001", "PSK", "SHARED-COVER", 1, 10, 50, 0, "WH-PL"],
+    ])
+    en = write_en(tmp_path, [["ORD-3000001", "SHARED-COVER", "KS-B-COVER", 1, "成品"]])
+    shadow = run_merge_shadow(orders, items, en, None, month="202608")
+    assert shadow.rows[0].product_id == "KS-B"
+    assert shadow.rows[0].resolution_status == "resolved"
+    assert shadow.stats["en_line_used"] == 1
+    assert shadow.stats["anchor_sources"].get("en_line") == 1
+
+    bom = write_bom(tmp_path, [{
+        "item_fg": "KS-B-COVER", "shipping_method": "成品",
+        "cost_fg": 40, "cost_sxbzcp": 50,
+        "pl_valuation_rate": 7,
+        "cover_freight_tmvvepd80f": 3, "freight_tmvvepd80f": 20,
+    }])
+    p2 = compute_phase2(shadow, bom, items, write_wh_map(tmp_path))
+    row = p2.rows[0]
+    assert row["status"] == "ok"
+    assert row["皮壳成本"] == 40
+    assert row["头程运费金额"] == 3          # 皮壳头程
+    assert row["绍兴二次加工成本"] == 0
+    assert row["二次加工成本"] == 0          # -COVER 加工成本清 0
+
+
+def test_en_line_overrides_alias_product(tmp_path):
+    """别名解析到 KS-OLD，EN 行给 KS-NEW → 以 EN 行为准并记冲突。"""
+    items = write_items_custom(tmp_path, [
+        {"name": "KS-OLD", "customer_code": "NBOX", "item_group": "靠枕", "variant_of": ""},
+        {"name": "KS-NEW", "customer_code": "", "item_group": "靠枕", "variant_of": ""},
+    ])
+    orders = write_orders(tmp_path, [
+        ["ORD-3100001", "PSK", "NBOX", 1, 10, 50, 0, "WH1"],
+    ])
+    en = write_en(tmp_path, [["ORD-3100001", "NBOX", "KS-NEW", 1, "皮壳"]])
+    shadow = run_merge_shadow(orders, items, en, None, month="202608")
+    assert shadow.rows[0].product_id == "KS-NEW"
+    assert shadow.stats["alias_en_conflict"] == 1
+
+
+def test_standalone_foam_rows_zero_shell(tmp_path):
+    """单独卖海绵（-Foam，非 FBA）：皮壳=0，绍兴二次=绍兴包装成品成本，头程=总额−皮壳。"""
+    shadow = _shadow(tmp_path, [
+        ["ORD-3200001", "PSK", "TT001-FIN-Foam", 1, 10, 50, 0, "WH-PL"],
+    ], [["ORD-3200001", "TT001-FIN-Foam", "", 1, "成品"]])
+    bom = write_bom(tmp_path, [{
+        "item_fg": "KS100-FINISH-RED", "shipping_method": "成品",
+        "cost_fg": 10, "cost_sxbzcp": 50,
+        "pl_valuation_rate": 7,
+        "cover_freight_tmvvepd80f": 3, "freight_tmvvepd80f": 20,
+    }])
+    p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
+    row = p2.rows[0]
+    assert row["皮壳成本"] == 0
+    assert row["绍兴二次加工成本"] == 50
+    assert row["头程运费金额"] == 17         # 20 − 3
+    assert row["二次加工成本"] == 7
+
+
+def test_standalone_ppcotton_zero_cost(tmp_path):
+    """单独卖 PP棉（-PPCOTTON，method=皮壳）：皮壳/绍兴二次/头程 = 0，保留目的地加工。"""
+    items = write_items_custom(tmp_path, [
+        {"name": "KS-PP", "customer_code": "CURVE-PPCOTTON", "item_group": "靠枕", "variant_of": ""},
+    ])
+    orders = write_orders(tmp_path, [
+        ["ORD-3300001", "PSK", "CURVE-PPCOTTON", 1, 10, 50, 0, "WH-PL"],
+    ])
+    en = write_en(tmp_path, [["ORD-3300001", "CURVE-PPCOTTON", "", 1, "皮壳"]])
+    shadow = run_merge_shadow(orders, items, en, None, month="202608")
+    bom = write_bom(tmp_path, [{
+        "item_fg": "KS-PP", "shipping_method": "皮壳",
+        "cost_fg": 10, "cost_sxbzcp": 5,
+        "pl_valuation_rate": 7,
+        "cover_freight_tmvvepd80f": 3, "freight_tmvvepd80f": 20,
+    }])
+    p2 = compute_phase2(shadow, bom, items, write_wh_map(tmp_path))
+    row = p2.rows[0]
+    assert row["皮壳成本"] == 0
+    assert row["绍兴二次加工成本"] == 0
+    assert row["头程运费金额"] == 0
+    assert row["二次加工成本"] == 7
+
+
+def test_fba_bypasses_suffix_rules(tmp_path):
+    """FBA 仓忽略后缀：仍取 cost_fg + (sx_cost_all−cost_fg) + 成品头程。"""
+    shadow = _shadow(tmp_path, [
+        ["ORD-3400001", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0, "WH-FBA"],
+    ], [["ORD-3400001", "TT001-FIN-Cover", "", 1, "成品"]])
+    bom = write_bom(tmp_path, [{
+        "item_fg": "KS100-FINISH-RED", "shipping_method": "成品",
+        "cost_fg": 10, "sx_cost_all": 25,
+        "freight_9rr7m7g3aj": 6,
+    }])
+    p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
+    row = p2.rows[0]
+    assert row["皮壳成本"] == 10
+    assert row["绍兴二次加工成本"] == 15
+    assert row["二次加工成本"] == 0
+
+
+def test_en_item_unmapped_keeps_ambiguous_block(tmp_path):
+    """EN 行给了物料但不在 Item 表 → 不静默回退；别名仍歧义时保持歧义。"""
+    items = write_items_custom(tmp_path, [
+        {"name": "KS-A-COVER", "customer_code": "SHARED-COVER", "item_group": "靠枕", "variant_of": "KS-A"},
+        {"name": "KS-B-COVER", "customer_code": "SHARED-COVER", "item_group": "靠枕", "variant_of": "KS-B"},
+    ])
+    orders = write_orders(tmp_path, [
+        ["ORD-3500001", "PSK", "SHARED-COVER", 1, 10, 50, 0, "WH-PL"],
+    ])
+    en = write_en(tmp_path, [["ORD-3500001", "SHARED-COVER", "NOT-IN-ITEM-TABLE", 1, "成品"]])
+    shadow = run_merge_shadow(orders, items, en, None, month="202608")
+    assert shadow.rows[0].resolution_status == "ambiguous"
+    assert shadow.stats["en_item_unmapped"] == 1
+
+
+def test_cover_in_merged_group_defers_to_filler_line(tmp_path):
+    """拆单组内 Cover 行不采信自身 EN 物料号；产品身份取填充行（EN 填充行）→ KS-B。"""
+    items = write_items_custom(tmp_path, [
+        {"name": "KS-A-COVER", "customer_code": "SH-COVER", "item_group": "靠枕", "variant_of": "KS-A"},
+        {"name": "KS-B-COVER", "customer_code": "SH-COVER", "item_group": "靠枕", "variant_of": "KS-B"},
+        {"name": "KS-B-FOAM", "customer_code": "CURVE-FOAM", "item_group": "靠枕", "variant_of": "KS-B"},
+    ])
+    orders = write_orders(tmp_path, [
+        ["ORD-3600001", "PSK", "SH-COVER", 1, 10, 50, 0, "WH1"],
+        ["ORD-3600001", "PSK", "CURVE-FOAM", 0, 0, 0, 0, "WH1"],
+    ])
+    en = write_en(tmp_path, [
+        ["ORD-3600001", "SH-COVER", "KS-A-COVER", 1, "成品"],
+        ["ORD-3600001", "CURVE-FOAM", "KS-B-FOAM", 1, "成品"],
+    ])
+    shadow = run_merge_shadow(orders, items, en, None, month="202608")
+    assert shadow.stats["en_line_skipped_cover_in_group"] == 1
+    detail = shadow.detail_rows[0]
+    assert detail["product_id"] == "KS-B"
+    assert detail["merged"] is True

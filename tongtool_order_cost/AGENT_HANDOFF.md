@@ -136,4 +136,12 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 - 订单全集：EN 有效单（`invalid=1` 只作 aux 校验）；拆分子单 `_1/_2` 保留；GS 原始表作业务骨架，`写回…` 只对拍；FBA 成本用 EN 明细，GS FBA 销量表作 78 列骨架。
 - 套件：Product Bundle 全子件 method 一致才派生；TJ# 与子件不得双计；`show_kit_items` 报表可对账。
 - Canary：旧值必须取目标写回表（不是销量报表）；写前备份/hash/锁，写后回读；不一致用备份整体回滚。
-- 代码：`tongtool_order_cost/tongtu_cost_engine/`；文档：`docs/reference/cost-engine-spec/32-35`；经验：`docs/solutions/architecture-patterns/tongtu-cost-engine-local-migration.md` 等三篇。
+- 代码：`tongtool_order_cost/tongtu_cost_engine/`；文档：`docs/reference/cost-engine-spec/32-38`；经验：`docs/solutions/architecture-patterns/tongtu-cost-engine-local-migration.md` 等三篇。
+
+### 坑：单独卖皮壳/海绵/PP棉 ≠ 产品歧义（2026-11-06）
+
+- **共享皮壳**（如 `TT0031187K0063920-Cover` 同时挂 KS0340 PP棉 / KS0342 海绵）别名天然多候选；不能当歧义留空。
+- **先看原始订单有没有配套行**：同 `order_common` 有 Cover + Foam/PPCotton → 拆单，合并成一件成品计价；只有一行 → 单独卖单品，按 EN 后缀特例逐行计价。
+- **行级身份用 EN `erp_item_code`**（行级权威）；但**拆单组内 Cover 行不采信**自己的 EN 物料号（常被默认到另一产品线），由填充行锚定。
+- `-COVER`：皮壳成本 + 皮壳头程，绍兴二次/二次=0；`-FOAM`：皮壳=0，绍兴二次=绍兴包装成本，头程=总额−皮壳；`-PPCOTTON`（method=皮壳）：皮壳/绍兴二次/头程=0；FBA 全部绕过。
+- 规则与实测：`docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md`。

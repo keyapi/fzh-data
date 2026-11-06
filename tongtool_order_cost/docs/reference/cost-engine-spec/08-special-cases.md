@@ -23,6 +23,8 @@ tags: [cost, special-cases, suffix, hardcode, reference]
 | **数字后缀 `-COVER1` / `-FOAM1`** | SKU 带数字后缀 | 仅**改有效重量口径**（历史预估尾程计费用），不改无后缀 `-COVER/-FOAM` 逻辑 | `order_sync.py:4484`（`_calculate_effective_weight_for_hist_fee`）；`cost_review.py:741-830` | ✅ 在用 |
 
 > ⚠️ **认后缀的范围不一致**：**只有 `order_sync` 与 `cost_review` 认后缀**；`doc_event`、`delivery_note_filling_cost` **完全不认后缀**（[09](09-known-issues-register.md) A3）。
+>
+> **本地引擎的实现与阈值**（行级身份、单独卖皮壳/海绵/PP棉、拆单组内 Cover 让位填充行、FBA 绕过）见 [38](38-en-line-identity-and-single-item-suffix.md)。
 
 ## 2. 自采购（皮壳 BOM 自引用主物料）
 
