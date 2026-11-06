@@ -39,23 +39,27 @@ def _post(url: str, data: dict) -> dict:
     return json.loads(urllib.request.urlopen(req).read())
 
 
-def _signed_url() -> str:
-    """构造带签名的完整 webhook URL。"""
-    secret = os.environ["DINGTALK_SECRET"]
-    webhook = os.environ["DINGTALK_WEBHOOK"]
+def _signed_url(webhook: str | None = None, secret: str | None = None) -> str:
+    """构造带签名的完整 webhook URL。
+
+    不传时读环境变量 DINGTALK_WEBHOOK / DINGTALK_SECRET（默认机器人）；
+    传入 webhook/secret 可推送到别的群机器人（如低库存告警群）。
+    """
+    secret = secret or os.environ["DINGTALK_SECRET"]
+    webhook = webhook or os.environ["DINGTALK_WEBHOOK"]
     timestamp, sign = _sign_request(secret)
     return f"{webhook}&timestamp={timestamp}&sign={sign}"
 
 
-def send_markdown(text: str, title: str = "通知") -> dict:
+def send_markdown(text: str, title: str = "通知", *, webhook: str | None = None, secret: str | None = None) -> dict:
     """发送 markdown 消息。"""
-    return _post(_signed_url(), {
+    return _post(_signed_url(webhook, secret), {
         "msgtype": "markdown",
         "markdown": {"title": title, "text": text},
     })
 
 
-def send_action_card(title: str, text: str, buttons: list[dict]) -> dict:
+def send_action_card(title: str, text: str, buttons: list[dict], *, webhook: str | None = None, secret: str | None = None) -> dict:
     """发送 ActionCard 卡片消息（支持下载按钮）。
 
     Args:
@@ -76,12 +80,12 @@ def send_action_card(title: str, text: str, buttons: list[dict]) -> dict:
     else:
         card["btns"] = buttons
 
-    return _post(_signed_url(), {"msgtype": "actionCard", "actionCard": card})
+    return _post(_signed_url(webhook, secret), {"msgtype": "actionCard", "actionCard": card})
 
 
-def send_dingtalk_message(text: str, title: str = "通知") -> dict:
+def send_dingtalk_message(text: str, title: str = "通知", *, webhook: str | None = None, secret: str | None = None) -> dict:
     """兼容旧接口：发送 markdown 消息。"""
-    return send_markdown(text, title)
+    return send_markdown(text, title, webhook=webhook, secret=secret)
 
 
 # ── 测试入口 ────────────────────────────────────────────
