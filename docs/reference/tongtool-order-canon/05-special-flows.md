@@ -47,7 +47,14 @@ tags: [tongtool, order, tail-cost, split-window, supplementary, non-product, can
 
 **证据**：[#282](https://github.com/keyapi/fzh-data/pull/282)；`docs/reference/monthly-tail-cost-pipeline.md`（模块内）。
 
-## 4. 非商品与白名单（边界）
+## 4. 旧 Colab 的两处历史瑕疵（勿复用）
+
+1. **「发货方式」双数据源**：旧 Colab 头程读 EN `绍兴发货方式`，皮壳/绍兴二次/波兰清零仍读已停更的人工字段 `当月给分公司发货类型` → 同一概念两个来源，输出自相矛盾。**规范**：一律以 EN `shipping_method` 为准（见 01/03、ADR-0001）。
+2. **波兰 0.001 清零**：旧 Colab 在命中条件时把 `二次加工成本` 写成 `0.001`，且不同步系数列。**规范**：波兰加工成本按目的地包装成品 BOM 取值；`0.001` 是历史实现瑕疵，不复用。
+
+**证据**：PR #280 `docs/solutions/workflow-issues/colab-legacy-cost-two-source-delivery-type.md`。
+
+## 5. 非商品与白名单（边界）
 
 - 非商品/耗材（`BUTTONKIT*`、`PP<n>LB`、`DLZYFX001`、`COTTON-EU`）四列显式 0，不进待审。
 - FBA 未登记 SKU 白名单只做**建议**，不自动改成本。
