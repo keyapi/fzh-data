@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-06（邮件域名到期 / Gmail 550-5.7.26）
+
+- **新增**: `integration-issues/email-domain-expiry-gmail-550-5-7-26.md` —— 域名 2026-11-03 到期后，阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析，腾讯企业邮发出的邮件被 Gmail 以 550-5.7.26 硬拒。11-04 续费成功但邮件未恢复：**续费 ≠ 恢复**，必须回查注册局 NS 并确认记录在服务（直接问权威 NS，不只看控制台）。另一层陷阱是**注册商 ≠ DNS 托管商**（阿里云注册、DNSPod 解析；主域 `vilavi.cn` 在 Cloudflare）。DKIM selector 是腾讯企业邮生成的自定义随机串（`sjnr2306` / `evhe2306`），常见 selector 全 NXDOMAIN 不能证明“没有 DKIM”。恢复后补 DMARC `p=none`、修 MX 优先级 5/10。
+
 ## 2026-10-27（供应分型 / frePPLe / 先搜分支）
 
 - **更新**: `workflow-issues/search-first-before-implementing.md`（`last_updated: 2026-10-27`）—— 补 Case 4：**main 上 grep 不到 ≠ 项目没有**。预测（statsforecast 2.1.1）、供应净额、库存政策、交期配置分别在本地的 `keyapi/forecast-refresh-oct27`、`keyapi/supply-integrate-oct27` 分支和 PR #300；先查 `git branch -a` / `git log --all` / `gh pr list --state all` / `git ls-tree`，再决定“复用 / 接线 / 重造”。

@@ -169,6 +169,7 @@ tags: [tag-one, tag-two]     # ≤8 个，小写连字符
 | `tracking-integration` | 承运商跟踪（FedEx/UPS/GLS/parcel_track） |
 | `api-gateway` | 代理 / 网关 / 鉴权桥 |
 | `authentication` | 登录、OAuth、封号 |
+| `email-delivery` | 邮件域名与发信认证（SPF/DKIM/DMARC、退信） |
 | `documentation` | 文档体系本身 |
 
 `problem_type` 沿用 ce-compound 枚举（`integration_issue` / `best_practice` / `workflow_issue` / `developer_experience` / `architecture_pattern` / `design_pattern` / `tooling_decision` / `convention` / `documentation_gap` / 以及 bug 轨那 9 个）。
