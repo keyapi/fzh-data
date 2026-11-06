@@ -120,6 +120,19 @@ def main() -> int:
     qual = qual.merge(cny9[KEYS].assign(在257=True), on=KEYS, how="left")
     qual["在257"] = qual["在257"].fillna(False)
     qual = qual.rename(columns={"p50": "D5_p50", "q95": "D5_q95"})
+    qual["建议结论"] = np.select(
+        [qual["netting_state"].astype(str).ne("eligible"),
+         qual["demand_state"].astype(str).ne("observed"),
+         pd.to_numeric(qual["D5_p50"], errors="coerce").fillna(0) <= 0],
+        ["阻塞-净额资格不足", "阻塞-需求未观测", "阻塞-零中位数待验证"],
+        default="待人工接受")
+    qual["阻塞原因"] = np.select(
+        [qual["netting_state"].astype(str).ne("eligible"),
+         qual["demand_state"].astype(str).ne("observed"),
+         pd.to_numeric(qual["D5_p50"], errors="coerce").fillna(0) <= 0],
+        [qual["netting_state"].astype(str), qual["demand_state"].astype(str),
+         "p50=0 且供给恢复后转为补；模型待验证"],
+        default="")
     qual["资格复审"] = "待人工：新增补货资格未审"
 
     r31 = cny9[cny9["可执行状态"].eq("可执行-待人工确认")].copy()

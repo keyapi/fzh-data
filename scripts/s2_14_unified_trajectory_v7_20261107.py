@@ -267,8 +267,15 @@ def main() -> int:
         rescue_rows.append(dict(
             product_id=r["product_id"], 池=r["pool"], 形态=r["physical_form"],
             UOM=r["canonical_uom"], 数量=q1 + q2,
+            首批数量=q1, 第二批数量=q2,
+            首批运输=mode, 第二批运输=r["建议运输"],
             原运输=r["建议运输"], 原首批到仓=r["首批到仓"],
+            原第二批到仓=r.get("第二批到仓", ""),
             补救运输=mode, 补救首批到仓=arr.date().isoformat(),
+            补救第二批到仓=arr2.date().isoformat() if hasattr(arr2, "date") else str(arr2),
+            首批下单日=DECISION.date().isoformat(),
+            第二批下单日=r.get("最迟下单日", ""),
+            运输方案=f"首批{mode}；第二批{r['建议运输']}",
             无断货概率=round(ns, 4), 满足率=round(fill, 4),
             状态=status_of(ns, fill, sigma)))
     rescue = pd.DataFrame(rescue_rows)
