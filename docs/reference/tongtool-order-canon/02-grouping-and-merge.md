@@ -68,6 +68,33 @@ tags: [tongtool, order, merge, split, grouping, identity, canon]
 - `tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py`（`find_groups`、`group_split_rows`；2026-11-06 观测）
 - `tongtool_integration/tongtool_integration/sync/order_sync.py`（`is_deliver_good` 取反；2026-11-06 观测）
 
+### 3.1 TikTok 跨前缀手动拆单（例外）
+
+TikTok 对接通途**不允许拆单**。需要拆包裹时，同事会在**另一个渠道账号手动建单**补另一半，于是同一笔交易的订单号散在不同前缀：
+
+| 一半 | 另一半 |
+|---|---|
+| `TTDaneeyUS-577247129175429589_2`（Foam） | `TTDaneeyGo-577247129175429589`（Cover） |
+| `TTDaneeyUS-577250076459897074_2`（Foam） | `TTBNKC-577250076459897074`（Cover） |
+
+**配对键 = 平台单号的数字主体（忽略前缀）**：`TT` 前缀 + 数字主体 ≥12 位，先剥 `_N` 与 `-M####`。
+配对只是**把两半放到同一组**；配对后仍按 §4/§5 的结构判据合并（同产品、唯一载体、件数=皮壳数量）。
+
+**安全阀**（不猜）：
+
+- 组内必须**恰好 1 个皮壳行**、至少 1 个填充行；
+- 皮壳与填充必须解析到**同一非空 product_id**；
+- 发货仓库必须一致；
+- 不同订单号。
+
+**模板兜底**：GS 模板行可能是旧 Colab 归一化后的单号（如 `577511764556747219-1`），raw 里是 TT 前缀；写回填充时按「数字主体 + 通途SKU」兜底匹配。
+
+**证据**
+- `tongtool_order_cost/tongtool_order_cost/order_side_input.py::tiktok_platform_body`（2026-11-06）
+- `tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py::_pair_tiktok_cross_prefix`（2026-11-06）
+- `tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/phase36_fill.py`（body 兜底，2026-11-06）
+- 历史规则：`docs/solutions/conventions/tongtu-order-suffix-and-merge-criteria.md` §5b（PR #280 / commit `72314dee`）
+
 ## 4. 同 `order_common` 何时合并
 
 **只有以下全部成立才合并**：

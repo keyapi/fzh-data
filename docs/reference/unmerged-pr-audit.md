@@ -293,7 +293,7 @@ tags: [pr-audit, unmerged, tongtool, canon, supply-chain, settlement, infrastruc
 - **代码已有纯函数**：`tongtool_order_cost/tongtool_order_cost/order_side_input.py::tiktok_platform_body()`（`TT` 前缀 + 数字主体 ≥12 位；先剥 `_N`/`-M####`）。测试 `tests/test_order_side_input.py` 覆盖跨前缀同主体。
 - **旧 Colab 实现**（cell 070/082/083/085/089/090/092）：`082` 按 SKU 的 `-N` 拆 `sku_base`；`083` 按 `(电话, sku_base)` 分组、`suffix==1` 当组长；`085` 组内运费求和、只留组长；`089` 从**订单备注**抽订单号再并一次；`090` groupby 求和；`092` concat 回去。依赖电话/备注，且文档自述「合并产出的发货数量是否正确…无断言」，**不完善**。
 - **当前本地引擎状态（2026-11-06 实测）**：202608 有 **1 组**跨前缀拆单（`TTDaneeyGo-577511764556747219` Cover + `TTDaneeyUS-577511764556747219_2` Foam），202609 **0 组**。引擎**未合并**：两行各自按后缀计价；GS 模板行 `577511764556747219-1`（Colab 归一化单号）在 raw 中不存在 → `crosswalk_missing`、成本空白。
-- **结论**：不是「未找到条款」，而是**规则有文档、有函数、缺实现**。建议 canon 02 增加 TikTok 条款：数字主体仅用于**跨前缀配对**；配对后仍按 02 §4/§5 的结构判据合并，件数取皮壳数量，销售额/运费求和。引擎与 phase36 落地后，202608 影响 1 单。
+- **结论**：不是「未找到条款」，而是**规则有文档、有函数、缺实现**。**已于 2026-11-06 落地**：canon 02 §3.1 + `GRP-010` + `_pair_tiktok_cross_prefix` + phase36 body 兜底；202608 该单由空白→整件成本（皮壳 197.13 + 绍兴二次 595.74 + 二次 208.78），202609 无变化。
 
 ### 7.2 拆单系数
 
@@ -445,8 +445,8 @@ git diff origin/main...HEAD | grep -iE "(api_key|api_secret|password|token|ghp_|
 
 | # | 项 | 现状 | 需要什么 |
 |---|---|---|---|
-| U1 | TikTok 跨前缀按数字主体合并 | 规则有文档（#280 conventions §5b）+ 函数（`tiktok_platform_body`），但未接入合并/计价 | 引擎配对 + phase36 body 兜底；影响 202608 1 单 |
-| U2 | TikTok「手动建单」条款 | **已找到**：TikTok API 不允许拆单 → 手动新建渠道账号建单；匹配键=数字主体（忽略前缀） | 落地为 canon 02 TikTok 条款；见 §7.1 |
+| U1 | TikTok 跨前缀按数字主体合并 | **已落地**（2026-11-06）：canon 02 §3.1 + GRP-010 + 引擎配对 + phase36 兜底 | 已验收：202608 1 单、202609 0 单 |
+| U2 | TikTok「手动建单」条款 | **已找到并落地**：TikTok API 不允许拆单 → 手动新建渠道账号建单；匹配键=数字主体（忽略前缀） | canon 02 §3.1 / GRP-010 |
 | U3 | 90 天精确边界 | 只有 7/10、7/14 两个观测点 | 更多样本；canon 只能写「≈90 天」 |
 | U4 | 「疑似官方 FedEx」账单 | #287 只有 1 单 | 账单抬头/账号核对 |
 | U5 | #310「EN 落盘」与 `stock_sync.py` 重叠 | 未直接读 EN 代码 | 只读源码核对 |

@@ -224,6 +224,30 @@ rules:
     owner: user
     effective_from: "2026-11-06"
 
+  - id: GRP-010
+    title: TikTok 跨前缀手动拆单配对
+    scope: [grouping, tiktok]
+    applies_when:
+      order_id_prefix: "TT*"
+      platform_body_len: ">=12"
+      distinct_order_ids_same_body: ">=2"
+    then:
+      pair_key: "平台单号数字主体（忽略前缀；先剥 _N 与 -M####）"
+      pair_rewrite: "填充行的 order_common/platform_sku 对齐到皮壳行，再走正常结构合并"
+      guards: "恰好 1 个皮壳行；皮壳/填充同一非空 product_id；同发货仓库；不同订单号"
+      pieces: "取皮壳行数量；销售额/运费按组求和"
+      template_fallback: "GS 模板行是归一化单号时，按数字主体+通途SKU 兜底匹配"
+    exceptions:
+      - "不同产品/不同仓库/多皮壳 → 不配对，按原样计价或阻断"
+    evidence:
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §3.1（2026-11-06）"
+      - "[SPEC] docs/solutions/conventions/tongtu-order-suffix-and-merge-criteria.md §5b（PR #280 / 72314dee）"
+      - "[LOCAL实现] split_merge.py::_pair_tiktok_cross_prefix；phase36_fill.py body 兜底（2026-11-06）"
+      - "[DATA] 202608 1 单（577511764556747219）、202609 0 单（2026-11-06）"
+    status: canon
+    owner: user
+    effective_from: "2026-11-06"
+
   - id: GRP-006
     title: 单独卖 -Cover/-Foam/-PPCotton 不是产品歧义
     scope: [grouping, pricing]
