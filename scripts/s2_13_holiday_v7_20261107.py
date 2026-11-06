@@ -23,6 +23,7 @@ V6 = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-06_v6.xls
 OUT = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-06_v7.xlsx"
 DECISION = pd.Timestamp("2026-11-06")
 JAN24 = pd.Timestamp("2027-01-24")
+RESTART = pd.Timestamp("2027-02-22")
 PREHAUL = 2
 MODE_DAYS = {"空运": 14, "快船": 30, "普船": 55, "专线": 60}
 PROD = {"美东USNJ": 30.0, "美中USTX": 35.2, "波兰": 43.6}
@@ -69,8 +70,9 @@ def main() -> int:
         days = MODE_DAYS.get(mode, 30)
         lead = prod + PREHAUL + days
         first_arr = DECISION + pd.Timedelta(days=lead)
-        cutoff = JAN24 - pd.Timedelta(days=lead)
-        second_arr = cutoff + pd.Timedelta(days=lead)
+        cutoff = RESTART - pd.Timedelta(days=lead)
+        second_arr = RESTART
+        second_order = cutoff
         stockout = (DECISION + pd.Timedelta(days=int(c / daily))
                     if daily > 0 and c > 0 else DECISION)
         alt = []
@@ -97,6 +99,9 @@ def main() -> int:
             覆盖终点=r["覆盖终点"],
             建议节前备货量=total, 首批数量=first, 第二批数量=second,
             最迟下单日=cutoff.date().isoformat(), 风险=risk_state,
+            首批下单日=DECISION.date().isoformat(),
+            第二批下单日=second_order.date().isoformat(),
+            首批晚于停工=bool(first_arr > JAN24),
             风险状态=risk_state, 可换运输=remedy_mode, 补救最快到仓=remedy_arr,
             模型资格="零中位数-待验证" if zero_median else "正常",
             建议量状态="待核" if zero_median else "已计算",

@@ -58,13 +58,15 @@ def inv_sim(forecast, actual, init_stock, lead_months):
         short_weeks += 1 if short > 0 else 0
         stock = max(0.0, stock - dem)
         target = float(np.sum(forecast[t:t + len(pipeline) + 1])) + float(np.mean(forecast))
-        pipeline.append(max(0.0, target - stock))
+        on_order = float(np.sum(pipeline))
+        pipeline.append(max(0.0, target - stock - on_order))
         stock_path.append(stock)
     total = float(np.sum(actual))
     return dict(short_units=short_units, short_weeks=short_weeks,
                 fill=(1 - short_units / total) if total > 0 else 1.0,
                 avg_stock=float(np.mean(stock_path)) if stock_path else 0.0,
-                end_stock=float(stock_path[-1]) if stock_path else 0.0)
+                end_stock=float(stock_path[-1]) if stock_path else 0.0,
+                end_in_transit=float(np.sum(pipeline)))
 
 
 def main() -> int:
@@ -169,7 +171,8 @@ def main() -> int:
                     init = sr.get("C可发供给")
                     inv = (inv_sim(pred, test, init, lead_m) if pd.notna(init)
                            else dict(short_units=np.nan, short_weeks=np.nan,
-                                     fill=np.nan, avg_stock=np.nan, end_stock=np.nan))
+                                     fill=np.nan, avg_stock=np.nan, end_stock=np.nan,
+                                     end_in_transit=np.nan))
                     rows.append(dict(segment=seg, product_id=key[0], pool=key[1],
                                      form=key[2], uom=key[3], h=h, origin_idx=oi,
                                      model=name, actual=float(test.sum()),
@@ -189,7 +192,8 @@ def main() -> int:
             .agg(n=("pred", "size"), actual=("actual", "sum"), pred=("pred", "sum"),
                  abs_err=("abs_err", "sum"), bias=("bias", "sum"),
                  short_units=("short_units", "sum"), short_weeks=("short_weeks", "sum"),
-                 avg_stock=("avg_stock", "mean"), end_stock=("end_stock", "mean"))
+                 avg_stock=("avg_stock", "mean"), end_stock=("end_stock", "mean"),
+                 end_in_transit=("end_in_transit", "mean"))
             .reset_index())
     summ["WAPE"] = summ["abs_err"] / summ["actual"].replace(0, np.nan)
     summ["bias_rate"] = summ["bias"] / summ["actual"].replace(0, np.nan)

@@ -22,6 +22,7 @@ SERIES = BASE / "D3b_v3_8_series_current_2026-11-07.parquet"
 CLS = BASE / "D_历史归一与回测_D3b_v3_8_2026-11-07.xlsx"
 D5 = BASE / "D5v6_6-60cm/D_概率与服务_D5_v6_6_2026-11-07.xlsx"
 D6 = BASE / "D6v6_15-final/D_Top50沙盒_D6_v6_15_2026-11-07.xlsx"
+D2 = BASE / "D_销量清洗_v3_2026-11-02.xlsx"
 CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-06_v7.xlsx"
 OUT = BASE / "forecast_benchmark_20261107_v4.xlsx"
 KEYS = ["product_id", "pool", "physical_form", "canonical_uom"]
@@ -63,14 +64,15 @@ def inv_sim(forecast, actual, init_stock, lead_weeks):
         short_weeks += 1 if short > 0 else 0
         stock = max(0.0, stock - dem)
         target = float(np.sum(forecast[t:t + len(pipeline) + 1])) + float(np.mean(forecast))
-        need = max(0.0, target - stock)
-        pipeline.append(need)
+        on_order = float(np.sum(pipeline))
+        pipeline.append(max(0.0, target - stock - on_order))
         stock_path.append(stock)
     total = float(np.sum(actual))
     return dict(short_units=short_units, short_weeks=short_weeks,
                 fill=(1 - short_units / total) if total > 0 else 1.0,
                 avg_stock=float(np.mean(stock_path)) if stock_path else 0.0,
-                end_stock=float(stock_path[-1]) if stock_path else 0.0)
+                end_stock=float(stock_path[-1]) if stock_path else 0.0,
+                end_in_transit=float(np.sum(pipeline)))
 
 
 def main() -> int:
@@ -99,6 +101,13 @@ def main() -> int:
     d6 = pd.read_excel(D6, sheet_name="1_全量动作").rename(
         columns={"池": "pool", "形态": "physical_form", "UOM": "canonical_uom"})
     sample = sample.merge(d6[KEYS + ["C可发供给", "推荐main_haul"]], on=KEYS, how="left")
+    d2 = pd.read_excel(D2, sheet_name="1_序列",
+                       usecols=["product_id", "pool", "physical_form", "canonical_uom",
+                                "month", "observation_status"])
+    d2["month"] = d2["month"].astype(str)
+    covered_months = {
+        tuple(k): set(g["month"]) for k, g in
+        d2[d2["observation_status"].astype(str).eq("observed")].groupby(KEYS)}
 
     hist = weekly.merge(sample[KEYS + ["segment"]], on=KEYS, how="inner")
     hist_map = {k: g.set_index("week")["qty"].astype(float).to_dict()
@@ -107,16 +116,25 @@ def main() -> int:
     for _, sr in sample.iterrows():
         key = tuple(sr[k] for k in KEYS)
         seg = sr["segment"]
-        weeks = sorted(hist_map.get(key, {}).keys())
-        if len(weeks) < 8:
+        months = sorted(covered_months.get(key, set()))
+        if len(months) < 8:
             skips.append(dict(segment=seg, product_id=key[0], pool=key[1], form=key[2],
-                              uom=key[3], reason="observed weeks<8", detail=f"n={len(weeks)}"))
+                              uom=key[3], reason="covered months<8", detail=f"n={len(months)}"))
             continue
-        idx = pd.period_range(pd.Period(weeks[0], freq="W-MON"),
-                              pd.Period(weeks[-1], freq="W-MON"), freq="W-MON")
-        week_str = [p.strftime("%Y-%m-%d") for p in idx]
+        starts = [pd.Period(f"{m[:4]}-{m[4:]}", freq="M").start_time for m in months]
+        ends = [pd.Period(f"{m[:4]}-{m[4:]}", freq="M").end_time for m in months]
+        week_set = set()
+        for st, en in zip(starts, ends):
+            for p in pd.period_range(st, en, freq="W-MON"):
+                week_set.add(p)
+        idx = sorted(week_set)
+        if len(idx) < 8:
+            skips.append(dict(segment=seg, product_id=key[0], pool=key[1], form=key[2],
+                              uom=key[3], reason="covered weeks<8", detail=f"n={len(idx)}"))
+            continue
+        week_str = [p.start_time.strftime("%Y-%m-%d") for p in idx]
+        cov = np.ones(len(week_str), dtype=bool)
         qty = np.array([hist_map.get(key, {}).get(w, 0.0) for w in week_str])
-        cov = np.array([w in hist_map.get(key, {}) for w in week_str])
         mode = str(sr.get("推荐main_haul", "空运")).replace("海运", "")
         lead_weeks = max(1, math.ceil((PROD.get(str(key[1]), 30.0) + 2
                                        + MODE_DAYS.get(mode, 30)) / 7))
@@ -130,12 +148,12 @@ def main() -> int:
                     continue
                 if not cov[origin:origin + h].all():
                     skips.append(dict(segment=seg, product_id=key[0], pool=key[1],
-                                      form=key[2], uom=key[3], reason="unknown_test_week",
+                                      form=key[2], uom=key[3], reason="uncovered_test_week",
                                       detail=f"h={h}"))
                     continue
                 if not cov[:origin].all():
                     skips.append(dict(segment=seg, product_id=key[0], pool=key[1],
-                                      form=key[2], uom=key[3], reason="unknown_train_week",
+                                      form=key[2], uom=key[3], reason="uncovered_train_week",
                                       detail=f"h={h}"))
                     continue
                 train, test = qty[:origin], qty[origin:origin + h]
@@ -215,7 +233,10 @@ def main() -> int:
         detail.to_excel(w, sheet_name="3_逐键逐模型", index=False)
         skip.to_excel(w, sheet_name="4_失败与跳过", index=False)
     print(fsum.to_string(index=False))
-    print("\nskips:\n", skip["reason"].value_counts().to_string())
+    if skip.empty:
+        print("\nskips: none")
+    else:
+        print("\nskips:\n", skip["reason"].value_counts().to_string())
     print("\nwrote", OUT)
     return 0
 

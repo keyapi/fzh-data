@@ -101,8 +101,11 @@ def main() -> int:
                 "模型异常-零中位数": "模型异常-零中位数", "无需求-不判定": "无需求-不判定"}
     cny9["可执行状态"] = np.select(
         [cny9["是否风险隔离"], cny9["是否可换运输"],
-         cny9["轨迹状态"].eq("模型异常-零中位数")],
-        ["风险隔离-待决策", "可换运输-待重模拟", "模型异常-零中位数"],
+         cny9["轨迹状态"].eq("模型异常-零中位数"),
+         cny9["首批晚于停工"].astype(bool)
+         & cny9["轨迹状态"].isin(["cycle95", "fill95"])],
+        ["风险隔离-待决策", "可换运输-待重模拟", "模型异常-零中位数",
+         "首批晚于停工-需重排"],
         default=cny9["轨迹状态"].map(exec_map).fillna("未匹配-需复核"))
     cny9["取整差"] = (pd.to_numeric(cny9["建议节前备货量"], errors="coerce").fillna(0)
                     - pd.to_numeric(cny9["首批数量"], errors="coerce").fillna(0)
@@ -135,14 +138,19 @@ def main() -> int:
         default="")
     qual["资格复审"] = "待人工：新增补货资格未审"
 
-    r31 = cny9[cny9["可执行状态"].eq("可执行-待人工确认")].copy()
+    r31 = cny9[cny9["轨迹状态"].isin(["cycle95", "fill95"])
+               & (~cny9["是否风险隔离"]) & (~cny9["是否可换运输"])
+               & (~cny9["轨迹状态"].eq("模型异常-零中位数"))].copy()
     r31["服务目标"] = np.where(r31["轨迹状态"].eq("cycle95"),
                                 "周期无断货≥95%", "满足率≥95%（周期<95%）")
     r31["人工确认"] = "确认需求/政策/下单日"
     r31 = r31[["product_id", "池", "形态", "UOM", "建议节前备货量", "首批数量",
-               "第二批数量", "首批到仓", "第二批到仓", "建议运输", "服务目标",
+               "第二批数量", "首批到仓", "第二批到仓", "首批下单日", "第二批下单日",
+               "首批晚于停工", "建议运输", "服务目标",
                "日均q95需求", "当前可用", "轨迹状态", "模型资格", "执行闸门",
                "人工确认"]]
+    r31["执行状态"] = np.where(r31["首批晚于停工"].astype(bool),
+                                "首批晚于停工-需重排", "可执行")
 
     r7 = rescue[rescue["状态"].isin(["cycle95", "fill95"])].copy()
     r7["执行状态"] = r7["可执行补救状态"]
@@ -162,16 +170,19 @@ def main() -> int:
                  "需求异常类型": "需求异常类型_v7"})
     cand = cand.merge(tj2, on=KEYS, how="left")
     cand = cand.merge(cny9[KEYS + ["风险状态", "是否风险隔离", "是否可换运输",
-                                   "模型资格", "执行闸门"]], on=KEYS, how="left")
+                                   "首批晚于停工", "模型资格", "执行闸门"]],
+                      on=KEYS, how="left")
     cand["风险状态"] = cand["风险状态"].fillna("").astype(str)
     cand["可执行状态"] = np.select(
         [cand["风险状态"].eq("全部方案失败"),
          cand["风险状态"].eq("选定方案失败-有补救候选"),
          cand["轨迹状态_最新"].eq("模型异常-零中位数"),
+         cand["首批晚于停工"].astype(bool)
+         & cand["轨迹状态_最新"].isin(["cycle95", "fill95"]),
          cand["轨迹状态_最新"].isin(["cycle95", "fill95"]),
          cand["轨迹状态_最新"].eq("fail")],
         ["风险隔离-待决策", "可换运输-待重模拟", "模型异常-零中位数",
-         "可执行-待人工确认", "不可执行-轨迹未过"],
+         "首批晚于停工-需重排", "可执行-待人工确认", "不可执行-轨迹未过"],
         default="模型异常-不判定")
     cand["轨迹状态"] = cand["轨迹状态_最新"]
     cand["周期无断货概率"] = cand["周期无断货概率_v7"]
@@ -208,6 +219,7 @@ def main() -> int:
     remedy_rows = cny9[cny9["是否可换运输"]]
     remedy_qty = float(pd.to_numeric(remedy_rows["建议节前备货量"], errors="coerce").fillna(0).sum())
     risk_pass = cny9[cny9["是否风险隔离"] & cny9["轨迹状态"].isin(["cycle95", "fill95"])]
+    early_rows = cny9[cny9["可执行状态"].eq("首批晚于停工-需重排")]
     risk_pass_qty = float(pd.to_numeric(risk_pass["建议节前备货量"],
                                        errors="coerce").fillna(0).sum())
     traj_cny_qty = float(pd.to_numeric(traj.loc[traj["类型"] == "春节", "数量"],
@@ -238,6 +250,7 @@ def main() -> int:
     risk_pass_traj = round(float(pd.to_numeric(risk_pass["轨迹数量"],
                                                errors="coerce").fillna(0).sum()), 1)
     net_rows = cny9[(~cny9["是否风险隔离"]) & (~cny9["是否可换运输"])
+                    & (~cny9["首批晚于停工"].astype(bool))
                     & cny9["轨迹状态"].isin(["cycle95", "fill95"])]
     net_keys = len(net_rows)
     net_plan = round(float(pd.to_numeric(net_rows["建议节前备货量"],
@@ -260,10 +273,13 @@ def main() -> int:
          "选定运输晚于断货日，但更快运输可赶上；需重模拟，不直接解禁"),
         ("  其中：可执行补救通过", len(exec_rescue),
          float(pd.to_numeric(exec_rescue["数量"], errors="coerce").fillna(0).sum()), np.nan,
-         "3 键（快船二批）通过；4 个普船方案二批下单日已过，另列阻塞"),
+         "7 键通过（5 cycle/2 fill）；第二批下单日已按复工 2/22 校正"),
         ("  其中：补救被第二批下单日阻塞", len(blocked_rescue),
          float(pd.to_numeric(blocked_rescue["数量"], errors="coerce").fillna(0).sum()), np.nan,
-         "普船第二批下单日 2026-10-23 已过，需重排，不算可执行"),
+         "0（第二批已按复工 2/22 校正）"),
+        ("  其中：首批晚于停工-需重排", len(early_rows),
+         float(pd.to_numeric(early_rows["建议节前备货量"], errors="coerce").fillna(0).sum()), np.nan,
+         "首批到仓晚于 2027-01-24 停工；需改空运/提前，不算净可执行"),
         ("  其中：可执行但风险隔离", len(risk_pass), round(risk_pass_qty, 1), risk_pass_traj,
          "轨迹过但风险未消；按风险隔离处理，不计入净可执行"),
         ("净可执行（剔除风险隔离）", net_keys, net_plan, net_traj,
@@ -410,7 +426,7 @@ def main() -> int:
         ("PO", "10a_PO核对看 14/11/3 的差异；10_PO逐单台账逐单看 open_qty/ETA/匹配"),
         ("运输补救", "16_运输补救：8 个选定运输晚于断货日但更快运输可赶上的键，单独重模拟；不直接解禁"),
         ("新增资格", "18_60cm新增补货资格：19 个供给恢复后 观察→补 的键，单独复审，不在 257 春节包"),
-        ("人工复审", "19_人工复审_31 / 20_人工复审_7：31 个可确认 + 7 个换运输模拟通过（其中 3 可执行、4 因普船二批下单日已过阻塞）"),
+        ("人工复审", "19_人工复审_31 / 20_人工复审_7：27 可执行 + 4 首批晚于停工 + 7 换运输可执行"),
     ], columns=["看哪张", "看什么"])
 
     # ---------- 12_已知限制
@@ -434,7 +450,7 @@ def main() -> int:
         ("60cm 287", "KS0001-DM-60-COFFEE/波兰 287 件保留原键、保留预测历史；零中位数待验证，方案量0"),
         ("60cm 覆盖", "保留原键 4,001 件（含 287）仍需按 D1b/C/EN/PO 逐键确认覆盖；本包只对平需求口径"),
         ("新增资格", "19 个 60cm 供给恢复后 观察→补 的键；不在 257 春节包，需单独资格复审"),
-        ("人工复审", "31 个可确认 + 7 个换运输模拟通过（3 可执行、4 普船二批下单日已过阻塞）；见 19/20 表"),
+        ("人工复审", "27 可执行 + 4 首批晚于停工 + 7 换运输可执行；见 19/20 表"),
         ("操作边界", "不自动下单、不写 EN、不写通途"),
     ], columns=["项", "已知限制"])
 
@@ -464,12 +480,16 @@ def main() -> int:
         ("2 零中位数建议量>0", int((zm & (cand["建议数量"] > 0)).sum()), 0),
         ("9 可换运输键", int(cny9["是否可换运输"].sum()), 8),
         ("16 运输补救行", len(rescue), 8),
-        ("16 第二批下单日已过", len(blocked_rescue), 4),
-        ("20 可执行补救", len(exec_rescue), 3),
+        ("16 第二批下单日已过", len(blocked_rescue), 0),
+        ("20 可执行补救", len(exec_rescue), 7),
         ("60cm 供给恢复键", len(rec), 20),
         ("18 新增资格键", len(qual), 19),
         ("18 新增资格误入257", int(qual["在257"].sum()), 0),
         ("19 人工复审31", len(r31), 31),
+        ("19 第二批下单日已过", int((pd.to_datetime(r31["第二批下单日"], errors="coerce")
+                                     < pd.Timestamp("2026-11-06")).sum()), 0),
+        ("19 首批晚于停工", int(r31["首批晚于停工"].sum()), 4),
+        ("19 可执行", int(r31["执行状态"].eq("可执行").sum()), 27),
         ("20 人工复审7", len(r7), 7),
         ("Top50 非可执行行", int((~top50["可执行状态"].eq("可执行-待人工确认")).sum()), 0),
     ], columns=["检查项", "实际", "期望"])
