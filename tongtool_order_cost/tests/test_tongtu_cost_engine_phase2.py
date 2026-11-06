@@ -967,3 +967,24 @@ def test_cover_in_merged_group_defers_to_filler_line(tmp_path):
     detail = shadow.detail_rows[0]
     assert detail["product_id"] == "KS-B"
     assert detail["merged"] is True
+
+
+def test_unique_cover_product_overrides_shared_filler(tmp_path):
+    """皮壳别名唯一 → 皮壳决定组内产品；共用海绵登记在另一产品上也不采用。"""
+    items = write_items_custom(tmp_path, [
+        {"name": "KS-DIAMOND-COVER", "customer_code": "DIAMOND-COVER", "item_group": "床头板", "variant_of": "KS-DIAMOND"},
+        {"name": "KS-SQUARE", "customer_code": "SHARED-FOAM", "item_group": "床头板", "variant_of": "KS-SQUARE"},
+    ])
+    orders = write_orders(tmp_path, [
+        ["ORD-3700001", "PSK", "DIAMOND-COVER", 1, 10, 50, 0, "WH1"],
+        ["ORD-3700001", "PSK", "SHARED-FOAM", 1, 0, 0, 0, "WH1"],
+    ])
+    en = write_en(tmp_path, [
+        ["ORD-3700001", "DIAMOND-COVER", "KS-DIAMOND-COVER", 1, "成品"],
+        ["ORD-3700001", "SHARED-FOAM", "KS-SQUARE", 1, "成品"],
+    ])
+    shadow = run_merge_shadow(orders, items, en, None, month="202608")
+    assert shadow.stats["group_cover_override"] == 1
+    detail = shadow.detail_rows[0]
+    assert detail["product_id"] == "KS-DIAMOND"
+    assert detail["merged"] is True

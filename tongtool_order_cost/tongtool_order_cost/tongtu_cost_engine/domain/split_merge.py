@@ -714,6 +714,7 @@ def load_orders(
         en_items = en_line_map.get((order_id, sku), frozenset())
         cover_in_group = (
             sku_shape(sku_raw) == SHAPE_COVER
+            and resolution.status == _STATUS_AMBIGUOUS
             and order_has_filler.get(order_common_part(order_id), False)
         )
         if len(en_items) > 1:
@@ -783,6 +784,8 @@ def load_orders(
 
     # 同订单锚定：Cover 别名同时命中 PPCotton/Foam 两条产品线时，用同订单组件行锁定
     _anchor_same_order(rows, resolver)
+    # 组内产品归属：皮壳别名唯一时，皮壳决定产品；共用海绵/PP棉常被单独登记在另一产品上
+    en_line_stats["group_cover_override"] = _cover_product_precedence(rows, resolver)
 
     for row in rows:
         if row.resolution_status == _STATUS_RESOLVED:
@@ -841,6 +844,48 @@ def _color_anchor(row: OrderRow, candidates: set[str], same: Sequence[OrderRow],
         if tokens & other:
             hits.append(c)
     return hits[0] if len(hits) == 1 else ""
+
+
+def _cover_product_precedence(rows: list[OrderRow], resolver: EnResolver) -> int:
+    """同一 (order_common, 平台SKU) 内，皮壳别名唯一 → 皮壳决定组内产品。
+
+    共用海绵/PP棉常只登记在另一产品上（如 KS0396 方格 vs KS0397 菱形），
+    若按填充行取产品，会把整件成本对到错误 BOM。平台 SKU 含逗号（多商品）时不处理。
+    """
+    by_group: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for i, row in enumerate(rows):
+        if "," in str(row.platform_sku or ""):
+            continue
+        if sku_shape(row.sku_raw) not in (SHAPE_COVER, SHAPE_FOAM, SHAPE_PPCOTTON):
+            continue
+        if row.product_id:
+            by_group[(row.order_common, row.platform_sku)].append(i)
+    changed = 0
+    for idxs in by_group.values():
+        covers = [
+            i for i in idxs
+            if sku_shape(rows[i].sku_raw) == SHAPE_COVER
+            and rows[i].resolution_status == _STATUS_RESOLVED
+        ]
+        products = {rows[i].product_id for i in covers}
+        if len(products) != 1:
+            continue
+        # 多颜色皮壳（多个不同 Cover SKU）是「多件不同变体」，不是一件成品的拆包
+        if len({sku_base(rows[i].sku) for i in covers}) != 1:
+            continue
+        product = next(iter(products))
+        for i in idxs:
+            row = rows[i]
+            if sku_shape(row.sku_raw) == SHAPE_COVER or row.product_id == product:
+                continue
+            raw = {k: v for k, v in row.raw.items() if k != "_en_item"}
+            raw["_group_cover_override"] = product
+            rows[i] = replace(
+                row, product_id=product, item_group=resolver.item_group_for(product),
+                raw=raw,
+            )
+            changed += 1
+    return changed
 
 
 def _anchor_same_order(rows: list[OrderRow], resolver: EnResolver) -> int:
