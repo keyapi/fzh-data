@@ -10,7 +10,18 @@ title: 通途订单规则库（canon）变更日志
 - **C9 关闭（退货）**：用户口径——通途订单不含退货，正常发货都算销售额，退货只在钉钉账期；“退货产品仓”只是发货仓。数据：202608/202609 负数数量 0 行。`UNIV-004` 改 canon，01 §6 重写。
 - **C14 关闭（负成本）**：无业务场景，按数据错误处理（本地阻断暴露，不 clamp）；1.7.0 的负数规则只针对 FBA 尾程参考值，不适用于四列成本。数据：两月四列负值 0 行。`PRICE-008` 改 canon。
 - **C2 裁决（ADR-0001）**：本地 38 矩阵为唯一应然口径；OS/CR 对齐，DN/DNF 只读复用；迁移顺序 OS 先修、双跑切换。新增 `adr/0001-cost-authority-and-migration.md`。
-- `rules.yaml`：decision-needed 清零（22 条：canon + unverified）。
+- `rules.yaml`：decision-needed 清零（23 条：canon + unverified）。
+
+## 2026-11-06（C3 裁决 + Codex 完整复审）
+
+- **C3 裁决（并入 ADR-0001）**：FBA 唯一判据 = `Tongtu Shipping Warehouse.warehouse_classification`；客户名/order_type 降为兼容告警；`needs_last_leg` 不是身份；未知映射阻断。新增 `FBA-001` resolver 规则，`UNIV-003`、01 §5、07 C3 同步。
+- **Codex 复审 must-fix 已修**：
+  - index 权威顺序改为「ADR > 规范 > 冲突 > 实现 > 证据」；
+  - 07 状态值统一到枚举（open/in-progress/decision-needed/decided/verified/resolved/closed/blocked），closed 可无截止日；
+  - 03 后缀矩阵标注「仅单独卖单品；拆单组内组件行成本 0」；
+  - rules.yaml 证据统一加 `[SPEC]/[EN现状]/[LOCAL实现]/[DATA]` 标签；
+  - 旧页横幅经复核确实存在（Codex 误看了另一个 worktree）。
+- rules.yaml 增至 23 条（21 canon + 1 unverified + 1 FBA resolver canon）。
 
 ## 2026-11-06
 

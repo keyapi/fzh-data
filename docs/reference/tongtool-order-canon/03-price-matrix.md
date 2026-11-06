@@ -68,7 +68,7 @@ tags: [tongtool, order, price-matrix, cover, foam, ppcotton, fba, canon]
 
 > 「目的地 valuation」在 USNJ/USTX/PL 分别取对应包装成品 BOM 的 `total_cost`；美国海外仓取 USTX；FBA 取 0（见 §4、§5）。
 
-### 3.2 `-COVER`（单独卖皮壳 / 拆单组里的皮壳行）
+### 3.2 `-COVER`（仅单独卖皮壳时）
 
 | 发货方式 | 皮壳成本 | 绍兴二次加工 | 目的地二次加工 | 头程 |
 |---|---|---|---|---|
@@ -78,7 +78,7 @@ tags: [tongtool, order, price-matrix, cover, foam, ppcotton, fba, canon]
 - 加工成本清零；
 - 头程一律取皮壳头程。
 
-### 3.3 `-FOAM`（单独卖海绵 / 拆单组里的填充行）
+### 3.3 `-FOAM`（仅单独卖海绵时）
 
 | 发货方式 | 皮壳成本 | 绍兴二次加工 | 目的地二次加工 | 头程 |
 |---|---|---|---|---|
@@ -102,6 +102,7 @@ tags: [tongtool, order, price-matrix, cover, foam, ppcotton, fba, canon]
 
 ### 3.5 后缀识别边界
 
+- **本矩阵只适用于「单独卖单品」的透传行**；拆单组内的 Cover/Foam/PPCotton 行只用于身份判定，合并后成本记在载体行，组件行成本为 **0**，不套本矩阵（见 §6）。
 - 后缀按**子串、大小写不敏感**识别：`-COVER`、`-FOAM`、`-PPCOTTON`。
 - 数字后缀（`-COVER1`…`-COVER5`、`-FOAM1`…`-FOAM5`）**不改变计价分支**，只影响历史预估尾程的有效重量。
 - 不带数字的 `-COVER` / `-FOAM` / `-PPCOTTON` 才进入本页矩阵。

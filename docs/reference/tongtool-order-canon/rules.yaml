@@ -1,6 +1,8 @@
 # 通途订单规则库 · 机器可读规则（MVP）
 # 规范正文：01-order-universe.md / 02-grouping-and-merge.md / 03-price-matrix.md
 # status: canon | decision-needed | unverified
+# evidence 约定：每条证据以 [SPEC] / [EN现状] / [LOCAL实现] / [DB] / [DATA] 开头，
+#   避免把「本地新增」误写成「EN 已有」。
 version: 0.1
 updated: 2026-11-06
 module: tongtool_order_cost
@@ -18,9 +20,9 @@ rules:
     exceptions:
       - "FBA 行走独立路径，不与自发货合并"
     evidence:
-      - "docs/reference/tongtool-order-canon/01-order-universe.md §1-§4（2026-11-06）"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（load_orders；2026-11-06 观测）"
-      - "docs/solutions/workflow-issues/tongtu-order-universe-invalid-split-fba.md"
+      - "[SPEC] docs/reference/tongtool-order-canon/01-order-universe.md §1-§4（2026-11-06）"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（load_orders；2026-11-06 观测）"
+      - "[SPEC] docs/solutions/workflow-issues/tongtu-order-universe-invalid-split-fba.md"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -39,9 +41,9 @@ rules:
       - "原单组件行重复时按件数锚定，不因 qty 合计不等阻断"
       - "无原单时只用有效子单，不构造原单"
     evidence:
-      - "docs/reference/tongtool-order-canon/01-order-universe.md §3（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/37-phase3.7-gs-ready.md"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_aux_validate、lookup_aux；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/01-order-universe.md §3（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/37-phase3.7-gs-ready.md"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_aux_validate、lookup_aux；2026-11-06 观测）"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -52,18 +54,43 @@ rules:
     applies_when:
       fulfillment: FBA
     then:
+      identity_rule: "唯一判据 = Tongtu Shipping Warehouse.warehouse_classification 含 FBA"
       pricing_path: "FBA 成品口径"
       merge: "不进入自发货合并组"
       duplicate: "同 月份|MSKU|SKU 同时出现在 FBA 与自发货时标重复，不直接相加"
+      unknown_warehouse: "不在配置表的仓库分类 → 阻断，不得默认 FBA/非 FBA"
     exceptions:
       - "跨月可借 ±1 个月 EN FBA 行，按 GS 数量分摊，标 cross_month_bridge"
+      - "客户名/客户码 FBA 关键字、order_type=FBA+渠道：仅作兼容/审计告警，不决定身份"
+      - "needs_last_leg 是尾程标志，不是 FBA 身份"
     evidence:
-      - "docs/reference/tongtool-order-canon/01-order-universe.md §5（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/35-phase4-fba-shadow.md"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/fba_shadow.py（build_fba_shadow；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/adr/0001-cost-authority-and-migration.md（C3）"
+      - "[SPEC] docs/reference/tongtool-order-canon/01-order-universe.md §5（2026-11-06）"
+      - "[EN现状] order_sync.py:2921-2931；cost_review.py:1045-1056"
+      - "[EN现状] delivery_note_filling_cost.py `_contains_fba_keyword`（仅告警）"
+      - "[LOCAL实现] fba_shadow.py（build_fba_shadow；2026-11-06 观测）"
     status: canon
-    owner: finance
-    effective_from: "2026-11"
+    owner: user
+    effective_from: "2026-11-06"
+
+  - id: FBA-001
+    title: 履约类型 resolver（唯一输入=仓库分类）
+    scope: [fulfillment, resolver]
+    applies_when:
+      resolving_fulfillment: true
+    then:
+      input: "Tongtu Shipping Warehouse.warehouse_classification"
+      output: "FBA / USNJ / USTX / PL / 海外仓 / 未知"
+      unknown_mapping: "阻断并暴露，不猜、不默认"
+      deprecated_inputs: "客户名关键字、order_type、渠道/账号 不得再决定履约类型"
+    exceptions: []
+    evidence:
+      - "[SPEC] adr/0001-cost-authority-and-migration.md（C3）"
+      - "[EN现状] Tongtu Shipping Warehouse 配置（2026-11-06 观测）"
+      - "[LOCAL实现] bom_cost.py `warehouse_bucket`（2026-11-06 观测）"
+    status: canon
+    owner: user
+    effective_from: "2026-11-06"
 
   - id: UNIV-004
     title: 退货不进入通途订单成本
@@ -75,9 +102,9 @@ rules:
       returns_warehouse: "「退货产品仓」只是发货仓名，行按所属分支正常计价"
     exceptions: []
     evidence:
-      - "01-order-universe.md §6（用户口径，2026-11-06）"
-      - "202608/202609 实测：负数数量 0 行、四列负值 0 行（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/en-branching-and-warehouse-config.md（退货仓命名）"
+      - "[SPEC] 01-order-universe.md §6（用户口径，2026-11-06）"
+      - "[DATA] 202608/202609 实测：负数数量 0 行、四列负值 0 行（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/en-branching-and-warehouse-config.md（退货仓命名）"
     status: canon
     owner: user
     effective_from: "2026-11-06"
@@ -94,8 +121,8 @@ rules:
     exceptions:
       - "有拆单尾号但同组无其它行、无作废原单时，按原始订单处理并保留尾号血缘"
     evidence:
-      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §2（2026-11-06）"
-      - "tongtool_order_cost/tongtool_order_cost/ustx_cost_compare.py（order_common_part；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §2（2026-11-06）"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/ustx_cost_compare.py（order_common_part；2026-11-06 观测）"
     status: canon
     owner: user
     effective_from: "2026-11"
@@ -115,9 +142,9 @@ rules:
       - "不用产品名含『包裹』、金额相等、行号先后作判据"
       - "is_deliver_good=0 只作辅助信号（API 的 isDeliverGoods=1 表示未发货/拆出，同步时取反）"
     evidence:
-      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §3（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/30-design-merge-split-no-double-count.md"
-      - "tongtool_integration/tongtool_integration/sync/order_sync.py（is_deliver_good；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §3（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/30-design-merge-split-no-double-count.md"
+      - "[EN现状] tongtool_integration/tongtool_integration/sync/order_sync.py（is_deliver_good；2026-11-06 观测）"
     status: canon
     owner: user
     effective_from: "2026-11"
@@ -134,8 +161,8 @@ rules:
     exceptions:
       - "载体不唯一、件数不唯一、身份冲突、method 不一致、aux 校验失败任一成立 → 不合并并阻断"
     evidence:
-      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §4（2026-11-06）"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（find_groups；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §4（2026-11-06）"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（find_groups；2026-11-06 观测）"
     status: canon
     owner: user
     effective_from: "2026-11"
@@ -150,9 +177,9 @@ rules:
     exceptions:
       - "阻断行保留在输出中，写 cost_status 与原因，不取 first/max/平均"
     evidence:
-      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §5（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/32-phase2-bom-cost-policy.md"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_pick_carrier；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §5（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/32-phase2-bom-cost-policy.md"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_pick_carrier；2026-11-06 观测）"
     status: canon
     owner: user
     effective_from: "2026-11"
@@ -170,9 +197,9 @@ rules:
       - "禁止取首行、最大值、行数"
       - "原单与子单件数不一致 → aux_qty_mismatch 阻断"
     evidence:
-      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §6（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/30-design-merge-split-no-double-count.md"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_count_pieces；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §6（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/30-design-merge-split-no-double-count.md"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_count_pieces；2026-11-06 观测）"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -192,9 +219,9 @@ rules:
       - "共享皮壳导致别名多候选时，不得留空；仍不唯一才阻断"
       - "一个皮壳可配 PP棉或海绵，是同一皮壳不同填充物，不是两个皮壳"
     evidence:
-      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §8（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
-      - "tongtool_order_cost/AGENT_HANDOFF.md（单独卖皮壳/海绵/PP棉 ≠ 产品歧义）"
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §8（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "[SPEC] tongtool_order_cost/AGENT_HANDOFF.md（单独卖皮壳/海绵/PP棉 ≠ 产品歧义）"
     status: canon
     owner: user
     effective_from: "2026-11"
@@ -211,9 +238,9 @@ rules:
     exceptions:
       - "填充行也无法唯一解析 → 阻断"
     evidence:
-      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §7.2（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（cover_in_group；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §7.2（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（cover_in_group；2026-11-06 观测）"
     status: canon
     owner: user
     effective_from: "2026-11"
@@ -231,9 +258,9 @@ rules:
       - "平台 SKU 含逗号（多商品）或多皮壳 SKU（多颜色多件）时不套用"
       - "两条锚定规则指向不同产品 → 阻断"
     evidence:
-      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §7.3（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md（反向例外）"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_cover_product_precedence；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §7.3（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md（反向例外）"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_cover_product_precedence；2026-11-06 观测）"
     status: canon
     owner: user
     effective_from: "2026-11"
@@ -254,9 +281,9 @@ rules:
       - "FBA 绕过"
       - "合并组不套后缀"
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.2（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
-      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/03-price-matrix.md §3.2（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "[EN现状] tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -279,9 +306,9 @@ rules:
       - "FBA 绕过"
       - "合并组不套后缀"
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.3（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
-      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/03-price-matrix.md §3.3（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "[EN现状] tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -304,9 +331,9 @@ rules:
       - "FBA 绕过"
       - "合并组不套后缀"
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.4（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
-      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/03-price-matrix.md §3.4（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "[EN现状] tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -327,9 +354,9 @@ rules:
       - "直采成品 cost_fg==sx_cost_all 且 cost_sxbzcp==0 时允许 sx=0（direct_purchase_zero）"
       - "sx<0 或恒等式不成立 → pending，不补 0"
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §5（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/35-phase4-fba-shadow.md"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/fba_shadow.py（2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/03-price-matrix.md §5（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/35-phase4-fba-shadow.md"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/fba_shadow.py（2026-11-06 观测）"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -346,9 +373,9 @@ rules:
       unit_cost: "组总成本 ÷ 件数"
     exceptions: []
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §6（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（合并组后缀门；2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/03-price-matrix.md §6（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（合并组后缀门；2026-11-06 观测）"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -367,9 +394,9 @@ rules:
     exceptions:
       - "美国海外仓加工与皮壳/半成品头程借 USTX，成品头程借 USFBA"
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.1、§4（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/04-cost-decision-tables.md"
-      - "tongtool_order_cost/docs/reference/en-shaoxing-shipment-cost-logic-spec.md"
+      - "[SPEC] docs/reference/tongtool-order-canon/03-price-matrix.md §3.1、§4（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/04-cost-decision-tables.md"
+      - "[SPEC] tongtool_order_cost/docs/reference/en-shaoxing-shipment-cost-logic-spec.md"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -385,9 +412,9 @@ rules:
       rule: "按普通皮壳：shell=cost_fg、freight=皮壳头程、sx=0、processing=目的地 valuation"
     exceptions: []
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §7（2026-11-06）"
-      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（2026-11-06 对齐，feature/ustx-cost-compare cdced7cd）"
+      - "[SPEC] docs/reference/tongtool-order-canon/03-price-matrix.md §7（2026-11-06）"
+      - "[EN现状] tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（2026-11-06 对齐，feature/ustx-cost-compare cdced7cd）"
     status: canon
     owner: user
     effective_from: "2026-11-06"
@@ -403,9 +430,9 @@ rules:
       not_applicable: "1.7.0 的负数规则只针对 FBA 尾程参考值<0 写入运费，不适用于四列成本"
     exceptions: []
     evidence:
-      - "03-price-matrix.md §7（2026-11-06）"
-      - "202608/202609 实测：四列负值 0 行、EN 明细负值 0 行（2026-11-06）"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（negative_cost；2026-11-06 观测）"
+      - "[SPEC] 03-price-matrix.md §7（2026-11-06）"
+      - "[DATA] 202608/202609 实测：四列负值 0 行、EN 明细负值 0 行（2026-11-06）"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（negative_cost；2026-11-06 观测）"
     status: canon
     owner: user
     effective_from: "2026-11-06"
@@ -422,8 +449,8 @@ rules:
     exceptions:
       - "合并组先算组总成本，再 ÷ 件数还原单位成本"
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §1（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/33-phase3-writeback-rehearsal.md"
+      - "[SPEC] docs/reference/tongtool-order-canon/03-price-matrix.md §1（2026-11-06）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/33-phase3-writeback-rehearsal.md"
     status: canon
     owner: finance
     effective_from: "2026-11"
@@ -437,8 +464,8 @@ rules:
       pricing_branch: "不改变后缀计价，落通用有效重量分支"
     exceptions: []
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.5、§7（2026-11-06）"
-      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+      - "[SPEC] docs/reference/tongtool-order-canon/03-price-matrix.md §3.5、§7（2026-11-06）"
+      - "[EN现状] tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
     status: unverified
     owner: codex
     due: "2026-12-04"

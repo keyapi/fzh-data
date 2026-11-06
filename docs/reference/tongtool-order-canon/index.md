@@ -42,7 +42,7 @@ tags: [tongtool, order, canon, index]
 
 ## 权威顺序
 
-1. **规范正文**（01–03）> 决策记录（07 / ADR）> 实现映射（06）> 证据（cost-engine-spec、solutions、审计报告）。
+1. **已接受的 ADR**（裁决，可覆盖旧规范）> **规范正文**（01–03）> 冲突登记（07）> 实现映射（06）> 证据（cost-engine-spec、solutions、审计报告）。
 2. 代码与规范不一致 → 先判「代码 bug」还是「规范过期」，写进 07，不允许两边都算对。
 3. 旧 `cost-engine-spec` 页面只作证据；行号、当月金额、Codex 复核过程都不进规范正文。
 

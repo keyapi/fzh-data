@@ -82,6 +82,8 @@ EN 的作废原单仍然保留在订单表里，但**不进入成本行集合**�
 
 ## 5. FBA：独立子集，与自发货分账
 
+- **FBA 身份的唯一判据**：`Tongtu Shipping Warehouse.warehouse_classification` 含 `FBA`（ADR-0001 C3）。客户名/客户码关键字、`order_type=FBA`+渠道/账号**不再决定身份**，只作兼容/审计告警；`needs_last_leg` 是尾程标志，不是 FBA 身份。
+- 仓库分类不在配置表 → **阻断**，不得默认成 FBA 或非 FBA。
 - FBA 行单独走 FBA 计价路径（成品口径），**不进入自发货的合并组**，也不与自发货行做 union。
 - 同一 `月份 | MSKU | SKU` 同时出现在 FBA 与自发货 → 标重复，**不直接相加**，先裁决归属。
 - FBA 的数量以 EN FBA 明细为准；GS FBA 销量表作骨架；通途 FBA 导出作覆盖校验。

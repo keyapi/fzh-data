@@ -34,7 +34,12 @@ tags: [adr, tongtool, cost, authority, migration]
 3. **DN / DNF 只读复用权威成本**，不再各自计算：
    - DN 保留 `custom_valuation_rate` 输出字段差异，并标注用途。
    - DNF 仅负责送货单展示，不引入独立口径。
-4. **FBA 判据统一为 `Tongtu Shipping Warehouse.warehouse_classification`**（C3），其余关键字/`order_type` 判据降为辅助或删除。
+4. **FBA 判据统一为 `Tongtu Shipping Warehouse.warehouse_classification`**（C3）。
+   - 唯一身份判据：`warehouse_classification` 含 `FBA`。
+   - 客户名/客户码关键字（`_contains_fba_keyword`）与 `order_type=FBA`+渠道/账号判据：**删除其 FBA 身份职责**，仅保留兼容/审计告警，不再决定成本口径。
+   - `needs_last_leg` 是**尾程标志**，不是 FBA 身份。
+   - 未知仓库分类（不在配置表）→ **阻断**，不得默认成非 FBA 或 FBA。
+   - 迁移：先在 ADR 固化 → 建统一 `fulfillment_resolver`（仓库分类为唯一输入）→ 影子对比各链路 → 替换消费者；最大风险是仓库配置错配，未知映射必须阻断。
 
 ## 迁移顺序
 
