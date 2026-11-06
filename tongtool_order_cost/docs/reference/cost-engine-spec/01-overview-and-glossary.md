@@ -12,9 +12,9 @@ tags: [cost, tongtu, colab, gsheet, erpnext, reference, overview, glossary]
 
 > **本页保留为证据；规范见 [docs/reference/tongtool-order-canon/](../../../../docs/reference/tongtool-order-canon/index.md)（2026-11-06 起）。**
 
-> 本 bundle 是**成本口径的单一事实源（single source of truth）**。凡「某成本列怎么来的 / 为什么两家算法不一样 / 缺哪些数」，
-> 先查这里，再下钻到具体文档。
-> 写作时间：**2026-10-15**。所含「线上事实」以该日为观测点；**数据快照**另有明确时点（见下）。
+> **历史证据（2026-10-15 写作）**：本 bundle 记录当时的 Colab/EN 逆向结论，**不再定义口径**。
+> 口径规范见 [docs/reference/tongtool-order-canon/](../../../../docs/reference/tongtool-order-canon/index.md)（2026-11-06 起）。
+> 所含「线上事实」以写作日为观测点；**数据快照**另有明确时点（见下）。
 
 ## 1. 这套系统在做什么
 
@@ -32,7 +32,7 @@ tags: [cost, tongtu, colab, gsheet, erpnext, reference, overview, glossary]
 订单利润   = 售价*汇率 − 订单总成本
 ```
 
-## 2. 两套「谁算成本」的实现（本 bundle 的核心张力）
+## 2. 两套「谁算成本」的实现（历史记录）
 
 | | **老系统（Colab + Google Sheet）** | **EN（ERPNext）** |
 |---|---|---|
@@ -105,7 +105,7 @@ tags: [cost, tongtu, colab, gsheet, erpnext, reference, overview, glossary]
 |---|---|
 | [02-keys-and-entities.md](02-keys-and-entities.md) | 键与实体、编码体系、去重键 |
 | [03-data-sources.md](03-data-sources.md) | 数据源清单（GS 工作簿/ws + EN 报表/Doctype），谁生成、谁消费 |
-| [**04-cost-decision-tables.md**](04-cost-decision-tables.md) | **核心**：按 目的地 × 发货方式 的各分项取值决策表 |
+| [**04-cost-decision-tables.md**](04-cost-decision-tables.md) | **历史决策表（证据）**：按 目的地 × 发货方式 的分项取值记录；规范以 canon 为准 |
 | [05 … colab-engine-cell-by-cell.md](colab-engine-cell-by-cell.md) | Colab 老引擎逐 cell |
 | [06 … en-branching-and-warehouse-config.md](en-branching-and-warehouse-config.md) | EN 39 个分流点 + `Tongtu Shipping Warehouse` 40 行配置 |
 | [06 … deduction-and-sxbzcp-adjustments.md](deduction-and-sxbzcp-adjustments.md) | 剔除额与 Jack 的改动 |
