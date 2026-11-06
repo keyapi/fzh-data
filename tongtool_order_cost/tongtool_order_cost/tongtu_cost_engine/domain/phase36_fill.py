@@ -25,6 +25,7 @@ from typing import Mapping, Sequence
 import pandas as pd
 
 from .split_merge import normalize_sku
+from ...order_side_input import platform_body, tiktok_platform_body
 
 TZ_CN = timezone(timedelta(hours=8))
 TOL = 1e-5
@@ -241,10 +242,14 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
     src_by_key: dict[str, dict] = {}
     src_by_order: dict[str, list[dict]] = defaultdict(list)
     src_by_row: dict[int, dict] = {}
+    src_by_body_sku: dict[tuple[str, str], dict] = {}
     for r in src.to_dict("records"):
         src_by_key.setdefault(_key(r.get("订单号"), r.get("通途SKU")), r)
         src_by_key.setdefault(_key_pt(r.get("订单号"), r.get("平台SKU_统一") or r.get("平台SKU")), r)
         src_by_order[str(r.get("订单号") or "").strip().upper()].append(r)
+        body = tiktok_platform_body(str(r.get("订单号") or ""))
+        if body:
+            src_by_body_sku.setdefault((body, normalize_sku(r.get("通途SKU"))), r)
         for x in str(r.get("source_row") or "").split(","):
             if x.strip().isdigit():
                 src_by_row[int(x.strip())] = r
@@ -283,6 +288,12 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
             cands = src_by_order.get(str(rec.get("订单号") or "").strip().upper(), [])
             if len(cands) == 1:
                 srow = cands[0]
+        if srow is None:
+            # TikTok 跨前缀：模板行可能是 Colab 归一化单号（如 xxx-1），
+            # 与 raw 的 TTDaneeyGo/TTDaneeyUS 前缀不同但数字主体相同。
+            body = platform_body(str(rec.get("订单号") or ""))
+            if len(body) >= 12:
+                srow = src_by_body_sku.get((body, normalize_sku(rec.get("通途SKU"))))
         if srow is None:
             ridx = raw_by_key.get(k)
             if ridx is None:

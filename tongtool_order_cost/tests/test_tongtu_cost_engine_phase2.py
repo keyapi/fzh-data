@@ -988,3 +988,45 @@ def test_unique_cover_product_overrides_shared_filler(tmp_path):
     detail = shadow.detail_rows[0]
     assert detail["product_id"] == "KS-DIAMOND"
     assert detail["merged"] is True
+
+
+def test_tiktok_cross_prefix_pairing(tmp_path):
+    """TikTok 跨前缀手动拆单：同数字主体、不同前缀的皮壳+海绵合并为一件成品。"""
+    body = "123456789012345678"
+    shadow = _shadow(tmp_path, [
+        [f"TTGo-{body}", "TT4747-Beige", "TT001-FIN-Cover", 1, 10, 50, 0, "WH1"],
+        [f"TTUS-{body}_2", "TT001-FIN-Cover", "TT001-FIN-Foam", 1, 0, 0, 0, "WH1"],
+    ], [
+        [f"TTGo-{body}", "TT001-FIN-Cover", "", 1, "半成品"],
+        [f"TTUS-{body}_2", "TT001-FIN-Foam", "", 1, "半成品"],
+    ])
+    assert shadow.stats["tiktok_paired"] == 1
+    assert shadow.stats["merged_groups"] == 1
+    detail = shadow.detail_rows[0]
+    assert detail["merged"] is True
+    assert detail["product_id"] == "KS100"
+    bom = write_bom(tmp_path, [{
+        "item_fg": "KS100-FINISH-RED", "shipping_method": "半成品",
+        "cost_fg": 10, "cost_sxbzbcp": 2, "ustx_valuation_rate": 3,
+        "cover_freight_e5asph24tk": 1, "sfg_freight_e5asph24tk": 4,
+        "freight_e5asph24tk": 9,
+    }])
+    p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
+    row = p2.rows[0]
+    assert row["status"] == "ok"
+    assert row["皮壳成本"] == 10
+    assert row["绍兴二次加工成本"] == 2
+
+
+def test_tiktok_cross_prefix_not_paired_on_different_product(tmp_path):
+    """同一数字主体但产品不同 → 不配对，保持两行。"""
+    body = "987654321098765432"
+    shadow = _shadow(tmp_path, [
+        [f"TTGo-{body}", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0, "WH1"],
+        [f"TTUS-{body}_2", "PSK", "TT777", 1, 10, 50, 0, "WH1"],
+    ], [
+        [f"TTGo-{body}", "TT001-FIN-Cover", "", 1, "半成品"],
+        [f"TTUS-{body}_2", "TT777", "", 1, "半成品"],
+    ])
+    assert shadow.stats["tiktok_paired"] == 0
+    assert shadow.stats["merged_groups"] == 0

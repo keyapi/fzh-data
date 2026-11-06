@@ -34,6 +34,7 @@ from typing import Iterable, Mapping, Sequence
 import pandas as pd
 
 from ...ustx_cost_compare import group_split_rows, order_common_part
+from ...order_side_input import tiktok_platform_body
 
 # ─────────────────────────── 常量 ───────────────────────────
 
@@ -782,6 +783,9 @@ def load_orders(
             continue
         rows.append(row)
 
+    # TikTok 跨前缀拆单：通途不允许拆单，同事用另一渠道账号手动建单；
+    # 同一数字主体、不同前缀的皮壳/填充行先配对，再走正常的结构合并。
+    en_line_stats["tiktok_paired"] = _pair_tiktok_cross_prefix(rows)
     # 同订单锚定：Cover 别名同时命中 PPCotton/Foam 两条产品线时，用同订单组件行锁定
     _anchor_same_order(rows, resolver)
     # 组内产品归属：皮壳别名唯一时，皮壳决定产品；共用海绵/PP棉常被单独登记在另一产品上
@@ -844,6 +848,53 @@ def _color_anchor(row: OrderRow, candidates: set[str], same: Sequence[OrderRow],
         if tokens & other:
             hits.append(c)
     return hits[0] if len(hits) == 1 else ""
+
+
+def _pair_tiktok_cross_prefix(rows: list[OrderRow]) -> int:
+    """TikTok 跨前缀拆单配对：同数字主体、不同前缀的皮壳/填充行视为同一件成品。
+
+    TikTok 对接通途不允许拆单，需要拆包裹时由同事在另一渠道账号手动建单，
+    两半的订单号前缀不同、数字主体相同（TT 前缀 + >=12 位）。配对只改写
+    `order_common/platform_sku`，之后仍由正常结构判据合并；不做猜测：
+    - 必须恰好 1 个皮壳行、至少 1 个填充行；
+    - 皮壳/填充都必须解析到同一非空 product_id；
+    - 发货仓库必须一致；
+    - 不同订单号。
+    """
+    groups: dict[str, list[int]] = defaultdict(list)
+    for i, row in enumerate(rows):
+        body = tiktok_platform_body(row.order_id)
+        if body:
+            groups[body].append(i)
+    paired = 0
+    for body, idxs in groups.items():
+        if len({rows[i].order_id for i in idxs}) < 2:
+            continue
+        covers = [i for i in idxs if sku_shape(rows[i].sku) == SHAPE_COVER]
+        fillers = [
+            i for i in idxs if sku_shape(rows[i].sku) in (SHAPE_FOAM, SHAPE_PPCOTTON)
+        ]
+        if len(covers) != 1 or not fillers:
+            continue
+        cover = rows[covers[0]]
+        if not cover.product_id:
+            continue
+        for i in fillers:
+            row = rows[i]
+            if row.order_id == cover.order_id:
+                continue
+            if not row.product_id or row.product_id != cover.product_id:
+                continue
+            if str(row.raw.get("发货仓库") or "") != str(cover.raw.get("发货仓库") or ""):
+                continue
+            rows[i] = replace(
+                row,
+                order_common=cover.order_common,
+                platform_sku=cover.platform_sku,
+                raw={**row.raw, "_tiktok_pair": body},
+            )
+            paired += 1
+    return paired
 
 
 def _cover_product_precedence(rows: list[OrderRow], resolver: EnResolver) -> int:
@@ -1026,7 +1077,9 @@ class MergeShadowResult:
 def _as_record(row: OrderRow) -> dict:
     """喂给 `group_split_rows` 的记录形态（它只需这几项 + `a`）。"""
     return {
-        "order_no": row.order_id,
+        # 用已算好的 order_common（TikTok 跨前缀配对会改写它），
+        # 正常订单与 order_common_part(order_id) 等价。
+        "order_no": row.order_common or row.order_id,
         "platform_sku": row.platform_sku,
         "tongtool_sku": row.sku,     # 用归一化 SKU 判「组内多 SKU」
         "qty": row.qty,

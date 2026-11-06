@@ -202,3 +202,39 @@ def test_raw_row_index_zero_still_resolves(tmp_path):
     # 命中 source_row=0 的源行（组内非载体 → 成本显式 0），不能落成 crosswalk_missing
     assert o5["cost_status"] == "ok"
     assert o5["皮壳成本"] == "0"
+
+
+def test_tiktok_template_body_fallback(tmp_path):
+    """模板行是归一化单号（xxx-1），源行是 TT 前缀；按数字主体兜底填成本。"""
+    _setup(tmp_path)
+    out = tmp_path / "out"
+    body = "123456789012345678"
+    for name in ("wb_fresh_202608.csv", "merged_202608.csv"):
+        p = out / name
+        df = pd.read_csv(p, dtype=str, keep_default_na=False)
+        extra = {c: "" for c in df.columns}
+        extra.update({
+            "订单号": f"{body}-1", "平台SKU": "TT4747-Beige", "平台SKU_统一": "TT4747-Beige",
+            "通途SKU": "TT001-FIN-Cover", "发货数量": "1", "售价*汇率": "100", "运费": "5",
+        })
+        pd.concat([df, pd.DataFrame([extra])], ignore_index=True).to_csv(
+            p, index=False, encoding="utf-8")
+    sp = out / "writeback_rehearsal" / "202608" / "writeback_new_202608.csv"
+    s = pd.read_csv(sp, dtype=str, keep_default_na=False)
+    se = {c: "" for c in s.columns}
+    se.update({
+        "订单号": f"TTGo-{body}", "通途SKU": "TT001-FIN-Cover",
+        "平台SKU_统一": "TT4747-Beige", "皮壳成本": "10", "绍兴二次加工成本": "2",
+        "二次加工成本": "1", "头程运费金额": "3", "运费": "5", "海外仓成本": "0",
+        "cost_status": "ok", "绍兴成本系数": "1", "二次加工成本系数": "1",
+        "绍兴二次加工成本系数": "1", "source_row": "99",
+    })
+    pd.concat([s, pd.DataFrame([se])], ignore_index=True).to_csv(
+        sp, index=False, encoding="utf-8")
+
+    res = build_phase36(month="202608", root=tmp_path)
+    full = pd.read_csv(Path(res["out_dir"]) / "wb_fresh_202608.csv",
+                       dtype=str, keep_default_na=False)
+    row = full[full["订单号"] == f"{body}-1"].iloc[0]
+    assert row["皮壳成本"] == "10"
+    assert row["绍兴二次加工成本"] == "2"
