@@ -129,7 +129,8 @@ timestamp: 2026-11-06
   + `docker compose up -d`，web/worker 均已重建并 healthy。
 - 服务器 `/opt/pb-orders/pb_orders/data/us_sku_name_cache.csv` 已追加三个新 SKU 的中/西语名
   （原文件已备份为 `us_sku_name_cache.csv.bak-*`）。
-- **遗留**：缓存来源 Google Sheet `US SKU Name` 仍需补这三行；否则下次从 Sheet 刷新缓存会覆盖掉。
+- 缓存来源 Google Sheet `US SKU Name`（id `1mnSJk9sUyt2Otp9mp7OWxaX7QS3YzbEUI_lMGc6GXLo`）
+  已于 2026-11-06 同步补入同样三行（933 → 936 行，逐行回读一致）。
 
 ## 8. 历史事实
 
