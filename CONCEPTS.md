@@ -584,3 +584,12 @@ GLS 波兰自发货单号批量跟踪走 gls-group.com **公开无鉴权 REST**�
 
 ### 处理时间（尾程迟发窗口）
 建标（面单创建 / GLS 数据录入）到站点收件（FedEx/UPS 首扫 / 交接 GLS）之间、允许占用的**营业日**窗口；超出则分类为迟发。UPS / FedEx / GLS 共用同一阈值；假日表仍按承运商（美国联邦 vs 波兰法定）。不要与承运延误（收件之后的在途慢）混为一谈。
+
+## Wayfair CG 库存与在途
+
+### WSA 是出库，不是入仓
+Wayfair Castlegate 的 `getCastleGateWarehouseShippingAdvice`（WSA，EDI 945）是 **CG 发往客户**的出库建议：`shipFrom` 是 CG 仓、`shipTo` 是客户，`products` 带 SKU 级 `quantityOrdered/quantityShipped`。它不是供应商发往 CG 的入仓单；`getCastleGatePurchaseOrders` 的 `CS...` 也是客户订单。
+
+### CG 在途只能推断
+入仓/在途没有可用的 SKU 级 API；用 `当日入仓收货 ≈ ΔCG on_hand + 当日 WSA 出库` 反推收货，再与通途发往 CG 的发出量比较得到 `in_transit_to_cg` 估计。通途 `WayfairCG-Cranbury仓` 是履约池账，不是 Wayfair 在库。
+*Avoid:* 把 WSA 当入仓；把通途 CG 账当 CG 在库；把在途未知写成 0。

@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-06 | Wayfair CG 在途不可直接查 —— WSA 是出库，用「Δ在库 + WSA 出库」反推收货 | [wayfair-cg-inbound-in-transit-visibility.md](wayfair-cg-inbound-in-transit-visibility.md) |
 | 2026-11-05 | git push 报 `Permission denied (publickey)` —— 密钥没问题，是 GitHub SSH 链路间歇性阻断；含三步判定法与一键 HTTPS 回退 | [github-ssh-intermittent-publickey-denied.md](github-ssh-intermittent-publickey-denied.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [layout-field-in-list-view-breaks-metadata-writes.md](layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-09-23 | grok-bot（美东）SSH 接入——对称 NAT 下打不成直连，只有经上海跳板有收益（235ms vs DERP 373ms），Vultr 跳板实为绕远路 | [grokbot-ssh-via-shanghai-jump-symmetric-nat.md](grokbot-ssh-via-shanghai-jump-symmetric-nat.md) |
