@@ -20,7 +20,7 @@ tags: [tongtool, order, conflicts, decisions, owners, canon]
 |---|---|---|---|---|---|---|---|---|
 | **C1** | 严重 | 拆单系数在订单同步恒为 1 | 可判定；修复方式需业务 | user | 2026-11-13 | 订单同步成本、拆单系数 | 决定「给 Order Item 加仓库字段」或「明确订单同步不乘系数」 | `verified` |
 | **C2** | 严重 | 后缀在五条链路五种成本 | 已裁决：以本地 38 矩阵为权威 | user | 2026-11-20 | 订单同步/CR/出库/送货单/本地引擎 | ADR-0001：OS/CR 对齐；DN/DNF 只读复用；OS 先修、双跑切换 | `decided`（ADR-0001） |
-| **C3** | 严重 | FBA 三套判据 | 已裁决：仓库分类为唯一判据 | user | 2026-11-20 | FBA 成本、尾程、毛利 | ADR-0001：建 fulfillment_resolver；关键字/order_type 降为告警；未知映射阻断 | `decided`（ADR-0001） |
+| **C3** | 严重 | FBA 三套判据 | 已裁决：`warehouse_classification` 为唯一判据 | user | 2026-11-20 | FBA 成本、尾程、毛利 | ADR-0001：建 fulfillment_resolver；关键字/order_type 降为告警；未知映射阻断 | `decided`（ADR-0001） |
 | **C4** | 高 | 头程三列系数文档/代码相反 | 可判定 | codex | 2026-11-13 | 头程金额 | 确认 OS 是否缺陷；修代码或改文档 | `verified` |
 | **C5** | 高 | `doc_event` 注释声称支持后缀 | 可判定 | codex | 2026-11-13 | 销售出库成本 | 删除错误注释或补实现 | `open` |
 | **C6** | 高 | 两套「绍兴成本」同名不同义 | 可判定 | finance | 2026-11-20 | 报表/订单字段 | 固化两个术语，禁止一名两用 | `open` |
