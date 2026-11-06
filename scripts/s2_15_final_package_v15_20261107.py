@@ -25,6 +25,7 @@ V13 = BASE / "S2_9-delivery-final-20261106/D_补货交付包_2026-11-06_final_v1
 CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-06_v7.xlsx"
 D6 = BASE / "D6v6_15-final/D_Top50沙盒_D6_v6_15_2026-11-07.xlsx"
 D6_PREV = BASE / "D6v6_14-final/D_Top50沙盒_D6_v6_14_2026-11-06.xlsx"
+D1B = BASE / "D_资格与契约_D1b_v2_3_2026-11-02.xlsx"
 D5 = BASE / "D5v6_6-60cm/D_概率与服务_D5_v6_6_2026-11-07.xlsx"
 RISK = BASE / "S2_9-delivery-final-20261106/D_断货风险与需求抑制_2026-11-06_v2.xlsx"
 TRAJ = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-07_v7.xlsx"
@@ -61,6 +62,10 @@ def main() -> int:
     cm = pd.read_csv(CM_RECON, encoding="utf-8-sig")
     d6 = pd.read_excel(D6, sheet_name="1_全量动作")
     d6_prev = pd.read_excel(D6_PREV, sheet_name="1_全量动作")
+    d5 = pd.read_excel(D5, sheet_name="1_预测")
+    d5 = d5[d5["horizon"].astype(str) == "97"].rename(
+        columns={"pool": "池", "physical_form": "形态", "canonical_uom": "UOM"})
+    d1b = pd.read_excel(D1B, sheet_name="1_资格")
     prev_unk = d6_prev[d6_prev["C完整键状态"].astype(str).eq("unknown_no_full_key")][
         ["product_id", "池", "形态", "UOM", "C可发供给", "C完整键状态",
          "建议动作", "净需求95"]].rename(
@@ -103,6 +108,31 @@ def main() -> int:
                     - pd.to_numeric(cny9["首批数量"], errors="coerce").fillna(0)
                     - pd.to_numeric(cny9["第二批数量"], errors="coerce").fillna(0)).round(0)
     cny9["日期一致"] = (cny9["首批到仓"].astype(str) == cny9["轨迹首批到仓"].astype(str))
+
+    # ---------- 19 个 60cm 供给恢复后的新增资格；31/7 人工复审材料
+    qual = rec[rec["动作修复前"].eq("观察") & rec["动作修复后"].eq("补")].copy()
+    qual = qual.merge(d5[KEYS + ["p50", "q95"]], on=KEYS, how="left")
+    d1bq = d1b.rename(columns={"destination_pool": "池", "physical_form": "形态",
+                               "canonical_uom": "UOM"})[
+        ["product_id", "池", "形态", "UOM", "decision_state", "demand_state",
+         "netting_state", "reason_code"]]
+    qual = qual.merge(d1bq, on=KEYS, how="left")
+    qual = qual.merge(cny9[KEYS].assign(在257=True), on=KEYS, how="left")
+    qual["在257"] = qual["在257"].fillna(False)
+    qual = qual.rename(columns={"p50": "D5_p50", "q95": "D5_q95"})
+    qual["资格复审"] = "待人工：新增补货资格未审"
+
+    r31 = cny9[cny9["可执行状态"].eq("可执行-待人工确认")].copy()
+    r31["服务目标"] = np.where(r31["轨迹状态"].eq("cycle95"),
+                                "周期无断货≥95%", "满足率≥95%（周期<95%）")
+    r31["人工确认"] = "确认需求/政策/下单日"
+    r31 = r31[["product_id", "池", "形态", "UOM", "建议节前备货量", "首批数量",
+               "第二批数量", "首批到仓", "第二批到仓", "建议运输", "服务目标",
+               "日均q95需求", "当前可用", "轨迹状态", "模型资格", "执行闸门",
+               "人工确认"]]
+
+    r7 = rescue[rescue["状态"].isin(["cycle95", "fill95"])].copy()
+    r7["需确认"] = "确认空运舱位/运价/合同"
 
     # ---------- 2_候选总表：状态/服务指标全部回填 v7
     cand = frames["2_可批准候选"].copy()
@@ -359,6 +389,8 @@ def main() -> int:
         ("轨迹", "11_统一逐日轨迹；逐日均值在独立文件 D_统一逐日轨迹_2026-11-07_v7.xlsx 的 4_逐日均值"),
         ("PO", "10a_PO核对看 14/11/3 的差异；10_PO逐单台账逐单看 open_qty/ETA/匹配"),
         ("运输补救", "16_运输补救：8 个选定运输晚于断货日但更快运输可赶上的键，单独重模拟；不直接解禁"),
+        ("新增资格", "18_60cm新增补货资格：19 个供给恢复后 观察→补 的键，单独复审，不在 257 春节包"),
+        ("人工复审", "19_人工复审_31 / 20_人工复审_7：31 个可确认 + 7 个换运输候选，逐键服务目标/日期/数量"),
     ], columns=["看哪张", "看什么"])
 
     # ---------- 12_已知限制
@@ -381,6 +413,8 @@ def main() -> int:
         ("快照", "数据截止 2026-11-02；PO 快照 2026-11-05；EN DN 字段查询 2026-11-06"),
         ("60cm 287", "KS0001-DM-60-COFFEE/波兰 287 件保留原键、保留预测历史；零中位数待验证，方案量0"),
         ("60cm 覆盖", "保留原键 4,001 件（含 287）仍需按 D1b/C/EN/PO 逐键确认覆盖；本包只对平需求口径"),
+        ("新增资格", "19 个 60cm 供给恢复后 观察→补 的键；不在 257 春节包，需单独资格复审"),
+        ("人工复审", "31 个可确认 + 7 个换运输候选；逐键服务目标/日期/数量见 19/20 表"),
         ("操作边界", "不自动下单、不写 EN、不写通途"),
     ], columns=["项", "已知限制"])
 
@@ -410,6 +444,10 @@ def main() -> int:
         ("9 可换运输键", int(cny9["是否可换运输"].sum()), 8),
         ("16 运输补救行", len(rescue), 8),
         ("60cm 供给恢复键", len(rec), 20),
+        ("18 新增资格键", len(qual), 19),
+        ("18 新增资格误入257", int(qual["在257"].sum()), 0),
+        ("19 人工复审31", len(r31), 31),
+        ("20 人工复审7", len(r7), 7),
         ("Top50 非可执行行", int((~top50["可执行状态"].eq("可执行-待人工确认")).sum()), 0),
     ], columns=["检查项", "实际", "期望"])
     checks["通过"] = checks["实际"].eq(checks["期望"])
@@ -422,7 +460,8 @@ def main() -> int:
              "8_非成品候选", "9_春节备货建议", "10_PO逐单台账", "10a_PO核对",
              "10b_PO与EN重叠_汇总", "11_统一逐日轨迹", "12_已知限制",
              "13_同窗口180_汇总", "13b_同窗口180_逐键", "14_60cm对账",
-             "15_一致性校验", "16_运输补救", "17_60cm供给恢复"]
+             "15_一致性校验", "16_运输补救", "17_60cm供给恢复",
+             "18_60cm新增补货资格", "19_人工复审_31", "20_人工复审_7"]
     out_frames = {
         "0_说明": notice_out,
         "0_怎么看": howto_out,
@@ -450,6 +489,9 @@ def main() -> int:
         "15_一致性校验": checks,
         "16_运输补救": rescue,
         "17_60cm供给恢复": rec,
+        "18_60cm新增补货资格": qual,
+        "19_人工复审_31": r31,
+        "20_人工复审_7": r7,
     }
     with pd.ExcelWriter(OUT, engine="openpyxl") as w:
         for sn in order:
