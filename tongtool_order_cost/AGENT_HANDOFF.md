@@ -3,6 +3,7 @@
 > **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py` · `scripts/upload_monthly_order_sheet.py`
 > **人读**: [README.md](README.md)
 > **Skill**: `.agents/skills/tongtool-order-cost/SKILL.md`
+> **口径唯一事实源（2026-11-06 起）**: [docs/reference/tongtool-order-canon/index.md](../docs/reference/tongtool-order-canon/index.md) —— 订单身份/分组合并/计价矩阵/冲突登记；本文件只保留模块交接与实现细节。
 
 ## 业务背景
 

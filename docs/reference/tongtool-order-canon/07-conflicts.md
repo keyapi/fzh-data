@@ -1,0 +1,95 @@
+---
+okf: v0.1
+type: Reference
+title: 冲突与裁决登记（15 条 + 边界观察）
+description: 把审计报告的 15 条冲突逐条落到可跟踪表：严重度、判定类型、owner、截止日、影响范围、下一动作、状态；另列 1 条尚未纳入 15 条的边界观察
+date: 2026-11-06
+module: tongtool_order_cost
+tags: [tongtool, order, conflicts, decisions, owners, canon]
+---
+
+# 冲突与裁决登记
+
+> **状态：living register。** 每条的 owner 与截止日必填；不允许「待定」长期挂着。
+> 来源：[00-audit-report.md](00-audit-report.md) §4；规则见 [rules.yaml](rules.yaml)。
+> 本页只登记与推进，不直接改业务代码、不写 GS/EN。
+
+## 1. 总表
+
+| ID | 严重度 | 冲突 | 判定类型 | owner | 截止日 | 影响范围 | 下一动作 | 状态 |
+|---|---|---|---|---|---|---|---|---|
+| **C1** | 严重 | 拆单系数在订单同步恒为 1 | 可判定；修复方式需业务 | user | 2026-11-13 | 订单同步成本、拆单系数 | 决定「给 Order Item 加仓库字段」或「明确订单同步不乘系数」；#290 已补完整根因链（订单头 warehouse_name 不回写→null→成本全 0） | `verified` |
+| **C2** | 严重 | 后缀在五条链路五种成本 | 已裁决：以本地 38 矩阵为权威 | user | 2026-11-20 | 订单同步/CR/出库/送货单/本地引擎 | ADR-0001：OS/CR 对齐；DN/DNF 只读复用；OS 先修、双跑切换 | `decided`（ADR-0001） |
+| **C3** | 严重 | FBA 三套判据 | 已裁决：`warehouse_classification` 为唯一判据 | user | 2026-11-20 | FBA 成本、尾程、毛利 | ADR-0001：建 fulfillment_resolver；关键字/order_type 降为告警；未知映射阻断；外部 PR #312/#318 合并前也须改判据 | `decided`（ADR-0001） |
+| **C4** | 高 | 头程三列系数文档/代码相反 | 可判定 | codex | 2026-11-13 | 头程金额 | 确认 OS 是否缺陷；修代码或改文档 | `verified` |
+| **C5** | 高 | `doc_event` 注释声称支持后缀 | 可判定 | codex | 2026-11-13 | 销售出库成本 | 删除错误注释或补实现 | `open` |
+| **C6** | 高 | 两套「绍兴成本」同名不同义 | 可判定 | finance | 2026-11-20 | 报表/订单字段 | 固化两个术语，禁止一名两用 | `open` |
+| **C7** | 高 | 产品归属文档只写单向 | 可判定 | user | 2026-11-13 | 合并组产品 | 确认双向规则并写进 02 | `resolved`（写入 02） |
+| **C8** | 高 | 套件在 EN 订单链无实现 | 可判定 | user | 2026-11-27 | 套件成本 | 指定本地引擎为权威或补 EN | `verified` |
+| **C9** | — | 退货不在通途订单（只在钉钉账期） | 已关闭（业务口径） | user | — | — | 无需在订单成本里实现；退货仓仅作发货仓 | `closed`（2026-11-06） |
+| **C10** | 中 | 双 SSOT 声明 + 数字不一致 | 可判定 + 1 项未证实 | codex | 2026-11-27 | 文档可信度 | 清理双 SSOT；202608 基线同口径重跑 | `open` |
+| **C11** | 中 | 行号锚点漂移 | 可判定 | codex | 2026-11-20 | 证据可追溯 | 已建 `06-implementation-map`（只写文件/函数+观测日）；旧页行号逐步清理 | `resolved`（06 已建） |
+| **C12** | 中 | 拆单系数字段位置写错 | 可判定 | codex | 2026-11-13 | 拆单系数 | 修正文档为 `Item Customer Detail` | `verified` |
+| **C13** | 中 | 尾程优先级三套 | 可判定；利润口径需业务 | finance | 2026-11-27 | 订单利润 | 指定利润口径，统一 OS/CR/SGP；#287 提供缺口定义与账单来源（证据，非裁决） | `open` |
+| **C14** | — | 负成本：无业务场景，按数据错误处理 | 已关闭 | user | — | 四列成本 | 本地阻断暴露；实测 0 例；1.7.0 负数规则只针对 FBA 尾程 | `closed`（2026-11-06） |
+| **C15** | 低 | 1:2:4 是否触发 | 未证实 | codex | 2026-12-04 | 旧 Colab 头程补缺 | 回放带缺失发货方式档的月份 | `open` |
+
+## 2. 状态定义与流转
+
+| 状态 | 含义 | 允许的下一步 |
+|---|---|---|
+| `open` | 已登记，未开始 | → `in-progress` / `decision-needed` |
+| `in-progress` | 有人在查/改 | → `verified` / `resolved` / `blocked` |
+| `decision-needed` | 等业务/财务拍板 | → `decided`（有 ADR） / `closed`（有理由） |
+| `decided` | 已有 ADR 裁决，待实现 | → `resolved` |
+| `verified` | 事实已核实（含 DB/代码复核），但未修 | → `resolved` / `closed` |
+| `resolved` | 已改代码或已改规范，且有证据 | 关闭 |
+| `closed` | 已关闭（不适用/无业务场景），需写理由 | — |
+| `blocked` | 依赖外部（EN 发布、数据补齐） | 记录阻塞原因与下次检查日 |
+
+**规则**：
+
+1. **owner 与截止日必填**；`closed` 可无截止日（需写关闭理由）；到期未决 → 升级到项目主，不允许静默延期。
+2. 每条 `resolved` 必须二选一：**改代码**（附 PR/提交）或 **改规范**（附 ADR 编号）。
+3. 不允许「文档说 A、代码是 B，两边都算对」。
+4. 口径类冲突（C2/C3/C6/C13）必须有财务或用户签字，不能由 Agent 自行裁决。
+   - C9（退货）已按用户口径关闭：通途订单不含退货，退货只在钉钉账期。
+   - C14（负成本）已关闭：无业务场景，按数据错误处理（实测 0 例）。
+
+## 3. 建议的裁决顺序
+
+1. **C6**：先固化两个「绍兴成本」术语，禁止一名两用。
+2. **C1 → C4 → C12**：同一批「拆单系数」问题，一起修，避免半修。
+3. **C5 → C13**：出库与尾程，影响利润闭环。
+4. **C7/C8**：合并与套件的口径归属，写入规范即可，不一定改代码。
+5. **C10/C11/C15**：文档治理与未证实项，最后收口。
+
+## 4. 边界观察（尚未纳入 15 条）
+
+### C-新1 `-FOAM` + 发货方式=皮壳
+
+- **现象**：EN 订单同步的皮壳分支只有 `-PPCOTTON` / `-COVER` / 普通三种，`-FOAM` 落普通皮壳；本地引擎原先对任意 method 的 `-FOAM` 都清零皮壳成本、头程取差额。
+- **裁决（2026-11-06，user 口径 + EN 证据）**：按 EN，**皮壳档不套 `-FOAM` 特例**，走普通皮壳分支。
+- **实现**：本地引擎已对齐（`feature/ustx-cost-compare cdced7cd`）；规则 `PRICE-007` 置 `canon`。
+- **影响**：当前 202608/202609 无此类订单，重跑逐字节不变。
+- **证据**：`03-price-matrix.md` §7；`order_sync.py`、`bom_cost.py`（2026-11-06）。
+
+## 4.1 C1 根因链（#290 补强）
+
+- **环节一**：`_update_order` 不回写订单头 `warehouse_name` → 订单永久 null；
+- **环节二**：null 仓库 → 找不到 `Tongtu Shipping Warehouse` 成本配置 → 子表发货方式/绍兴成本/头程/皮壳全 0；
+- **环节三**：`Tongtool Order Item` 没有 `warehouse_name` 字段（DB 证实）→ 拆单系数 lookup 恒 `return 1`。
+- 三个环节都指向「订单同步链路拿不到仓库身份」，但**不能互相替代**；修 C1 时必须同时补齐字段与回写。
+
+### C-新2 #294 件数 `max` vs canon 阻断
+
+- **现象**：`order_side_input.count_pieces` 对纯填充单返回 `max + 待复核`；canon 02 §6 要求 `pieces_ambiguous` 阻断。
+- **裁决**：canon 阻断为准；审计脚本的 max 只作审计口径，不进入成本。
+- **状态**：`open`（代码/审计脚本未改；已在 02 §6 标注边界）。
+- **证据**：PR #294 `order_side_input.py`；canon 02 §6。
+
+## 5. 证据
+
+- [00-audit-report.md](00-audit-report.md) §4（冲突原文与证据）
+- [rules.yaml](rules.yaml)（可执行规则与 status）
+- [01-order-universe.md](01-order-universe.md)、[02-grouping-and-merge.md](02-grouping-and-merge.md)、[03-price-matrix.md](03-price-matrix.md)（规范正文）
