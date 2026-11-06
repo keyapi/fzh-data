@@ -70,6 +70,7 @@ def _run_fulfillment(repo, job, settings, job_id, in_dir, work_dir):
         allow_unmatched=job["allow_unmatched"],
         cache_only=True,  # 普通任务绝不联网
         validate_only=job["validate_only"],
+        sku_migration=True,  # 旧通途 SKU -> 新 SKU；未确认/冲突会直接失败
         sku_cache_path=settings.sku_cache_path,
         nltk_dir=settings.nltk_dir,
         # 磁盘名固定是 order.csv，拿它命名产物会变成 `..._order_on_...`；
