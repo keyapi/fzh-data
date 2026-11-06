@@ -5,6 +5,10 @@ title: 通途订单规则库（canon）变更日志
 ---
 # 变更日志
 
+## 2026-11-06（04 成本取值链）
+- 新建 04-cost-sources：月末 BOM 时点、皮壳/头程/目的地/绍兴二次取值、自采购、套件。
+- rules.yaml 新增 PRICE-011（自采购）、KIT-001（套件），共 31 条（30 canon + 1 unverified）。
+
 ## 2026-11-06（未合并 PR 规则并入 canon）
 - 新建 05-special-flows：90 天改单窗口（#282）、尾程缺口与账单来源（#287）、补发/云仓、非商品边界。
 - 新建 06-implementation-map：规则→EN/本地/Colab/GS 落点（文件/函数+观测日，不写行号；C11 resolved）。

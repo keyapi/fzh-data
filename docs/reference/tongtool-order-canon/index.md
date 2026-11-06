@@ -21,7 +21,7 @@ tags: [tongtool, order, canon, index]
 | 1 | [01-order-universe.md](01-order-universe.md) | 哪些行算数；原始订单/作废原单/拆分子单/FBA/退货 |
 | 2 | [02-grouping-and-merge.md](02-grouping-and-merge.md) | 何时不合并、何时合并、件数取谁、共享组件谁定产品、单独卖后缀为何不是歧义 |
 | 3 | [03-price-matrix.md](03-price-matrix.md) | 后缀 × 发货方式 × 目的地 × 是否 FBA 的四列矩阵 |
-| 4 | `04-cost-sources.md`（未建） | 皮壳/头程/加工/绍兴/自采购/套件的取值链 |
+| 4 | [04-cost-sources.md](04-cost-sources.md) | 皮壳/头程/加工/绍兴/自采购/套件的取值链与时点 |
 | 5 | [05-special-flows.md](05-special-flows.md) | 90 天改单窗口、尾程缺口/账单来源、补发/云仓、非商品边界 |
 | 6 | [06-implementation-map.md](06-implementation-map.md) | 规则 → EN / 本地 / Colab / GS 的当前落点（文件/函数 + 观测日） |
 | 7 | [07-conflicts.md](07-conflicts.md) | 15 条冲突的 owner、截止日、影响、下一动作 |
@@ -35,11 +35,12 @@ tags: [tongtool, order, canon, index]
 | [01-order-universe.md](01-order-universe.md) | Reference | **canon** | 订单全集与身份 |
 | [02-grouping-and-merge.md](02-grouping-and-merge.md) | Reference | **canon** | 分组合并、件数、产品归属 |
 | [03-price-matrix.md](03-price-matrix.md) | Reference | **canon** | 后缀/发货方式/目的地/FBA 计价矩阵 |
+| [04-cost-sources.md](04-cost-sources.md) | Reference | **canon** | 四列取值链、自采购、套件 |
 | [05-special-flows.md](05-special-flows.md) | Reference | **canon** | 改单窗口 / 尾程 / 补发 / 非商品 |
 | [06-implementation-map.md](06-implementation-map.md) | Reference | **canon** | 规则 → 实现落点（观测日；不写行号） |
 | [07-conflicts.md](07-conflicts.md) | Reference | **living** | 冲突登记与裁决推进 |
 | [adr/](adr/index.md) | Decision | **accepted** | ADR-0001：成本权威口径与五链路迁移 |
-| [rules.yaml](rules.yaml) | Rules | **MVP** | 29 条（28 canon + 1 unverified，decision-needed 已清零）；含 FBA-001 resolver、GRP-009 合并守恒、GRP-010 TikTok、UNIV-005/FLOW-001~003 旁路；证据带 [SPEC]/[EN现状]/[LOCAL实现]/[DATA] 标签 |
+| [rules.yaml](rules.yaml) | Rules | **MVP** | 31 条（30 canon + 1 unverified，decision-needed 已清零）；含 FBA-001、GRP-009/010、UNIV-005、FLOW-001~003、PRICE-011、KIT-001；证据带 [SPEC]/[EN现状]/[LOCAL实现]/[DATA] 标签 |
 | [log.md](log.md) | Log | — | 变更日志 |
 
 ## 权威顺序

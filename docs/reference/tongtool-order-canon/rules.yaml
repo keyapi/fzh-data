@@ -585,3 +585,42 @@ rules:
     status: canon
     owner: finance
     effective_from: "2026-11-06"
+
+  - id: PRICE-011
+    title: 自采购（皮壳 BOM 自引用）
+    scope: [pricing, bom]
+    applies_when:
+      shipping_method: "成品"
+      cost_fg_nonzero: true
+      cost_sxbzcp_zero: true
+      bom_self_references_main_item: true
+    then:
+      sx_cost_all: "= cost_fg（不走 皮壳+绍兴包装成品）"
+      mark: "direct_purchase_zero"
+    exceptions: []
+    evidence:
+      - "[SPEC] docs/reference/tongtool-order-canon/04-cost-sources.md §6（2026-11-06）"
+      - "[EN现状] bom_cost_list_v2.py（2026-11-06 观测）"
+      - "[SPEC] tongtool_order_cost/docs/reference/cost-engine-spec/08-special-cases.md §2"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: KIT-001
+    title: 套件 TJ# 计价
+    scope: [pricing, kit]
+    applies_when:
+      order_sku_is_bundle: true
+    then:
+      authority: "本地引擎（EN 订单成本链无实现）"
+      method: "子件 shipping_method 全一致才派生；混合/空待审"
+      single_carrier: "只有 TJ# 行时套件行是唯一成本载体；子件不得双计"
+      reconcile: "可用 show_kit_items 套件行对账，差异 >0.01 阻断"
+    exceptions: []
+    evidence:
+      - "[SPEC] docs/reference/tongtool-order-canon/04-cost-sources.md §7（2026-11-06）"
+      - "[LOCAL实现] bom_cost.py Product Bundle（2026-11-06 观测）"
+      - "[EN现状] OS/CR/SGP grep bundle=0（2026-11-06）"
+    status: canon
+    owner: user
+    effective_from: "2026-11-06"
