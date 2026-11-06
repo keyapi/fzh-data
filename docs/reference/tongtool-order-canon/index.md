@@ -37,7 +37,7 @@ tags: [tongtool, order, canon, index]
 | [03-price-matrix.md](03-price-matrix.md) | Reference | **canon** | 后缀/发货方式/目的地/FBA 计价矩阵 |
 | [07-conflicts.md](07-conflicts.md) | Reference | **living** | 冲突登记与裁决推进 |
 | [adr/](adr/index.md) | Decision | **accepted** | ADR-0001：成本权威口径与五链路迁移 |
-| [rules.yaml](rules.yaml) | Rules | **MVP** | 23 条（22 canon + 1 unverified，decision-needed 已清零）；含 FBA-001 resolver；证据带 [SPEC]/[EN现状]/[LOCAL实现]/[DATA] 标签 |
+| [rules.yaml](rules.yaml) | Rules | **MVP** | 24 条（23 canon + 1 unverified，decision-needed 已清零）；含 FBA-001 resolver、GRP-009 合并守恒；证据带 [SPEC]/[EN现状]/[LOCAL实现]/[DATA] 标签 |
 | [log.md](log.md) | Log | — | 变更日志 |
 
 ## 权威顺序

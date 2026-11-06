@@ -204,6 +204,26 @@ rules:
     owner: finance
     effective_from: "2026-11"
 
+  - id: GRP-009
+    title: 合并守恒销售额与尾程运费
+    scope: [grouping, money]
+    applies_when:
+      merge: true
+    then:
+      sales: "合并行 售价/售价(人民币) = 组内全部源行之和"
+      freight: "合并行 运费 = 组内各源行运费之和（同一键多行按出现顺序消费）"
+      fallback: "模板完全没有该行时才用「包裹总运费」兜底；有任一源行命中模板则不得再加兜底"
+      exclude: "作废原单/模板独有行不得参与有效子单映射"
+      unit: "运费是行总额，不乘数量；订单总成本 = 单位成本×数量 + 运费"
+    exceptions: []
+    evidence:
+      - "[SPEC] docs/reference/tongtool-order-canon/02-grouping-and-merge.md §10（2026-11-06）"
+      - "[LOCAL实现] tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/writeback_rehearsal.py（_assert_conservation；2026-11-06）"
+      - "[DATA] 202608 82 组 / 202609 42 组逐组差 0（2026-11-06）"
+    status: canon
+    owner: user
+    effective_from: "2026-11-06"
+
   - id: GRP-006
     title: 单独卖 -Cover/-Foam/-PPCotton 不是产品歧义
     scope: [grouping, pricing]

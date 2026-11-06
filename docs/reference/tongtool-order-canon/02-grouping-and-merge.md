@@ -210,6 +210,12 @@ tags: [tongtool, order, merge, split, grouping, identity, canon]
 5. **歧义即阻断**：载体/产品/件数/身份任一不唯一 → 阻断，不取 first/max/平均。
 6. **作废不计**：`invalid=1` 不进入件数与成本合计。
 7. **FBA 不混**：FBA 行不进入自发货合并组，业务键重复要单独标记。
+8. **金额守恒**：`售价`、`售价(人民币)`、`运费` 合并前后必须相等。
+   - 合并行的销售额 = 组内全部源行之和；
+   - **合并行的尾程运费 = 组内各源行运费之和**（同一键多行按出现顺序）；
+   - 模板完全没有该行时才允许用「包裹总运费」兜底，否则会把组件运费重复计；
+   - **作废原单/模板独有行不得参与有效子单映射**，否则原单运费会被带进有效子单；
+   - `运费` 是**行总额**，不乘数量；订单总成本 = 单位成本×数量 + 运费。
 
 **证据**
 - [30-design-merge-split-no-double-count.md](../../../tongtool_order_cost/docs/reference/cost-engine-spec/30-design-merge-split-no-double-count.md)（5 条断言）
