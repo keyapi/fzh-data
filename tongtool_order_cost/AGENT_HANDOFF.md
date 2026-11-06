@@ -1,6 +1,6 @@
 # tongtool_order_cost — Agent 交接
 
-> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py` · `scripts/upload_monthly_order_sheet.py`
+> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py` · `scripts/upload_monthly_order_sheet.py` · `scripts/create_monthly_tax_pivot.py`
 > **人读**: [README.md](README.md)
 > **Skill**: `.agents/skills/tongtool-order-cost/SKILL.md`
 
@@ -39,6 +39,7 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `tongtool_order_cost/io_loaders.py` | 订单/规则/汇率加载 |
 | `tongtool_order_cost/pp_cotton.py` | 美中 DANEEY 订单 × BOM Cost List → PP 棉 kg 估算 |
 | `tongtool_order_cost/gsheets.py` | 本地 SA JSON → gspread Client / gsheet2df |
+| `tongtool_order_cost/gsheets_pivot.py` | 报税成本透视表规格（纯函数：行/值字段、列偏移、batchUpdate 请求） |
 | `tongtool_order_cost/sku_map.py` | 已确认旧→新映射；gray60 / Foam97 例外 |
 | `tongtool_order_cost/tongtool_goods.py` | ERP2 `erp2_product_goodsquery` |
 | `scripts/run_audit_170.py` | 1.7.0 特殊规则审计 CLI |
@@ -46,6 +47,27 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `scripts/remap_gsheet_sku.py` | Google Sheet SKU 列 dry-run / apply |
 | `scripts/lookup_tongtool_sku.py` | 通途主档 SKU 存在性 |
 | `scripts/estimate_pp_cotton.py` | PP 棉用量估算 CLI |
+| `scripts/create_monthly_tax_pivot.py` | 在月度表新建「数据透视表-报税成本YYYYMM」并逐组对账 |
+
+## 报税成本透视表（2026-10 追加）
+
+月度表 `通途订单YYYYMM` 的 `写回YYYY年M月FBA订单和非FBA订单`（78 列）→ 透视表
+`数据透视表-报税成本YYYYMM`，固定放在源 ws **右侧**（index = 源 ws index + 1）。
+
+- 行：`渠道账号` → `发货仓按销售汇总分类` → `通途SKU`（均升序，前两级显示分类汇总）
+- 值（全部 SUM）：`发货数量`、`皮壳成本*系数*数量`、`绍兴二次加工成本*系数*数量`、
+  `二次加工成本*系数*数量`、`头程运费*数量`、`运费`
+- 列偏移由表头名解析，并与 202607 基准（38/46/2 与 17/57/60/63/31/34）硬校验，表头漂移直接失败。
+- 注意源表是 `写回…`（78 列），不是 `检查运营人员-写回…`（81 列）。
+
+```bash
+GSPREAD_SERVICE_ACCOUNT_FILE=<父仓库>/secrets/gsheets-service-account.json \
+uv run python tongtool_order_cost/scripts/create_monthly_tax_pivot.py --month 202608 --month 202609 --apply
+# 默认 dry-run；--verify-only 只对账
+```
+
+脚本内置对账：pivot 规格深比较、明细组数、6 个汇总值（容差 0.01）、
+明细合计/源表合计/「总计」行三方核对。
 
 ## Notebook / Google Sheet 约定（2026-08-14 核实）
 
