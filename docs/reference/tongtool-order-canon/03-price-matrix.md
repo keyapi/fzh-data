@@ -86,7 +86,7 @@ tags: [tongtool, order, price-matrix, cover, foam, ppcotton, fba, canon]
 | **成品** | **0** | `cost_sxbzcp` | 目的地 valuation | 成品头程 − 皮壳头程 |
 | **皮壳** | 见 §7 边界（现行 EN 无特例，按普通皮壳） | — | — | — |
 
-- 头程是**差额**，不是全额；差额为负时如何处理见 [07](07-conflicts.md) C14。
+- 头程是**差额**，不是全额；差额为负视为数据错误（见 §7 `PRICE-008`）。
 - 皮壳成本归零，因为成本转移到填充物对应的绍兴包装成本。
 
 ### 3.4 `-PPCOTTON`（单独卖 PP 棉）
@@ -171,7 +171,7 @@ tags: [tongtool, order, price-matrix, cover, foam, ppcotton, fba, canon]
 |---|---|---|
 | **`-FOAM` + 发货方式=皮壳** | EN 无此特例，按普通皮壳；本地引擎已于 2026-11-06 对齐（不再清零皮壳） | canon（`PRICE-007`） |
 | **`-PPCOTTON` + 成品/半成品** | 无特例，按普通该档 | canon（EN 仅皮壳档） |
-| **`-FOAM` 头程差额为负** | EN 订单同步照写负值；Cost Review 用 `max(0)`；本地引擎阻断 | `decision-needed`（[07](07-conflicts.md) C14） |
+| **四列出现负值** | 视为数据错误：本地引擎阻断并暴露，不 clamp；实测 202608/202609 为 0 例 | canon（`PRICE-008`） |
 | **数字后缀 >5** | 落通用有效重量分支，不改变计价 | unverified（是否有此类订单未统计） |
 | **合并组内多成品/多皮壳** | 不合并，拆成多件 | canon（[02](02-grouping-and-merge.md) §5） |
 

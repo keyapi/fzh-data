@@ -12,6 +12,7 @@ tags: [tongtool, order, audit, conflict, evidence, canon]
 
 > 本文只做盘点和判定，不改业务代码、不写 GS/EN、不提交 PR。
 > 配套方案：[01-proposed-structure.md](01-proposed-structure.md)。
+> **2026-11-06 更新**：C9（退货）与 C14（负成本）已按用户口径关闭，状态以 [07-conflicts.md](07-conflicts.md) 为准；本文保留审计时点证据。
 
 ## 0. 摘要
 

@@ -36,6 +36,7 @@ tags: [tongtool, order, canon, index]
 | [02-grouping-and-merge.md](02-grouping-and-merge.md) | Reference | **canon** | 分组合并、件数、产品归属 |
 | [03-price-matrix.md](03-price-matrix.md) | Reference | **canon** | 后缀/发货方式/目的地/FBA 计价矩阵 |
 | [07-conflicts.md](07-conflicts.md) | Reference | **living** | 冲突登记与裁决推进 |
+| [adr/](adr/index.md) | Decision | **accepted** | ADR-0001：成本权威口径与五链路迁移 |
 | [rules.yaml](rules.yaml) | Rules | **MVP** | 机器可读规则，`status` 仅 canon/decision-needed/unverified |
 | [log.md](log.md) | Log | — | 变更日志 |
 

@@ -66,20 +66,21 @@ rules:
     effective_from: "2026-11"
 
   - id: UNIV-004
-    title: 退货成本口径
+    title: 退货不进入通途订单成本
     scope: [order_universe, returns]
     applies_when:
       order_type: return
     then:
-      current: "仅识别退货仓名称，无成本规则"
+      rule: "通途订单只含正常发货；退货只在钉钉账期体现，不在订单成本里冲减"
+      returns_warehouse: "「退货产品仓」只是发货仓名，行按所属分支正常计价"
     exceptions: []
     evidence:
-      - "docs/reference/tongtool-order-canon/00-audit-report.md C9/G3（2026-11-06）"
+      - "01-order-universe.md §6（用户口径，2026-11-06）"
+      - "202608/202609 实测：负数数量 0 行、四列负值 0 行（2026-11-06）"
       - "tongtool_order_cost/docs/reference/cost-engine-spec/en-branching-and-warehouse-config.md（退货仓命名）"
-    status: decision-needed
-    owner: finance
-    due: "2026-12-04"
-    effective_from: "TBD"
+    status: canon
+    owner: user
+    effective_from: "2026-11-06"
 
   - id: GRP-001
     title: 未拆单时当前订单即原始订单
@@ -392,23 +393,22 @@ rules:
     effective_from: "2026-11-06"
 
   - id: PRICE-008
-    title: 负头程/负成本政策
+    title: 负成本是数据错误，不做业务规则
     scope: [pricing, edge_case]
     applies_when:
       any_unit_cost_lt_zero: true
     then:
-      current_en_order_sync: "照写负值"
-      current_cost_review: "max(0, 差额)"
-      current_local: "negative_cost 阻断"
+      rule: "四列成本出现负值视为数据错误：本地引擎阻断并暴露，不 clamp、不静默补 0"
+      observed_en: "OS 照写负值；CR max(0)；两者都不应作为口径依据"
+      not_applicable: "1.7.0 的负数规则只针对 FBA 尾程参考值<0 写入运费，不适用于四列成本"
     exceptions: []
     evidence:
-      - "docs/reference/tongtool-order-canon/03-price-matrix.md §7（2026-11-06）"
-      - "tongtool_order_cost/docs/reference/cost-engine-spec/09-known-issues-register.md（A3）"
-      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（2026-11-06 观测）"
-    status: decision-needed
-    owner: finance
-    due: "2026-11-27"
-    effective_from: "TBD"
+      - "03-price-matrix.md §7（2026-11-06）"
+      - "202608/202609 实测：四列负值 0 行、EN 明细负值 0 行（2026-11-06）"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（negative_cost；2026-11-06 观测）"
+    status: canon
+    owner: user
+    effective_from: "2026-11-06"
 
   - id: PRICE-009
     title: 单位成本与数量口径

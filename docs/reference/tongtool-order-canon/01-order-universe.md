@@ -92,18 +92,22 @@ EN 的作废原单仍然保留在订单表里，但**不进入成本行集合**�
 - [35-phase4-fba-shadow.md](../../../tongtool_order_cost/docs/reference/cost-engine-spec/35-phase4-fba-shadow.md)（FBA 桥接、跨月、三方对账）
 - `tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/fba_shadow.py`（`build_fba_shadow`；2026-11-06 观测）
 
-## 6. 退货、补发、取消：现状与缺口
+## 6. 退货、补发、取消：范围界定
 
-| 形态 | 现行处理 | 状态 |
+| 形态 | 口径 | 状态 |
 |---|---|---|
-| **退货** | 只有「退货产品仓」这类仓库名；**没有退货成本规则**（是否冲减、按原单还是退货仓、是否重算头程） | `decision-needed`（见 [07](07-conflicts.md) C9） |
+| **退货** | **通途订单不包含退货交易**。正常发货都算销售额；退货只在**钉钉账期**体现。订单表里的「退货产品仓」只是一个发货仓名，行仍是正常正数出库，按所属分支计价。 | canon（业务口径，2026-11-06 用户确认） |
 | **补发** | 订单号 `-M<数字>` 且渠道为 OSTK/WAYFAIR 时，强制 `needs_last_leg=1`；这是尾程标记，不是退货 | 已实现于 Cost Review 链路；订单同步链路未证实 |
-| **取消 / 负数量** | 未发现独立成本口径；依赖 `invalid=1` 或订单同步删除 | `unverified` |
+| **取消 / 负数量** | 未发现独立成本口径；依赖 `invalid=1` 或订单同步删除。实测 202608/202609 负数数量 = 0 | canon（数据事实） |
 | **作废** | `invalid=1`，按 §3 只作锚 | canon |
 
-**不要把退货等同于作废**：作废是「这笔订单不算」，退货是「算过之后退回」，两者对成本、头程、尾程的影响不同。退货口径未定前，不得在规范中假设「退货仓自动冲减」。
+**不要把退货等同于作废**：作废是「这笔订单不算」；退货是「结算侧的事」，不进入通途订单成本。**不要在通途订单里新增退货成本逻辑**——退货冲减由钉钉账期处理。
 
-**证据**
+**数据证据（2026-11-06）**
+- 202608/202609：`发货数量 < 0` 的行数均为 **0**；四列成本负值行数均为 **0**。
+- `退货产品仓` 行（202608 62 行）均为正常正数出库（qty=1、有售价）。
+
+**参考**
 - [en-branching-and-warehouse-config.md](../../../tongtool_order_cost/docs/reference/cost-engine-spec/en-branching-and-warehouse-config.md)（退货仓命名）
 - `work_order_task/.../report/delivery_note_filling_cost/delivery_note_filling_cost.py`、`tongtool_integration/.../doctype/tongtool_cost_review/tongtool_cost_review.py`（2026-11-06 观测；仅见补发尾程标记，未见退货成本分支）
 
