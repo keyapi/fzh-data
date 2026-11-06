@@ -88,3 +88,10 @@ date: 2026-11-06
 - 结果：春节 cycle95 33/1,755、fill95 29/1,927、fail 195/11,987；新增 fill95 10/799、fail 61/4,510。
 - 主包 v11 已同步所有页面：候选页带轨迹状态，汇总拆分“候选/轨迹”，PO台账加阶段核销状态。
 - 仍未完成：PO 与 DN/Shipment 的逐单阶段关联（当前只有 EN 在途重叠/超额状态）。
+
+## PO-DN 映射（2026-11-06）
+
+- 正确字段：`DN.custom_tongtool_purchase_order`（代码在 `EN_API/tongtool_purchase/tongtool_purchase.py`）。
+- 13 个 EN DN 带该字段 → 71 条 PO 行 → 51 条可接 EN Shipment；旧 PO 无字段，保留未映射。
+- v12 主包 `10_PO逐单台账` 已含 DN/日期/Shipment/开船/入仓。
+- 仍未完成：候选 6,837 与春节 15,679 的数量绑定；异常需求键隔离；所有页面从同一结果生成。
