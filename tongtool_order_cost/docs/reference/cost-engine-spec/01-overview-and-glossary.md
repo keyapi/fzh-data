@@ -10,6 +10,8 @@ tags: [cost, tongtu, colab, gsheet, erpnext, reference, overview, glossary]
 
 # 通途订单成本引擎 · 总览与术语
 
+> **本页保留为证据；规范见 [docs/reference/tongtool-order-canon/](../../../../docs/reference/tongtool-order-canon/index.md)（2026-11-06 起）。**
+
 > 本 bundle 是**成本口径的单一事实源（single source of truth）**。凡「某成本列怎么来的 / 为什么两家算法不一样 / 缺哪些数」，
 > 先查这里，再下钻到具体文档。
 > 写作时间：**2026-10-15**。所含「线上事实」以该日为观测点；**数据快照**另有明确时点（见下）。

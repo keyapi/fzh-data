@@ -1,0 +1,445 @@
+# 通途订单规则库 · 机器可读规则（MVP）
+# 规范正文：01-order-universe.md / 02-grouping-and-merge.md / 03-price-matrix.md
+# status: canon | decision-needed | unverified
+version: 0.1
+updated: 2026-11-06
+module: tongtool_order_cost
+rules:
+
+  - id: UNIV-001
+    title: 有效订单全集
+    scope: [order_universe]
+    applies_when:
+      entering_cost_calculation: true
+    then:
+      include: "EN Tongtool Order 中 invalid=0 的全部明细行；拆分子单 _1/_2 全部保留"
+      exclude: "invalid=1 只进入 aux 校验，不进入成本、收入、利润合计"
+      no_dedup: "订单行集合层不按 SKU 去重"
+    exceptions:
+      - "FBA 行走独立路径，不与自发货合并"
+    evidence:
+      - "docs/reference/tongtool-order-canon/01-order-universe.md §1-§4（2026-11-06）"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（load_orders；2026-11-06 观测）"
+      - "docs/solutions/workflow-issues/tongtu-order-universe-invalid-split-fba.md"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: UNIV-002
+    title: 作废原单只作锚不计价
+    scope: [order_universe, split_merge]
+    applies_when:
+      invalid: 1
+      same_order_common: true
+    then:
+      role: "校验件数、发货方式、载体；必要时用原单件数兜底"
+      pricing: "不参与成本、收入、利润"
+      output: "写回表保留行与销售字段，成本与系数轨清空，标 invalid_original"
+    exceptions:
+      - "原单组件行重复时按件数锚定，不因 qty 合计不等阻断"
+      - "无原单时只用有效子单，不构造原单"
+    evidence:
+      - "docs/reference/tongtool-order-canon/01-order-universe.md §3（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/37-phase3.7-gs-ready.md"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_aux_validate、lookup_aux；2026-11-06 观测）"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: UNIV-003
+    title: FBA 与自发货分账
+    scope: [order_universe, fba]
+    applies_when:
+      fulfillment: FBA
+    then:
+      pricing_path: "FBA 成品口径"
+      merge: "不进入自发货合并组"
+      duplicate: "同 月份|MSKU|SKU 同时出现在 FBA 与自发货时标重复，不直接相加"
+    exceptions:
+      - "跨月可借 ±1 个月 EN FBA 行，按 GS 数量分摊，标 cross_month_bridge"
+    evidence:
+      - "docs/reference/tongtool-order-canon/01-order-universe.md §5（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/35-phase4-fba-shadow.md"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/fba_shadow.py（build_fba_shadow；2026-11-06 观测）"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: UNIV-004
+    title: 退货成本口径
+    scope: [order_universe, returns]
+    applies_when:
+      order_type: return
+    then:
+      current: "仅识别退货仓名称，无成本规则"
+    exceptions: []
+    evidence:
+      - "docs/reference/tongtool-order-canon/00-audit-report.md C9/G3（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/en-branching-and-warehouse-config.md（退货仓命名）"
+    status: decision-needed
+    owner: finance
+    due: "2026-12-04"
+    effective_from: "TBD"
+
+  - id: GRP-001
+    title: 未拆单时当前订单即原始订单
+    scope: [grouping]
+    applies_when:
+      no_split_evidence: true
+    then:
+      pricing: "逐行直接计价"
+      merge: false
+      aux: "不引入 invalid 原单"
+    exceptions:
+      - "有拆单尾号但同组无其它行、无作废原单时，按原始订单处理并保留尾号血缘"
+    evidence:
+      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §2（2026-11-06）"
+      - "tongtool_order_cost/tongtool_order_cost/ustx_cost_compare.py（order_common_part；2026-11-06 观测）"
+    status: canon
+    owner: user
+    effective_from: "2026-11"
+
+  - id: GRP-002
+    title: 拆单/拆包裹识别
+    scope: [grouping]
+    applies_when:
+      same_order_common: true
+      same_platform_sku: true
+      same_product: true
+      row_count: ">=2"
+      distinct_tongtool_sku: ">=2"
+    then:
+      classification: "拆单候选组"
+    exceptions:
+      - "不用产品名含『包裹』、金额相等、行号先后作判据"
+      - "is_deliver_good=0 只作辅助信号（API 的 isDeliverGoods=1 表示未发货/拆出，同步时取反）"
+    evidence:
+      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §3（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/30-design-merge-split-no-double-count.md"
+      - "tongtool_integration/tongtool_integration/sync/order_sync.py（is_deliver_good；2026-11-06 观测）"
+    status: canon
+    owner: user
+    effective_from: "2026-11"
+
+  - id: GRP-003
+    title: 合并条件
+    scope: [grouping]
+    applies_when:
+      group_candidate: true
+    then:
+      merge: true
+      output: "一个合并组 = 一件成品；载体行计价；组件行显式 0"
+      lineage: "组内全部源 SKU 保留为血缘"
+    exceptions:
+      - "载体不唯一、件数不唯一、身份冲突、method 不一致、aux 校验失败任一成立 → 不合并并阻断"
+    evidence:
+      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §4（2026-11-06）"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（find_groups；2026-11-06 观测）"
+    status: canon
+    owner: user
+    effective_from: "2026-11"
+
+  - id: GRP-004
+    title: 不合并与阻断
+    scope: [grouping]
+    applies_when:
+      any_of: ["single_row", "same_sku_repeated", "multiple_finished_skus", "multiple_cover_skus", "carrier_ambiguous", "method_mixed", "pieces_ambiguous", "identity_conflict", "fba"]
+    then:
+      action: "不合并；多成品/多皮壳拆成多件；其余阻断并留空"
+    exceptions:
+      - "阻断行保留在输出中，写 cost_status 与原因，不取 first/max/平均"
+    evidence:
+      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §5（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/32-phase2-bom-cost-policy.md"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_pick_carrier；2026-11-06 观测）"
+    status: canon
+    owner: user
+    effective_from: "2026-11"
+
+  - id: GRP-005
+    title: 件数口径
+    scope: [grouping]
+    applies_when:
+      merge: true
+    then:
+      cover_carrier: "同皮壳 base 的全部行数量之和"
+      finished_carrier: "只数无拆单尾号的基行数量；只有 -1/-2 行时阻断 pieces_ambiguous"
+      aux_fallback: "原单组件行重复时可用原单件数锚定，标 pieces_source=aux"
+    exceptions:
+      - "禁止取首行、最大值、行数"
+      - "原单与子单件数不一致 → aux_qty_mismatch 阻断"
+    evidence:
+      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §6（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/30-design-merge-split-no-double-count.md"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_count_pieces；2026-11-06 观测）"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: GRP-006
+    title: 单独卖 -Cover/-Foam/-PPCotton 不是产品歧义
+    scope: [grouping, pricing]
+    applies_when:
+      row_count: 1
+      sku_suffix_in: ["-COVER", "-FOAM", "-PPCOTTON"]
+      no_sibling_component: true
+    then:
+      merge: false
+      identity_order: ["EN erp_item_code", "别名", "同订单 Cover/填充行锚定"]
+      pricing: "按 03 后缀矩阵逐行计价"
+    exceptions:
+      - "共享皮壳导致别名多候选时，不得留空；仍不唯一才阻断"
+      - "一个皮壳可配 PP棉或海绵，是同一皮壳不同填充物，不是两个皮壳"
+    evidence:
+      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §8（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "tongtool_order_cost/AGENT_HANDOFF.md（单独卖皮壳/海绵/PP棉 ≠ 产品歧义）"
+    status: canon
+    owner: user
+    effective_from: "2026-11"
+
+  - id: GRP-007
+    title: 共享皮壳时由填充行定产品
+    scope: [grouping, identity]
+    applies_when:
+      group_has_cover: true
+      group_has_filler: true
+    then:
+      cover_en_item: "Cover 行不单独决定整组产品；别名歧义时跳过其 erp_item_code"
+      product_anchor: "由 Foam/PPCotton 行解析出的产品锚定整组"
+    exceptions:
+      - "填充行也无法唯一解析 → 阻断"
+    evidence:
+      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §7.2（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（cover_in_group；2026-11-06 观测）"
+    status: canon
+    owner: user
+    effective_from: "2026-11"
+
+  - id: GRP-008
+    title: 共享填充物时由皮壳定产品
+    scope: [grouping, identity]
+    applies_when:
+      cover_alias_unique: true
+      cover_sku_count: 1
+      platform_sku_has_comma: false
+    then:
+      product_anchor: "皮壳产品覆盖组内填充行的产品（group_cover_override）"
+    exceptions:
+      - "平台 SKU 含逗号（多商品）或多皮壳 SKU（多颜色多件）时不套用"
+      - "两条锚定规则指向不同产品 → 阻断"
+    evidence:
+      - "docs/reference/tongtool-order-canon/02-grouping-and-merge.md §7.3（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md（反向例外）"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/split_merge.py（_cover_product_precedence；2026-11-06 观测）"
+    status: canon
+    owner: user
+    effective_from: "2026-11"
+
+  - id: PRICE-001
+    title: -COVER 计价
+    scope: [pricing, non_fba]
+    applies_when:
+      sku_suffix: "-COVER"
+      fulfillment: non_fba
+      merged_group: false
+    then:
+      shell_cost: "cost_fg"
+      sx_processing: 0
+      destination_processing: 0
+      head_freight: "皮壳头程"
+    exceptions:
+      - "FBA 绕过"
+      - "合并组不套后缀"
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.2（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: PRICE-002
+    title: -FOAM 计价（半成品/成品）
+    scope: [pricing, non_fba]
+    applies_when:
+      sku_suffix: "-FOAM"
+      shipping_method_in: ["半成品", "成品"]
+      fulfillment: non_fba
+      merged_group: false
+    then:
+      shell_cost: 0
+      sx_processing: "半成品 cost_sxbzbcp；成品 cost_sxbzcp"
+      destination_processing: "目的地 valuation"
+      head_freight: "半成品头程−皮壳头程；成品头程−皮壳头程"
+    exceptions:
+      - "差额为负的处理见 PRICE-008"
+      - "FBA 绕过"
+      - "合并组不套后缀"
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.3（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: PRICE-003
+    title: -PPCOTTON 计价（仅皮壳档）
+    scope: [pricing, non_fba]
+    applies_when:
+      sku_suffix: "-PPCOTTON"
+      shipping_method: "皮壳"
+      fulfillment: non_fba
+      merged_group: false
+    then:
+      shell_cost: 0
+      sx_processing: 0
+      destination_processing: "目的地 valuation"
+      head_freight: 0
+    exceptions:
+      - "成品/半成品档无特例，按普通该档"
+      - "FBA 绕过"
+      - "合并组不套后缀"
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.4（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: PRICE-004
+    title: FBA 绕过后缀
+    scope: [pricing, fba]
+    applies_when:
+      fulfillment: FBA
+    then:
+      shell_cost: "cost_fg"
+      sx_processing: "sx_cost_all − cost_fg"
+      destination_processing: 0
+      head_freight: "对应国家 FBA 成品头程"
+      shipping_method: "不看"
+      suffix: "不看"
+    exceptions:
+      - "直采成品 cost_fg==sx_cost_all 且 cost_sxbzcp==0 时允许 sx=0（direct_purchase_zero）"
+      - "sx<0 或恒等式不成立 → pending，不补 0"
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §5（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/35-phase4-fba-shadow.md"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/fba_shadow.py（2026-11-06 观测）"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: PRICE-005
+    title: 合并组不套后缀
+    scope: [pricing, grouping]
+    applies_when:
+      merged_group: true
+    then:
+      suffix_matrix: "不套用"
+      pricing: "按载体 shipping_method 取整件普通矩阵"
+      components: "成本显式 0"
+      unit_cost: "组总成本 ÷ 件数"
+    exceptions: []
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §6（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（合并组后缀门；2026-11-06 观测）"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: PRICE-006
+    title: 无后缀三档普通矩阵
+    scope: [pricing, non_fba]
+    applies_when:
+      sku_suffix: none
+      fulfillment: non_fba
+      merged_group: false
+    then:
+      皮壳: {shell: "cost_fg", sx: 0, processing: "目的地 valuation", freight: "皮壳头程"}
+      半成品: {shell: "cost_fg", sx: "cost_sxbzbcp", processing: "目的地 valuation", freight: "半成品头程"}
+      成品: {shell: "cost_fg", sx: "cost_sxbzcp", processing: "目的地 valuation", freight: "成品头程"}
+    exceptions:
+      - "美国海外仓加工与皮壳/半成品头程借 USTX，成品头程借 USFBA"
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.1、§4（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/04-cost-decision-tables.md"
+      - "tongtool_order_cost/docs/reference/en-shaoxing-shipment-cost-logic-spec.md"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: PRICE-007
+    title: -FOAM 在皮壳档的口径
+    scope: [pricing, edge_case]
+    applies_when:
+      sku_suffix: "-FOAM"
+      shipping_method: "皮壳"
+      fulfillment: non_fba
+    then:
+      rule: "按普通皮壳：shell=cost_fg、freight=皮壳头程、sx=0、processing=目的地 valuation"
+    exceptions: []
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §7（2026-11-06）"
+      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（2026-11-06 对齐，feature/ustx-cost-compare cdced7cd）"
+    status: canon
+    owner: user
+    effective_from: "2026-11-06"
+
+  - id: PRICE-008
+    title: 负头程/负成本政策
+    scope: [pricing, edge_case]
+    applies_when:
+      any_unit_cost_lt_zero: true
+    then:
+      current_en_order_sync: "照写负值"
+      current_cost_review: "max(0, 差额)"
+      current_local: "negative_cost 阻断"
+    exceptions: []
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §7（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/09-known-issues-register.md（A3）"
+      - "tongtool_order_cost/tongtool_order_cost/tongtu_cost_engine/domain/bom_cost.py（2026-11-06 观测）"
+    status: decision-needed
+    owner: finance
+    due: "2026-11-27"
+    effective_from: "TBD"
+
+  - id: PRICE-009
+    title: 单位成本与数量口径
+    scope: [pricing, writeback]
+    applies_when:
+      writing_cost: true
+    then:
+      unit_cost: "四列均为单位成本"
+      amount: "单位成本 × 件数/数量"
+      identity: "1 件成本 = 皮壳 + 绍兴二次 + 目的地二次（不含头程）"
+    exceptions:
+      - "合并组先算组总成本，再 ÷ 件数还原单位成本"
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §1（2026-11-06）"
+      - "tongtool_order_cost/docs/reference/cost-engine-spec/33-phase3-writeback-rehearsal.md"
+    status: canon
+    owner: finance
+    effective_from: "2026-11"
+
+  - id: PRICE-010
+    title: 数字后缀大于 5 的计价
+    scope: [pricing, edge_case]
+    applies_when:
+      sku_suffix_matches: "-(COVER|FOAM)[6-9][0-9]*"
+    then:
+      pricing_branch: "不改变后缀计价，落通用有效重量分支"
+    exceptions: []
+    evidence:
+      - "docs/reference/tongtool-order-canon/03-price-matrix.md §3.5、§7（2026-11-06）"
+      - "tongtool_integration/tongtool_integration/sync/order_sync.py（2026-11-06 观测）"
+    status: unverified
+    owner: codex
+    due: "2026-12-04"
+    effective_from: "TBD"

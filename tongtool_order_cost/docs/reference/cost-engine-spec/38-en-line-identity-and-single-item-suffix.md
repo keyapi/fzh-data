@@ -11,6 +11,8 @@ tags: [cost, en-line, suffix, cover, foam, ppcotton, identity]
 
 # EN 行级身份与单品后缀
 
+> **本页保留为证据；规范见 [docs/reference/tongtool-order-canon/](../../../../docs/reference/tongtool-order-canon/index.md)（2026-11-06 起）。**
+
 > 起因：2026-11 把「单独卖皮壳」误判成 SKU 别名歧义而留空，并把 Cover 行按整件产品计价。
 > 用户口径：**原始订单只卖皮壳时，直接取皮壳成本；一个皮壳可配 PP棉或海绵两种填充物，这是同一皮壳、不同填充物，不是两个皮壳。**
 

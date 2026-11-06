@@ -10,6 +10,8 @@ tags: [cost, decision-table, ustx, head-freight, processing-cost, reference]
 
 # 成本决策表 · 按 目的地 × 绍兴发货方式
 
+> **本页保留为证据；规范见 [docs/reference/tongtool-order-canon/](../../../../docs/reference/tongtool-order-canon/index.md)（2026-11-06 起）。**
+
 > 这是本 bundle 的**核心页**。所有「某列怎么来的」都应能在这里查到；细节下钻见括号里的文件。
 
 ## 0. 一句话模型

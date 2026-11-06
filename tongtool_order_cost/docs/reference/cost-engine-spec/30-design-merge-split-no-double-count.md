@@ -10,6 +10,8 @@ tags: [cost, ustx, order-merge, split-package, dedup, design]
 
 # 拆包裹/合并 → 合成一件成品再对 BOM（设计稿）
 
+> **本页保留为证据；规范见 [docs/reference/tongtool-order-canon/](../../../../docs/reference/tongtool-order-canon/index.md)（2026-11-06 起）。**
+
 > 目标：订单里「一件成品被拆成多个包裹（皮壳 / 海绵 / 成品）记成多行」时，**先合成一件**再对 BOM 成本，做到**不重不漏**（成本既不重复计、也不漏计）。与 [18](18-sku-direct-impact-on-order-merge.md)（影响评估）配套；本页给**算法与落点**。
 
 ## 1. 落点判断（三处，各司其职）

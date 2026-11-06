@@ -10,6 +10,8 @@ tags: [cost, special-cases, suffix, hardcode, reference]
 
 # 特例清单
 
+> **本页保留为证据；规范见 [docs/reference/tongtool-order-canon/](../../../../docs/reference/tongtool-order-canon/index.md)（2026-11-06 起）。**
+
 > 「正常决策表之外」的所有旁路规则。每条：**触发 → 效果 → 落点 → 是否在用**。
 > 主决策表见 [04-cost-decision-tables.md](04-cost-decision-tables.md)；未证实项一律指向 [09](09-known-issues-register.md)。
 
