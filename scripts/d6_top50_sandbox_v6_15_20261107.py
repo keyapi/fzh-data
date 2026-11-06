@@ -72,10 +72,15 @@ US_POOLS = ("美东USNJ", "美中USTX")
 CUSTOMER_OF_POOL = {"美东USNJ": "CENTRADE", "美中USTX": "DANEEY", "波兰": "波兰公司"}
 
 
+ACTIVE_60_TARGETS: set[str] = set()
+
+
 def merge60(pid):
     s = str(pid)
     if s.startswith("KS0001-") and "-60-" in s:
-        return s.replace("KS0001-", "KS0248-", 1)
+        t = s.replace("KS0001-", "KS0248-", 1)
+        if t in ACTIVE_60_TARGETS:
+            return t
     return s
 
 
@@ -169,6 +174,8 @@ def main(argv=None) -> int:
            .rename(columns={"destination_pool": "pool"}))
     d1b[KEYS] = d1b[KEYS].astype(str)
     d1b_act = d1b[d1b["decision_state"].astype(str) == "active"].copy()
+    global ACTIVE_60_TARGETS
+    ACTIVE_60_TARGETS = set(d1b_act["product_id"].astype(str))
     d1b_key = d1b_act[["product_id", "pool", "physical_form",
                         "canonical_uom", "coverage_status", "market_pool_match"]].copy()
     d1b_key[KEYS] = d1b_key[KEYS].astype(str)

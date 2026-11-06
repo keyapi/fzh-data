@@ -162,6 +162,10 @@ def main() -> int:
                          首批到仓=arr1.date().isoformat(), 第二批到仓=arr2.date().isoformat(),
                          第二批晚于覆盖终点=bool(pd.notna(cov) and arr2 > cov),
                          建议运输=r["建议运输"],
+                         风险状态=r.get("风险状态", ""),
+                         可换运输=r.get("可换运输", ""),
+                         补救最快到仓=r.get("补救最快到仓", ""),
+                         模型资格=r.get("模型资格", ""),
                          无断货概率=round(ns, 4) if ns is not None else None,
                          满足率=round(fill, 4) if fill is not None else None,
                          需求sigma=round(sigma, 2),
@@ -238,6 +242,37 @@ def main() -> int:
                                        日均需求=round(md, 4), 日均库存=round(ms, 4),
                                        日均缺口=round(msh, 4)))
 
+    rescue_rows = []
+    for _, r in cny.iterrows():
+        if str(r.get("风险状态", "")) != "选定方案失败-有补救候选":
+            continue
+        d50, d95, on_hand, receipts, sigma, demand_flag = prep(r)
+        if demand_flag:
+            continue
+        mode = str(r["可换运输"])
+        days = MODE_DAYS.get(mode, 30)
+        prod = prod_map.get(str(r["pool"]), 30.0)
+        lead = prod + PREHAUL_DAYS + days + SHELVING_DAYS
+        arr = DECISION + pd.Timedelta(days=lead)
+        q1 = int(r["首批数量"]); q2 = int(r["第二批数量"])
+        arr2 = pd.to_datetime(r.get("第二批到仓"), errors="coerce")
+        if pd.isna(arr2):
+            arr2 = arr
+        cov = pd.to_datetime(r["覆盖终点"], errors="coerce")
+        Hh = max(90, int((cov - DECISION).days) + 7) if pd.notna(cov) else 97
+        d1 = max(0, int((arr - DECISION).days)); d2 = max(0, int((arr2 - DECISION).days))
+        key = (r["product_id"], r["pool"], r["physical_form"], r["canonical_uom"])
+        ns, fill, _ = simulate(key_rng(key + ("rescue",)), Hh, d50, d95, on_hand,
+                               receipts, [(d1, q1), (d2, q2)])
+        rescue_rows.append(dict(
+            product_id=r["product_id"], 池=r["pool"], 形态=r["physical_form"],
+            UOM=r["canonical_uom"], 数量=q1 + q2,
+            原运输=r["建议运输"], 原首批到仓=r["首批到仓"],
+            补救运输=mode, 补救首批到仓=arr.date().isoformat(),
+            无断货概率=round(ns, 4), 满足率=round(fill, 4),
+            状态=status_of(ns, fill, sigma)))
+    rescue = pd.DataFrame(rescue_rows)
+
     out = pd.DataFrame(rows)
     sens = pd.DataFrame(sens_rows)
     detail = pd.DataFrame(daily_rows)
@@ -257,6 +292,7 @@ def main() -> int:
         ("零中位数", "p50=0 且 q95>0：标“模型异常-零中位数”，不模拟、不进候选"),
         ("无需求", "p50=0 且 q95=0：标“无需求-不判定”"),
         ("整数批次", "春节首批取整，第二批=总量-首批；轨迹直接用批次数量"),
+        ("运输补救", "选定方案晚于断货日、但更快运输可赶上的键，单独重模拟；不直接解禁"),
         ("到货", "C可发 + EN在途/待发 + PO追加 + CG；首批/第二批按生产+prehaul+运输+上架"),
         ("输入D5", sha(D5)), ("输入春节", sha(CNY)), ("输入D6", sha(D6)),
         ("脚本", "scripts/s2_14_unified_trajectory_v7_20261107.py"),
@@ -266,6 +302,7 @@ def main() -> int:
         params.to_excel(w, sheet_name="0_参数", index=False)
         summary.to_excel(w, sheet_name="1_汇总", index=False)
         out.to_excel(w, sheet_name="2_逐键", index=False)
+        rescue.to_excel(w, sheet_name="3_运输补救", index=False)
         sens_summary.to_excel(w, sheet_name="3_同窗口180_汇总", index=False)
         sens.to_excel(w, sheet_name="3b_同窗口180_逐键", index=False)
         detail.to_excel(w, sheet_name="4_逐日均值", index=False)

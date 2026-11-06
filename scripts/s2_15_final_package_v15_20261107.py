@@ -24,6 +24,7 @@ BASE = Path("D:/Work/fzh-order-store/analysis")
 V13 = BASE / "S2_9-delivery-final-20261106/D_补货交付包_2026-11-06_final_v13_draft.xlsx"
 CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-06_v7.xlsx"
 D6 = BASE / "D6v6_15-final/D_Top50沙盒_D6_v6_15_2026-11-07.xlsx"
+D6_PREV = BASE / "D6v6_14-final/D_Top50沙盒_D6_v6_14_2026-11-06.xlsx"
 D5 = BASE / "D5v6_6-60cm/D_概率与服务_D5_v6_6_2026-11-07.xlsx"
 RISK = BASE / "S2_9-delivery-final-20261106/D_断货风险与需求抑制_2026-11-06_v2.xlsx"
 TRAJ = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-07_v7.xlsx"
@@ -51,12 +52,29 @@ def main() -> int:
     sens = pd.read_excel(TRAJ, sheet_name="3b_同窗口180_逐键")
     sens_sum = pd.read_excel(TRAJ, sheet_name="3_同窗口180_汇总")
     params = pd.read_excel(TRAJ, sheet_name="0_参数")
+    rescue = pd.read_excel(TRAJ, sheet_name="3_运输补救")
     cny = pd.read_excel(CNY, sheet_name="2_逐键排期")
     risk = pd.read_excel(RISK, sheet_name="2_断货风险")
     po_src = pd.read_csv(PO_SRC, encoding="utf-8-sig")
     po_audit = pd.read_csv(PO_AUDIT, encoding="utf-8-sig")
     po_overlap = pd.read_csv(PO_OVERLAP, encoding="utf-8-sig")
     cm = pd.read_csv(CM_RECON, encoding="utf-8-sig")
+    d6 = pd.read_excel(D6, sheet_name="1_全量动作")
+    d6_prev = pd.read_excel(D6_PREV, sheet_name="1_全量动作")
+    prev_unk = d6_prev[d6_prev["C完整键状态"].astype(str).eq("unknown_no_full_key")][
+        ["product_id", "池", "形态", "UOM", "C可发供给", "C完整键状态",
+         "建议动作", "净需求95"]].rename(
+        columns={"C可发供给": "C修复前", "C完整键状态": "状态修复前",
+                 "建议动作": "动作修复前", "净需求95": "净需求修复前"})
+    rec = prev_unk.merge(
+        d6[KEYS + ["C可发供给", "C完整键状态", "建议动作", "净需求95"]],
+        on=KEYS, how="inner").rename(
+        columns={"C可发供给": "C修复后", "C完整键状态": "状态修复后",
+                 "建议动作": "动作修复后", "净需求95": "净需求修复后"})
+    rec = rec[rec["状态修复后"].astype(str).ne("unknown_no_full_key")]
+    rec = rec[["product_id", "池", "形态", "UOM", "C修复前", "C修复后",
+               "状态修复前", "状态修复后", "动作修复前", "动作修复后",
+               "净需求修复前", "净需求修复后"]]
 
     # ---------- 9_春节备货建议：直接用 CNY v7（整数批次 + prehaul=2）
     cny9 = cny.copy()
@@ -70,13 +88,17 @@ def main() -> int:
                  "需求异常类型": "轨迹需求异常类型",
                  "无断货概率": "轨迹无断货概率", "满足率": "轨迹满足率"})
     cny9 = cny9.merge(tj, on=KEYS, how="left")
-    cny9["是否风险隔离"] = cny9["风险"].fillna("").astype(str).str.strip().ne("")
+    cny9["风险状态"] = cny9["风险状态"].fillna("").astype(str)
+    cny9["是否风险隔离"] = cny9["风险状态"].eq("全部方案失败")
+    cny9["是否可换运输"] = cny9["风险状态"].eq("选定方案失败-有补救候选")
     exec_map = {"cycle95": "可执行-待人工确认", "fill95": "可执行-待人工确认",
                 "fail": "不可执行-轨迹未过", "模型异常": "模型异常-不判定",
                 "模型异常-零中位数": "模型异常-零中位数", "无需求-不判定": "无需求-不判定"}
-    cny9["可执行状态"] = np.where(
-        cny9["是否风险隔离"], "风险隔离-待决策",
-        cny9["轨迹状态"].map(exec_map).fillna("未匹配-需复核"))
+    cny9["可执行状态"] = np.select(
+        [cny9["是否风险隔离"], cny9["是否可换运输"],
+         cny9["轨迹状态"].eq("模型异常-零中位数")],
+        ["风险隔离-待决策", "可换运输-待重模拟", "模型异常-零中位数"],
+        default=cny9["轨迹状态"].map(exec_map).fillna("未匹配-需复核"))
     cny9["取整差"] = (pd.to_numeric(cny9["建议节前备货量"], errors="coerce").fillna(0)
                     - pd.to_numeric(cny9["首批数量"], errors="coerce").fillna(0)
                     - pd.to_numeric(cny9["第二批数量"], errors="coerce").fillna(0)).round(0)
@@ -91,15 +113,17 @@ def main() -> int:
                  "满足率": "需求满足率_v7", "首批到仓": "首批到仓_v7",
                  "需求异常类型": "需求异常类型_v7"})
     cand = cand.merge(tj2, on=KEYS, how="left")
-    cand = cand.merge(cny9[KEYS + ["是否风险隔离"]], on=KEYS, how="left")
-    cand["风险隔离_v7"] = cand["是否风险隔离"].fillna(False)
+    cand = cand.merge(cny9[KEYS + ["风险状态", "是否风险隔离", "是否可换运输",
+                                   "模型资格", "执行闸门"]], on=KEYS, how="left")
+    cand["风险状态"] = cand["风险状态"].fillna("").astype(str)
     cand["可执行状态"] = np.select(
-        [cand["风险隔离_v7"],
+        [cand["风险状态"].eq("全部方案失败"),
+         cand["风险状态"].eq("选定方案失败-有补救候选"),
          cand["轨迹状态_最新"].eq("模型异常-零中位数"),
          cand["轨迹状态_最新"].isin(["cycle95", "fill95"]),
          cand["轨迹状态_最新"].eq("fail")],
-        ["风险隔离-待决策", "模型异常-零中位数", "可执行-待人工确认",
-         "不可执行-轨迹未过"],
+        ["风险隔离-待决策", "可换运输-待重模拟", "模型异常-零中位数",
+         "可执行-待人工确认", "不可执行-轨迹未过"],
         default="模型异常-不判定")
     cand["轨迹状态"] = cand["轨迹状态_最新"]
     cand["周期无断货概率"] = cand["周期无断货概率_v7"]
@@ -108,11 +132,22 @@ def main() -> int:
     cand["需求异常类型"] = cand["需求异常类型_v7"]
     zm = cand["轨迹状态_最新"].eq("模型异常-零中位数")
     cand.loc[zm, "建议数量"] = 0
-    cand.loc[zm, "净需求95"] = 0
-    cand.loc[zm, "需求q95"] = 0
-    cand.loc[zm, "建议动作"] = "观察（零中位数）"
+    cand.loc[zm, "建议动作"] = "观察（零中位数-待验证）"
     if "春节方案数量" in cand.columns:
         cand.loc[zm, "春节方案数量"] = 0
+    cand["forecast_q95"] = cand["需求q95"]
+    cand["raw_net_gap"] = cand["净需求95"]
+    cand["proposed_qty"] = cand["建议数量"]
+    cand["approved_qty"] = 0
+    cand["模型资格"] = cand["模型资格"].fillna("正常")
+    cand["阻断原因"] = np.select(
+        [zm, cand["风险状态"].eq("选定方案失败-有补救候选"),
+         cand["风险状态"].eq("全部方案失败")],
+        ["p50=0 且 q95>0；模型待验证，禁止执行",
+         "选定运输晚于断货日；可换运输待重模拟",
+         "所有已验证运输均晚于断货日"],
+        default="")
+    cand = cand.drop(columns=[c for c in ["轨迹无断货", "轨迹满足率"] if c in cand.columns])
 
     # ---------- 1_汇总
     cny_total = float(pd.to_numeric(cny9["建议节前备货量"], errors="coerce").fillna(0).sum())
@@ -122,6 +157,8 @@ def main() -> int:
         键数=("product_id", "size"), 数量=("数量", "sum"))
     risk_rows = cny9[cny9["是否风险隔离"]]
     risk_qty = float(pd.to_numeric(risk_rows["建议节前备货量"], errors="coerce").fillna(0).sum())
+    remedy_rows = cny9[cny9["是否可换运输"]]
+    remedy_qty = float(pd.to_numeric(remedy_rows["建议节前备货量"], errors="coerce").fillna(0).sum())
     risk_pass = cny9[cny9["是否风险隔离"] & cny9["轨迹状态"].isin(["cycle95", "fill95"])]
     risk_pass_qty = float(pd.to_numeric(risk_pass["建议节前备货量"],
                                        errors="coerce").fillna(0).sum())
@@ -152,7 +189,8 @@ def main() -> int:
                                               errors="coerce").fillna(0).sum()), 1)
     risk_pass_traj = round(float(pd.to_numeric(risk_pass["轨迹数量"],
                                                errors="coerce").fillna(0).sum()), 1)
-    net_rows = cny9[(~cny9["是否风险隔离"]) & cny9["轨迹状态"].isin(["cycle95", "fill95"])]
+    net_rows = cny9[(~cny9["是否风险隔离"]) & (~cny9["是否可换运输"])
+                    & cny9["轨迹状态"].isin(["cycle95", "fill95"])]
     net_keys = len(net_rows)
     net_plan = round(float(pd.to_numeric(net_rows["建议节前备货量"],
                                          errors="coerce").fillna(0).sum()), 1)
@@ -166,10 +204,16 @@ def main() -> int:
         ("  其中：轨迹未通过 fail", c_fa, p_fa, q_fa, "不可执行；需改方案或人工接受风险"),
         ("  其中：模型异常（不判定）", c_an, p_an, q_an, "sigma>2，需求尾部失真，不参与通过/失败"),
         ("  其中：零中位数（隔离）", c_zm, p_zm, q_zm,
-         "p50=0 且 q95>0；不再用指数分布补正值，不模拟、不进候选"),
+         "p50=0 且 q95>0；保留原q95与净需求，方案量0、禁止执行"),
         ("  取整差（方案量-轨迹量）", np.nan, round_diff, np.nan, "整数批次，差应为 0；逐行看 3_整数校验"),
         ("  其中：风险隔离（与上面交叉）", len(risk_rows), round(risk_qty, 1), risk_traj_qty,
-         f"{len(risk_rows)} 条空运晚于断货日；是总量子集，不能与上面相加"),
+         f"{len(risk_rows)} 条全部已验证运输都晚于断货日；是总量子集，不能与上面相加"),
+        ("  其中：可换运输-待重模拟", len(remedy_rows), round(remedy_qty, 1), np.nan,
+         "选定运输晚于断货日，但更快运输可赶上；需重模拟，不直接解禁"),
+        ("  其中：补救重模拟通过", int(rescue["状态"].isin(["cycle95", "fill95"]).sum()),
+         float(pd.to_numeric(rescue.loc[rescue["状态"].isin(["cycle95", "fill95"]),
+                                       "数量"], errors="coerce").fillna(0).sum()), np.nan,
+         "8 键改空运后 7 键过（5 cycle/2 fill）、1 fail；仍不自动解禁"),
         ("  其中：可执行但风险隔离", len(risk_pass), round(risk_pass_qty, 1), risk_pass_traj,
          "轨迹过但风险未消；按风险隔离处理，不计入净可执行"),
         ("净可执行（剔除风险隔离）", net_keys, net_plan, net_traj,
@@ -275,11 +319,11 @@ def main() -> int:
         {"项": "输入 D6 v6.14", "值": sha(D6)},
         {"项": "输入 D5 v6.5", "值": sha(D5)},
         {"项": "输入 风险 v2", "值": sha(RISK)},
-        {"项": "输入 轨迹 v6", "值": sha(TRAJ)},
+        {"项": "输入 轨迹 v7", "值": sha(TRAJ)},
         {"项": "输入 PO 队列", "值": sha(PO_SRC)},
         {"项": "输入 PO-DN 审计", "值": sha(PO_AUDIT)},
         {"项": "输入 PO-EN 重叠", "值": sha(PO_OVERLAP)},
-        {"项": "脚本", "值": "scripts/s2_12_final_package_v14_20261106.py"},
+        {"项": "脚本", "值": "scripts/s2_15_final_package_v15_20261107.py"},
         {"项": "脚本 SHA-256", "值": sha(SCRIPT_PATH)},
         {"项": "自动下单", "值": "false"},
         {"项": "写 EN/通途", "值": "false"},
@@ -288,11 +332,11 @@ def main() -> int:
 
     # ---------- 0_说明 / 0_怎么看（v14 口径）
     notice_out = pd.DataFrame([
-        ("状态", "DRAFT v15：整数批次；零中位数隔离；可执行/未通过/风险隔离已拆；不批准"),
+        ("状态", "DRAFT v15：整数批次；零中位数待验证；可执行/可换运输/风险隔离已拆；不批准"),
         ("数量关系", f"当前候选 {cand_qty:.0f} 是即时补货；春节 {cny_total:.0f} 是方案总量；"
-                   f"轨迹可执行 {q_cy + q_fi:.0f}，剔除风险隔离后净可执行 "
-                   f"{net_plan:.0f}（方案量）/{net_traj:.0f}（轨迹量）；{len(risk_rows)} 条风险 "
-                   f"{risk_qty:.0f} 是子集，不能相加"),
+                   f"轨迹可执行 {q_cy + q_fi:.0f}，剔除风险隔离/可换运输后净可执行 "
+                   f"{net_plan:.0f}（方案量）/{net_traj:.0f}（轨迹量）；{len(risk_rows)} 条全部失败 "
+                   f"{risk_qty:.0f} + {len(remedy_rows)} 条可换运输 {remedy_qty:.0f}，不能相加"),
         ("轨迹", f"春节 cycle95 {c_cy}/{q_cy:.0f}、fill95 {c_fi}/{q_fi:.0f}、"
                f"fail {c_fa}/{q_fa:.0f}、模型异常 {c_an}/{q_an:.0f}、"
                f"零中位数 {c_zm}/{q_zm:.0f}；"
@@ -300,7 +344,7 @@ def main() -> int:
         ("PO", "EN 带通途 PO 字段 14 个 DN；未结台账 11 个 DN/71 行 PO/51 行 Shipment；"
                "3 个 DN 不在 11-05 未结队列"),
         ("交期", "生产 + pre-haul 2 + 55/30/14（入仓→签收）+ shelving 0"),
-        ("异常", "24 个春节键 sigma>2；66 个零中位数键单列隔离，均不判定"),
+        ("异常", "24 个春节键 sigma>2；66 个零中位数键保留原q95、方案量0、禁止执行"),
         ("边界", "不自动下单、不写 EN/通途；数据截止 11-02，PO 快照 11-05"),
     ], columns=["项", "内容"])
     howto_out = pd.DataFrame([
@@ -314,26 +358,28 @@ def main() -> int:
         ("催已有", "3_催已有：105 行，按默认交期判断赶不赶得上；新增量 5,309"),
         ("轨迹", "11_统一逐日轨迹；逐日均值在独立文件 D_统一逐日轨迹_2026-11-07_v7.xlsx 的 4_逐日均值"),
         ("PO", "10a_PO核对看 14/11/3 的差异；10_PO逐单台账逐单看 open_qty/ETA/匹配"),
+        ("运输补救", "16_运输补救：8 个选定运输晚于断货日但更快运输可赶上的键，单独重模拟；不直接解禁"),
     ], columns=["看哪张", "看什么"])
 
     # ---------- 12_已知限制
     limits = pd.DataFrame([
         ("新增数量", "当前基准 5,309；5,239 是 CG 修复前旧值，已作废"),
         ("春节总量", f"{cny_total:.0f} 是方案总量；{len(risk_rows)} 条风险 {risk_qty:.0f} 是子集，不能相加"),
-        ("可执行量", f"轨迹可执行 {c_cy + c_fi} 键/{q_cy + q_fi:.0f} 件；其中 {len(risk_pass)} 键/{risk_pass_qty:.0f} 件仍属风险隔离；零中位数 {c_zm} 键/{p_zm:.0f} 件隔离；净可执行 {net_keys} 键/{net_plan:.0f}（方案量）/{net_traj:.0f}（轨迹量）；未通过 {c_fa} 键/{p_fa:.0f} 件；模型异常 {c_an} 键/{p_an:.0f} 件"),
+        ("可执行量", f"轨迹可执行 {c_cy + c_fi} 键/{q_cy + q_fi:.0f} 件；其中 {len(risk_pass)} 键/{risk_pass_qty:.0f} 件属全部失败；可换运输 {len(remedy_rows)} 键/{remedy_qty:.0f} 件；零中位数 {c_zm} 键（q95保留、方案量0）；净可执行 {net_keys} 键/{net_plan:.0f}（方案量）/{net_traj:.0f}（轨迹量）；未通过 {c_fa} 键/{p_fa:.0f} 件；模型异常 {c_an} 键/{p_an:.0f} 件"),
         ("新增服务", f"fill95 {n_fi} 键/{q_nfi:.0f} 件；fail {n_fa} 键/{q_nfa:.0f} 件；未过的不能当已批准"),
         ("取整", f"整数批次；方案量与轨迹量差 {round_diff:.0f}，逐行看 3_整数校验"),
         ("净可执行口径", f"方案量 {net_plan:.0f} / 轨迹量 {net_traj:.0f}；整数批次，两列应一致"),
         ("180 天同窗", "仅作敏感性。新增按 97 天任务窗定量，拉到 180 天全部 fail 属预期，不能据此否定方案"),
         ("需求外推", "春节用 97 天日均外推到覆盖终点，不是季节模型；2-4 月需求可能偏离"),
         ("轨迹性质", "随机情景模拟，不是服务保证；失败键需人工决策"),
-        ("风险隔离", f"{len(risk_rows)} 个风险键不可视为已批准执行量"),
-        ("零中位数", f"{c_zm} 个键 p50=0 且 q95>0；不再用指数分布补正值，需求历史保留、行动隔离"),
+        ("风险隔离", f"{len(risk_rows)} 个键全部已验证运输都晚于断货日，不可视为已批准执行量"),
+        ("可换运输", f"{len(remedy_rows)} 个键选定运输晚于断货日，但更快运输可赶上；待重模拟，不直接解禁"),
+        ("零中位数", f"{c_zm} 个键 p50=0 且 q95>0；保留原q95与净需求，方案量0、禁止执行"),
         ("PO", "PO 与 EN 在途存在重叠；逐单阶段、ETA、DN↔PO 基数仍需人工确认"),
         ("CG", "只有 eligible 且非 stale 的数量可抵扣；未知 CG 不得抵扣"),
         ("交期", "pre-haul=2 是决策值（实测 p50=0/p90=2）；shelving=0 未实测"),
         ("快照", "数据截止 2026-11-02；PO 快照 2026-11-05；EN DN 字段查询 2026-11-06"),
-        ("60cm 287", "KS0001-DM-60-COFFEE/波兰 287 件保留原键、保留预测历史；D6 动作为观察，不因本结论建议补货"),
+        ("60cm 287", "KS0001-DM-60-COFFEE/波兰 287 件保留原键、保留预测历史；零中位数待验证，方案量0"),
         ("60cm 覆盖", "保留原键 4,001 件（含 287）仍需按 D1b/C/EN/PO 逐键确认覆盖；本包只对平需求口径"),
         ("操作边界", "不自动下单、不写 EN、不写通途"),
     ], columns=["项", "已知限制"])
@@ -358,6 +404,12 @@ def main() -> int:
         ("9 零中位数行仍标可执行", int((cny9["轨迹状态"].eq("模型异常-零中位数")
                                        & cny9["可执行状态"].eq("可执行-待人工确认")).sum()), 0),
         ("2 服务指标与 v7 不一致", metric_mismatch, 0),
+        ("2 旧服务列已移除", int(any(c in cand.columns for c in ["轨迹无断货", "轨迹满足率"])), 0),
+        ("2 零中位数原q95保留", int((zm & (cand["forecast_q95"] > 0)).sum()), 66),
+        ("2 零中位数建议量>0", int((zm & (cand["建议数量"] > 0)).sum()), 0),
+        ("9 可换运输键", int(cny9["是否可换运输"].sum()), 8),
+        ("16 运输补救行", len(rescue), 8),
+        ("60cm 供给恢复键", len(rec), 20),
         ("Top50 非可执行行", int((~top50["可执行状态"].eq("可执行-待人工确认")).sum()), 0),
     ], columns=["检查项", "实际", "期望"])
     checks["通过"] = checks["实际"].eq(checks["期望"])
@@ -370,7 +422,7 @@ def main() -> int:
              "8_非成品候选", "9_春节备货建议", "10_PO逐单台账", "10a_PO核对",
              "10b_PO与EN重叠_汇总", "11_统一逐日轨迹", "12_已知限制",
              "13_同窗口180_汇总", "13b_同窗口180_逐键", "14_60cm对账",
-             "15_一致性校验"]
+             "15_一致性校验", "16_运输补救", "17_60cm供给恢复"]
     out_frames = {
         "0_说明": notice_out,
         "0_怎么看": howto_out,
@@ -396,6 +448,8 @@ def main() -> int:
         "13b_同窗口180_逐键": sens,
         "14_60cm对账": cm,
         "15_一致性校验": checks,
+        "16_运输补救": rescue,
+        "17_60cm供给恢复": rec,
     }
     with pd.ExcelWriter(OUT, engine="openpyxl") as w:
         for sn in order:
@@ -425,6 +479,7 @@ def main() -> int:
             "v13": {"path": str(V13), "sha256": sha(V13)},
             "cny_v7": {"path": str(CNY), "sha256": sha(CNY)},
             "d6_v6_15": {"path": str(D6), "sha256": sha(D6)},
+            "d6_v6_14": {"path": str(D6_PREV), "sha256": sha(D6_PREV)},
             "d5_v6_6": {"path": str(D5), "sha256": sha(D5)},
             "trajectory_v7": {"path": str(TRAJ), "sha256": sha(TRAJ)},
             "po_queue": {"path": str(PO_SRC), "sha256": sha(PO_SRC)},

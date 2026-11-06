@@ -65,8 +65,6 @@ def main() -> int:
         first = 0 if zero_median else int(round(total * 0.6))
         second = total - first
         level = str(r["放行等级"])
-        first = int(round(total * 0.6))
-        second = total - first
         prod = PROD.get(pool, 30.0)
         days = MODE_DAYS.get(mode, 30)
         lead = prod + PREHAUL + days
@@ -75,19 +73,35 @@ def main() -> int:
         second_arr = cutoff + pd.Timedelta(days=lead)
         stockout = (DECISION + pd.Timedelta(days=int(c / daily))
                     if daily > 0 and c > 0 else DECISION)
-        risk = "" if zero_median else ("所有模式首批都晚于q95断货日" if first_arr > stockout else "")
+        alt = []
+        for alt_mode in ("空运", "快船", "普船"):
+            alt_arr = DECISION + pd.Timedelta(days=prod + PREHAUL + MODE_DAYS[alt_mode])
+            if alt_arr <= stockout:
+                alt.append((alt_mode, alt_arr))
+        if zero_median or first_arr <= stockout:
+            risk_state, remedy_mode, remedy_arr = "", "", ""
+        elif alt:
+            risk_state = "选定方案失败-有补救候选"
+            remedy_mode, _ra = min(alt, key=lambda x: x[1])
+            remedy_arr = _ra.date().isoformat()
+        else:
+            risk_state, remedy_mode, remedy_arr = "全部方案失败", "", ""
         rows.append(dict(
             product_id=r["product_id"], 物料名称=r.get("物料名称", ""),
             **{"通途SKU/来源码（不含FBA）": r.get("通途SKU/来源码（不含FBA）", "")},
             池=pool, 形态=r["形态"], UOM=r["UOM"], 放行等级=level,
-            日均q95需求=0 if zero_median else round(daily, 4), 当前可用=round(c, 2),
+            日均q95需求=round(daily, 4), 当前可用=round(c, 2),
             预计q95断货日=stockout.date().isoformat(), 建议运输=mode,
             首批到仓=first_arr.date().isoformat(),
             第二批到仓=second_arr.date().isoformat(),
             覆盖终点=r["覆盖终点"],
             建议节前备货量=total, 首批数量=first, 第二批数量=second,
-            最迟下单日=cutoff.date().isoformat(), 风险=risk,
-            模型资格="零中位数-隔离" if zero_median else "正常",
+            最迟下单日=cutoff.date().isoformat(), 风险=risk_state,
+            风险状态=risk_state, 可换运输=remedy_mode, 补救最快到仓=remedy_arr,
+            模型资格="零中位数-待验证" if zero_median else "正常",
+            建议量状态="待核" if zero_median else "已计算",
+            执行闸门="禁止执行" if zero_median else "待人工确认",
+            批准量=0,
             建议动作D6=r.get("建议动作", ""),
         ))
     out = pd.DataFrame(rows)
@@ -99,8 +113,10 @@ def main() -> int:
         ("首批合计", int(out["首批数量"].sum())),
         ("第二批合计", int(out["第二批数量"].sum())),
         ("批次差非零行", int((out["批次差"] != 0).sum())),
-        ("首批晚于断货日", int((out["风险"] != "").sum())),
-        ("零中位数隔离行", int((out["模型资格"] == "零中位数-隔离").sum())),
+        ("首批晚于断货日", int((out["风险状态"] != "").sum())),
+        ("可换运输-待重模拟", int((out["风险状态"] == "选定方案失败-有补救候选").sum())),
+        ("全部方案失败", int((out["风险状态"] == "全部方案失败").sum())),
+        ("零中位数待验证行", int((out["模型资格"] == "零中位数-待验证").sum())),
         ("prehaul天数", PREHAUL),
     ], columns=["项", "值"])
     with pd.ExcelWriter(OUT, engine="openpyxl") as w:
