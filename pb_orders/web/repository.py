@@ -84,6 +84,7 @@ ARTIFACT_LABELS = {
     "input_packslip": "Packslip PDF",
     "input_order": "SPS 订单 CSV",
     "checked_order": "checked0stock CSV",
+    "converted_order": "转换后订单 CSV（新 SKU）",
     "stock_operations": "SPS 库存检查操作表",
     "tongtool": "通途导入 xlsx",
     "tongtool_no_stock": "通途 无库存 xlsx",

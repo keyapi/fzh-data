@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -27,6 +28,7 @@ _MODULE_DIR = Path(__file__).resolve().parent
 if str(_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(_MODULE_DIR))
 
+import arc_sku_migration  # noqa: E402
 import pb_back_label_pdf  # noqa: E402
 import pb_label_pdf  # noqa: E402
 import pb_tongtu_excel  # noqa: E402
@@ -38,6 +40,7 @@ SHIPMENT_PATTERN = "shipment*.csv"
 
 MIME_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 MIME_PDF = "application/pdf"
+MIME_CSV = "text/csv"
 
 
 class PBJobError(Exception):
@@ -83,6 +86,10 @@ class JobOptions:
     # 用 CSV 所在目录当历史目录（命令行惯例：补发时把 PB orders 根目录传进来）。
     reorder: list[str] = field(default_factory=list)
     history_dirs: list[str] = field(default_factory=list)
+    # 弧形海绵带圆柱颈枕：旧通途 SKU -> 新 SKU 自动转换 + PB 料号交叉校验。
+    # 默认开启；映射见 pb_orders/sku_maps/pb_arc_foam_cylinder.json。
+    sku_migration: bool = True
+    sku_map_path: Path | None = None
 
 
 @dataclass
@@ -142,12 +149,22 @@ def resolve_input(dir_path: Path, explicit, pattern: str, label: str) -> Path:
     return path.resolve()
 
 
-def shipment_report(shipment_csv: Path, df_rows: pd.DataFrame) -> dict:
-    """只读交叉核对：用 ASN(shipment) CSV 的实发数量比对订单数量。不删行。"""
+def shipment_report(shipment_csv: Path, df_rows: pd.DataFrame, sku_map: dict | None = None) -> dict:
+    """只读交叉核对：用 ASN(shipment) CSV 的实发数量比对订单数量。不删行。
+
+    ``sku_map`` 是「旧 SKU -> 新 SKU」的映射；两边的 SKU 都先归一化，避免
+    订单已转新 SKU、而 ASN CSV 仍是旧 SKU 时被误判成缺货。
+    """
+    normalize = (
+        lambda value: sku_map.get(str(value).strip().upper(), str(value).strip())
+        if sku_map
+        else str(value).strip()
+    )
     ship = pd.read_csv(shipment_csv, dtype=str)
     ship["_qty"] = pd.to_numeric(ship["Qty Ship"], errors="coerce").fillna(0).astype(int)
-    ordered = df_rows.groupby("Vendor Style")["Qty Ordered"].sum().astype(int)
-    shipped = ship.groupby("Vdr Item #")["_qty"].sum()
+    ship["_sku"] = ship["Vdr Item #"].map(normalize)
+    ordered = df_rows.groupby(df_rows["Vendor Style"].map(normalize))["Qty Ordered"].sum().astype(int)
+    shipped = ship.groupby("_sku")["_qty"].sum()
     cmp = pd.DataFrame({"ordered": ordered, "shipped": shipped}).fillna(0).astype(int)
     short = cmp[cmp["shipped"] < cmp["ordered"]]
     return {
@@ -164,6 +181,72 @@ def shipment_report(shipment_csv: Path, df_rows: pd.DataFrame) -> dict:
             for sku, r in short.iterrows()
         ],
     }
+
+
+def _prepare_order_csv(
+    csv_path: Path, options: JobOptions, out_dir: Path | None, progress: ProgressFn
+):
+    """旧通途 SKU -> 新 SKU，并用 PB 料号做交叉校验。
+
+    返回 ``(可用 CSV, 报告, 持久化产物路径, 清理函数, 映射)``。
+    有未确认/冲突 SKU 时直接抛 ``PBJobError``，不出任何正式产物。
+    """
+    if not options.sku_migration:
+        return csv_path, {"enabled": False}, None, None, None
+
+    map_path = Path(options.sku_map_path) if options.sku_map_path else arc_sku_migration.DEFAULT_MAP
+    try:
+        mapping = arc_sku_migration.load_mapping(map_path)
+        header, rows = arc_sku_migration.read_order_csv(csv_path)
+        plan = arc_sku_migration.analyze_rows(header, rows, mapping)
+    except arc_sku_migration.MigrationError as exc:
+        raise PBJobError(
+            f"SKU 迁移读取失败：{exc}",
+            hint="检查 sku_maps/pb_arc_foam_cylinder.json 与订单 CSV 是否完整。",
+            code="sku_migration_error",
+        ) from exc
+
+    if plan.has_blockers:
+        details = "；".join(arc_sku_migration.describe_blockers(plan, mapping))
+        raise PBJobError(
+            "SKU 校验未通过，已中止出件",
+            hint=f"{details}。请先找 Tracy/Diane 确认 PB 料号、颜色与价格，确认前不要人工猜。",
+            code="sku_migration_blocked",
+        )
+
+    counts: dict[tuple[str, str], int] = {}
+    for _index, old, new in plan.replace:
+        counts[(old, new)] = counts.get((old, new), 0) + 1
+    report = {
+        "enabled": True,
+        "applied": bool(plan.replace),
+        "detail_rows": plan.detail_rows,
+        "other_rows": plan.other_rows,
+        "replacements": [
+            {"old": old, "new": new, "rows": count} for (old, new), count in counts.items()
+        ],
+        "already_new": dict(plan.already_new),
+    }
+    if not plan.replace:
+        return csv_path, report, None, None, mapping
+
+    progress("sku_migration", f"转换旧通途 SKU：{len(plan.replace)} 行")
+    name = f"{options.csv_stem or csv_path.stem}_新SKU.csv"
+    persist = out_dir is not None and not options.validate_only
+    if persist:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        target = out_dir / name
+        cleanup = None
+    else:
+        with tempfile.NamedTemporaryFile(prefix="pb_sku_", suffix=".csv", delete=False) as fh:
+            target = Path(fh.name)
+        cleanup = lambda: target.unlink(missing_ok=True)
+
+    arc_sku_migration.write_order_csv(
+        target, header, arc_sku_migration.apply_plan(header, rows, plan)
+    )
+    report["converted_name"] = target.name
+    return target, report, (target if persist else None), cleanup, mapping
 
 
 def run_job(
@@ -203,6 +286,9 @@ def run_job(
 
     # ---------- 步骤 3：订单 CSV -> 通途 xlsx ----------
     progress("orders", "处理订单 CSV 并拆行")
+    effective_csv, migration_report, converted_path, migration_cleanup, sku_mapping = (
+        _prepare_order_csv(csv_path, options, out_dir, progress)
+    )
     # 重复建单加后缀（workflow.md §10）：先把要补发的 PO 解析成 {PO: "-N"}。
     # 显式 `PO=-2` 直接采信；裸 `PO` 走「扫历史导入 xlsx 算下一个可用后缀」。
     reorder_auto, reorder_suffixes = pb_tongtu_excel.parse_reorder_spec(options.reorder)
@@ -215,7 +301,7 @@ def run_job(
         reorder_suffixes.update(auto_map)
         warnings.extend(reorder_warns)
     try:
-        df_order = pb_tongtu_excel.build_order_df(csv_path, order_suffixes=reorder_suffixes)
+        df_order = pb_tongtu_excel.build_order_df(effective_csv, order_suffixes=reorder_suffixes)
     except ValueError as exc:
         # 这一层的 ValueError 都是「这份 CSV 用不了」（缺列 / 数量非法等）。
         # 不套 PBJobError 的话，页面会落到通用提示「PDF 与 CSV 可能不是同一批」——指错了方向。
@@ -224,7 +310,20 @@ def run_job(
             hint="请用 SPS 导出的完整订单 CSV 重新提交；本批的 checked0stock 文件见「检查 SPS 新订单」任务。",
             code="order_csv_invalid",
         ) from exc
+    finally:
+        if migration_cleanup:
+            migration_cleanup()
     no_stock_skus = [s for s in options.no_stock if str(s).strip()]
+    if sku_mapping:
+        mapped = [arc_sku_migration.canonical_sku(s, sku_mapping) for s in no_stock_skus]
+        changed = [
+            {"old": old, "new": new}
+            for old, new in zip(no_stock_skus, mapped)
+            if old.strip().upper() != new.strip().upper()
+        ]
+        if changed:
+            migration_report["no_stock_mapped"] = changed
+        no_stock_skus = mapped
     importable, no_stock = pb_tongtu_excel.split_no_stock(df_order, no_stock_skus)
 
     # ---------- 1:1 硬校验（对全量订单行；无货拆分是之后的事）----------
@@ -263,7 +362,11 @@ def run_job(
             warnings.append("发货核对跳过：未提供 shipment ASN CSV")
         else:
             progress("shipment", "核对 ASN 实发数量")
-            ship = shipment_report(sp, importable)
+            ship = shipment_report(
+                sp,
+                importable,
+                sku_map=arc_sku_migration.old_to_new_map(sku_mapping) if sku_mapping else None,
+            )
 
     # 按无货 SKU 把「页」分成两组（df_join 行序 == PDF 页序）
     if no_stock_skus:
@@ -302,6 +405,7 @@ def run_job(
             "applied": dict(sorted(reorder_suffixes.items())),
             "history_files": reorder_files,
         },
+        "sku_migration": migration_report,
         "one_to_one": {"pdf_pages": len(df_pdf), "order_rows": len(df_order), "ok": True},
         "join": {"unmatched": len(unmatched),
                  "unmatched_sample": [str(u) for u in unmatched[:10]]},
@@ -335,6 +439,19 @@ def run_job(
 
     out_dir.mkdir(parents=True, exist_ok=True)
     artifacts: list[ArtifactSpec] = []
+
+    if converted_path is not None:
+        artifacts.append(
+            ArtifactSpec(
+                "converted_order",
+                converted_path,
+                migration_report.get("converted_name") or converted_path.name,
+                MIME_CSV,
+            )
+        )
+        report["outputs"].append(
+            {"kind": "converted_order", "name": converted_path.name}
+        )
 
     # ---------- 通途 xlsx ----------
     progress("tongtool", "生成通途导入 xlsx")

@@ -72,6 +72,17 @@ table.kv th { width: 190px; color: var(--muted); font-weight: 500; }
 .error { color: var(--bad); background: #fdecea; padding: 10px 12px; border-radius: 6px; }
 .warn { color: #8a6100; background: var(--warn-bg); padding: 10px 12px; border-radius: 6px; }
 .warn-list li { color: #8a6100; }
+/* 全站常驻的 SKU 切换提示：周一上线期间必须一眼看到 */
+.notice {
+  background: #fff4d6;
+  color: #6b4e00;
+  border-bottom: 1px solid #f0d58a;
+  border-left: 5px solid #d9a300;
+  padding: 10px 18px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.notice code { background: rgba(0, 0, 0, .06); padding: 1px 4px; border-radius: 3px; }
 /* 「部分缺货 PO」的醒目提示：整单取消会让 PB 发催单，必须显眼 */
 .mixed-warning { border-left: 4px solid #d9a300; background: var(--warn-bg); }
 .mixed-warning h2 { color: #8a6100; }

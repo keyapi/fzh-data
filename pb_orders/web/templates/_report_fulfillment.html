@@ -1,6 +1,39 @@
 {# 出件任务的数量对账与校验明细 #}
 {% if job.report %}
 {% set r = job.report %}
+{% if r.sku_migration and r.sku_migration.enabled %}
+<section class="card {{ 'mixed-warning' if r.sku_migration.applied else '' }}">
+  <h2>SKU 自动转换</h2>
+  {% if r.sku_migration.applied %}
+  <p><strong>已把旧通途 SKU 转换为新 SKU。</strong>本次的通途导入 xlsx、标签、背贴都使用新 SKU；PB 侧 ASN/invoice 仍用 PB 料号。</p>
+  <table>
+    <thead><tr><th>旧 SKU</th><th>新 SKU</th><th>转换行数</th></tr></thead>
+    <tbody>
+      {% for row in r.sku_migration.replacements %}
+      <tr>
+        <td class="mono">{{ row.old }}</td>
+        <td class="mono">{{ row.new }}</td>
+        <td>{{ row.rows }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted">已用 PB 料号与 Vendor Style 交叉校验，未发现冲突。</p>
+  {% else %}
+  <p>本批未发现旧通途 SKU（订单已是新 SKU，或不属于该产品），未做替换。</p>
+  {% endif %}
+  {% if r.sku_migration.already_new %}
+  <p class="muted">已是新 SKU：
+    {% for sku, count in r.sku_migration.already_new.items() %}<code>{{ sku }}</code> × {{ count }}{% if not loop.last %}；{% endif %}{% endfor %}
+  </p>
+  {% endif %}
+  {% if r.sku_migration.no_stock_mapped %}
+  <p class="muted">断货清单里的旧 SKU 已同步为新 SKU：
+    {% for row in r.sku_migration.no_stock_mapped %}<code>{{ row.old }}</code> → <code>{{ row.new }}</code>{% if not loop.last %}；{% endif %}{% endfor %}
+  </p>
+  {% endif %}
+</section>
+{% endif %}
 <section class="card">
   <h2>数量对账</h2>
   <table>
