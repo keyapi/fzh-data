@@ -514,3 +514,74 @@ rules:
     owner: codex
     due: "2026-12-04"
     effective_from: "TBD"
+
+  - id: UNIV-005
+    title: 销售历史边界（GS vs EN）
+    scope: [order_universe, history]
+    applies_when:
+      reading_historical_sales: true
+    then:
+      gs_history: "GS 月表 2023-01 起为历史销售真源"
+      en_completeness: "EN 2025-07 起基本完整；通途 API 不能重建更早"
+      boundary: "历史销售可借 GS；订单身份/作废/erp_item_code/shipping_method 仍以 EN 为准"
+    exceptions: []
+    evidence:
+      - "[SPEC] docs/reference/tongtool-order-canon/01-order-universe.md §1（2026-11-06）"
+      - "[SPEC] PR #290 docs/solutions/architecture-patterns/order-history-duckdb-store.md"
+    status: canon
+    owner: user
+    effective_from: "2026-11-06"
+
+  - id: FLOW-001
+    title: 通途改单窗口 ≈ 90 天
+    scope: [special_flow, tail_cost]
+    applies_when:
+      modifying_tail_after_despatch: true
+    then:
+      window: "发货日期往前约 90 天后不可改"
+      observed: "7/10 及更早失败、7/14 及以后成功（仅两个观测点）"
+      wording: "只能写≈90 天，精确边界未证实"
+    exceptions:
+      - "云仓直发不需要尾程"
+      - "补发 -M + OSTK/Wayfair 视为需要尾程"
+    evidence:
+      - "[SPEC] docs/reference/tongtool-order-canon/05-special-flows.md §1（2026-11-06）"
+      - "[SPEC] PR #282 monthly-tail-cost-pipeline.md"
+    status: canon
+    owner: user
+    effective_from: "2026-11-06"
+
+  - id: FLOW-002
+    title: 尾程缺口与账单来源
+    scope: [special_flow, tail_cost]
+    applies_when:
+      needs_tail: true
+    then:
+      gap: "needs_tail=1 且 物流商运费=0 → 待追尾程"
+      sources: "平台已付 / 补发例外 / 「7条」供应商 / 疑似官方 FedEx"
+      fedex: "无公开账单 API；官网反爬，只能人工下载或线下账单"
+      not_decision: "不裁决 OS/CR/SGP 三套优先级（C13）"
+    exceptions: []
+    evidence:
+      - "[SPEC] docs/reference/tongtool-order-canon/05-special-flows.md §2（2026-11-06）"
+      - "[SPEC] PR #287 fedex-billing-online-download.md"
+    status: canon
+    owner: finance
+    effective_from: "2026-11-06"
+
+  - id: FLOW-003
+    title: 补发与云仓直发
+    scope: [special_flow, supplementary]
+    applies_when:
+      supplementary_or_cloud_warehouse: true
+    then:
+      supplementary: "是否补发货=是 或 -M<数字> → 不合并；需要尾程"
+      supplementary_ostk_wayfair: "强制 needs_last_leg=1"
+      cloud_direct: "云仓直发不需要尾程"
+    exceptions: []
+    evidence:
+      - "[SPEC] docs/reference/tongtool-order-canon/05-special-flows.md §3（2026-11-06）"
+      - "[SPEC] PR #282 monthly-tail-cost-pipeline.md"
+    status: canon
+    owner: finance
+    effective_from: "2026-11-06"

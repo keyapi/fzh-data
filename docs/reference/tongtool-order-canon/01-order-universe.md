@@ -24,6 +24,8 @@ tags: [tongtool, order, universe, invalid, split, fba, canon]
 
 **规则**：三者冲突时，订单身份、作废标记、`erp_item_code`、`shipping_method` 以 EN `Tongtool Order` 为准；GS 只提供业务字段与写回列。FBA 的数量与站点以 EN FBA 明细为准，GS FBA 销量表作骨架与覆盖校验。
 
+**历史边界（#290）**：GS 月表自 2023-01 起是历史**销售**真源，EN 自 2025-07 起基本完整；通途 API 可见性跟「最近更新时间」走，不能重建 2025-07 以前。**销售历史 ≠ 成本身份**：历史销售可借 GS，但订单身份/作废/`erp_item_code`/`shipping_method` 仍以 EN 为准。
+
 **证据**
 - [37-phase3.7-gs-ready.md](../../../tongtool_order_cost/docs/reference/cost-engine-spec/37-phase3.7-gs-ready.md)（原始表 / 写回表 / FBA 表的分工）
 - [tongtu-order-universe-invalid-split-fba.md](../../../docs/solutions/workflow-issues/tongtu-order-universe-invalid-split-fba.md)

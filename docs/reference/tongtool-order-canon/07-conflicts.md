@@ -18,7 +18,7 @@ tags: [tongtool, order, conflicts, decisions, owners, canon]
 
 | ID | 严重度 | 冲突 | 判定类型 | owner | 截止日 | 影响范围 | 下一动作 | 状态 |
 |---|---|---|---|---|---|---|---|---|
-| **C1** | 严重 | 拆单系数在订单同步恒为 1 | 可判定；修复方式需业务 | user | 2026-11-13 | 订单同步成本、拆单系数 | 决定「给 Order Item 加仓库字段」或「明确订单同步不乘系数」 | `verified` |
+| **C1** | 严重 | 拆单系数在订单同步恒为 1 | 可判定；修复方式需业务 | user | 2026-11-13 | 订单同步成本、拆单系数 | 决定「给 Order Item 加仓库字段」或「明确订单同步不乘系数」；#290 已补完整根因链（订单头 warehouse_name 不回写→null→成本全 0） | `verified` |
 | **C2** | 严重 | 后缀在五条链路五种成本 | 已裁决：以本地 38 矩阵为权威 | user | 2026-11-20 | 订单同步/CR/出库/送货单/本地引擎 | ADR-0001：OS/CR 对齐；DN/DNF 只读复用；OS 先修、双跑切换 | `decided`（ADR-0001） |
 | **C3** | 严重 | FBA 三套判据 | 已裁决：`warehouse_classification` 为唯一判据 | user | 2026-11-20 | FBA 成本、尾程、毛利 | ADR-0001：建 fulfillment_resolver；关键字/order_type 降为告警；未知映射阻断 | `decided`（ADR-0001） |
 | **C4** | 高 | 头程三列系数文档/代码相反 | 可判定 | codex | 2026-11-13 | 头程金额 | 确认 OS 是否缺陷；修代码或改文档 | `verified` |
@@ -28,9 +28,9 @@ tags: [tongtool, order, conflicts, decisions, owners, canon]
 | **C8** | 高 | 套件在 EN 订单链无实现 | 可判定 | user | 2026-11-27 | 套件成本 | 指定本地引擎为权威或补 EN | `verified` |
 | **C9** | — | 退货不在通途订单（只在钉钉账期） | 已关闭（业务口径） | user | — | — | 无需在订单成本里实现；退货仓仅作发货仓 | `closed`（2026-11-06） |
 | **C10** | 中 | 双 SSOT 声明 + 数字不一致 | 可判定 + 1 项未证实 | codex | 2026-11-27 | 文档可信度 | 清理双 SSOT；202608 基线同口径重跑 | `open` |
-| **C11** | 中 | 行号锚点漂移 | 可判定 | codex | 2026-11-20 | 证据可追溯 | 建 `06-implementation-map`，只写观测日+commit | `open` |
+| **C11** | 中 | 行号锚点漂移 | 可判定 | codex | 2026-11-20 | 证据可追溯 | 已建 `06-implementation-map`（只写文件/函数+观测日）；旧页行号逐步清理 | `resolved`（06 已建） |
 | **C12** | 中 | 拆单系数字段位置写错 | 可判定 | codex | 2026-11-13 | 拆单系数 | 修正文档为 `Item Customer Detail` | `verified` |
-| **C13** | 中 | 尾程优先级三套 | 可判定；利润口径需业务 | finance | 2026-11-27 | 订单利润 | 指定利润口径，统一 OS/CR/SGP | `open` |
+| **C13** | 中 | 尾程优先级三套 | 可判定；利润口径需业务 | finance | 2026-11-27 | 订单利润 | 指定利润口径，统一 OS/CR/SGP；#287 提供缺口定义与账单来源（证据，非裁决） | `open` |
 | **C14** | — | 负成本：无业务场景，按数据错误处理 | 已关闭 | user | — | 四列成本 | 本地阻断暴露；实测 0 例；1.7.0 负数规则只针对 FBA 尾程 | `closed`（2026-11-06） |
 | **C15** | 低 | 1:2:4 是否触发 | 未证实 | codex | 2026-12-04 | 旧 Colab 头程补缺 | 回放带缺失发货方式档的月份 | `open` |
 
@@ -73,6 +73,13 @@ tags: [tongtool, order, conflicts, decisions, owners, canon]
 - **实现**：本地引擎已对齐（`feature/ustx-cost-compare cdced7cd`）；规则 `PRICE-007` 置 `canon`。
 - **影响**：当前 202608/202609 无此类订单，重跑逐字节不变。
 - **证据**：`03-price-matrix.md` §7；`order_sync.py`、`bom_cost.py`（2026-11-06）。
+
+## 4.1 C1 根因链（#290 补强）
+
+- **环节一**：`_update_order` 不回写订单头 `warehouse_name` → 订单永久 null；
+- **环节二**：null 仓库 → 找不到 `Tongtu Shipping Warehouse` 成本配置 → 子表发货方式/绍兴成本/头程/皮壳全 0；
+- **环节三**：`Tongtool Order Item` 没有 `warehouse_name` 字段（DB 证实）→ 拆单系数 lookup 恒 `return 1`。
+- 三个环节都指向「订单同步链路拿不到仓库身份」，但**不能互相替代**；修 C1 时必须同时补齐字段与回写。
 
 ## 5. 证据
 
