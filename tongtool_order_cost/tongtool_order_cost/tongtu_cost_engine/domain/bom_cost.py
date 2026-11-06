@@ -446,7 +446,7 @@ def _unit_costs(
         if shape == SHAPE_COVER:
             sx = 0.0
             processing = 0.0
-        elif shape == SHAPE_FOAM:
+        elif shape == SHAPE_FOAM and method in (METHOD_SEMI, METHOD_FINISHED):
             shell = 0.0
         elif shape == SHAPE_PPCOTTON and method == METHOD_COVER:
             shell = 0.0
@@ -744,7 +744,7 @@ def compute_phase2(
                             )
                             if shape == SHAPE_COVER:
                                 en_sx, en_proc = 0.0, 0.0
-                            elif shape == SHAPE_FOAM:
+                            elif shape == SHAPE_FOAM and method in (METHOD_SEMI, METHOD_FINISHED):
                                 en_shell = 0.0
                             elif shape == SHAPE_PPCOTTON and method == METHOD_COVER:
                                 en_shell, en_sx = 0.0, 0.0
@@ -760,7 +760,8 @@ def compute_phase2(
                         if bucket not in FBA_BUCKETS:
                             if shape == SHAPE_COVER and (costs["sx"] != 0 or costs["processing"] != 0):
                                 suffix_errors.append("cover_sx_processing_nonzero")
-                            if shape == SHAPE_FOAM and costs["shell"] != 0:
+                            if (shape == SHAPE_FOAM and method in (METHOD_SEMI, METHOD_FINISHED)
+                                    and costs["shell"] != 0):
                                 suffix_errors.append("foam_shell_nonzero")
                             if (shape == SHAPE_PPCOTTON and method == METHOD_COVER
                                     and (costs["shell"] != 0 or costs["sx"] != 0 or costs["freight"] != 0)):
