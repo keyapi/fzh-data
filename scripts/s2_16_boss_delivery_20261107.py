@@ -20,7 +20,7 @@ CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-06_v7.xl
 TRAJ = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-07_v7.xlsx"
 V15 = BASE / "S2_9-delivery-final-20261106/D_补货交付包_2026-11-06_final_v15.xlsx"
 A = BASE / "SKU活跃宇宙_2026-10-29_FINAL.xlsx"
-OUT = BASE / "D_老板版补货建议_2026-11-07.xlsx"
+OUT = BASE / "D_老板版补货建议_2026-11-07_v2.xlsx"
 KEYS = ["product_id", "池", "形态", "UOM"]
 
 
@@ -239,7 +239,8 @@ def main() -> int:
     branch = out.groupby(["分公司", "方案类型"]).agg(
         键数=("商品编码", "size"), 建议补量=("建议补多少", "sum")).reset_index()
     cny_qty = out.loc[out["方案类型"].eq("春节方案"), "建议补多少"].sum()
-    daily_qty = out.loc[out["方案类型"].eq("日常补货候选"), "建议补多少"].sum()
+    daily_qty = out.loc[out["一句话建议"].isin(
+        ["补-待排期", "补-下单日已过-需重排"]), "建议补多少"].sum()
     daily_keys = int(out["一句话建议"].isin(
         ["补-待排期", "补-下单日已过-需重排"]).sum())
     pending = out[out["一句话建议"].isin(
@@ -256,8 +257,7 @@ def main() -> int:
     pivot = pivot.reindex(columns=["需求键数"] + sel_cols, fill_value=0).reset_index()
 
     boss = pd.DataFrame([
-        ("这份表是什么", f"三个分公司全部 {len(out)} 个需求键的逐商品补货建议；不是只覆盖 8 款。"),
-        ("8 款复核", "8 款只是已复核子集；其余需求键也在这张表里，不能用 8 款代表全部。"),
+        ("这份表是什么", f"三个分公司全部 {len(out)} 个需求键的逐商品补货建议；覆盖补/不补/催已有/观察全部状态，不是只列已审核子集。"),
         ("数据日期", "需求预测截至 2026-11-02；库存截至 2026-11-05；决策日 2026-11-06。"),
         ("春节方案", f"257 键 / {cny_qty:,.0f} 件；其中 27 键/1,756 件可确认，4 键/271 件首批晚于停工，8 键/424 件换运输，110 键/7,436 件断货风险，66 键需求看不清。"),
         ("日常补货候选", f"{daily_keys} 键 / {daily_qty:,.0f} 件；是 D6 当前补货候选，需单独排期，**不要与春节 12,092 相加**。"),
