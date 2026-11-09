@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -342,6 +343,14 @@ def item_for_detail(
     if detail.get("merged"):
         carrier = normalize_sku(detail.get("carrier_sku"))
         carrier_items = _same_product(set(resolver.items_for_sku(carrier)), product_id, resolver)
+        if not carrier_items:
+            # 皮壳组的 EN 登记可能只在“另一填充类型”的产品族上（同一皮壳用于 PP 棉/海绵）：
+            # 用去掉 -Cover/-Foam 的基号在该产品族内再找一次；仍不唯一则阻断。
+            base = re.sub(r'-(?:COVER|FOAM|PPCOTTON)\d*$', '',
+                          str(detail.get("carrier_sku") or "").strip(), flags=re.I)
+            if base and normalize_sku(base) != carrier:
+                carrier_items = _same_product(
+                    set(resolver.items_for_sku(base)), product_id, resolver)
         if len(carrier_items) == 1:
             item = next(iter(carrier_items))
             return (item, "") if item in bom_index else ("", "bom_item_missing")

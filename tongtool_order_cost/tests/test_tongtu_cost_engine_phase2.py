@@ -990,6 +990,30 @@ def test_unique_cover_product_overrides_shared_filler(tmp_path):
     assert detail["merged"] is True
 
 
+def test_filler_type_conflict_uses_filler_product(tmp_path):
+    """同一皮壳用于 PP 棉/海绵两种成品：产品族只差填充类型 → 填充行决定。
+
+    EN 皮壳行登记到海绵产品也不能采信，否则整件成本对到错误 BOM。
+    """
+    items = write_items_custom(tmp_path, [
+        {"name": "KS-SPONGE-50", "customer_code": "DUAL-COVER", "item_group": "弧形海绵靠枕-拉链款", "variant_of": "KS-SPONGE"},
+        {"name": "KS-PP-COVER-50", "customer_code": "DUAL-COVER", "item_group": "弧形PP棉靠枕-拉链款", "variant_of": "KS-PP"},
+        {"name": "KS-PP-FILL-50", "customer_code": "CURVE-PPCOTTON", "item_group": "弧形PP棉靠枕-拉链款", "variant_of": "KS-PP"},
+    ])
+    orders = write_orders(tmp_path, [
+        ["ORD-3800001", "PSK", "DUAL-COVER", 1, 10, 50, 0, "WH1"],
+        ["ORD-3800001", "PSK", "CURVE-PPCOTTON", 1, 0, 0, 0, "WH1"],
+    ])
+    en = write_en(tmp_path, [
+        ["ORD-3800001", "DUAL-COVER", "KS-SPONGE-50", 1, "皮壳"],
+        ["ORD-3800001", "CURVE-PPCOTTON", "KS-PP-FILL-50", 1, "皮壳"],
+    ])
+    shadow = run_merge_shadow(orders, items, en, None, month="202608")
+    detail = shadow.detail_rows[0]
+    assert detail["product_id"] == "KS-PP"
+    assert detail["merged"] is True
+
+
 def test_tiktok_cross_prefix_pairing(tmp_path):
     """TikTok 跨前缀手动拆单：同数字主体、不同前缀的皮壳+海绵合并为一件成品。"""
     body = "123456789012345678"

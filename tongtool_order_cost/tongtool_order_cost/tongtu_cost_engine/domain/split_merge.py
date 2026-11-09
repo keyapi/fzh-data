@@ -897,11 +897,32 @@ def _pair_tiktok_cross_prefix(rows: list[OrderRow]) -> int:
     return paired
 
 
-def _cover_product_precedence(rows: list[OrderRow], resolver: EnResolver) -> int:
-    """同一 (order_common, 平台SKU) 内，皮壳别名唯一 → 皮壳决定组内产品。
+def _filler_kind(item_group: str) -> str:
+    g = str(item_group or "")
+    if "海绵" in g:
+        return "foam"
+    if "PP棉" in g or "PP 棉" in g:
+        return "ppcotton"
+    return ""
 
-    共用海绵/PP棉常只登记在另一产品上（如 KS0396 方格 vs KS0397 菱形），
-    若按填充行取产品，会把整件成本对到错误 BOM。平台 SKU 含逗号（多商品）时不处理。
+
+def _group_differs_only_by_filler(a: str, b: str) -> bool:
+    """两个产品族的 item_group 只差填充类型（PP棉 vs 海绵）→ 填充行决定产品族。"""
+    ka, kb = _filler_kind(a), _filler_kind(b)
+    if not ka or not kb or ka == kb:
+        return False
+    ra = str(a).replace("PP棉", "").replace("PP 棉", "").replace("海绵", "").strip()
+    rb = str(b).replace("PP棉", "").replace("PP 棉", "").replace("海绵", "").strip()
+    return ra == rb
+
+
+def _cover_product_precedence(rows: list[OrderRow], resolver: EnResolver) -> int:
+    """同一 (order_common, 平台SKU) 内，决定组内产品归属。
+
+    - 皮壳唯一，且与填充产品族的差异**不是**填充类型（如方格 vs 菱形）→ 皮壳决定；
+      共用海绵/PP棉常只登记在另一产品上，按填充行取产品会把成本对到错误 BOM。
+    - 皮壳与填充产品族只差「PP棉 vs 海绵」→ **填充行决定**：同一皮壳颜色会同时用于
+      PP 棉和海绵两种成品，皮壳本身不能区分；此时若 EN 皮壳行登记错，按皮壳取会算错成本。
     """
     by_group: dict[tuple[str, str], list[int]] = defaultdict(list)
     for i, row in enumerate(rows):
@@ -925,12 +946,42 @@ def _cover_product_precedence(rows: list[OrderRow], resolver: EnResolver) -> int
         if len({sku_base(rows[i].sku) for i in covers}) != 1:
             continue
         product = next(iter(products))
+        filler_products = {
+            rows[i].product_id for i in idxs
+            if sku_shape(rows[i].sku_raw) in (SHAPE_FOAM, SHAPE_PPCOTTON)
+            and rows[i].product_id and rows[i].product_id != product
+        }
+        use_filler = False
+        target_item = ""
+        if len(filler_products) == 1:
+            fp = next(iter(filler_products))
+            if _group_differs_only_by_filler(
+                    resolver.item_group_for(product), resolver.item_group_for(fp)):
+                use_filler = True
+                product = fp
+                # 兜底：皮壳行的 EN 物料若在另一产品族，按“族前缀替换”构造目标族同色同尺寸物料
+                for i in covers:
+                    ci = str(rows[i].raw.get("_en_item") or "").strip()
+                    cf = resolver.product_for_item(ci) if ci else ""
+                    if cf and cf != fp and cf in ci:
+                        cand = ci.replace(cf, fp, 1)
+                        if resolver.product_for_item(cand) == fp:
+                            target_item = cand
+                            break
         for i in idxs:
             row = rows[i]
-            if sku_shape(row.sku_raw) == SHAPE_COVER or row.product_id == product:
-                continue
-            raw = {k: v for k, v in row.raw.items() if k != "_en_item"}
-            raw["_group_cover_override"] = product
+            if not use_filler:
+                if sku_shape(row.sku_raw) == SHAPE_COVER or row.product_id == product:
+                    continue
+                raw = {k: v for k, v in row.raw.items() if k != "_en_item"}
+                raw["_group_cover_override"] = product
+            else:
+                # 填充行决定产品族时，组内所有行都重挂 _en_item：
+                # 皮壳行的 EN 物料可能登记在另一产品族，填充行的颜色也可能不对。
+                raw = {k: v for k, v in row.raw.items() if k != "_en_item"}
+                if target_item:
+                    raw["_en_item"] = target_item
+                raw["_group_filler_override"] = product
             rows[i] = replace(
                 row, product_id=product, item_group=resolver.item_group_for(product),
                 raw=raw,
@@ -1231,13 +1282,14 @@ def find_groups(
                 # 件数统一按 Cover/整件口径比较；组件行 qty 合计不作为件数
                 aux_pieces = aux_entry.pieces
                 if aux_entry.duplicate_components:
-                    # component_sum_error：原单组件行重复，qty 合计不可用 → 按件数锚定，不阻断
-                    if aux_pieces > 0 and abs(aux_pieces - pieces) > TOL:
+                    # 原单组件行重复：原单 Cover 计数同源重复，不能证明件数翻倍。
+                    # 仅当子单件数无法确定（ambiguous/zero）时才用原单件数兜底。
+                    if (pieces <= 0 or reason in ("pieces_ambiguous", "pieces_zero")) \
+                            and aux_pieces > 0:
                         pieces = aux_pieces
                         pieces_source = "aux"
                         aux_used = True
-                        if reason in ("pieces_ambiguous", "pieces_zero"):
-                            reason = ""
+                        reason = ""
                 elif pieces > 0 and abs(aux_pieces - pieces) > TOL:
                     reason = "aux_qty_mismatch"
                     aux_qty_failed = True
@@ -1383,7 +1435,7 @@ def build_aux_table(
             status = "component_sum_error"
             reason = (
                 f"原单组件行重复（{len(entry.rows)} 行），组件 qty 合计不可用；"
-                f"按 Cover/整件件数 {aux_pieces:g} 锚定"
+                f"件数取子单皮壳数量（原单 Cover 计数 {aux_pieces:g} 不再作为锚）"
             )
         elif not qty_ok:
             status, reason = "阻断", f"qty 原单件数 {aux_pieces:g} ≠ 子单件数 {sub_pieces:g}"

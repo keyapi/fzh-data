@@ -25,7 +25,7 @@ from typing import Mapping, Sequence
 import pandas as pd
 
 from .split_merge import normalize_sku
-from ...order_side_input import platform_body, tiktok_platform_body
+from ...order_side_input import order_base, platform_body, tiktok_platform_body
 
 TZ_CN = timezone(timedelta(hours=8))
 TOL = 1e-5
@@ -243,6 +243,8 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
     src_by_order: dict[str, list[dict]] = defaultdict(list)
     src_by_row: dict[int, dict] = {}
     src_by_body_sku: dict[tuple[str, str], dict] = {}
+    src_group_by_common: dict[str, dict] = {}
+    src_group_by_body: dict[str, dict] = {}
     for r in src.to_dict("records"):
         src_by_key.setdefault(_key(r.get("订单号"), r.get("通途SKU")), r)
         src_by_key.setdefault(_key_pt(r.get("订单号"), r.get("平台SKU_统一") or r.get("平台SKU")), r)
@@ -250,6 +252,18 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
         body = tiktok_platform_body(str(r.get("订单号") or ""))
         if body:
             src_by_body_sku.setdefault((body, normalize_sku(r.get("通途SKU"))), r)
+        # 合并组：写回源只有载体子单一行；模板行用「拆单前公共单号」（被标 invalid 的原单）
+        # 或 TikTok 归一化单号，按组映射，避免整组成本被当成组件行清零。
+        if str(r.get("merged") or "").strip().lower() == "true":
+            common = str(r.get("订单号_公共部分") or r.get("订单号") or "").strip().upper()
+            if common:
+                src_group_by_common.setdefault(common, r)
+                base = order_base(common).upper()
+                if base:
+                    src_group_by_common.setdefault(base, r)
+            tbody = body or tiktok_platform_body(common)
+            if tbody:
+                src_group_by_body.setdefault(tbody, r)
         for x in str(r.get("source_row") or "").split(","):
             if x.strip().isdigit():
                 src_by_row[int(x.strip())] = r
@@ -277,10 +291,14 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
                 for r in flags.to_dict("records")
                 if str(r.get("invalid") or "").strip() == "1"
             }
+    # 合并组在模板里通常只剩 1 行（显示行可能是组件 SKU）：该行是组行，不是被吸收组件。
+    tpl_rows_by_common = Counter(
+        order_base(str(r.get("订单号") or "")).strip().upper() for r in self_t.to_dict("records"))
     for rec in self_t.to_dict("records"):
         row = dict(rec)
         k = _key(rec.get("订单号"), rec.get("通途SKU"))
         srow = src_by_key.get(k)
+        group_row = False
         if srow is None:
             srow = src_by_key.get(
                 _key_pt(rec.get("订单号"), rec.get("平台SKU_统一") or rec.get("平台SKU")))
@@ -295,6 +313,20 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
             if len(body) >= 12:
                 srow = src_by_body_sku.get((body, normalize_sku(rec.get("通途SKU"))))
         if srow is None:
+            # 合并组：模板行用「拆单前公共单号」（被标 invalid 的原单）或 TikTok 归一化单号。
+            # 整组只有载体一行有成本，按组映射后不得再按「被吸收组件」清零。
+            oid_u = str(rec.get("订单号") or "").strip().upper()
+            cand = src_group_by_common.get(oid_u)
+            if cand is None and oid_u in invalid_ids:
+                cand = src_group_by_common.get(order_base(oid_u).upper())
+            if cand is None:
+                body = platform_body(str(rec.get("订单号") or ""))
+                if len(body) >= 12:
+                    cand = src_group_by_body.get(body)
+            if cand is not None:
+                srow = cand
+                group_row = True
+        if srow is None:
             ridx = raw_by_key.get(k)
             if ridx is None:
                 ridx = raw_by_key.get(
@@ -306,6 +338,13 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
         if old_row is None:
             old_row = old_by_key.get(
                 _key_pt(rec.get("订单号"), rec.get("平台SKU_统一") or rec.get("平台SKU")))
+        if (srow is not None and not group_row
+                and normalize_sku(rec.get("通途SKU")) != normalize_sku(srow.get("通途SKU"))
+                and str(srow.get("merged") or "").strip().lower() == "true"
+                and tpl_rows_by_common.get(
+                    order_base(str(rec.get("订单号") or "")).upper(), 0) <= 1):
+            # 模板同组只剩一行且源是合并组载体 → 该行即组行（显示 SKU 为组件），按整组计价
+            group_row = True
         if srow is None:
             oid = str(rec.get("订单号") or "").strip().upper()
             if oid in invalid_ids:
@@ -357,7 +396,7 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
                                     kc="", k2="", ksx="", status=f"source_{src_status}",
                                     reason=f"source_{src_status}")
                 status = f"source_{src_status}"
-            elif not same_carrier:
+            elif not same_carrier and not group_row:
                 # 合并组内被吸收行：成本显式 0；系数取载体；组内非空不一致 → 阻断
                 carrier_coefs = _coef_tuple(srow) if srow is not None else ("", "", "")
                 comp_coefs = _coef_tuple(old_row)
@@ -394,8 +433,10 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
                 else:
                     coefs = tuple(x if x != "" else y for x, y in zip(carrier_coefs, oldc))
                     shell = _num(srow.get("皮壳成本"))
-                    shell_out = _num(old_row.get("皮壳不含包装成本")) if old_row else None
-                    shell_in = _num(old_row.get("皮壳含包装成本")) if old_row else None
+                    shell_out = (_num(old_row.get("皮壳不含包装成本")) if old_row
+                                 else _num(rec.get("皮壳不含包装成本")))
+                    shell_in = (_num(old_row.get("皮壳含包装成本")) if old_row
+                                else _num(rec.get("皮壳含包装成本")))
                     cells = _fill_cells(
                         shell=shell, shell_in=shell_in, shell_out=shell_out,
                         sx2=_num(srow.get("绍兴二次加工成本")),
@@ -413,6 +454,7 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
             "status": status, "source_order": srow.get("订单号") if srow else "",
             "source_sku": srow.get("通途SKU") if srow else "",
             "same_carrier": (normalize_sku(rec.get("通途SKU")) == normalize_sku(srow.get("通途SKU"))) if srow else "",
+            "group_row": group_row,
             "qty": qty,
         })
         if status in ("crosswalk_missing", "coef_conflict", "invalid_original") or status.startswith("source_"):

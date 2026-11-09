@@ -693,7 +693,8 @@ def test_aux_report_and_sheet(tmp_path):
 
 
 def test_aux_component_rows_do_not_sum_pieces(tmp_path):
-    """KFLDE 场景：原单 2 Cover + 2 Foam，组件 qty 合计 4 是错的，按 Cover 应为 2。"""
+    """KFLDE 场景：原单 2 Cover + 2 Foam 属组件行重复；不用原单 Cover 计数翻倍，
+    件数仍取子单皮壳数量（1）。"""
     items = write_items(tmp_path, ITEMS)
     flags = write_flags(tmp_path, [["ORD-1300001", "1", "0", "作废"]])
     orders = write_orders(tmp_path, [
@@ -712,19 +713,20 @@ def test_aux_component_rows_do_not_sum_pieces(tmp_path):
     assert result.ok, [a for a in result.assertions if a.status == "fail"]
     assert result.stats["merged_groups"] == 1
     group = result.groups[0]
-    assert group.pieces == 2           # ΣCover qty，不是 4
-    assert group.pieces_source == "aux"
-    assert group.aux_used is True
+    assert group.pieces == 1           # 子单皮壳数量；原单重复行不翻倍
+    assert group.pieces_source == "suborder"
+    assert group.aux_used is False
     aux = result.aux_table[0]
     assert aux["qty"] == 2
     assert aux["原始组件qty"] == 4
-    assert aux["子单qty"] == 2
+    assert aux["子单qty"] == 1
     assert aux["校验结果"] == "component_sum_error"
     assert "组件行重复" in aux["原因"]
     assert result.stats["aux_component_sum_error"] == 1
     # 原单不叠加：总数仍只来自子单
     assert result.stats["qty_total"] == 2
-    assert result.stats["qty_shadow"] == 2
+    assert result.stats["qty_shadow"] == 2      # 组件行 qty 合计（守恒口径），不是件数
+    assert result.stats["pieces_shadow"] == 1
 
 
 def test_aux_cross_month_linked_not_unlinked(tmp_path):
