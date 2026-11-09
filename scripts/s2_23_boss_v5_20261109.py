@@ -287,6 +287,7 @@ def main() -> int:
     net_now = float(pd.to_numeric(keys60["净需求95"], errors="coerce").fillna(0).sum())
     new_now = float(pd.to_numeric(keys60["新补数量"], errors="coerce").fillna(0).sum())
     po60 = pd.DataFrame([
+        ("审计时点", "round15 审计（截至 2026-11-05）；11-09 C/EN 已刷新，但 60cm 逐键覆盖未重跑。"),
         ("历史销量", f"{hist:,.0f} 件（20 键，不是当前采购量）"),
         ("C 覆盖", "20/20 exact_full，合计 239"),
         ("EN 覆盖", "20/20 exact_full，合计 239（同一物理池，不可相加）"),
