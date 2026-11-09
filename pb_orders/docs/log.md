@@ -30,6 +30,8 @@ timestamp: 2026-09-22
   （API Key / 幂等 / 订单号占用），因此用 `patch` 只叠加本次改动，未整文件覆盖；
   web/worker 已重建 healthy，缓存已补三个新 SKU 的中/西语名。
 - **名称源已同步**：Google Sheet `US SKU Name` 已补同样三行（933 → 936，逐行回读一致）。
+- **经验沉淀**：`docs/solutions/workflow-issues/product-revision-old-sku-order-migration.md`、
+  `docs/solutions/developer-experience/non-git-deployment-dir-server-ahead-patch.md`。
 
 ## 2026-10-08（第二十轮：通途导入 Excel 支持「重复建单自动加后缀」）
 

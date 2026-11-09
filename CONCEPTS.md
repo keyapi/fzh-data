@@ -225,6 +225,13 @@ EN 销售订单上的一个**内部自编字段**（`po_no` / 行级 `purchase_o
 它是履约链的终点，也是唯一能证明「货真的到了」的证据。**任何上游影子数据都不能替代它**：
 赛狐库存用安全冗余数量、海外仓备货单表达的是采购与成本口径，二者都不能反推某批头程已签收或已上架。
 
+### 平台料号 vs 供应商/通途 SKU 的改版切换
+平台侧料号（如 PB/SPS 的 `Buyers Catalog or Stock Keeping #`）在产品改版后通常不变，
+但仓库侧会新建改版 SKU、旧 SKU 停用/零库存。配对必须用 `(平台料号, 颜色)` 做硬校验，
+不能只看 SKU 名称；历史人工映射可能把颜色写反。出件前应按显式
+`confirmed / unconfirmed / blocked` 三态转换，未确认或冲突直接失败关闭。
+详见 `docs/solutions/workflow-issues/product-revision-old-sku-order-migration.md`。
+
 ## ERPNext Platform
 
 ### Custom App

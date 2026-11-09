@@ -13,7 +13,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-06 | 非 git 部署目录且服务器副本领先分支：用 patch 叠加，不整文件覆盖 | [developer-experience/non-git-deployment-dir-server-ahead-patch.md](developer-experience/non-git-deployment-dir-server-ahead-patch.md) |
 | 2026-11-06 | 邮件域名到期 → Gmail 550-5.7.26 拒收：续费≠恢复，注册商≠DNS 托管商 | [integration-issues/email-domain-expiry-gmail-550-5-7-26.md](integration-issues/email-domain-expiry-gmail-550-5-7-26.md) |
+| 2026-11-06 | 产品改版后平台订单仍带旧 SKU：显式映射 + 平台料号交叉校验 + 出件前自动转换 | [workflow-issues/product-revision-old-sku-order-migration.md](workflow-issues/product-revision-old-sku-order-migration.md) |
 | 2026-11-05 | EN 服务器 git push 报 Permission denied (publickey) —— 密钥没问题，是 GitHub SSH 链路间歇性阻断 | [integration-issues/github-ssh-intermittent-publickey-denied.md](integration-issues/github-ssh-intermittent-publickey-denied.md) |
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |
 | 2026-10-27 | 供应分型与断货证据 — 先排费用/组件，再按角色分型；PJ 检查点不是每周 | [workflow-issues/supply-sku-segmentation-and-stockout-evidence.md](workflow-issues/supply-sku-segmentation-and-stockout-evidence.md) |

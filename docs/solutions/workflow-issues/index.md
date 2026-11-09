@@ -9,6 +9,7 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [product-revision-old-sku-order-migration.md](product-revision-old-sku-order-migration.md) | 产品改版后平台订单仍带旧 SKU：显式映射 + 平台料号交叉校验 + 出件前自动转换 |
 | [supply-sku-segmentation-and-stockout-evidence.md](supply-sku-segmentation-and-stockout-evidence.md) | 供应分型先排费用/组件，再按成品/半成品/皮壳分型；PJ 检查点不是每周；Jeck 表是成本表不是促销 |
 | [key-test-login-hook-and-prod-test-divergence.md](key-test-login-hook-and-prod-test-divergence.md) | key_test 每次登录写元数据（~0.75–1.05s）+ 猴补丁核心报表；生产 `production-backup` 与测试 `main` 割裂 |
 | [mcp-to-chatgpt-bringup-lessons.md](mcp-to-chatgpt-bringup-lessons.md) | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的方法与四个教训 |

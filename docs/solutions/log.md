@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-06（PB 弧形颈枕旧 SKU 切换 / 非 git 部署热修）
+
+- **新增**: `workflow-issues/product-revision-old-sku-order-migration.md` —— 产品改版后平台料号不变、订单仍带旧供应商 SKU 时，必须以 `(平台料号, 颜色)` 为锚做显式映射；`confirmed / unconfirmed / blocked` 三态，出件前自动转换并保留转换后 CSV；平台料号与 Vendor Style 硬校验，冲突/未确认 SKU 直接失败关闭；断货清单与 ASN 核对用旧/新别名；名称缓存与 Google Sheet 双写。
+- **新增**: `developer-experience/non-git-deployment-dir-server-ahead-patch.md` —— `/opt/pb-orders` 不是 git 仓库且服务器副本领先分支时，不能整文件覆盖；先比基线、备份、`git diff` 生成补丁、把服务器文件归一为 LF、`patch --dry-run` 后 apply（fuzz 要逐段核对）；web/worker 两个容器一起重建。
+
 ## 2026-11-06（邮件域名到期 / Gmail 550-5.7.26）
 
 - **新增**: `integration-issues/email-domain-expiry-gmail-550-5-7-26.md` —— 域名 2026-11-03 到期后，阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析，腾讯企业邮发出的邮件被 Gmail 以 550-5.7.26 硬拒。11-04 续费成功但邮件未恢复：**续费 ≠ 恢复**，必须回查注册局 NS 并确认记录在服务（直接问权威 NS，不只看控制台）。另一层陷阱是**注册商 ≠ DNS 托管商**（阿里云注册、DNSPod 解析；主域 `vilavi.cn` 在 Cloudflare）。DKIM selector 是腾讯企业邮生成的自定义随机串（`sjnr2306` / `evhe2306`），常见 selector 全 NXDOMAIN 不能证明“没有 DKIM”。恢复后补 DMARC `p=none`、修 MX 优先级 5/10。
