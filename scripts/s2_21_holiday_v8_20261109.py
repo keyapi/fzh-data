@@ -87,9 +87,14 @@ def main() -> int:
             second_order = finish_for_restart - pd.Timedelta(days=prod)
             second_prod_finish = finish_for_restart
             second_arr = RESTART
-        second_order_b = RESTART
-        second_prod_finish_b = RESTART + pd.Timedelta(days=prod)
-        second_arr_b = RESTART + pd.Timedelta(days=lead)
+        # 方案 B：不提前插单，仍按原连续排期下单；1/24 停工、2/22 复工后
+        # 只补完剩余生产天数，再加运输。不是 2/22 重新从头生产。
+        orig_order_b = RESTART - pd.Timedelta(days=lead)
+        worked_before_shutdown = max(0.0, (JAN24 - orig_order_b).days)
+        remaining_prod = max(0.0, prod - worked_before_shutdown)
+        second_order_b = orig_order_b
+        second_prod_finish_b = RESTART + pd.Timedelta(days=remaining_prod)
+        second_arr_b = second_prod_finish_b + pd.Timedelta(days=trans)
         cutoff = second_order
         if first_prod_finish > JAN24 and first_prod_finish < RESTART:
             raise ValueError(f"首批生产跨停工：{r['product_id']} {pool} {first_prod_finish.date()}")

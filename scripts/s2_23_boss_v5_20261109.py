@@ -22,6 +22,7 @@ W3 = BASE / "round15_60cm_dnpo_audit.csv"
 C14 = BASE / "C-refresh-20261109/通途库存_A337_v15_refresh_2026-11-09.xlsx"
 EN_STOCK = BASE / "en_stock_20261109.parquet"
 CG_STOCK = BASE / "cg_stock_20261109.parquet"
+D2B = BASE / "D_删失需求估计_D2b_v2_2026-11-02.xlsx"
 OUT = BASE / "D_老板版补货建议_2026-11-09_v5.1.xlsx"
 KEYS = ["product_id", "池", "形态", "UOM"]
 AS_OF = pd.Timestamp("2026-11-09")
@@ -479,6 +480,12 @@ def main() -> int:
     need_dt = pd.to_datetime(out["要求到仓/覆盖终点"], errors="coerce")
     arr_dt = pd.to_datetime(out["首批到仓"], errors="coerce")
     out.loc[daily_mask, "到仓晚于需求天数"] = (arr_dt[daily_mask] - need_dt[daily_mask]).dt.days
+    late_text = out["到仓晚于需求天数"].between(1, 7)
+    out.loc[late_text, "执行说明"] = (
+        out.loc[late_text, "执行说明"].astype(str)
+        + "；比需要日晚 "
+        + out.loc[late_text, "到仓晚于需求天数"].astype(int).astype(str)
+        + " 天")
 
     def late_reschedule(r):
         return "晚于需要日" in str(r.get("重排结果", ""))
@@ -615,7 +622,8 @@ def main() -> int:
     exp_route = dec_route[dec_route["一句话建议"].eq("催已有+新增")]
     boss = pd.DataFrame([
         ("今天/本周要下的单", f"{len(p1)} 个商品，{p1_qty:,} 件"
-                          f"（春节、补救、催货；其中 {int(p1['动作'].eq('催在途').sum())} 个只催不新下）",
+                          f"（春节、补救、催货；其中 {int(p1['动作'].eq('催在途').sum())} 个只催不新下；"
+                          f"{int(p1['到仓晚于需求天数'].between(1,7).sum())} 个新下单晚 1–7 天）",
          "按 1_运营下单表 的 P1 行执行；先看目的客户/仓、运输、下单日、到仓日"),
         ("可以排期的单", f"{len(p2)} 个商品，{p2_qty:,} 件",
          "按 1_运营下单表 的 P2 行排期；不要提前占用现金"),
@@ -687,6 +695,56 @@ def main() -> int:
                         "不能据此证明历史当时 D5 胜出，只能作回放诊断。"),
     ], columns=["版本/变更", "说明"])
 
+    # ---------- 断货/删失需求上界情景（不改主表） ----------
+    d2 = pd.read_excel(D2B, sheet_name="1_键级估计")
+    cens = d2[d2["censor_method"].ne("none")].copy()
+    cens["ratio"] = cens.apply(
+        lambda r: (float(r["estimated_demand"]) / float(r["observed_demand"]))
+        if float(r["observed_demand"]) > 0 else np.nan, axis=1)
+    cens = cens.rename(columns={"pool": "池", "physical_form": "形态",
+                                "canonical_uom": "UOM"})
+    cens = cens[KEYS + ["observed_demand", "estimated_demand", "ratio",
+                        "n_censored_months", "censor_method"]]
+    censor_cmp = b.merge(cens, on=KEYS, how="inner")
+    censor_cmp["修正后q95"] = censor_cmp["q95"] * censor_cmp["ratio"]
+    censor_cmp["估算新增净需求"] = (
+        pd.to_numeric(censor_cmp["q95"], errors="coerce").fillna(0)
+        * (censor_cmp["ratio"] - 1)).clip(lower=0)
+    censor_cmp["物料名称"] = censor_cmp["物料名称"].fillna(censor_cmp["名称"])
+    censor_cmp = censor_cmp[[
+        "池", "product_id", "物料名称", "形态", "UOM", "一句话建议",
+        "q95", "净需求95", "建议补量", "observed_demand", "estimated_demand",
+        "ratio", "估算新增净需求", "n_censored_months", "censor_method",
+    ]].rename(columns={
+        "池": "分公司", "product_id": "商品编码", "物料名称": "商品名称",
+        "UOM": "单位", "一句话建议": "当前建议", "q95": "当前q95",
+        "净需求95": "当前净需求95", "建议补量": "当前建议量",
+        "observed_demand": "D2b观测需求", "estimated_demand": "D2b估计需求",
+        "ratio": "估计/观测", "估算新增净需求": "估算新增需求",
+        "n_censored_months": "删失月数", "censor_method": "估计方法",
+    }).sort_values("估算新增需求", ascending=False)
+    censor_summary = pd.DataFrame([
+        ("D2b 删失键", int(len(d2[d2["censor_method"].ne("none")])), "D2b v2；rate_upper 等方法"),
+        ("匹配到 D6 当前键", int(len(censor_cmp)), "只匹配 product_id+池+形态+UOM"),
+        ("估算新增需求合计", f"{censor_cmp['估算新增需求'].sum():,.0f} 件",
+         "q95 × (D2b估计/观测 − 1)，是上界情景，不是点估计"),
+        ("其中当前动作=补", int(censor_cmp["当前建议"].astype(str).str.startswith("补").sum()),
+         "这些键最可能被低估"),
+        ("是否进主表", "否", "不改 v5.1 下单量；先作为断货上界情景"),
+    ], columns=["项", "值", "说明"])
+    boss = pd.concat([boss, pd.DataFrame([
+        ("断货影响",
+         f"D2b 上界情景：{len(censor_cmp)} 个键、估算新增 "
+         f"{censor_cmp['估算新增需求'].sum():,.0f} 件；未进主表",
+         "主表按观测需求，可能低估断货键；要不要按上界备货，看 15 后由业务拍板"),
+    ], columns=["事项", "结论", "你要做什么"])], ignore_index=True)
+    data_notes = pd.concat([data_notes, pd.DataFrame([
+        ("断货/删失需求",
+         f"D2b 删失键 {len(d2[d2['censor_method'].ne('none')])} 个；匹配 {len(censor_cmp)} 个；"
+         f"估算新增 {censor_cmp['估算新增需求'].sum():,.0f} 件",
+         "上界情景，未进主表；见 15_断货修正情景"),
+    ], columns=["项目", "时点/范围", "说明"])], ignore_index=True)
+
     src = pd.DataFrame([
         ("D5 v6.7", str(D5), sha(D5)),
         ("11/1–8 同店修正", str(NC), sha(NC)),
@@ -696,6 +754,7 @@ def main() -> int:
         ("C14 11-09 刷新", str(C14), sha(C14)),
         ("EN 库存 11-09", str(EN_STOCK), sha(EN_STOCK)),
         ("CG 库存 11-09", str(CG_STOCK), sha(CG_STOCK)),
+        ("D2b 删失需求", str(D2B), sha(D2B)),
         ("v15 历史交付包", str(V15), sha(V15)),
         ("A 活跃宇宙", str(A), sha(A)),
         ("60cm/DN-PO 审计", str(W3), sha(W3)),
@@ -733,6 +792,8 @@ def main() -> int:
         po60.to_excel(w, sheet_name="13_60cm与DN-PO（审计）", index=False)
         keys60.to_excel(w, sheet_name="13b_60cm逐键", index=False)
         pivot.to_excel(w, sheet_name="14_分公司汇总", index=False)
+        censor_summary.to_excel(w, sheet_name="15_断货修正情景", index=False)
+        censor_cmp.to_excel(w, sheet_name="15b_断货修正逐键", index=False)
 
     wb = load_workbook(OUT)
     hf, hfont = PatternFill("solid", fgColor="1F4E78"), Font(color="FFFFFF", bold=True)
