@@ -615,6 +615,8 @@ def main() -> int:
          "看 7_春节第二批停工风险；要工厂确认 12 月产能"),
         ("数据可信度", "库存/CG/EN 11-09；订单到 11-08；PO 仍 11-05；60cm 审计仍 11-05",
          "PO 和 60cm 不是最新；涉及这两项的结论要复核"),
+        ("看表顺序", "老板看 0；运营下单看 1；要拍板看 2；物流看 2b；重排晚看 2c；"
+                  "工厂看 7；8–13 是审计底稿，不用先看", "按角色分表，不要从 8_全量底稿 直接下单"),
     ], columns=["事项", "结论", "你要做什么"])
 
     # 60cm corrected summary + detail
@@ -691,14 +693,14 @@ def main() -> int:
         noorder.to_excel(w, sheet_name="3_暂不下单", index=False)
         dictionary.to_excel(w, sheet_name="4_名词解释", index=False)
         data_notes.to_excel(w, sheet_name="5_数据与口径", index=False)
-        summary.to_excel(w, sheet_name="6_核对汇总", index=False)
+        summary.to_excel(w, sheet_name="6_核对汇总（内部）", index=False)
         risk6.to_excel(w, sheet_name="7_春节第二批停工风险", index=False)
-        out.to_excel(w, sheet_name="8_全量底稿", index=False)
-        target31.to_excel(w, sheet_name="9_目标核对", index=False)
-        past6.to_excel(w, sheet_name="10_周一新增过期", index=False)
+        out.to_excel(w, sheet_name="8_全量底稿（审计）", index=False)
+        target31.to_excel(w, sheet_name="9_服务目标核对", index=False)
+        past6.to_excel(w, sheet_name="10_新过期清单", index=False)
         src.to_excel(w, sheet_name="11_数据来源", index=False)
         corrections.to_excel(w, sheet_name="12_v5.1改了什么", index=False)
-        po60.to_excel(w, sheet_name="13_60cm与DN-PO", index=False)
+        po60.to_excel(w, sheet_name="13_60cm与DN-PO（审计）", index=False)
         keys60.to_excel(w, sheet_name="13b_60cm逐键", index=False)
         pivot.to_excel(w, sheet_name="14_分公司汇总", index=False)
 
@@ -726,7 +728,7 @@ def main() -> int:
                 widths[i] = min(52, max(widths.get(i, 10), len(str(v)) + 2))
         for i, wd in widths.items():
             ws.column_dimensions[get_column_letter(i)].width = wd
-    ws = wb["8_全量底稿"]
+    ws = wb["8_全量底稿（审计）"]
     hdr = [c.value for c in ws[1]]
     if "一句话建议" in hdr:
         ci = hdr.index("一句话建议") + 1
