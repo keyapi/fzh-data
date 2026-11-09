@@ -264,7 +264,7 @@ def main() -> int:
         ("v4 变更 1", "按 A/B 原目标判定：A 看周期95%，B 看满足率95%；不可二选一。"),
         ("v4 变更 2", "催已有与新增并列：105 键；71 键同时新增 5,309 件。"),
         ("v4 变更 3", "PO 2,417 是历史销量；当前净需求约 316、新补参考约 324。"),
-        ("v4 变更 4", "删除“首批晚于停工=不可执行”；4 键均 B 级，2 达 fill95、2 未达。"),
+        ("v4 变更 4", "删除“首批晚于停工=不可执行”；首批晚于停工 4 键均 B 级，2 达/2 未达；换运输 8 键单独 4 达/4 未达。"),
         ("v4 变更 5", "按 11-09 重核日期：日常新增 6 键/209 件下单日已过。"),
     ], columns=["版本/变更", "说明"])
 
@@ -273,6 +273,26 @@ def main() -> int:
         ("轨迹 v7", str(TRAJ), sha(TRAJ)), ("v15", str(V15), sha(V15)),
         ("A 活跃宇宙", str(A), sha(A)), ("60cm/DN-PO 审计", str(W3), sha(W3)),
     ], columns=["文件", "路径", "sha256"])
+
+    target31 = b[b["是否春节方案"] & b["轨迹状态"].isin(["cycle95", "fill95"])
+                 & (~b["风险状态"].isin(["全部方案失败", "选定方案失败-有补救候选"]))
+                 & (b["模型资格"].ne("零中位数-待验证"))].copy()
+    target31 = target31[["product_id", "池", "形态", "UOM", "放行等级",
+                         "周期无断货概率", "需求满足率", "原目标达到",
+                         "建议节前备货量", "一句话建议"]].rename(
+        columns={"product_id": "商品编码", "池": "分公司", "形态": "形态",
+                 "UOM": "单位", "建议节前备货量": "建议量"})
+    target31["原目标达到"] = target31["原目标达到"].map({True: "是", False: "否"})
+    target31 = target31.sort_values(["原目标达到", "建议量"], ascending=[True, False])
+
+    past6 = b[(~b["是否春节方案"]) & b["建议动作"].eq("补")
+              & (b["下单日"] >= pd.Timestamp("2026-11-06"))
+              & (b["下单日"] < AS_OF)].copy()
+    past6 = past6[["product_id", "池", "形态", "UOM", "下单日", "建议数量",
+                   "建议动作"]].rename(
+        columns={"product_id": "商品编码", "池": "分公司",
+                 "建议数量": "建议量", "下单日": "计划下单日"})
+    past6["重核时点"] = "2026-11-09"
 
     with pd.ExcelWriter(OUT, engine="openpyxl") as w:
         summary.to_excel(w, sheet_name="0_老板先看", index=False)
@@ -285,6 +305,8 @@ def main() -> int:
         src.to_excel(w, sheet_name="6_数据来源", index=False)
         out[out["一句话建议"].isin(order[:10])].to_excel(
             w, sheet_name="7_本周行动清单", index=False)
+        target31.to_excel(w, sheet_name="8_目标核对_31", index=False)
+        past6.to_excel(w, sheet_name="9_周一新增过期_6", index=False)
 
     wb = load_workbook(OUT)
     hf, hfont = PatternFill("solid", fgColor="1F4E78"), Font(color="FFFFFF", bold=True)
