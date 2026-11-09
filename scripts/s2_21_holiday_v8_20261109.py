@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""CNY schedule v8: integer batches + pre-haul 2 + same-source quantities.
+"""CNY schedule v9: integer batches + pre-haul 2 + shutdown-safe production calendar.
 
 Rules:
 - daily q95 = D5 97-day q95 / 97
@@ -18,9 +18,9 @@ import pandas as pd
 
 BASE = Path("D:/Work/fzh-order-store/analysis")
 D5 = BASE / "D5v6_7-novcast/D_概率与服务_D5_v6_7_2026-11-09.xlsx"
-D6 = BASE / "D6v6_17-1109/D_Top50沙盒_D6_v6_17_2026-11-09.xlsx"
+D6 = BASE / "D6v6_18-1109/D_Top50沙盒_D6_v6_18_2026-11-09.xlsx"
 V6 = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-06_v6.xlsx"
-OUT = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-09_v8.xlsx"
+OUT = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-09_v9.xlsx"
 DECISION = pd.Timestamp("2026-11-09")
 JAN24 = pd.Timestamp("2027-01-24")
 RESTART = pd.Timestamp("2027-02-22")
@@ -68,11 +68,33 @@ def main() -> int:
         level = str(r["放行等级"])
         prod = PROD.get(pool, 30.0)
         days = MODE_DAYS.get(mode, 30)
-        lead = prod + PREHAUL + days
+        trans = PREHAUL + days
+        lead = prod + trans
         first_arr = DECISION + pd.Timedelta(days=lead)
-        cutoff = RESTART - pd.Timedelta(days=lead)
-        second_arr = RESTART
-        second_order = cutoff
+        first_prod_finish = DECISION + pd.Timedelta(days=prod)
+
+        # 第二批必须避开 2027-01-24 ~ 2027-02-22 工厂停工。
+        # 方案 A（可执行）：若按 2/22 倒推会在停工期内生产，则改为停工前做完，
+        # 下单日 = 1/24 - 生产天数；到仓 = max(2/22, 1/24 + 运输天数)。
+        # 方案 B（风险情景）：不在停工前插单，2/22 复工后才生产，到仓顺延。
+        finish_for_restart = RESTART - pd.Timedelta(days=trans)
+        early_needed = bool(finish_for_restart > JAN24)
+        if early_needed:
+            second_order = JAN24 - pd.Timedelta(days=prod)
+            second_prod_finish = JAN24
+            second_arr = max(RESTART, JAN24 + pd.Timedelta(days=trans))
+        else:
+            second_order = finish_for_restart - pd.Timedelta(days=prod)
+            second_prod_finish = finish_for_restart
+            second_arr = RESTART
+        second_order_b = RESTART
+        second_prod_finish_b = RESTART + pd.Timedelta(days=prod)
+        second_arr_b = RESTART + pd.Timedelta(days=lead)
+        cutoff = second_order
+        if first_prod_finish > JAN24 and first_prod_finish < RESTART:
+            raise ValueError(f"首批生产跨停工：{r['product_id']} {pool} {first_prod_finish.date()}")
+        if second_prod_finish > JAN24 and second_prod_finish < RESTART:
+            raise ValueError(f"第二批生产跨停工：{r['product_id']} {pool} {second_prod_finish.date()}")
         stockout = (DECISION + pd.Timedelta(days=int(c / daily))
                     if daily > 0 and c > 0 else DECISION)
         alt = []
@@ -95,12 +117,18 @@ def main() -> int:
             日均q95需求=round(daily, 4), 当前可用=round(c, 2),
             预计q95断货日=stockout.date().isoformat(), 建议运输=mode,
             首批到仓=first_arr.date().isoformat(),
+            首批生产完成=first_prod_finish.date().isoformat(),
             第二批到仓=second_arr.date().isoformat(),
+            第二批生产开始=second_order.date().isoformat(),
+            第二批生产完成=second_prod_finish.date().isoformat(),
+            第二批需停工前插单=early_needed,
+            第二批停工后到仓=second_arr_b.date().isoformat(),
             覆盖终点=r["覆盖终点"],
             建议节前备货量=total, 首批数量=first, 第二批数量=second,
             最迟下单日=cutoff.date().isoformat(), 风险=risk_state,
             首批下单日=DECISION.date().isoformat(),
             第二批下单日=second_order.date().isoformat(),
+            第二批下单日_停工后=second_order_b.date().isoformat(),
             首批晚于停工=bool(first_arr > JAN24),
             风险状态=risk_state, 可换运输=remedy_mode, 补救最快到仓=remedy_arr,
             模型资格="零中位数-待验证" if zero_median else "正常",
@@ -122,6 +150,10 @@ def main() -> int:
         ("可换运输-待重模拟", int((out["风险状态"] == "选定方案失败-有补救候选").sum())),
         ("全部方案失败", int((out["风险状态"] == "全部方案失败").sum())),
         ("零中位数待验证行", int((out["模型资格"] == "零中位数-待验证").sum())),
+        ("第二批需停工前插单", int(out["第二批需停工前插单"].sum())),
+        ("第二批需停工前插单件数", int(out.loc[out["第二批需停工前插单"], "第二批数量"].sum())),
+        ("第二批提前排产最早下单日",
+         str(out.loc[out["第二批需停工前插单"], "第二批下单日"].min())),
         ("prehaul天数", PREHAUL),
     ], columns=["项", "值"])
     with pd.ExcelWriter(OUT, engine="openpyxl") as w:
