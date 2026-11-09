@@ -13,6 +13,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-09 | 通途拆单类型与拆单前 SKU 位置（自动拆单 / 手动拆单 / TikTok 跨账号） | [conventions/tongtu-split-types-and-presplit-sku.md](conventions/tongtu-split-types-and-presplit-sku.md) |
+| 2026-11-09 | 通途拆单合并成本写回：五类错误与修复（组行匹配 / 件数 / 产品族 / 订单号截断 / 审计口径） | [workflow-issues/tongtu-split-merge-writeback-cost-rules.md](workflow-issues/tongtu-split-merge-writeback-cost-rules.md) |
+| 2026-11-09 | 分公司发货 vs FBA 成本对比口径（共同成本 + 差异块，不夸大节省） | [tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md](tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md) |
 | 2026-11-05 | 通途订单成本引擎：Colab 迁移本地包的四列口径与合并/BOM 架构 | [architecture-patterns/tongtu-cost-engine-local-migration.md](architecture-patterns/tongtu-cost-engine-local-migration.md) |
 | 2026-11-05 | 通途订单全集：作废原单、拆分子单、原始表与 FBA 销量表的口径陷阱 | [workflow-issues/tongtu-order-universe-invalid-split-fba.md](workflow-issues/tongtu-order-universe-invalid-split-fba.md) |
 | 2026-11-05 | FBA SKU 别名归一化、KS0001 优先与 EN 客户物料号登记 | [integration-issues/tongtu-fba-alias-normalization-registration.md](integration-issues/tongtu-fba-alias-normalization-registration.md) |

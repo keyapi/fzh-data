@@ -145,3 +145,13 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 - **行级身份用 EN `erp_item_code`**（行级权威）；但**拆单组内 Cover 行不采信**自己的 EN 物料号（常被默认到另一产品线），由填充行锚定。
 - `-COVER`：皮壳成本 + 皮壳头程，绍兴二次/二次=0；`-FOAM`：皮壳=0，绍兴二次=绍兴包装成本，头程=总额−皮壳；`-PPCOTTON`（method=皮壳）：皮壳/绍兴二次/头程=0；FBA 全部绕过。
 - 规则与实测：`docs/reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md`。
+
+### 坑：拆单合并成本写回（2026-11-09）
+
+- **组行识别**：模板行可能是拆单前公共单号（`Cds-…QFL`）、TikTok 归一化单号（`…-1`）或单行组显示组件 SKU；Phase36 必须按 `order_common` / 数字主体映射，不能按 `(订单号,通途SKU)` 精确匹配后清零。
+- **件数**：EN 原单组件行重复不代表件数翻倍；子单皮壳件数可确定时以子单为准，只有 `pieces_ambiguous/zero` 才用原单兜底。
+- **产品族**：同一皮壳用于 PP 棉/海绵两种成品；两族 `item_group` 只差「PP棉 vs 海绵」→ 填充行定产品；只差款式/图案 → 皮壳定产品；皮壳 EN 行在错误族时按族前缀替换（`KS0342-HLR-50-DEEPBLUE`→`KS0340-HLR-50-DEEPBLUE`），构造不出则阻断。
+- **订单号截断**：模板订单号少一段会表现为 `crosswalk_missing`，不是缺行；本地模板与 GS 要同步改。
+- **审计**：合并组按「单位成本 × 发货数量」对比 Phase2 四列合计；组内行不套单品后缀矩阵。
+- 经验：`docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md`、`docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md`。
+- **EN 登记**：只写子表 `customer_items.ref_code`，不写主表 `Item.customer_code`；组件多对多、完整 SKU 唯一；配套 issue `work_order_task#4` / `tongtool_integration#22`。

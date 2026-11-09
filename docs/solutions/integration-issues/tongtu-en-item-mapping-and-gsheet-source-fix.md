@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: 通途SKU↔EN物料 权威映射（ref_code / importBOMCostList.客户物料号）与 gsheet 源头修正
 date: 2026-10-17
+last_updated: 2026-11-09
 category: integration-issues
 module: tongtool_order_cost
 problem_type: integration_issue
@@ -45,6 +46,25 @@ tags: [tongtu, erpnext, en-item, customer-code, gsheet, importerange, coverage, 
 - 我先算出「直连覆盖率 11%」并差点据此下结论 —— **实际是我的解析脚本 `f[0].startswith("TT")` 把 `CE*`/`SX*`/`PP*` 前缀的客户码全丢了**；真值是 **99.9%**。
 - 教训：①**筛选/前缀判断前先统计分布**，别让"顺手的前缀过滤"静默丢数据；②大批量 SSH 分块查询会**输出回显异常**（本条症状），小分块更稳；③**任何覆盖率数字，先抽查几条原始记录**。
 
+### 4. 登记位置与组件多对多（2026-11-09）
+
+- **唯一登记位置**：Item 子表 `customer_items.ref_code`（DB `tabItem Customer Detail.ref_code`）。
+  **不是主表 `Item.customer_code`**；不得用主表字段做补登或“已登记”判定。
+- 同一 Item 的 ref_code 可同时包含**整件 SKU** 与 `-Cover`/`-Foam` 组件：订单未拆时显示整件，拆单时显示组件。
+- **组件 SKU 是多对多**：
+  - 同一填充物用于相同品类+相同尺寸、不同面料/颜色（如 `Curve-Pillow-50-PPCotton`）；
+  - 同一皮壳用于 PP 棉/海绵两种成品（如 `TT0031186K0063918-Cover`）。
+  完整 SKU（组合 SKU / 整件基号）才要求全局唯一。
+- 生产 app 的唯一校验（`work_order_task::validate_item_ref_code`，挂在 `Item.before_validate`）
+  目前对所有 ref 强制跨 Item 唯一，会阻止带历史重复的 Item 保存（本次 23 个组合 SKU 中 9 个只能
+  受控写入）。已提 issue：
+  - 校验放宽（组件豁免、完整 SKU 唯一）：`keyapi/work_order_task#4`
+  - 同步侧不要对组件 `LIMIT 1` 单选：`keyapi/tongtool_integration#22`
+- 写入做法：读目标 Item 的 `customer_items` 现有行（保留 `customer_group`/`custom_split_package_cost_factor`），
+  追加 `{customer_group, ref_code}` 后整体 PUT；写前备份、写后回读；全局占用先查。
+  参考脚本：`missing_products/register_product_customer_codes.py`、
+  `tongtool_order_cost/out/_fetch_refcode_from_child.py`、`_register_bundle_refcodes.py`。
+
 ## Why This Matters
 
 - 通途↔EN 的 SKU 口径不一致是**系统性**的（改名习惯 + 历史登记），靠"解析产品名"必然踩坑；有权威桥就能把"猜"变成"查"。
@@ -67,6 +87,9 @@ tags: [tongtu, erpnext, en-item, customer-code, gsheet, importerange, coverage, 
 
 ## Related
 
+- 拆单合并成本写回五类错误：`docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md`
+- 拆单类型与拆单前 SKU：`docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md`
+- 登记/校验配套 issue：`keyapi/work_order_task#4`（校验放宽）、`keyapi/tongtool_integration#22`（同步不要 LIMIT 1）
 - 口径单一事实源（本主题的细账全在这）：[`tongtool_order_cost/docs/reference/cost-engine-spec/`](../../../tongtool_order_cost/docs/reference/cost-engine-spec/index.md)
   —— 尤其 [16 客户物料号直连](../../../tongtool_order_cost/docs/reference/cost-engine-spec/16-customer-sku-direct-path.md)、[27 gsheet 源头根因](../../../tongtool_order_cost/docs/reference/cost-engine-spec/27-gsheet-source-root-cause.md)、[28 解析 vs EN 体检](../../../tongtool_order_cost/docs/reference/cost-engine-spec/28-parse-vs-en-7to9.md)
 - 通途订单号后缀与合并判据：`docs/solutions/conventions/tongtu-order-suffix-and-merge-criteria.md`（在分支 `docs/colab-cost-current-state` / PR #280，本分支未含）

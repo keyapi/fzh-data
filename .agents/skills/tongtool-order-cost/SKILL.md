@@ -5,12 +5,13 @@ description: >
   月度盈利审计（只读冻结→离线分析）、美中 USTX 二次加工成本三方案对比。
   用户提到特殊规则、订单改销售额成本、Jeck特殊规则、1.7.0、通途订单202606、
   Google Sheet 通途SKU 替换、gspread、FBA 尾程、账期差异、月度盈利审计、平均成本低、
-  美中USTX、二次加工成本、测算表对比、绍兴发货方式时触发。
+  美中USTX、二次加工成本、测算表对比、绍兴发货方式、拆单合并、组合SKU登记、
+  分公司发货 vs FBA 成本对比时触发。
   不要用于赛狐打单或 ERPNext 工单排查。
 metadata:
   module: tongtool_order_cost
   docs: tongtool_order_cost/docs/index.md
-  updated: 2026-10-14
+  updated: 2026-11-09
 ---
 
 # 通途订单特殊规则 / Google Sheet SKU 改名
@@ -58,3 +59,6 @@ metadata:
 - `docs/solutions/architecture-patterns/tongtu-cost-engine-local-migration.md` —— 本地成本引擎：合并成品+BOM 单位成本×件数、四列语义、套件/FBA、canary 旧值来源
 - `docs/solutions/workflow-issues/tongtu-order-universe-invalid-split-fba.md` —— 订单全集：作废原单/拆分子单/原始表 vs 写回表/FBA 明细 vs 销量表
 - `docs/solutions/integration-issues/tongtu-fba-alias-normalization-registration.md` —— FBA SKU 别名归一化、KS0001 优先、EN 客户物料号登记
+- `docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md` —— 拆单合并成本写回五类错误：组行匹配、件数翻倍、PP棉/海绵产品族、订单号截断、审计口径
+- `docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md` —— 通途自动/手动/TikTok 拆单区别；拆单前 SKU 在 EN `platform_sku`，写回键仍用组件
+- `docs/solutions/tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` —— 分公司发货 vs FBA 成本对比口径、必排项与边界

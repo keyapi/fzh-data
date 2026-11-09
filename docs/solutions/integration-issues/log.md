@@ -6,6 +6,9 @@ title: 集成问题 — 变更日志
 
 # 变更日志
 
+## 2026-11-09
+- **更新**: 通途SKU↔EN物料 权威映射 — 补「登记位置与组件多对多」：唯一登记位置是 Item 子表 `customer_items.ref_code`（不是主表 `Item.customer_code`）；同一 Item 可同时有整件与 `-Cover/-Foam`；组件 SKU 多对多（共享皮壳/填充物），完整 SKU 才唯一；配套 `work_order_task#4`（校验放宽）与 `tongtool_integration#22`（同步不要 LIMIT 1）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
+
 ## 2026-10-17
 - **新增**: 通途SKU↔EN物料 权威映射（EN `Item Customer Detail.ref_code` / `importBOMCostList.客户物料号`）+ 「直连优先、旧键兜底」。两个通用坑：改 gsheet 前分清 IMPORTRANGE 源/显示层；覆盖率结论前必反证（自算的 11% 实为前缀过滤丢数据的 bug，真值 99.9%）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
 

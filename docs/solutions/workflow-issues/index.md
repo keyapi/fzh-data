@@ -9,6 +9,7 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [tongtu-split-merge-writeback-cost-rules.md](tongtu-split-merge-writeback-cost-rules.md) | 拆单合并成本写回五类错误：组行匹配、件数翻倍、产品族（PP棉/海绵）、订单号截断、审计口径；8/9 月 0/0 失败 |
 | [key-test-login-hook-and-prod-test-divergence.md](key-test-login-hook-and-prod-test-divergence.md) | key_test 每次登录写元数据（~0.75–1.05s）+ 猴补丁核心报表；生产 `production-backup` 与测试 `main` 割裂 |
 | [mcp-to-chatgpt-bringup-lessons.md](mcp-to-chatgpt-bringup-lessons.md) | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的方法与四个教训 |
 | [fedex-track-batch-query.md](fedex-track-batch-query.md) | FedEx 官方批量 Track + 账号/组织恢复 + 三条教训 |

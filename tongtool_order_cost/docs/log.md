@@ -5,6 +5,11 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-11-09
+- **修复** 拆单合并成本写回五类问题：Phase36 组行匹配（拆单前公共单号/TikTok 归一化单号/单行组显示组件）、EN 原单重复组件不翻倍件数、PP棉/海绵由填充行定产品（族前缀替换兜底）、模板订单号截断、审计按“单位成本×件数”对比组总成本；8/9 月合并组自查 0/0 失败。
+- **修复** EN 客户物料号登记：只写子表 `customer_items.ref_code`；8/9 月 23 个组合 SKU 全部登记（14 REST + 9 受控写入）；配套 issue `work_order_task#4` / `tongtool_integration#22`。
+- **更新** `AGENT_HANDOFF.md` 新增「拆单合并成本写回」坑位；知识库新增 3 篇（workflow/conventions/tooling）。
+
 ## 2026-11-06
 - **新增** `cost-engine-spec/38-en-line-identity-and-single-item-suffix.md`：EN 订单行 `erp_item_code` 行级身份；单独卖 `-COVER`/`-FOAM`/`-PPCOTTON` 按 EN `order_sync.py:2941-3003` 计价；拆单组内 Cover 让位填充行；FBA 绕过；含 202608 A/B（订单总成本 −18,040.63）。
 - **修正** `AGENT_HANDOFF.md`：新增「单独卖皮壳/海绵/PP棉 ≠ 产品歧义」坑位；文档范围改为 32-38。
