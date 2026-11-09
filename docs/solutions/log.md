@@ -13,6 +13,7 @@ tags: [solutions, log]
 - **新增**: `conventions/tongtu-split-types-and-presplit-sku.md` — 通途自动拆单 / 手动拆单 / TikTok 跨账号拆单的区别；拆单前组合 SKU 在 EN `platform_sku`（自动）或原单基号（手动）；写回键仍用组件 SKU。
 - **新增**: `tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` — 分公司发货 vs FBA 成本对比口径：共同成本与差异块拆分、必排项、边界，以及 202607-09 重算结果。
 - **更新**: `integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md` — 补登记位置（子表 `customer_items.ref_code`）与组件多对多；配套 issue `work_order_task#4` / `tongtool_integration#22`。
+- **更新**: `tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` — 补「半成品/绍兴二次不重复加」口径：半成品+增量=四列绍兴二次；FBA合计=皮壳+成品包装+头程；说明表头改为共同/增量，共享 Excel 已更新。
 
 ## 2026-11-05
 - **新增**: 通途订单成本引擎本地化三篇经验 → [`architecture-patterns/tongtu-cost-engine-local-migration.md`](architecture-patterns/tongtu-cost-engine-local-migration.md)、[`workflow-issues/tongtu-order-universe-invalid-split-fba.md`](workflow-issues/tongtu-order-universe-invalid-split-fba.md)、[`integration-issues/tongtu-fba-alias-normalization-registration.md`](integration-issues/tongtu-fba-alias-normalization-registration.md)

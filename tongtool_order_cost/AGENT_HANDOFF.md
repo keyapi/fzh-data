@@ -153,5 +153,6 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 - **产品族**：同一皮壳用于 PP 棉/海绵两种成品；两族 `item_group` 只差「PP棉 vs 海绵」→ 填充行定产品；只差款式/图案 → 皮壳定产品；皮壳 EN 行在错误族时按族前缀替换（`KS0342-HLR-50-DEEPBLUE`→`KS0340-HLR-50-DEEPBLUE`），构造不出则阻断。
 - **订单号截断**：模板订单号少一段会表现为 `crosswalk_missing`，不是缺行；本地模板与 GS 要同步改。
 - **审计**：合并组按「单位成本 × 发货数量」对比 Phase2 四列合计；组内行不套单品后缀矩阵。
+- **FBA 对比**：绍兴包装半成品是共同部分；分公司/FBA 的绍兴二次是扣掉半成品后的增量，`半成品+增量=四列绍兴二次`；FBA合计=皮壳+成品包装+FBA头程。财务表在 `out/fba_vs_branch/`，共享副本在 `D:\Work\王忠于\成本核算\`。
 - 经验：`docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md`、`docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md`。
 - **EN 登记**：只写子表 `customer_items.ref_code`，不写主表 `Item.customer_code`；组件多对多、完整 SKU 唯一；配套 issue `work_order_task#4` / `tongtool_integration#22`。
