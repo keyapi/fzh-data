@@ -13,6 +13,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-09 | 账期核算定稿导出须用 keep_approval + 可选迟交 exclude-keys | [workflow-issues/amazon-period-colab-export-keep-approval.md](workflow-issues/amazon-period-colab-export-keep-approval.md) |
+| 2026-11-09 | Amazon 账期 Phase3 写表须用 Spreadsheet ID，勿与 Colab notebook 文件 ID 混用 | [integration-issues/amazon-period-phase3-gsheet-not-colab-id.md](integration-issues/amazon-period-phase3-gsheet-not-colab-id.md) |
 | 2026-11-02 | 钉钉原生「销售收款确认单」可用 API 带附件发起 | [integration-issues/dingtalk-oa-create-receipt-with-attachments.md](integration-issues/dingtalk-oa-create-receipt-with-attachments.md) |
 | 2026-11-02 | PB 月度钉钉销售收款确认单——日行 + 日 CSV，月合并只当最后附件 | [conventions/pb-dingtalk-receipt-monthly-package.md](conventions/pb-dingtalk-receipt-monthly-package.md) |
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |

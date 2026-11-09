@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-09（Amazon 账期 Phase3 本地写表 + 定稿 keep_approval）
+
+- **新增**: `integration-issues/amazon-period-phase3-gsheet-not-colab-id.md` —— Phase3 写回 Google 表须用 Spreadsheet id（`18e64…`），勿用同名 Colab notebook 的 Drive 文件 id（`1tyBOh…`）；400 invalid argument 先核 ID 类型。
+- **新增**: `workflow-issues/amazon-period-colab-export-keep-approval.md` —— `export_colab_period.py` 定稿必须 `keep_approval` + 可选 `--exclude-keys`；模块 `amazon_period_tax/` + `run_period_phase3.py` 本地对齐 Colab Phase3。
+
 ## 2026-11-02（钉钉销售收款确认单 API 发起 + PB 月包惯例）
 - **新增**: `integration-issues/dingtalk-oa-create-receipt-with-attachments.md` —— 原生 OA 单可 API 带附件发起。读附件已有的 `Workflow.Instance.Write` 不够：还要 `Storage.UploadInfo.Read` / `Storage.File.Write`，每开一次发布新版本。OSS PUT 用 `urllib` 会注入 `Content-Type` 导致 `SignatureDoesNotMatch`；unionId 走旧 `topapi/v2/user/get`。发起前确认上一张已 `TERMINATED`。
 - **新增**: `conventions/pb-dingtalk-receipt-monthly-package.md` —— PB 月度钉钉包：表单只写各结日一行，不要月合计行；附件按日 CSV 升序，**最后**挂 `PB invoice 合并 YYYYMM.csv`（`merge_invoices.py`）。日文件夹须先收进 `YYYYMM/`。摘单丢表头的事故正文在 PR #297，不在此重复。

@@ -19,6 +19,8 @@ description: >
 附件拉取与 DRM 对照数字：`docs/research/2026-09-09-attachment-fetch-and-drm-audit.md`。
 迟交挪动登记 / 跨月剔除：`docs/reference/late-submission-registry.md`。
 惯例：`docs/solutions/conventions/amazon-period-file-reconcile.md`。
+Colab 定稿 `keep_approval` + 迟交键：`docs/solutions/workflow-issues/amazon-period-colab-export-keep-approval.md`（`export_colab_period.py`）。
+Tax/Phase3 本地写表：`amazon_period_tax/` + `docs/solutions/integration-issues/amazon-period-phase3-gsheet-not-colab-id.md`。
 API 带附件发起：`docs/solutions/integration-issues/dingtalk-oa-create-receipt-with-attachments.md`。
 PB 月度钉钉包（日行 + 日 CSV，月合并只当最后附件、不要月合计行）：`docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md`。
 API + aflow + 账期月过滤 + NAS：**同一条流水线**，手册 `docs/research/browser-admin-download.md`。

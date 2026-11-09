@@ -154,6 +154,7 @@ uv sync
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + **API 带附件发起** + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
+| `amazon-period-tax` | `amazon_period_tax/` | NAS 账期 txt → 附加费&Tax/Phase3 gsheet 本地管道（Colab 税账期 + 钉钉OA收款费用多平台） |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
@@ -262,12 +263,12 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 
 ### 经验库路由（`docs/solutions/`）
 
-**动手前先查这里有没有现成结论**——踩过的坑基本都在。114 篇按 category 分 8 类，每类一份 `index.md`：
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。116 篇按 category 分 8 类，每类一份 `index.md`：
 
 | 类别 | 篇数 | 什么时候读 |
 |------|-----|-----------|
-| `workflow-issues/` | 31 | 账期对账、迟交/错位、跨期结算、批处理流程 |
-| `integration-issues/` | 22 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
+| `workflow-issues/` | 32 | 账期对账、迟交/错位、跨期结算、批处理流程 |
+| `integration-issues/` | 23 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
 | `architecture-patterns/` | 18 | 「这个管道/系统为什么这样设计」 |
 | `tooling-decisions/` | 13 | 脚本、工具选型、产出校验 |
 | `developer-experience/` | 10 | Windows / worktree / MCP / Colab 等本机环境坑 |

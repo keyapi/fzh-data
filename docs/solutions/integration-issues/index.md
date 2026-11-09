@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-09 | Amazon 账期 Phase3 写表须用 Spreadsheet ID，勿与 Colab notebook 文件 ID 混用 | [amazon-period-phase3-gsheet-not-colab-id.md](amazon-period-phase3-gsheet-not-colab-id.md) |
 | 2026-11-02 | 钉钉原生「销售收款确认单」可用 API 带附件发起 | [dingtalk-oa-create-receipt-with-attachments.md](dingtalk-oa-create-receipt-with-attachments.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [layout-field-in-list-view-breaks-metadata-writes.md](layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-09-23 | grok-bot（美东）SSH 接入——对称 NAT 下打不成直连，只有经上海跳板有收益（235ms vs DERP 373ms），Vultr 跳板实为绕远路 | [grokbot-ssh-via-shanghai-jump-symmetric-nat.md](grokbot-ssh-via-shanghai-jump-symmetric-nat.md) |
