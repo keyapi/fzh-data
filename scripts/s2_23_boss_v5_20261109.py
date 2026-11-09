@@ -723,6 +723,20 @@ def main() -> int:
         "ratio": "估计/观测", "估算新增净需求": "估算新增需求",
         "n_censored_months": "删失月数", "censor_method": "估计方法",
     }).sort_values("估算新增需求", ascending=False)
+    tight = censor_cmp[
+        (censor_cmp["估计/观测"] < 1.25)
+        & (censor_cmp["删失月数"] <= 2)
+        & censor_cmp["当前建议"].astype(str).str.startswith("补")]
+    tail_ratio = censor_cmp[censor_cmp["估计/观测"] >= 2]
+    tail_months = censor_cmp[censor_cmp["删失月数"] >= 5]
+    tail_big = censor_cmp[
+        (censor_cmp["当前建议量"].fillna(0) > 0)
+        & (censor_cmp["估算新增需求"] > 0.5 * censor_cmp["当前建议量"].fillna(0))]
+    cand43 = out[((out["方案类型"].eq("春节方案")) & (out["目标结果"].eq("达到")))
+                 | out["动作"].eq("催在途")][
+        ["分公司", "商品编码", "形态", "单位"]].merge(
+        censor_cmp[["分公司", "商品编码", "形态", "单位", "估算新增需求"]],
+        on=["分公司", "商品编码", "形态", "单位"], how="inner")
     censor_summary = pd.DataFrame([
         ("D2b 删失键", int(len(d2[d2["censor_method"].ne("none")])), "D2b v2；rate_upper 等方法"),
         ("匹配到 D6 当前键", int(len(censor_cmp)), "只匹配 product_id+池+形态+UOM"),
@@ -731,12 +745,21 @@ def main() -> int:
         ("其中当前动作=补", int(censor_cmp["当前建议"].astype(str).str.startswith("补").sum()),
          "这些键最可能被低估"),
         ("是否进主表", "否", "不改 v5.1 下单量；先作为断货上界情景"),
+        ("建议", "不按全量 3,196 件加", "43 行仅 8 行命中、+54 件；现有下单已覆盖上界净需求"),
+        ("可选保守试点", f"{len(tight)} 键 / {tight['估算新增需求'].sum():,.0f} 件",
+         "倍数<1.25、删失月≤2、当前动作=补；与 43 行交集 0；会后业务决定"),
+        ("全量上界不采用原因",
+         f"倍数≥2：{len(tail_ratio)} 键/+{tail_ratio['估算新增需求'].sum():,.0f}；"
+         f"删失≥5月：{len(tail_months)} 键/+{tail_months['估算新增需求'].sum():,.0f}；"
+         f"加量>当前50%：{len(tail_big)} 键/+{tail_big['估算新增需求'].sum():,.0f}",
+         "rate_upper 是上界，不是点估计；尾部不适合直接下单"),
     ], columns=["项", "值", "说明"])
     boss = pd.concat([boss, pd.DataFrame([
         ("断货影响",
-         f"D2b 上界情景：{len(censor_cmp)} 个键、估算新增 "
-         f"{censor_cmp['估算新增需求'].sum():,.0f} 件；未进主表",
-         "主表按观测需求，可能低估断货键；要不要按上界备货，看 15 后由业务拍板"),
+         f"D2b 上界 {len(censor_cmp)} 键/+{censor_cmp['估算新增需求'].sum():,.0f} 件；"
+         f"建议不加全量。43 行仅 {len(cand43)} 行命中/+{cand43['估算新增需求'].sum():,.0f} 件",
+         f"43 行现有下单已覆盖；可选保守试点 {len(tight)} 键/+{tight['估算新增需求'].sum():,.0f} 件，"
+         "看 15 后由业务决定"),
     ], columns=["事项", "结论", "你要做什么"])], ignore_index=True)
     data_notes = pd.concat([data_notes, pd.DataFrame([
         ("断货/删失需求",
