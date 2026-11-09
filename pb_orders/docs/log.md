@@ -8,6 +8,31 @@ timestamp: 2026-09-22
 
 # 变更日志
 
+## 2026-11-06（弧形海绵带圆柱颈枕：旧→新通途 SKU 转换）
+
+- **背景**：PB 料号不变，订单会带 2024 年登记的旧通途 SKU；旧 SKU 美中仓为 0，
+  有货的是 2025-07-15 建档的改版 SKU（50×22×55）。周一上线前需要一个显式转换层。
+- **新增**：`sku_maps/pb_arc_foam_cylinder.json`（confirmed 灰/象牙白、unconfirmed 深蓝、
+  blocked 菱形绒布）与 `arc_sku_migration.py`（`status` / `check` / `map-order`）。
+  `status` 走通途**直连 API** 查美中仓；`map-order` 只改本地 CSV 的 `Vendor Style`，
+  不写通途。深蓝/冲突默认非零退出且不写文件。
+- **交叉校验**：用 `Buyers Catalog or Stock Keeping #` 对 `Vendor Style` 做配对校验，
+  可拦截 2025-07-31 映射表里旧 SKU/颜色写反的问题。
+- **Web 接入**：`JobOptions.sku_migration=True`，出件任务自动转换；转换后的 CSV 作为
+  `converted_order` 产物可下载；`_report_fulfillment.html` 新增「SKU 自动转换」区块；
+  `base.html` 顶部常驻切换提示。冲突/深蓝/未登记 SKU 直接 `PBJobError` 中止。
+- **断货别名**：`stock_precheck` 与出件 `no_stock` 均把旧/新 SKU 视为同一件，
+  断货清单写任一套都能命中。
+- **文档**：`reference/pb-arc-foam-cylinder-sku-migration.md`（报价时间线、库存、Web 行为、Runbook）。
+- **测试**：`tests/test_arc_sku_migration.py`（8）+ `tests/test_arc_sku_migration_service.py`（4）
+  + `tests/test_web_arc_sku.py`（2）。
+- **已部署**：2026-11-06 部署到 `sh-erpnext-test:/opt/pb-orders`。服务器副本比本分支新
+  （API Key / 幂等 / 订单号占用），因此用 `patch` 只叠加本次改动，未整文件覆盖；
+  web/worker 已重建 healthy，缓存已补三个新 SKU 的中/西语名。
+- **名称源已同步**：Google Sheet `US SKU Name` 已补同样三行（933 → 936，逐行回读一致）。
+- **经验沉淀**：`docs/solutions/workflow-issues/product-revision-old-sku-order-migration.md`、
+  `docs/solutions/developer-experience/non-git-deployment-dir-server-ahead-patch.md`。
+
 ## 2026-10-08（第二十轮：通途导入 Excel 支持「重复建单自动加后缀」）
 
 - **需求**：通途不允许重复订单号；同一 PO 分两次建单（部分缺货，有货先发、缺货到货后补发）

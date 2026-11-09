@@ -113,6 +113,18 @@ def _noop(_step: str, _message: str) -> None:
 
 
 def _normalized_skus(values: list[str]) -> tuple[list[str], set[str]]:
+    """断货 SKU 去重 + 旧/新别名展开（弧形海绵颈枕切换期）。
+
+    订单里可能还是旧 SKU，而断货清单已经换成新 SKU（或反过来）；
+    两边任一写法都应命中，否则会漏判整单有货。
+    """
+    try:
+        import arc_sku_migration as sku_mig
+
+        aliases = sku_mig.alias_map(sku_mig.load_mapping(sku_mig.DEFAULT_MAP))
+    except Exception:  # noqa: BLE001 - 映射缺失不能挡住库存预检
+        aliases = {}
+
     snapshot: list[str] = []
     seen: set[str] = set()
     for value in values:
@@ -121,6 +133,7 @@ def _normalized_skus(values: list[str]) -> tuple[list[str], set[str]]:
         if not sku or key in seen:
             continue
         seen.add(key)
+        seen.update(member.lower() for member in aliases.get(sku.upper(), set()))
         snapshot.append(sku)
     return snapshot, seen
 

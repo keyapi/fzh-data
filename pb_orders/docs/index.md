@@ -13,6 +13,9 @@ timestamp: 2026-09-22
 | Agent 完整交接（背景/文件/运行/函数表/坑/清单） | [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) |
 | 人读模块说明（怎么用、出错怎么办） | [../README.md](../README.md) |
 | 工作流细节：六步流程、列映射、坐标表、命名规则、数量对账、**§9 库存预检**、**§10 重复建单加后缀** | [reference/workflow.md](reference/workflow.md) |
+| **弧形海绵带圆柱颈枕：报价历史、旧→新通途 SKU 映射、周一部分颜色上线 Runbook** | [reference/pb-arc-foam-cylinder-sku-migration.md](reference/pb-arc-foam-cylinder-sku-migration.md) |
+| 本次学习：产品改版后平台订单仍带旧 SKU（显式映射 / 平台料号校验 / 失败关闭） | [../../docs/solutions/workflow-issues/product-revision-old-sku-order-migration.md](../../docs/solutions/workflow-issues/product-revision-old-sku-order-migration.md) |
+| 本次学习：非 git 部署目录热修（服务器副本领先时用 patch 叠加） | [../../docs/solutions/developer-experience/non-git-deployment-dir-server-ahead-patch.md](../../docs/solutions/developer-experience/non-git-deployment-dir-server-ahead-patch.md) |
 | 部署到 EN 测试服务器：前端、队列、离线缓存、Frappe 对比、**落地实现与实测** | [reference/server-deployment-architecture.md](reference/server-deployment-architecture.md) |
 | 迁移踩坑记录 | [lessons/index.md](lessons/index.md) |
 | 变更历史 | [log.md](log.md) |

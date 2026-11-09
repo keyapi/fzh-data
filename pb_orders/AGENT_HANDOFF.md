@@ -631,8 +631,33 @@ uv run pytest tests/ -q
 - [ ] EN 测试服务器上累计了十几条 `actor=验收测试` 的任务（含刻意造的错误路径用例），清理属破坏性操作，等用户确认
 - [x] 数据行末尾多出的**空**字段已能读（2026-09-24 真实批次：表头 147 / H 146 / D 148）；非空的额外字段仍拒绝。见坑 34-35
 
+## 11. 弧形海绵带圆柱颈枕：旧→新 SKU 切换（2026-11-06）
+
+PB 料号不变，新订单仍带 2024 年旧通途 SKU；旧 SKU 美中仓为 0，有货的是 2025 年改版 SKU。
+出件前必须自动换算，且用平台料号校验颜色：
+
+| 平台料号 | 颜色 | 旧 SKU（订单里） | 新 SKU（有货） |
+|---|---|---|---|
+| `5938375` | Grey | `TT0031058K0062965` | `TT0312672K0064328` |
+| `4020032` | Ivory | `TT0031059K0062966` | `TT0312673K0064329` |
+| 未登记 | Deep Blue | — | `TT0312674K0064330`（出现即中止） |
+
+- 映射：`sku_maps/pb_arc_foam_cylinder.json`，三态 `confirmed / unconfirmed / blocked`。
+- 出件：`service._prepare_order_csv()` 在生成通途 xlsx / 标签 / 背贴前改写 `Vendor Style`；
+  `JobOptions.sku_migration=True` 默认开启；转换后 CSV 作为 `converted_order` 产物保留。
+- 校验：`Buyers Catalog or Stock Keeping #` 必须与 `Vendor Style` 配对；冲突、深蓝、未登记菱形绒布
+  直接 `PBJobError`，不产出任何正式文件。
+- 别名：`stock_precheck` 的断货清单、出件 `no_stock`、ASN 核对均把旧/新 SKU 视为同一件。
+- 页面：`base.html` 顶部常驻提示；`_report_fulfillment.html` 展示转换明细。
+- 名称：服务器 `data/us_sku_name_cache.csv` 与来源 Google Sheet `US SKU Name` 都要有 3 个新 SKU。
+- 部署：`/opt/pb-orders` 不是 git 仓库且服务器副本领先分支，本次用 `patch` 叠加；
+  见 `docs/solutions/developer-experience/non-git-deployment-dir-server-ahead-patch.md`。
+- 报价/库存/Runbook 明细：`docs/reference/pb-arc-foam-cylinder-sku-migration.md`。
+
 ## 相关经验（docs/solutions）
 
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
+- `docs/solutions/workflow-issues/product-revision-old-sku-order-migration.md` —— 产品改版后平台订单仍带旧 SKU：显式映射、平台料号交叉校验、出件前自动转换
+- `docs/solutions/developer-experience/non-git-deployment-dir-server-ahead-patch.md` —— 非 git 部署目录且服务器副本领先分支时，用 patch 叠加

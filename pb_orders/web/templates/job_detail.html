@@ -7,6 +7,7 @@
     <span class="tag">{{ JOB_TYPE_LABELS.get(job.job_type, job.job_type or '出件') }}</span>
     <span class="badge {{ job.status }}" id="top-status">{{ STATUS_LABELS.get(job.status, job.status) }}</span>
     {% if job.validate_only %}<span class="tag">仅校验</span>{% endif %}
+    {% if job.report and job.report.sku_migration and job.report.sku_migration.applied %}<span class="tag">SKU 已转换</span>{% endif %}
     {% if job.source_job_id %}<span class="tag">来源任务 {{ job.source_job_id }}</span>{% endif %}
     <a class="btn ghost right" href="{{ prefix }}/">返回列表</a>
   </p>

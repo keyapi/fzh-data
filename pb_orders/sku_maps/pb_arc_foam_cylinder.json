@@ -1,0 +1,41 @@
+{
+  "product": "PB Adjustable Orthopedic Support Pillow (arc foam with cylinder)",
+  "note": "PB 料号不变；订单会带 2024 年登记的旧通途 SKU，出件前转换为当前有货的新 SKU。",
+  "confirmed": [
+    {
+      "pb_sku": "5938375",
+      "pb_color": "Grey",
+      "old_color": "灰色",
+      "old_tt": "TT0031058K0062965",
+      "new_tt": "TT0312672K0064328",
+      "new_color": "灰色"
+    },
+    {
+      "pb_sku": "4020032",
+      "pb_color": "Ivory",
+      "old_color": "白色",
+      "old_tt": "TT0031059K0062966",
+      "new_tt": "TT0312673K0064329",
+      "new_color": "象牙白色"
+    }
+  ],
+  "unconfirmed": [
+    {
+      "sku": "TT0312674K0064330",
+      "color": "深蓝色",
+      "reason": "无旧 SKU、无 PB 料号、无本地报价记录；如订单出现必须人工确认"
+    }
+  ],
+  "blocked": [
+    {
+      "sku": "TT0031046K0062963",
+      "color": "菱形复合绒布-米色",
+      "reason": "未进入 2024-10-08 PB SKU Worksheet，PB 未登记"
+    },
+    {
+      "sku": "TT0031057K0062964",
+      "color": "菱形复合绒布-灰色",
+      "reason": "未进入 2024-10-08 PB SKU Worksheet，PB 未登记"
+    }
+  ]
+}
