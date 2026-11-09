@@ -3,6 +3,7 @@
 from __future__ import annotations
 from pathlib import Path
 import hashlib
+import math
 import pandas as pd
 import numpy as np
 from openpyxl import load_workbook
@@ -43,7 +44,8 @@ def main() -> int:
 
     ccols = KEYS + ["物料名称", "放行等级", "建议节前备货量", "首批数量", "第二批数量",
                     "首批到仓", "第二批到仓", "首批下单日", "第二批下单日",
-                    "建议运输", "模型资格", "风险状态", "首批晚于停工"]
+                    "建议运输", "模型资格", "风险状态", "首批晚于停工",
+                    "第二批需停工前插单", "第二批停工后到仓"]
     b = d6.merge(cny[ccols], on=KEYS, how="left", suffixes=("", "_cny"))
     b = b.merge(traj, on=KEYS, how="left")
     b = b.merge(v18[KEYS].assign(新增资格=True), on=KEYS, how="left")
@@ -104,6 +106,9 @@ def main() -> int:
     def num(r, c):
         v = pd.to_numeric(r.get(c), errors="coerce")
         return 0.0 if pd.isna(v) else float(v)
+
+    def q0(r, c):
+        return int(math.floor(num(r, c) + 0.5))
 
     def qty(r):
         if r["是否春节方案"]:
@@ -264,34 +269,34 @@ def main() -> int:
         if (not r["是否春节方案"]
                 and str(r.get("推荐main_haul", "")) == "路线待确认"):
             if str(r.get("建议动作")) == "催已有":
-                return f"先催在途 {int(num(r,'催已有量'))} 件；新单等物流确认路线后再下"
+                return f"先催在途 {q0(r,'催已有量')} 件；新单等物流确认路线后再下"
             return "物流还没给出可用的运输路线；先确认运输方式和到仓日，不要按默认天数直接下单"
         if r["是否春节方案"]:
             if rem_pass(r):
-                return (f"首批 {int(num(r,'首批数量'))} 件改空运，11-09 下单，"
-                        f"{r.get('补救首批到仓','')} 到仓；第二批 {int(num(r,'第二批数量'))} 件"
+                return (f"首批 {q0(r,'首批数量')} 件改空运，11-09 下单，"
+                        f"{r.get('补救首批到仓','')} 到仓；第二批 {q0(r,'第二批数量')} 件"
                         f"仍走{str(r.get('建议运输',''))}，{r.get('第二批下单日','')} 前下单，"
                         f"{r.get('第二批到仓','')} 到仓")
-            return (f"首批 {int(num(r,'首批数量'))} 件{str(r.get('建议运输',''))}，11-09 下单，"
-                    f"{r.get('首批到仓','')} 到仓；第二批 {int(num(r,'第二批数量'))} 件，"
+            return (f"首批 {q0(r,'首批数量')} 件{str(r.get('建议运输',''))}，11-09 下单，"
+                    f"{r.get('首批到仓','')} 到仓；第二批 {q0(r,'第二批数量')} 件，"
                     f"{r.get('第二批下单日','')} 前下单，{r.get('第二批到仓','')} 到仓")
         if str(r.get("建议动作")) == "催已有" and num(r, "新补数量") > 0:
-            return (f"先催在途 {int(num(r,'催已有量'))} 件；同时新下 {int(num(r,'新补数量'))} 件"
+            return (f"先催在途 {q0(r,'催已有量')} 件；同时新下 {q0(r,'新补数量')} 件"
                     f"（{str(r.get('推荐main_haul',''))}），今天下单")
         if str(r.get("建议动作")) == "催已有":
-            return f"只催在途 {int(num(r,'催已有量'))} 件，不下新单"
+            return f"只催在途 {q0(r,'催已有量')} 件，不下新单"
         if str(r.get("建议动作")) == "补":
-            return (f"下 {int(num(r,'建议数量'))} 件，{str(r.get('推荐main_haul',''))}，"
+            return (f"下 {q0(r,'建议数量')} 件，{str(r.get('推荐main_haul',''))}，"
                     f"{first_order(r)} 下单，{first_arrival(r)} 到仓")
         return ""
     b["执行说明"] = b.apply(exec_plan, axis=1)
 
     def date_flag(r):
         if r["是否春节方案"]:
-            if bool(r.get("第二批需停工前插单", False)):
-                return (f"第二批必须在 {r.get('第二批下单日','')} 前插单；"
-                        f"否则复工后生产，{r.get('第二批停工后到仓','')} 才到，"
-                        "部分商品会失去目标")
+            if (bool(r.get("第二批需停工前插单", False))
+                    and r["一句话建议"] in ("可以补-待确认", "先换运输-原目标已过")):
+                return (f"第二批最晚 {r.get('第二批下单日','')} 前下单；"
+                        f"不插单则 {r.get('第二批停工后到仓','')} 到仓，可能失去目标")
             return ""
         if r["一句话建议"] == "补-下单日已过-需重排":
             return r.get("重排结果", "")
@@ -469,12 +474,21 @@ def main() -> int:
 
     # ---------- 运营/老板可读层 ----------
     out["下单件数"] = out["首批数量"].fillna(0) + out["第二批数量"].fillna(0)
+    out["到仓晚于需求天数"] = np.nan
+    daily_mask = out["方案类型"].eq("日常补货") & out["首批数量"].gt(0)
+    need_dt = pd.to_datetime(out["要求到仓/覆盖终点"], errors="coerce")
+    arr_dt = pd.to_datetime(out["首批到仓"], errors="coerce")
+    out.loc[daily_mask, "到仓晚于需求天数"] = (arr_dt[daily_mask] - need_dt[daily_mask]).dt.days
 
     def late_reschedule(r):
         return "晚于需要日" in str(r.get("重排结果", ""))
 
     order_actions = ["下单", "下单（首批改空运）", "今天重下", "催在途 + 下单", "催在途"]
-    ops = out[out["动作"].isin(order_actions)].copy()
+    late8 = out[out["动作"].isin(order_actions)
+                & out["首批数量"].gt(0)
+                & (out["到仓晚于需求天数"] >= 8)].copy()
+    ops = out[out["动作"].isin(order_actions)
+              & ~(out["首批数量"].gt(0) & (out["到仓晚于需求天数"] >= 8))].copy()
     ops = ops[~ops.apply(late_reschedule, axis=1)].copy()
     ops.insert(3, "目的客户/仓", ops["分公司"].map(
         {"美东USNJ": "CENTRADE", "美中USTX": "DANEEY", "波兰": "波兰公司"}))
@@ -484,6 +498,8 @@ def main() -> int:
                        "需求看不清-先别补", "需求异常-不判定", "新增资格-待复审"]
     dec_boss = out[out["一句话建议"].isin(decision_status)].copy()
     dec_late = out[out["动作"].eq("今天重下") & out.apply(late_reschedule, axis=1)].copy()
+    dec_late = pd.concat([dec_late, late8], ignore_index=True).drop_duplicates(
+        ["分公司", "商品编码", "形态", "单位"])
     dec_route = out[out["动作"].eq("先确认路线")].copy()
     dec_boss = dec_boss.drop_duplicates(["分公司", "商品编码", "形态", "单位"])
     dec_late = dec_late.drop_duplicates(["分公司", "商品编码", "形态", "单位"])
@@ -492,7 +508,7 @@ def main() -> int:
 
     def decision_text(r):
         s = r["一句话建议"]
-        q = int(num(r, "建议补多少"))
+        q = q0(r, "建议补多少")
         if r["动作"] == "先确认路线":
             return ("物流路线还没确认，无法给可信到仓日",
                     "让物流确认路线和到仓日，再下单", "先按空运/已知路线走",
@@ -590,23 +606,35 @@ def main() -> int:
     p2 = ops[ops["优先级"].str.startswith("P2")]
     p1_qty = int(p1["下单件数"].sum())
     p2_qty = int(p2["下单件数"].sum())
+    late8_future = late8[late8["动作"].ne("今天重下")]
+    late8_n = len(late8_future)
+    late8_qty = int(late8_future["下单件数"].sum())
+    late1_7 = out[out["动作"].isin(order_actions) & out["动作"].ne("今天重下")
+                  & out["首批数量"].gt(0)
+                  & out["到仓晚于需求天数"].between(1, 7)]
+    exp_route = dec_route[dec_route["一句话建议"].eq("催已有+新增")]
     boss = pd.DataFrame([
-        ("今天/本周要下的单", f"{len(p1)} 个商品，{p1_qty:,} 件（含春节和日常重下；"
-                          f"其中 {int(p1['动作'].eq('催在途').sum())} 个只催不新下）",
+        ("今天/本周要下的单", f"{len(p1)} 个商品，{p1_qty:,} 件"
+                          f"（春节、补救、催货；其中 {int(p1['动作'].eq('催在途').sum())} 个只催不新下）",
          "按 1_运营下单表 的 P1 行执行；先看目的客户/仓、运输、下单日、到仓日"),
         ("可以排期的单", f"{len(p2)} 个商品，{p2_qty:,} 件",
          "按 1_运营下单表 的 P2 行排期；不要提前占用现金"),
         ("先催在途", f"{len(expedite_rows)} 个商品，催 {expedite_rows['催已有量'].sum():,.0f} 件；"
                    f"其中 {int((out['一句话建议'].eq('催已有+新增')).sum())} 个还要新下 "
-                   f"{expedite_rows['新增补货量'].sum():,.0f} 件",
-         "让物流/采购先催；新下的部分看下单表"),
+                   f"{expedite_rows['新增补货量'].sum():,.0f} 件；"
+                   f"{len(exp_route)} 个/ {exp_route['新增补货量'].sum():,.0f} 件在 2b 路线待确认",
+         "让物流/采购先催；新下的部分看下单表，2b 的先确认路线"),
         ("要你拍板", f"{len(dec_boss)} 个商品；其中断货 {len(out[out['一句话建议'].eq('可能断货-需拍板')])} 个/"
                   f"{out.loc[out['一句话建议'].eq('可能断货-需拍板'),'建议补多少'].sum():,.0f} 件，"
                   f"未达目标 {len(out[out['一句话建议'].isin(['未达原目标-需调整','换运输也不达原目标-需调整'])])} 个/"
                   f"{out.loc[out['一句话建议'].isin(['未达原目标-需调整','换运输也不达原目标-需调整']),'建议补多少'].sum():,.0f} 件",
          "看 2_需要拍板，每行都写了选项 A/B 和后果"),
         ("物流先确认路线", f"{len(dec_route)} 个商品路线待确认", "转物流；没有路线就没有可信到仓日，先不要下单"),
-        ("运营重排仍晚", f"{len(dec_late)} 个商品今天重下仍晚于需要日", "转运营/物流；能接受晚到就重下，不能就空运"),
+        ("到仓晚 8 天以上", f"{late8_n} 行 / {late8_qty:,} 件，已从下单表移到 2c",
+         "转运营/物流；能接受晚到就重下，不能就空运"),
+        ("到仓晚 1–7 天", f"{len(late1_7)} 行，留在下单表但标了晚几天", "先核对提前期；能接受就下，不能就空运"),
+        ("运营重排仍晚", f"{len(dec_late)} 个商品（含今天重下晚到 + 到仓晚 8 天以上）",
+         "转运营/物流；能接受晚到就重下，不能就空运"),
         ("暂不下单", f"{len(noorder)} 个商品", "库存够或证据不足；看 3_暂不下单"),
         ("最大风险", "113 个商品/7,586 件所有运输都赶不上断货日；"
                   "54 个商品/2,696 件达不到原目标",
@@ -652,6 +680,8 @@ def main() -> int:
                      f"{rem_fail} 个未通过键不再写成可执行。"),
         ("v5.1 修 4", "新增 1_运营下单表（只放能执行的单）、2_需要拍板（选项+后果）、"
                      "3_暂不下单、4_名词解释；原全量底稿移到 8_全量底稿。"),
+        ("v5.1 修 5", f"到仓晚于需要日 8 天以上的 {late8_n} 行从下单表移到 2c；"
+                     f"晚 1–7 天的 {len(late1_7)} 行留在表内并标注天数。"),
         ("v5.1 数据", "库存/CG/EN 11-09；订单截至 11-08；PO 11-05；60cm 审计 11-05。"),
         ("v5.1 模型口径", "D5 回测使用 2026-11 选定的模型标签，存在前视；"
                         "不能据此证明历史当时 D5 胜出，只能作回放诊断。"),
