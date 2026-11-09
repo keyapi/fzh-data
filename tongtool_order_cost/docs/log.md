@@ -6,6 +6,8 @@ title: tongtool_order_cost 变更日志
 # 变更日志
 
 ## 2026-11-09
+- **调研** Colab（截至 4.8）→ 本地引擎 parity 审计：核心成本/拆单合并已移植，但本地仍依赖 Colab 生成的 166/95/78 列模板；`build-order-tabs` 是停用 Colab 的关键缺口。见 `research/2026-11-09-colab-local-parity-audit.md`。
+- **新增脚本** `fetch_fx_rates.py`（GS 汇率按月导出）、`fetch_special_orders.py`（特殊订单删除清单+过滤 raw）、`check_warehouse_map.py`（raw 仓库 vs wh_map）；202608/202609 仓库映射均 0 未覆盖。
 - **修复** 拆单合并成本写回五类问题：Phase36 组行匹配（拆单前公共单号/TikTok 归一化单号/单行组显示组件）、EN 原单重复组件不翻倍件数、PP棉/海绵由填充行定产品（族前缀替换兜底）、模板订单号截断、审计按“单位成本×件数”对比组总成本；8/9 月合并组自查 0/0 失败。
 - **修复** EN 客户物料号登记：只写子表 `customer_items.ref_code`；8/9 月 23 个组合 SKU 全部登记（14 REST + 9 受控写入）；配套 issue `work_order_task#4` / `tongtool_integration#22`。
 - **更新** `AGENT_HANDOFF.md` 新增「拆单合并成本写回」坑位；知识库新增 3 篇（workflow/conventions/tooling）。

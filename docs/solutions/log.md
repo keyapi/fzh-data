@@ -14,6 +14,7 @@ tags: [solutions, log]
 - **新增**: `tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` — 分公司发货 vs FBA 成本对比口径：共同成本与差异块拆分、必排项、边界，以及 202607-09 重算结果。
 - **更新**: `integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md` — 补登记位置（子表 `customer_items.ref_code`）与组件多对多；配套 issue `work_order_task#4` / `tongtool_integration#22`。
 - **更新**: `tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` — 补「半成品/绍兴二次不重复加」口径：半成品+增量=四列绍兴二次；FBA合计=皮壳+成品包装+头程；说明表头改为共同/增量，共享 Excel 已更新。
+- **新增**: `documentation-gaps/tongtu-colab-local-parity-gap.md` — Colab（截至 4.8）→ 本地：成本/拆单合并已移植，但 self/FBA/merged 三张模板仍由 Colab 生成；`build-order-tabs` 是停用 Colab 的关键缺口；含 FX/特殊订单/仓库检查脚本。
 
 ## 2026-11-05
 - **新增**: 通途订单成本引擎本地化三篇经验 → [`architecture-patterns/tongtu-cost-engine-local-migration.md`](architecture-patterns/tongtu-cost-engine-local-migration.md)、[`workflow-issues/tongtu-order-universe-invalid-split-fba.md`](workflow-issues/tongtu-order-universe-invalid-split-fba.md)、[`integration-issues/tongtu-fba-alias-normalization-registration.md`](integration-issues/tongtu-fba-alias-normalization-registration.md)

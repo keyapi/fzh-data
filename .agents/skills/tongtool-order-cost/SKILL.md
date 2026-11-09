@@ -6,7 +6,7 @@ description: >
   用户提到特殊规则、订单改销售额成本、Jeck特殊规则、1.7.0、通途订单202606、
   Google Sheet 通途SKU 替换、gspread、FBA 尾程、账期差异、月度盈利审计、平均成本低、
   美中USTX、二次加工成本、测算表对比、绍兴发货方式、拆单合并、组合SKU登记、
-  分公司发货 vs FBA 成本对比时触发。
+  分公司发货 vs FBA 成本对比、Colab 移植/退场、build-order-tabs、parity 时触发。
   不要用于赛狐打单或 ERPNext 工单排查。
 metadata:
   module: tongtool_order_cost
@@ -62,3 +62,5 @@ metadata:
 - `docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md` —— 拆单合并成本写回五类错误：组行匹配、件数翻倍、PP棉/海绵产品族、订单号截断、审计口径
 - `docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md` —— 通途自动/手动/TikTok 拆单区别；拆单前 SKU 在 EN `platform_sku`，写回键仍用组件
 - `docs/solutions/tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` —— 分公司发货 vs FBA 成本对比口径、必排项与边界
+- `docs/solutions/documentation-gaps/tongtu-colab-local-parity-gap.md` —— Colab（截至 4.8）→ 本地：已移植范围、build-order-tabs 缺口与停用条件
+- `tongtool_order_cost/docs/research/2026-11-09-colab-local-parity-audit.md` —— 逐步骤完整对照表（含 4.1–4.8）

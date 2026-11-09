@@ -156,3 +156,4 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 - **FBA 对比**：绍兴包装半成品是共同部分；分公司/FBA 的绍兴二次是扣掉半成品后的增量，`半成品+增量=四列绍兴二次`；FBA合计=皮壳+成品包装+FBA头程。财务表在 `out/fba_vs_branch/`，共享副本在 `D:\Work\王忠于\成本核算\`。
 - 经验：`docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md`、`docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md`。
 - **EN 登记**：只写子表 `customer_items.ref_code`，不写主表 `Item.customer_code`；组件多对多、完整 SKU 唯一；配套 issue `work_order_task#4` / `tongtool_integration#22`。
+- **Colab 退场**：截至 4.8 的成本/拆单合并核心已移植，但本地仍依赖 Colab 生成的 self 166 / FBA 95 / merged 78 三张模板；`build-order-tabs` 是停用 Colab 的关键缺口。对照表见 `docs/research/2026-11-09-colab-local-parity-audit.md`。前置脚本：`scripts/fetch_fx_rates.py`、`scripts/fetch_special_orders.py`、`scripts/check_warehouse_map.py`。

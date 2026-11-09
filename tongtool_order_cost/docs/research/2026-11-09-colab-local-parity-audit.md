@@ -1,0 +1,77 @@
+---
+okf: v0.1
+type: Reference
+title: Colab（截至 4.8）→ 本地引擎 parity 审计与 build-order-tabs 评估
+description: 逐步骤对照 20250409 合并EN成本 Colab（live 2026-11-04）与本地 tongtu_cost_engine 的覆盖情况、决策与缺口
+date: 2026-11-09
+module: tongtool_order_cost
+tags: [colab, parity, build-order-tabs, cost-engine]
+---
+
+# Colab（截至 4.8）→ 本地引擎 parity 审计
+
+**对象**：`out/colab_live_20261104.ipynb`（含 4.1.0.1/4.5.4 更新；即 20250409 合并EN成本 notebook 的当前版）
+**结论**：成本与拆单合并核心已移植；**还不能停用 Colab**。本地引擎目前是「往 Colab 生成的 166/95/78 列模板里填成本」，不负责从 raw 重建三张订单表。
+
+## 1. 逐步对照
+
+| 步骤 | 内容 | 本地状态 / 决策 |
+|---|---|---|
+| 1–2 | 品类使用面料、材料价格/损耗、工时、皮壳入库等 gsheet 中间表 | **可不用**。本地用 EN BOM Cost List + `item_group_branch.tsv` + `wh_map.tsv`，不再做「品类-尺寸-面料编码」解析；1–2 的历史表不再依赖 |
+| 3 | 头程（GS + EN 头程合并） | **已替代**：本地用 BOM 头程列 + 仓库分类（USNJ/USTX/PL/FBA）；无需 Colab 3.x |
+| 4.1.0 | 读非 FBA 订单、汇率（和财务部共享/汇率）、仓库成本来源 | **部分**：订单/仓库已用 raw + wh_map；**汇率新增本地导出脚本** `scripts/fetch_fx_rates.py`（GS 汇率表按月列）；raw 的 `售价(人民币)/售价` 在 GBP 上与汇率表不一致，不能替代汇率表 |
+| 4.1.0.1 | 删除特殊订单（`处理特殊订单` ws，`处理方式=删除`） | **已补**：`scripts/fetch_special_orders.py` 导出删除清单并可过滤 raw；202608 删除 55 单（raw 10912→10910）、202609 删除 56 单（raw 6268→6267，本月命中 1 单）。写回表核过 0 命中 |
+| 4.1.1 | 美国邮编分区、007/008 区 153+ 纸箱 $2.5 | **不移植**（用户确认后来无实际用途；只影响尾程/分区，不影响四列成本）。如未来要用，按 GS `美国UPS邮编分区` + zip 前 3 位实现 |
+| 4.1.2 | 美国州名规范化/缩写 | **不移植**（同上；不影响四列成本） |
+| 4.2 / 4.7.2 | 从产品名称解析品类/面料/尺寸/有无扣 | **替代实现**：本地用 EN 行级 `erp_item_code` + `customer_items.ref_code` + 基号/产品族兜底，不解析产品名；EN 解析不出则阻断，不按名称猜。暂不做名称解析兜底 |
+| 4.2.2 / 4.2.3 | 多包裹合并（松饼/多片/多功能）、TikTok 按备注合并 | **通用已覆盖**：`split_merge` 结构判据 + `_pair_tiktok_cross_prefix`（数字主体）；产品特例（松饼/多片/多功能）未单列，需在 build 时用 8/9 月对拍确认 |
+| 4.3.0.2.9 | 麻将沙发衍生款 3 个 → 发货数量 ×3 | **不移植**（用户确认不用；且 Colab 代码已注释） |
+| 4.3.0.3 / 4.3.1 | 皮壳成本 / EN 绍兴成本 | **已移植**：BOM `cost_fg` / `cost_sxbzbcp` / `cost_sxbzcp` / `sx_cost_all` |
+| 4.4 | 头程 | **已移植**：BOM 头程列 + 仓库分类 |
+| 4.5.1 | 二次加工成本 | **已移植**：`wh_map.tsv` 的 valuation_rate（USNJ/USTX/PL；FBA=0） |
+| 4.5.2 | 海外仓成本_USHWC | **暂不移植**（目前无海外仓；本地只透传模板值，不计算） |
+| 4.5.3 / 4.5.4 / 4.9 | 渠道账号/运营人员（深圳按平台SKU细分、账号拆分） | **未移植、也不属于成本口径**。202607 后深圳改回一人一账号，固定 ws `202607深圳账号平台SKU人员对照表` 不再更新；建议从成本链路剥离。若报表仍要运营人员列，另建「账号→运营人员」单表（一人一账号时只按账号映射） |
+| 4.6 | 订单与成本合并、按仓库/品类取成本 | **已移植**：`split_merge` + `bom_cost` |
+| 4.6.1 | 非 FBA 列裁剪成 166 列 | **模板来自 Colab**；本地只填成本列，未从 raw 重建 166 列 |
+| 4.7 / 4.7.1.1 | FBA 订单、订单数量按 UUID 展开 | **部分**：`fba_shadow` 用 EN 明细 + 销量表出 78 列；95 列 FBA 模板仍来自 Colab，UUID 展开未在本地实现 |
+| 4.8 | 非 FBA + FBA 合并成 78 列 | **模板来自 Colab**；本地 `fba_shadow`/`phase36` 出 78 列合并 shadow/成本，但依赖 self/FBA 模板 |
+
+## 2. build-order-tabs 评估
+
+**需要做**，否则不能停 Colab。现有本地引擎的输入是：
+
+- `out/wb_fresh_<月>.csv`（166 列，Colab 产出）
+- `out/wb_fba_<月>.csv`（95 列，Colab 产出）
+- `out/merged_<月>.csv`（78 列，Colab 产出）
+
+`fill-tables` 只填这 29 个成本/系数列，不生成行集合/列结构。
+
+### 2.1 行集合差异（必须先解决）
+
+- 202608 raw 10,912 → 特殊订单删除后 10,910 → 合并吸收 91 → Phase1 detail 10,821。
+- 但 Colab self 表 10,870 行；差 49 行（invalid 原单/非商品/未解析等），不是 writeback_new 的 10,821 能直接替代。
+- FBA：Colab 95 列 1,966 行；本地 fba_shadow 是 78 列，95 列模板仍来自 Colab。
+- 结论：build-order-tabs 不能只做 `concat`，要把 Colab 的**行全集**（含 invalid/非商品/未解析）与**列合同**都实现，或明确改为本地新口径并让财务接受行数变化。
+
+### 2.2 建议的实现
+
+新增 CLI `build-order-tabs --month`，分三个 builder：
+
+1. **self 166**：raw（先过滤特殊订单）→ 列合同（上个月 166 列）→ 合并组一行 → 成本/系数 → 写 `wb_fresh_<月>.csv`。
+2. **fba 95**：FBA 销量表 → 订单数量 UUID 展开 → EN 明细/BOM → 95 列 → 写 `wb_fba_<月>.csv`。
+3. **merged 78**：self + FBA concat → 78 列 → 写 `merged_<月>.csv`；复用 `phase36` 的 95↔78 对账。
+
+先做 parity 对拍：每月与 Colab 三表比行数、订单/SKU 集合、销售额、四列成本、29 列逐格；三个月全过再停 Colab。
+
+## 3. 已落地的前置脚本
+
+- `scripts/fetch_fx_rates.py`：从 `和财务部共享/汇率` 取指定月列 → `fx_<月>.csv`
+- `scripts/fetch_special_orders.py`：导出 `处理特殊订单` 删除清单，并可过滤 raw
+- `scripts/check_warehouse_map.py`：raw 发货仓库 vs `wh_map.tsv`；202608/202609 均 0 未映射
+
+## 4. 待办
+
+1. 补 `build-order-tabs` 的 self/FBA/merged 三个 builder（最大工程）。
+2. 对拍 202608/202609（必要时 202607）三表；差异逐条归因。
+3. 决定是否保留 4.5.3/4.5.4/4.9 的运营人员列；若保留，另建账号→人员单表。
+4. 停用 Colab 前保留回归证据与回滚路径。
