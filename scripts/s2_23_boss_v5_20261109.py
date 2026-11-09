@@ -238,6 +238,13 @@ def main() -> int:
     qual_past = qual[qual["_od"] < AS_OF]
     tgt_total = len(target31)
     tgt_yes = int((target31["原目标达到"] == "是").sum())
+    rem_rows = out[out["一句话建议"].isin(
+        ["先换运输-原目标已过", "换运输也不达原目标-需调整"])]
+    rem_pass = int(out["一句话建议"].eq("先换运输-原目标已过").sum())
+    rem_fail = int(out["一句话建议"].eq("换运输也不达原目标-需调整").sum())
+    late = b[b["是否春节方案"] & b["首批晚于停工"].astype(bool)]
+    late_a = int(late["放行等级"].astype(str).str.startswith("A").sum())
+    late_b = int(late["放行等级"].astype(str).str.startswith("B").sum())
 
     summary = pd.DataFrame([
         ("覆盖范围", f"三个分公司全部 {len(out)} 个需求键；不是子集。"),
@@ -253,9 +260,9 @@ def main() -> int:
                     f"{out.loc[out['一句话建议'].isin(['未达原目标-需调整','换运输也不达原目标-需调整']),'建议补多少'].sum():,.0f} 件；不能按原目标通过。"),
         ("断货风险", f"{len(out[out['一句话建议'].eq('可能断货-需拍板')])} 键/"
                   f"{out.loc[out['一句话建议'].eq('可能断货-需拍板'),'建议补多少'].sum():,.0f} 件；所有已验证运输都晚于断货日。"),
-        ("运输补救", f"{len(out[out['一句话建议'].isin(['先换运输-原目标已过','换运输也不达原目标-需调整'])])} 键/"
-                  f"{out.loc[out['一句话建议'].isin(['先换运输-原目标已过','换运输也不达原目标-需调整']),'建议补多少'].sum():,.0f} 件；"
-                  "按 A/B 严格目标 5 达/4 未达（旧轨迹口径 8 达/1 未达，差异是 A 级不能用满足率替代周期）。"),
+        ("运输补救", f"{len(rem_rows)} 键/{rem_rows['建议补多少'].sum():,.0f} 件；"
+                  f"按 A/B 严格目标 {rem_pass} 达/{rem_fail} 未达（旧轨迹口径 8 达/1 未达，"
+                  "差异是 A 级不能用满足率替代周期）。"),
         ("催已有 + 新增", f"{len(expedite_rows)} 键；催已有 {expedite_rows['催已有量'].sum():,.0f} 件，"
                        f"新增 {expedite_rows['新增补货量'].sum():,.0f} 件；两种动作并列。"),
         ("日常补货", f"{len(daily_rows)} 键/{daily_rows['建议补多少'].sum():,.0f} 件；"
@@ -318,9 +325,11 @@ def main() -> int:
                      f"新增资格 {len(qual)}/{qual['建议补多少'].sum():,.0f}，"
                      f"其中 {len(qual_past)}/{qual_past['建议补多少'].sum():,.0f} 下单日已过。"),
         ("v5 变更 5", f"春节 {len(cny_rows)}/{cny_rows['建议补多少'].sum():,.0f}；"
-                     "首批下单已按 11-09 重排；首批到仓晚于停工 17 键（A 10/B 7），"
-                     "是否可执行仍看是否早于断货日，不用停工日一刀切。"),
-        ("v5 变更 6", "运输补救 9 键/463 件：按 A/B 严格目标 5 达/4 未达；"
+                     f"首批下单已按 11-09 重排；首批到仓晚于停工 {len(late)} 键"
+                     f"（A {late_a}/B {late_b}），是否可执行仍看是否早于断货日，"
+                     "不用停工日一刀切。"),
+        ("v5 变更 6", f"运输补救 {len(rem_rows)} 键/{rem_rows['建议补多少'].sum():,.0f} 件："
+                     f"按 A/B 严格目标 {rem_pass} 达/{rem_fail} 未达；"
                      "旧轨迹口径 8 达/1 未达，差异来自 A 级不能用满足率替代周期。"),
         ("v5 变更 7", "PO 2,417 是历史销量、不是欠采购；台账仍为 11-05，"
                      "PO 最新状态未取到，需另行补数。"),
