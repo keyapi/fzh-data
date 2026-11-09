@@ -109,3 +109,8 @@ date: 2026-11-07
 ## 结论
 
 **v3 是正确的“观测状态修正版”，但仍只是方法初筛。** 主线 31+7 人工复审不需要等 benchmark。
+
+## 相关经验
+
+- [预测模型对照前先冻结观测契约](solutions/best-practices/forecast-benchmark-observation-contract.md)
+- [补货交付状态与批次口径](solutions/workflow-issues/supply-chain-delivery-batch-status.md)

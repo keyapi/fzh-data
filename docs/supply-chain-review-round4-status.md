@@ -165,3 +165,8 @@ date: 2026-11-06
 - **v4 覆盖**：按 D2 观测月定义覆盖，月内无订单周记 0；v4 已跑通（0 跳过）。稳定品 WAPE 0.48–0.60/fill 0.82–0.87；零中位数 WAPE 1.6–9.5（过预测），仍不能选模型。
 - 文件：`D_补货交付包_2026-11-06_final_v15.xlsx`、`D_统一逐日轨迹_2026-11-07_v7.xlsx`、`D_春节排期优化_2026-11-06_v7.xlsx`。
 - 仍未完成：60cm 保留原键 4,001 件的 D1b/C/EN/PO 覆盖逐键确认；DN↔PO 全局基数；PO 逐单阶段数量核销。
+
+## 相关经验
+
+- [补货交付状态与批次口径](solutions/workflow-issues/supply-chain-delivery-batch-status.md)
+- [预测模型对照观测契约](solutions/best-practices/forecast-benchmark-observation-contract.md)

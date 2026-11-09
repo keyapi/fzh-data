@@ -44,3 +44,8 @@ date: 2026-11-07
 
 - 三个 worker 完成后，工头合并。
 - Codex gate 只审 v3 与两份审计结论；不重开已交付数字。
+
+## 相关经验
+
+- [工头+只读打工仔+Codex gate](solutions/tooling-decisions/multi-agent-supply-chain-review-loop.md)
+- [补货交付状态与批次口径](solutions/workflow-issues/supply-chain-delivery-batch-status.md)

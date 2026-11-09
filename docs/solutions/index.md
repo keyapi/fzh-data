@@ -13,6 +13,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-07 | 预测模型对照前先冻结“观测契约” — 月历、删失、共同窗口与在途 | [best-practices/forecast-benchmark-observation-contract.md](best-practices/forecast-benchmark-observation-contract.md) |
+| 2026-11-07 | 补货交付的状态分桶与批次日期 — 别把“模拟通过”当“可执行” | [workflow-issues/supply-chain-delivery-batch-status.md](workflow-issues/supply-chain-delivery-batch-status.md) |
+| 2026-11-07 | 工头 + 只读打工仔 + Codex gate — 供应链交付的并行审计回路 | [tooling-decisions/multi-agent-supply-chain-review-loop.md](tooling-decisions/multi-agent-supply-chain-review-loop.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-10-08 | key_test 应用的两个结构性隐患：每次登录写元数据 + 打核心报表猴补丁，且生产/测试分支割裂 | [workflow-issues/key-test-login-hook-and-prod-test-divergence.md](workflow-issues/key-test-login-hook-and-prod-test-divergence.md) |
 | 2026-09-24 | 知识库防腐三件套 — 孤儿检测 / 生成式索引 / 链接图 | [best-practices/knowledge-base-anti-rot.md](best-practices/knowledge-base-anti-rot.md) |
