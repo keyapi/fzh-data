@@ -157,8 +157,9 @@ def main(argv=None) -> int:
                  ("DN_ROWS", args.dn_rows), ("SHIPMENTS", args.shipments),
                  ("ZMT", args.zmt), ("LEADTIME_SNAPSHOT", args.leadtime_snapshot),
                  ("DN_PO", args.dn_po), ("MOQ", args.moq), ("EN_STOCK", args.en_stock),
-                 ("PO_OPEN", args.po_open), ("ORDERS", args.orders)):
-        if Path(v).exists():
+                 ("PO_OPEN", args.po_open), ("ORDERS", args.orders),
+                 ("SO", args.so)):
+        if v and Path(v).exists():
             inputs[k] = dict(path=str(v), sha256=sha256(v))
 
     # ---------- 基础表：current-owner 需求键（D3b v3.5） + 物理 C/EN/PO 供给
@@ -1344,6 +1345,7 @@ def main(argv=None) -> int:
         f"- 生成有效抵扣的键：{int((f['cg_buffer_credit'] > 0).sum())} 个，抵扣合计 "
         f"{f['cg_buffer_credit'].sum():.0f} 件",
         f"- CG 池 178 键：全部 `观察`，不生成 CG 仓补货建议",
+        f"- 已下 SO 待发供给：{float(f['so_qty'].sum()):.0f} 件（{int((f['so_qty']>0).sum())} 键；来源 {args.so or '无'}）",
         f"- CG 销量（WayfairCG 仓订单）：{cg_sales['cg_sales_qty'].sum():.0f} 件，"
         f"覆盖 {len(cg_sales)} 个产品；明细见 `5_CG记录`",
         "",

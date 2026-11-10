@@ -669,8 +669,9 @@ def main() -> int:
          "会上说明 11/09 EN 三仓 0 明细；新单按 1 表 P1；PO/60cm 未刷新"),
         ("看表顺序", "老板看 0；运营下单看 1；要拍板看 2；物流看 2b；重排晚看 2c；"
                   "工厂看 7；老板问策略看 16；新SO看17；8–13 是审计底稿", "按角色分表，不要从 8_全量底稿 直接下单"),
-        ("EN 新SO", "SO-26-00136 15:14 已下 2,320 件；36 个波兰键/1,280 件匹配，已计入 D6 v6.20",
-         "这些量不要重复下；看 17_EN新SO"),
+        ("EN 新SO", "SO-26-00136 15:14 已下 2,320 件；36 个波兰键/1,280 件匹配，"
+                  "但到 12/15，只有部分算按时：4 键仍补 216 件、23 键转催已有 623 件",
+         "看 17_EN新SO；不要重复下已覆盖量，4+23 仍要处理"),
     ], columns=["事项", "结论", "你要做什么"])
 
     # 60cm corrected summary + detail
@@ -785,8 +786,9 @@ def main() -> int:
          "看 15 后由业务决定"),
     ], columns=["事项", "结论", "你要做什么"])], ignore_index=True)
     data_notes = pd.concat([data_notes, pd.DataFrame([
-        ("EN 新 SO", "SO-26-00136：2026-11-10 15:14 创建，66 行/2,320 件；36 个波兰键/1,280 件匹配 D6，已计入 v6.20 供给",
-         "见 17_EN新SO；这些量不要再重复下"),
+        ("EN 新 SO", "SO-26-00136：2026-11-10 15:14 创建，66 行；按 product+pool 去重 54 行/2,320 件；"
+                    "36 个波兰键/1,280 件匹配 D6",
+         "见 17_EN新SO；SO 到 12/15，部分按时；4 键仍补 216、23 键转催已有 623；不要重复下已覆盖量"),
         ("断货/删失需求",
          f"D2b 删失键 {len(d2[d2['censor_method'].ne('none')])} 个；匹配 {len(censor_cmp)} 个；"
          f"估算新增 {censor_cmp['估算新增需求'].sum():,.0f} 件",
@@ -796,14 +798,15 @@ def main() -> int:
     pl_so = d6[d6["池"].eq("波兰") & (pd.to_numeric(d6["SO已下"], errors="coerce").fillna(0) > 0)].copy()
     so_summary = pd.DataFrame([
         ("SO", "SO-26-00136", "2026-11-10 15:14 创建；客户 波兰公司；交付日 2026-12-15"),
-        ("SO 原始", "66 行 / 2,320 件", "客户 波兰公司；交付日 2026-12-15"),
+        ("SO 原始", "66 行；按 product+pool 去重 54 行 / 2,320 件", "客户 波兰公司；交付日 2026-12-15"),
         ("匹配 D6 波兰", f"{len(pl_so)} 键 / {pd.to_numeric(pl_so['SO已下'], errors='coerce').fillna(0).sum():,.0f} 件",
          "按 product+pool 去重后；这些量已计入 v6.20"),
         ("已计入 D6", f"{len(pl_so)} 键 / {pd.to_numeric(pl_so['SO已下'], errors='coerce').fillna(0).sum():,.0f} 件",
-         "v6.20 把 SO 作为待发供给；不再重复下单"),
-        ("完全覆盖", int(((pd.to_numeric(pl_so["SO已下"], errors="coerce").fillna(0) > 0)
-                     & (pd.to_numeric(pl_so["净需求95"], errors="coerce").fillna(0) <= 0)).sum()),
-         "净需求已为 0 的键"),
+         "v6.20 把 SO 作为待发供给；未覆盖部分仍需处理"),
+        ("净需求=0", int(pl_so["建议动作"].eq("不补").sum()), "8 个不补；另有 1 个观察"),
+        ("仍需处理", f"{int(pl_so['建议动作'].eq('补').sum())} 键/216 件仍补 + "
+                  f"{int(pl_so['建议动作'].eq('催已有').sum())} 键/623 件催已有",
+         "SO 到 12/15，只有部分算按时；不能当全部已覆盖"),
     ], columns=["项", "值", "说明"])
     so_rows = pl_so[["product_id", "池", "形态", "UOM", "SO已下", "净需求95",
                      "新补数量", "建议动作", "动作原因"]].rename(columns={"product_id": "商品编码", "池": "分公司"})
@@ -835,9 +838,9 @@ def main() -> int:
     src = pd.DataFrame([
         ("D5 v6.7", str(D5), sha(D5)),
         ("11/1–8 同店修正", str(NC), sha(NC)),
-        ("D6 v6.19", str(D6), sha(D6)),
-        ("CNY v10", str(CNY), sha(CNY)),
-        ("轨迹 v10", str(TRAJ), sha(TRAJ)),
+        ("D6 v6.20", str(D6), sha(D6)),
+        ("CNY v11", str(CNY), sha(CNY)),
+        ("轨迹 v11", str(TRAJ), sha(TRAJ)),
         ("C14 11-10 刷新", str(C14), sha(C14)),
         ("EN 库存 11-10", str(EN_STOCK), sha(EN_STOCK)),
         ("CG 库存 11-10", str(CG_STOCK), sha(CG_STOCK)),
