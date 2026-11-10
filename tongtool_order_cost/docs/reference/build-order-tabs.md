@@ -82,12 +82,11 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 - `EN绍兴包装半成品成本` / `EN绍兴包装成品成本` **统一写当前 BOM**
   `cost_sxbzbcp` / `cost_sxbzcp`。注意旧 Colab 的「成品」列实际是
   「合并后二次加工×系数」，语义已更正。
-- **整成品 method 覆盖**：SKU 无 `-COVER/-FOAM/-PPCOTTON` 后缀、BOM=半成品/成品、
-  EN=皮壳 时，按 BOM method 计价（`bom_override_full_product`）。
-  依据：202608 49 行（46 半成品 + 3 成品）/ 202609 12 行（10 + 2），多为退货仓/皮壳仓
-  EN method 与成品 SKU 冲突；不覆盖会漏绍兴二次与头程，按行重算成本差
-  **+2,116.67 / +911.87**。
-- 组件后缀行仍按 EN method + 后缀矩阵（`-Cover` 绍兴二次/二次=0）。
+- **method 唯一依据 = BOM 主档 `shipping_method`**（2026-11-10 定案）：
+  所有行（含 `-Cover/-Foam/-PPCotton` 组件后缀）都按 BOM method + 后缀矩阵计价；
+  EN 订单行 `shipping_method` 只写审计（`en_method`），不参与定价。
+  202608 仅 46 行、202609 仅 9 行 EN=皮壳 / BOM=半成品，其余完全一致。
+  仓库（主仓/退货仓/皮壳仓）不改变 method 或成本算法。
 - 审计：`self_method_warehouse_audit.csv` 列出 EN vs BOM method、raw vs EN 仓库的差异行；
   202609 有 468 行 raw `美中-FZH-DANEEY` 但 EN 是 `美中-FZH-DANEEY-退货产品仓`。
 

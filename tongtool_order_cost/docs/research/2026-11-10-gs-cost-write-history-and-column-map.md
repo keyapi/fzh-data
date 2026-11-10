@@ -93,17 +93,20 @@ tags: [tongtool, gsheet, writeback, cost-columns, bom-version, audit]
   皮壳 53.939/53.846、绍兴二次 **16.522567**、二次 90.306、头程 33.15、1件 160.767567/160.674567。
 - 备份：`out/gs_min_patch_<月>/run_*/backup.csv`；变更明细：`out/gs_min_patch_<月>/<tab>_changes.csv`。
 
-## 5. 方法覆盖规则（一句话版）
+## 5. method 规则（一句话版）
 
-> **整成品 SKU**（通途SKU 没有 `-Cover/-Foam/-PPCotton` 后缀）：
-> 不管 EN 订单行写皮壳、退货仓还是皮壳仓，**一律按 BOM 主档的 半成品/成品 取成本**。
-> 只有组件后缀行（单独卖皮壳/海绵/PP棉）才按 EN 皮壳和后缀矩阵取成本。
+> **定价 method 一律取 BOM 主档 `shipping_method`**（1104 BOM）；
+> EN 订单行的 `shipping_method` 只写 `en_method` 审计，不参与定价。
+> 仓库（美中主仓 / 退货产品仓 / 皮壳仓库）不改变 method 或成本算法。
+> 组件后缀 `-Cover/-Foam/-PPCotton` 同样按 BOM method + 后缀矩阵。
 
-- 202608 方法冲突 56 行，其中 49 行整成品覆盖；202609 15 行，其中 12 行覆盖。
+- 202608/202609 实测：EN vs BOM method 仅 **46 / 9 行**不同（全是 EN=皮壳、BOM=半成品），
+  其余 10,708 / 6,094 行完全一致；GS 29 列实际金额变化 46 / 9 行
+  （+1,920.04 / +370.55）。
 - 覆盖行会出现在 `out/build_tabs/<月>/self_method_warehouse_audit.csv`
   （EN_method / BOM_method / 实际计价method / raw vs EN 仓库）。
 - 202609 有 468 行 raw `美中-FZH-DANEEY` 但 EN `美中-FZH-DANEEY-退货产品仓`：
-  这就是你在 GS 里按 raw 仓库过滤却看到 0/16.52 混用的原因；现在整成品已统一。
+  这就是你在 GS 里按 raw 仓库过滤却看到 0/16.52 混用的原因；现在全部按 BOM 半成品。
 
 ## 6. 后续（全量替换前必须搞清）
 

@@ -87,9 +87,11 @@ tags: [tongtu, split-merge, phase36, pieces, product-family, gsheet, audit]
 - **修法**：
   - `皮壳含/不含/系数` 统一 = 当前 `皮壳成本`；`EN绍兴包装半成品/成品` = 当前 BOM
     `cost_sxbzbcp/cost_sxbzcp`（旧「成品」列其实是合并后二次加工×系数）。
-  - **整成品 SKU**（无 `-Cover/-Foam/-PPCotton` 后缀）+ BOM=半成品/成品 + EN=皮壳 →
-    按 BOM method 计价（`bom_override_full_product`）；组件后缀行仍按 EN method。
-    202608 49 行 / 202609 12 行，按行重算成本差 +2,116.67 / +911.87。
+  - **method 唯一依据 = BOM 主档 `shipping_method`**：所有行（含组件后缀）都按 BOM
+    method + 后缀矩阵计价；EN method 只写 `en_method` 审计，不参与定价。
+    202608 仅 46 行、202609 仅 9 行 EN=皮壳 / BOM=半成品，其余完全一致。
+    202608 49 行 / 202609 12 行 method 冲突（含成品 3/2 行）；GS 实际金额变化 46/9 行
+    +1,920.04 / +370.55。
   - 新增 `self_method_warehouse_audit.csv`：EN vs BOM method、raw vs EN 仓库逐行差异。
 - **排查顺序**：不要只看 raw `发货仓库`；先看 `self_method_warehouse_audit.csv` 的
   `EN发货仓库/EN_method/BOM_method`，再判断 0 是后缀规则还是 method 冲突。

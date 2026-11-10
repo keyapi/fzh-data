@@ -901,8 +901,8 @@ def build_order_tabs(
                      out / "snapshots" / month / "en_items_all_089.csv")
     flags = _pick(flags_csv, out / "snapshots" / month / "order_flags.csv")
     branch = _pick(branch_map_csv, out / "item_group_branch.tsv")
-    bom = _pick(bom_csv, out / "bom_cost_product_with_kits.csv",
-                out / "bom_cost_product_with_disabled.csv")
+    bom = _pick(bom_csv, out / "bom_cost_product_with_disabled.csv",
+                out / "bom_cost_product_with_kits.csv")
     wh_map = _pick(wh_map_tsv, out / "snapshots" / month / "wh_map.tsv", out / "wh_map.tsv")
     fx_path = _pick(fx_csv, out / f"fx_{month}.csv")
     wh_sources = _pick(wh_sources_tsv, out / "warehouse_cost_sources.tsv")
@@ -919,7 +919,9 @@ def build_order_tabs(
     # ── self ──
     shadow = run_merge_shadow(
         raw_path, ref_map, en_items, flags if flags.exists() else None,
-        branch_map_csv=branch if branch.exists() else None, month=month,
+        branch_map_csv=branch if branch.exists() else None,
+        bom_method_csv=bom,
+        month=month,
     )
     phase2 = compute_phase2(
         shadow, bom, ref_map, wh_map,

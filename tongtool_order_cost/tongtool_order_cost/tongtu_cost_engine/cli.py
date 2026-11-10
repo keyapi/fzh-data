@@ -290,6 +290,7 @@ def main(argv=None) -> int:
         result = run_merge_shadow(
             args.orders, args.ref_map, en_items, flags,
             branch_map_csv=branch_map if branch_map.exists() else None,
+            bom_method_csv=bom_csv,
             month=args.month,
         )
         phase2 = compute_phase2(
@@ -352,6 +353,7 @@ def main(argv=None) -> int:
         result = run_merge_shadow(
             args.orders, args.ref_map, en_items, flags,
             branch_map_csv=branch_map if branch_map.exists() else None,
+            bom_method_csv=bom_csv,
             month=args.month,
         )
         bundle_map = out_root / "product_bundles.csv"
@@ -405,19 +407,20 @@ def main(argv=None) -> int:
         orders_path = Path(args.orders)
         out_root = orders_path.parents[2] if len(orders_path.parents) > 2 else orders_path.parent
         branch_map = Path(args.branch_map) if args.branch_map else out_root / "item_group_branch.tsv"
-        result = run_merge_shadow(
-            args.orders, args.ref_map, en_items, flags,
-            branch_map_csv=branch_map if branch_map.exists() else None,
-            month=args.month,
-        )
         bom_csv = (
             Path(args.bom_cost) if args.bom_cost
             else out_root / "bom_cost_product_with_disabled.csv"
         )
-        wh_tsv = Path(args.wh_map) if args.wh_map else orders_path.parent / "wh_map.tsv"
-        wb_csv = Path(args.writeback) if args.writeback else out_root / f"writeback_{args.month}.csv"
         if not bom_csv.exists():
             raise SystemExit(f"BOM Cost List 不存在: {bom_csv}")
+        result = run_merge_shadow(
+            args.orders, args.ref_map, en_items, flags,
+            branch_map_csv=branch_map if branch_map.exists() else None,
+            bom_method_csv=bom_csv,
+            month=args.month,
+        )
+        wh_tsv = Path(args.wh_map) if args.wh_map else orders_path.parent / "wh_map.tsv"
+        wb_csv = Path(args.writeback) if args.writeback else out_root / f"writeback_{args.month}.csv"
         if not wh_tsv.exists():
             raise SystemExit(f"仓库分类映射不存在: {wh_tsv}")
         bundle_map = out_root / "product_bundles.csv"

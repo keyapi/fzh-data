@@ -38,7 +38,7 @@ tags: [cost, bom, phase2, disabled-item, curve-pillow, method-diff]
   2. 两条线都在时，Cover 平台 SKU 含 **PPCotton/Foam** → 按候选 item_group 的「PP棉/海绵」锁定；
   3. 平台 SKU 无材质词 → 用 Cover 平台 SKU 的颜色词匹配同订单组件行颜色，唯一命中才锁定。
 - 锚定后 `resolution_status=resolved`，`_anchor_source` 记 `same_order/material/color`。
-- **Cover 行与填充行 EN method 不同**（拆包裹常态）：合并组方法以**非 Cover 行**为准；
+- **Cover 行与填充行 BOM method 不同**（拆包裹常态）：合并组方法以**非 Cover 行**为准；
   非 Cover 行仍不一致或无 → `mixed_methods` 阻断，不猜。
 - 2026-11-05 实测：202608 锚定 9 行（same_order 8 + color 1），歧义 0；202609 锚定 8 行，
   剩 1 行（订单只有 Cover、平台无材质/颜色信号）保持阻断。
@@ -47,15 +47,13 @@ tags: [cost, bom, phase2, disabled-item, curve-pillow, method-diff]
 
 - USNJ/USTX/PL 的 valuation_rate **等于**对应 `USNJBZCP#`/`USTXBZCP#`/`PLBZCP#` BOM 的 `total_cost`；与 `shipping_method` 无关。
 - 二次加工规则**对全部 method 生效**；无目的地 BZCP BOM 时 rate=0（本数据中成品 method 均如此）。
-- **method_diff 规则**（2026-11-10 修订）：
-  - **整成品 SKU**（无 `-COVER/-FOAM/-PPCOTTON` 后缀）且 BOM=半成品/成品、EN=皮壳 →
-    **按 BOM method 计价**，`method_source=bom_override_full_product`，反向记录
-    `method_diff_alt_delta`。依据：202608 49 行（46 半成品 + 3 成品）/ 202609 12 行
-    （10 + 2），EN 多为退货仓/皮壳仓的旧 method；成品 SKU 按皮壳计价会漏绍兴二次与头程，
-    按行重算成本差 **+2,116.67 / +911.87**。
-    **不阻断**，逐行列在 `self_method_warehouse_audit.csv`。
-  - 其余（`-Cover/-Foam/-PPCotton` 组件后缀、或非「EN 皮壳 vs BOM 半成品/成品」组合）→
-    仍按 EN method 定价，BOM method 只记录 + `method_diff_alt_delta` 审计。
+- **method 规则**（2026-11-10 定案）：
+  - **定价 method 一律取 BOM 主档 `shipping_method`**（1104 BOM）；
+    `load_orders` 用 EN 行级 exact item / 别名候选解析 BOM method。
+  - EN 订单行 `shipping_method` **只作审计**（`en_method`），不一致时输出
+    `method_diff` + `method_diff_alt_delta`（EN 口径成本差），**不阻断、不影响定价**。
+  - 202608 仅 46 行、202609 仅 9 行 EN=皮壳 / BOM=半成品；其余 10,708 / 6,094 行完全一致。
+  - 组件后缀行同样用 BOM method + 后缀矩阵；不再有任何「按 EN method」的定价分支。
 - 2026-11-04 的旧依据（71 行 EN BOM 重算通过、两月差异 2,290.59）只覆盖正常订单；
   未覆盖「整成品 SKU 被 EN 标成皮壳」的退货仓/皮壳仓混用场景。
 - 报表 `cost_sxbzcp` 与 EN SXBZCP 存在漂移（抽样 40 行），但漂移集中在 Phase2 未使用的列（半成品用 sxbzcp 以外的 `cost_sxbzbcp`、皮壳 sx=0、成品 method 与 EN 一致），故按 method 选列是必要的。

@@ -5,11 +5,12 @@
 - 结构分组复用 `ustx_cost_compare.group_split_rows`（键 = 订单号公共部分 + 平台SKU）；
 - 再加 EN 产品守卫（`通途SKU → customer_code 别名 → Item → 产品`），组内 product_id 必须一致。
 
-定价口径（用户 2026-11-04 明确）：
-- **一律以 EN `Tongtool Order` 明细的 `shipping_method`（绍兴发货方式）为准**；
-- GS/写回表的 `当月给分公司发货类型` 可能不准，**只作参考、不参与定价**，本模块只原样透传；
-- `split_package_cost_factor` 与 EN 存储的 `cost_fg/cost_sxbzbcp/cost_sxbzcp` **只作对账/兜底参考，
-  不参与主计算**（aux 表里只展示，不进入成本逻辑）。
+定价口径（2026-11-10 修订）：
+- **method（绍兴发货方式）一律取 BOM 主档 `shipping_method`**（1104 BOM）；
+  EN 订单行的 `shipping_method` 只作审计（`en_method`），**不参与定价**；
+- 仓库（主仓/退货仓/皮壳仓）不改变 method 或成本算法；
+- GS/写回表的 `当月给分公司发货类型`、EN 存储的 `cost_fg/cost_sxbzbcp/cost_sxbzcp`
+  **只作对账/兜底参考**，不参与主计算。
 
 EN 作废原单（aux）：
 - 从快照 `en_items_all_089.csv` 读 `order_flags.invalid=1` 的原单行；
@@ -46,7 +47,7 @@ SHAPE_COVER = "cover"
 SHAPE_FOAM = "foam"
 SHAPE_PPCOTTON = "ppcotton"
 
-# EN shipping_method 的三种交付语义（定价唯一依据）
+# BOM shipping_method 的三种交付语义（定价唯一依据）
 METHOD_COVER = "皮壳"
 METHOD_SEMI = "半成品"
 METHOD_FINISHED = "成品"
@@ -155,8 +156,8 @@ AUX_COLUMNS: tuple[str, ...] = (
 )
 
 _BLOCK_REASONS = {
-    "method_missing": "组件缺 EN shipping_method（交付语义未知）",
-    "mixed_methods": "组内 EN shipping_method 不一致",
+    "method_missing": "组件缺 BOM shipping_method（绍兴发货方式未知）",
+    "mixed_methods": "组内 BOM shipping_method 不一致",
     "multiple_carrier_skus": "组内多个载体 SKU（无法唯一确定成本载体）",
     "multiple_cover_skus": "组内多个皮壳 SKU（无法唯一确定成本载体）",
     "carrier_identity_conflict": "组内载体行身份字段不一致（平台/仓库/渠道等）",
@@ -164,7 +165,7 @@ _BLOCK_REASONS = {
     "pieces_zero": "件数为 0",
     "pieces_ambiguous": "成品行只有拆单尾号，件数无法唯一确定",
     "aux_qty_mismatch": "EN 原单件数 ≠ 有效子单之和",
-    "aux_method_mismatch": "EN 原单 method ≠ 有效子单 method",
+    "aux_method_mismatch": "BOM 原单 method ≠ 有效子单 method",
     "aux_ambiguous": "同一原单+产品存在多个 EN 原单条目",
 }
 
@@ -183,8 +184,8 @@ REF_CODE_EQUIVALENCE = (
 )
 
 PRICING_BASIS_NOTE = (
-    "**定价依据**：一律用 EN `shipping_method`（绍兴发货方式）；"
-    "GS/写回表 `当月给分公司发货类型` 只作参考、不参与定价。"
+    "**定价依据**：一律用 BOM 主档 `shipping_method`（绍兴发货方式）；"
+    "EN 行 `shipping_method`、GS/写回表 `当月给分公司发货类型` 只作审计/参考、不参与定价。"
     "`split_package_cost_factor` 与 EN 存储 `cost_fg/cost_sxbzbcp/cost_sxbzcp` "
     "只作对账/兜底参考，不参与主计算。"
 )
@@ -219,7 +220,7 @@ def sku_base(sku: object) -> str:
 def sku_shape(sku: object) -> str:
     """SKU 形态：含 COVER→皮壳、含 FOAM→海绵、含 PPCOTTON→PP棉、其余→成品形态。
 
-    注意：这不是交付语义；交付语义一律取 EN `shipping_method`。
+    注意：这不是交付语义；交付语义一律取 BOM `shipping_method`。
     单品后缀计价（EN `order_sync.py:2941-3003`）只对非 FBA、非合并组生效。
     """
     base = sku_base(sku)
@@ -394,9 +395,10 @@ def fallback_method(
 
 
 def load_method_map(en_items_csv: str | Path) -> dict[tuple[str, str], str]:
-    """`(order_id_code, 归一化通途SKU) → shipping_method`。
+    """`(order_id_code, 归一化通途SKU) → EN shipping_method`（**仅审计**）。
 
-    同一键出现多个不同 method → 记为 `""`（未知，组内会阻断），不取 first。
+    2026-11-10 起定价不再使用 EN method，统一用 BOM 主档 `shipping_method`；
+    同一键出现多个不同 method → 记为 `""`，不取 first。
     """
     df = pd.read_csv(en_items_csv, dtype=str, low_memory=False, keep_default_na=False)
     missing = [c for c in REQUIRED_EN_ITEM_COLUMNS if c not in df.columns]
@@ -409,6 +411,28 @@ def load_method_map(en_items_csv: str | Path) -> dict[tuple[str, str], str]:
         if not key[1]:
             continue
         seen.setdefault(key, set()).add(method)
+    return {k: next(iter(v)) if len(v) == 1 else "" for k, v in seen.items()}
+
+
+def load_bom_method_map(bom_csv: str | Path | None) -> dict[str, str]:
+    """`item_fg → BOM shipping_method`（绍兴发货方式，定价唯一依据）。
+
+    同一 item 多行且 method 不一致 → `""`（调用方阻断），不取 first。
+    """
+    if not bom_csv:
+        return {}
+    path = Path(bom_csv)
+    if not path.exists():
+        return {}
+    df = pd.read_csv(path, dtype=str, low_memory=False, keep_default_na=False)
+    if "item_fg" not in df.columns or "shipping_method" not in df.columns:
+        return {}
+    seen: dict[str, set[str]] = {}
+    for rec in df.to_dict("records"):
+        item = str(rec.get("item_fg") or "").strip()
+        method = str(rec.get("shipping_method") or "").strip()
+        if item:
+            seen.setdefault(item, set()).add(method)
     return {k: next(iter(v)) if len(v) == 1 else "" for k, v in seen.items()}
 
 
@@ -639,6 +663,7 @@ class OrderRow:
     resolution_status: str
     shipping_method: str
     method_source: str = ""
+    en_shipping_method: str = ""
     raw: dict = field(default_factory=dict)
 
 
@@ -679,14 +704,20 @@ def load_orders(
     en_items_csv: str | Path,
     flags_csv: str | Path | None = None,
     branch_map: Mapping[str, dict] | None = None,
+    bom_method_csv: str | Path | None = None,
 ) -> LoadResult:
-    """读订单 CSV → 归一化/解析/带 EN shipping_method/标记作废。"""
+    """读订单 CSV → 归一化/解析；method 取 **BOM 主档 shipping_method**。
+
+    EN 订单行的 `shipping_method` 只作审计（`en_shipping_method`），不参与定价。
+    `bom_method_csv` 缺省时退回旧行为（EN method），仅用于测试/兼容。
+    """
     df = pd.read_csv(orders_csv, dtype=str, low_memory=False, keep_default_na=False)
     missing = [c for c in REQUIRED_ORDER_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"订单表缺列: {missing}")
 
-    method_map = load_method_map(en_items_csv)
+    en_method_map = load_method_map(en_items_csv)
+    bom_method_map = load_bom_method_map(bom_method_csv)
     en_line_map = load_en_line_map(en_items_csv)
     invalid_map = _read_invalid_map(flags_csv)
     rows: list[OrderRow] = []
@@ -741,8 +772,26 @@ def load_orders(
                     item_names=(en_item,), products=(en_product,),
                 )
                 en_line_stats["en_line_used"] += 1
-        method = method_map.get((order_id, sku), "")
-        method_source = "en" if method else ""
+        en_method = en_method_map.get((order_id, sku), "")
+        method = ""
+        method_source = ""
+        if bom_method_map:
+            # 1) EN 行级 exact item → BOM method（身份权威 + BOM 口径）
+            if len(en_items) == 1:
+                method = bom_method_map.get(next(iter(en_items)), "")
+                if method:
+                    method_source = "bom_item"
+            # 2) 别名命中的候选 item → BOM method 必须唯一
+            if not method:
+                cand_items = resolver.items_for_sku(sku_raw)
+                cand_methods = {bom_method_map[i] for i in cand_items if bom_method_map.get(i)}
+                if len(cand_methods) == 1:
+                    method = next(iter(cand_methods))
+                    method_source = "bom_alias"
+        else:
+            # 兼容/测试：没有 BOM method 文件时退回 EN method
+            method = en_method
+            method_source = "en" if method else ""
         if not method:
             if is_non_product_accessory(sku):
                 method_source = "non_product_accessory"
@@ -772,6 +821,7 @@ def load_orders(
             resolution_status=resolution.status,
             shipping_method=method,
             method_source=method_source,
+            en_shipping_method=en_method,
             raw={
                 **dict(rec),
                 **({"_anchor_source": anchor_source} if anchor_source else {}),
@@ -1983,6 +2033,9 @@ def build_merge_shadow(
                 "blocked_reason": "",
             })
             detail = _merged_raw(group)
+            group_en_methods = {
+                r.en_shipping_method for r in group.rows if r.en_shipping_method
+            }
             detail.update({
                 "group_id": group.group_id,
                 "product_id": group.product_id,
@@ -1991,6 +2044,8 @@ def build_merge_shadow(
                 "carrier_sku": group.carrier_sku,
                 "role": group.method,
                 "pricing_method": group.method,
+                "en_method": (next(iter(group_en_methods))
+                              if len(group_en_methods) == 1 else ""),
                 "method_source": group.rows[0].method_source if group.rows else "",
                 "merged": True,
                 "shipping_method": group.method,
@@ -2041,6 +2096,7 @@ def build_merge_shadow(
             "carrier_sku": sku_base(row.sku),
             "role": row.shipping_method,
             "pricing_method": row.shipping_method,
+            "en_method": row.en_shipping_method,
             "method_source": row.method_source,
             "merged": False,
             "shipping_method": row.shipping_method,
@@ -2173,12 +2229,19 @@ def run_merge_shadow(
     flags_csv: str | Path | None = None,
     *,
     branch_map_csv: str | Path | None = None,
+    bom_method_csv: str | Path | None = None,
     month: str = "",
 ) -> MergeShadowResult:
-    """读快照 CSV + EN 明细（含作废原单）→ shadow 结果。只读，不写任何文件。"""
+    """读快照 CSV + EN 明细（含作废原单）→ shadow 结果。只读，不写任何文件。
+
+    2026-11-10 起 method（绍兴发货方式）取 **BOM 主档**；EN shipping_method 仅审计。
+    """
     resolver = EnResolver.from_items_csv(ref_map_csv)
     branch_map = load_branch_map(branch_map_csv) if branch_map_csv else None
-    loaded = load_orders(orders_csv, resolver, en_items_csv, flags_csv, branch_map)
+    loaded = load_orders(
+        orders_csv, resolver, en_items_csv, flags_csv, branch_map,
+        bom_method_csv=bom_method_csv,
+    )
     invalid_ids = {k for k, v in _read_invalid_map(flags_csv).items() if v}
     aux_rows = load_aux_original(en_items_csv, invalid_ids, resolver)
     aux_entries = build_aux_entries(aux_rows)

@@ -98,7 +98,7 @@ def write_writeback(tmp_path: Path, rows: list[list]) -> Path:
     return path
 
 
-def _shadow(tmp_path, orders_rows, en_rows, flags_rows=None):
+def _shadow(tmp_path, orders_rows, en_rows, flags_rows=None, bom_method_csv=None):
     items = write_items(tmp_path)
     orders = write_orders(tmp_path, orders_rows)
     en = write_en(tmp_path, en_rows)
@@ -107,7 +107,8 @@ def _shadow(tmp_path, orders_rows, en_rows, flags_rows=None):
         flags = tmp_path / "flags.csv"
         pd.DataFrame(flags_rows, columns=["order_id_code", "invalid", "suspended", "order_status"]).to_csv(
             flags, index=False, encoding="utf-8")
-    return run_merge_shadow(orders, items, en, flags, month="202608")
+    return run_merge_shadow(orders, items, en, flags, month="202608",
+                            bom_method_csv=bom_method_csv)
 
 
 # ── 合并组半成品：pieces × 四列 ──
@@ -257,22 +258,22 @@ def test_negative_cost_blocks(tmp_path):
     assert not p2.ok
 
 
-def test_method_diff_full_product_overrides_to_bom_method(tmp_path):
-    """整成品 SKU（非 -Cover/-Foam）EN=皮壳 与 BOM=成品 冲突：按 BOM 成品计价并标源。"""
-    shadow = _shadow(tmp_path, [
-        ["ORD-2700001", "PSK", "TT777", 1, 10, 50, 0, "WH-NJ"],
-    ], [["ORD-2700001", "TT777", "", 1, "皮壳"]])
+def test_bom_method_authority_prices_full_product_even_if_en_cover(tmp_path):
+    """整成品 SKU：定价 method 取 BOM 主档（成品），EN 皮壳仅审计。"""
     bom = write_bom(tmp_path, [{
         "item_fg": "KS200-OTHER", "shipping_method": "成品",
         "cost_fg": 5, "cost_sxbzcp": 1, "usnj_valuation_rate": 2,
         "cover_freight_2kk9fsq8ln": 3, "freight_2kk9fsq8ln": 7,
     }])
+    shadow = _shadow(tmp_path, [
+        ["ORD-2700001", "PSK", "TT777", 1, 10, 50, 0, "WH-NJ"],
+    ], [["ORD-2700001", "TT777", "", 1, "皮壳"]], bom_method_csv=bom)
     p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
     row = p2.rows[0]
     assert row["status"] == "ok"
     assert row["method"] == "成品"
     assert row["en_method"] == "皮壳"
-    assert row["method_source"] == "bom_override_full_product"
+    assert row["method_source"] in ("bom_item", "bom_alias")
     assert row["bom_method"] == "成品"
     assert row["method_diff"] is True
     assert row["绍兴二次加工成本"] == 1
@@ -378,36 +379,36 @@ def test_same_product_multiple_items_still_ambiguous():
 
 
 def test_method_diff_alt_delta_is_audited(tmp_path):
-    shadow = _shadow(tmp_path, [
-        ["ORD-3100001", "PSK", "TT777", 1, 10, 50, 0, "WH-NJ"],
-    ], [["ORD-3100001", "TT777", "", 1, "皮壳"]])
     bom = write_bom(tmp_path, [{
         "item_fg": "KS200-OTHER", "shipping_method": "成品",
         "cost_fg": 5, "cost_sxbzcp": 1, "usnj_valuation_rate": 2,
         "cover_freight_2kk9fsq8ln": 3, "freight_2kk9fsq8ln": 7,
     }])
+    shadow = _shadow(tmp_path, [
+        ["ORD-3100001", "PSK", "TT777", 1, 10, 50, 0, "WH-NJ"],
+    ], [["ORD-3100001", "TT777", "", 1, "皮壳"]], bom_method_csv=bom)
     p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
     row = p2.rows[0]
     assert row["method_diff"] is True
-    # 生效 BOM 成品：5+7+2+1=15；备选 EN 皮壳：5+3+2+0=10 → 审计差 −5
+    # 定价 BOM 成品：5+7+2+1=15；备选 EN 皮壳：5+3+2+0=10 → 审计差 −5
     assert row["method_diff_alt_delta"] == -5
     assert p2.stats["phase2_method_diff_alt_delta"] == -5
 
 
-def test_cover_suffix_keeps_en_cover_method(tmp_path):
-    """-Cover 组件行即使 BOM=成品，也不做整成品覆盖，仍按 EN 皮壳计价。"""
-    shadow = _shadow(tmp_path, [
-        ["ORD-2750001", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0, "WH-NJ"],
-    ], [["ORD-2750001", "TT001-FIN-Cover", "", 1, "皮壳"]])
+def test_cover_suffix_uses_bom_method_but_suffix_matrix(tmp_path):
+    """-Cover 组件行：method 取 BOM（成品），但后缀矩阵仍把绍兴二次/二次清零。"""
     bom = write_bom(tmp_path, [{
         "item_fg": "KS100-FINISH-RED", "shipping_method": "成品",
         "cost_fg": 4, "cost_sxbzcp": 9, "usnj_valuation_rate": 2,
         "cover_freight_2kk9fsq8ln": 3, "freight_2kk9fsq8ln": 7,
     }])
+    shadow = _shadow(tmp_path, [
+        ["ORD-2750001", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0, "WH-NJ"],
+    ], [["ORD-2750001", "TT001-FIN-Cover", "", 1, "皮壳"]], bom_method_csv=bom)
     p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
     row = p2.rows[0]
-    assert row["method"] == "皮壳"
-    assert row["method_source"] != "bom_override_full_product"
+    assert row["method"] == "成品"
+    assert row["method_source"] in ("bom_item", "bom_alias")
     assert row["绍兴二次加工成本"] == 0
     assert row["二次加工成本"] == 0
 

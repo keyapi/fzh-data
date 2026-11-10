@@ -190,17 +190,20 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
 - **成本列一致性（2026-11-10）**：`皮壳含包装成本/不含/系数` 统一=当前 `皮壳成本`；
   `EN绍兴包装半成品/成品成本` 统一=当前 BOM `cost_sxbzbcp/cost_sxbzcp`。
   **不要**再从旧写回继承这些列，否则会出现 76.961 与 53.939 并存。
-- **整成品 method 覆盖（2026-11-10）**：无 `-Cover/-Foam/-PPCotton` 后缀的成品 SKU，
-  若 BOM=半成品/成品、EN=皮壳，按 **BOM method** 计价（`bom_override_full_product`），
-  否则会漏绍兴二次/头程。202608 49 行 / 202609 12 行（按行重算成本差 +2,116.67 / +911.87）；
-  组件后缀行仍按 EN method。
+- **method 唯一依据（2026-11-10 定案）**：定价 method 一律取 **BOM 主档 `shipping_method`**
+  （`load_orders` 按 EN 行级 exact item / 别名候选解析）；EN 订单行 method 只写 `en_method`
+  审计，不参与定价。仓库（主仓/退货仓/皮壳仓）不改变 method/成本。
+  组件后缀行同样按 BOM method + 后缀矩阵；不要再用 EN method 做任何定价分支。
+  202608 仅 46 行、202609 仅 9 行 EN=皮壳 / BOM=半成品，其余完全一致。
 - **方法/仓库审计**：`out/build_tabs/<月>/self_method_warehouse_audit.csv`。
   202609 有 468 行 raw 仓库=`美中-FZH-DANEEY` 但 EN=`…-退货产品仓`，同一 SKU 会因此
   出现 绍兴二次 0 vs 16.52；排查先看这张表，不要只看 raw `发货仓库`。
-- **GS 写回（2026-11-10 最小修补）**：只写 29 个成本/系数列；8/9 月 6 个写回 ws，
-  202608 self 46 行 +1,920.04、202609 self 9 行 +370.55，FBA 只改含/不含，readback 0。
-  备份/明细：`out/gs_min_patch_<月>/`。历史、列用途、0903 vs 1104 BOM 对照见
-  `docs/research/2026-11-10-gs-cost-write-history-and-column-map.md`。
+- **GS 写回（2026-11-10）**：先做了 29 列最小修补（8/9 月 6 个 ws，readback 0）；
+  随后 **202608 全量替换**为 build_tabs（self 10,870→10,819、merged 12,836→12,785、
+  FBA 不变；总成本 0 差异、利润 +1,729.97），readback 0。
+  202609 全量替换仅 dry-run（运费 +304,541.93 属尾程待更新，暂缓）。
+  备份/明细：`out/gs_min_patch_<月>/`、`out/gs_full_replace_<月>/`。
+  端到端步骤与判断标准见 `docs/reference/tongtool-order-pipeline.md`。
 - **未动列**：`运费`（9 月仍是模板旧值）、销售额、商品属性、`EN绍兴包装*`、
   `是否皮壳/当月类型`、行集合；全量替换 build_tabs 前需逐项确认语义。
 - **尚未切换写回**：GS 写回仍走 `fill-tables` + 旧模板；先财务确认再切。

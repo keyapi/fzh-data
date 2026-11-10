@@ -10,10 +10,10 @@
 - 合并组按 Phase 1 `pieces` 乘，透传行按 `qty` 乘。
 
 约束：
-- **method_diff 规则（Phase 2.1 定案）**：BOM master `shipping_method` 与 EN 订单行
-  `shipping_method` 不一致时，按 **EN method** 定价（Phase 1.1 权威口径），
-  BOM method 只记录并输出 `method_diff_alt_delta` 审计差异，**不阻断**。
-  依据：EN BOM 明细重算显示皮壳/目的地加工与 method 无关；按 method 选列后抽样 0 差异。
+- **method 规则（2026-11-10 定案）**：定价 method 一律取 **BOM master `shipping_method`**
+  （load_orders 按 EN 行级 exact item / 别名候选解析 BOM method）；EN 订单行
+  `shipping_method` 只作审计（`en_method`），不一致时输出 `method_diff` +
+  `method_diff_alt_delta`，**不阻断、不影响定价**。
 - BOM 多行/缺行/缺仓库分类/负值 → 该行成本阻断（不出值）。
 - 多候选 item 只用 Phase 1 锁定的 `product_id` 子树；同产品仍多 Item → 阻断。
 - 写回表四列与 BOM 结果逐列对账，**仅对账、不采信**，差异进 `diff_vs_writeback_*`。
@@ -721,26 +721,19 @@ def compute_phase2(
                 else:
                     bom = bom_rows[0]
                     bom_method = str(bom.get("shipping_method") or "").strip()
-                    method_diff = bool(bom_method and method and bom_method != method)
-                    shape = SHAPE_FINISHED if merged else sku_shape(detail.get("通途SKU"))
-                    # 整成品 SKU 却按 EN「皮壳」计价，而 BOM 主档是半成品/成品：
-                    # 这是退货仓/皮壳仓 EN method 与成品 SKU 冲突，按 BOM method 计价并标源。
-                    effective_method = method
+                    en_method = str(detail.get("en_method") or "").strip()
+                    # 定价 method = BOM 主档（load_orders 已按 BOM 解析）；EN method 仅审计。
                     method_source = detail.get("method_source") or ""
-                    if (method == METHOD_COVER
-                            and bom_method in (METHOD_SEMI, METHOD_FINISHED)
-                            and shape == SHAPE_FINISHED):
-                        effective_method = bom_method
-                        method_source = "bom_override_full_product"
-                    costs, reason = _unit_costs(bom, bucket, effective_method, shape)
+                    method_diff = bool(en_method and bom_method and en_method != bom_method)
+                    shape = SHAPE_FINISHED if merged else sku_shape(detail.get("通途SKU"))
+                    costs, reason = _unit_costs(bom, bucket, method, shape)
                     if reason:
                         status = "blocked"
                     else:
                         identity = costs["shell"] + costs["sx"] + costs["processing"]
                         alt_delta = None
                         if method_diff:
-                            alt_method = method if effective_method != method else bom_method
-                            alt_costs, alt_reason = _unit_costs(bom, bucket, alt_method, shape)
+                            alt_costs, alt_reason = _unit_costs(bom, bucket, en_method, shape)
                             if not alt_reason:
                                 alt_delta = round(
                                     (sum(alt_costs.values()) - sum(costs.values())) * units, 6
@@ -752,8 +745,8 @@ def compute_phase2(
                         else:
                             en_shell = _num(bom.get("cost_fg")) or 0.0
                             en_sx = (
-                                (_num(bom.get("cost_sxbzbcp")) or 0.0) if effective_method == METHOD_SEMI
-                                else (_num(bom.get("cost_sxbzcp")) or 0.0) if effective_method == METHOD_FINISHED
+                                (_num(bom.get("cost_sxbzbcp")) or 0.0) if method == METHOD_SEMI
+                                else (_num(bom.get("cost_sxbzcp")) or 0.0) if method == METHOD_FINISHED
                                 else 0.0
                             )
                             en_proc = (
@@ -763,9 +756,9 @@ def compute_phase2(
                             )
                             if shape == SHAPE_COVER:
                                 en_sx, en_proc = 0.0, 0.0
-                            elif shape == SHAPE_FOAM and effective_method in (METHOD_SEMI, METHOD_FINISHED):
+                            elif shape == SHAPE_FOAM and method in (METHOD_SEMI, METHOD_FINISHED):
                                 en_shell = 0.0
-                            elif shape == SHAPE_PPCOTTON and effective_method == METHOD_COVER:
+                            elif shape == SHAPE_PPCOTTON and method == METHOD_COVER:
                                 en_shell, en_sx = 0.0, 0.0
                         en_unit = en_shell + en_sx + en_proc
                         if abs(identity - en_unit) > 1e-6:
@@ -779,10 +772,10 @@ def compute_phase2(
                         if bucket not in FBA_BUCKETS:
                             if shape == SHAPE_COVER and (costs["sx"] != 0 or costs["processing"] != 0):
                                 suffix_errors.append("cover_sx_processing_nonzero")
-                            if (shape == SHAPE_FOAM and effective_method in (METHOD_SEMI, METHOD_FINISHED)
+                            if (shape == SHAPE_FOAM and method in (METHOD_SEMI, METHOD_FINISHED)
                                     and costs["shell"] != 0):
                                 suffix_errors.append("foam_shell_nonzero")
-                            if (shape == SHAPE_PPCOTTON and effective_method == METHOD_COVER
+                            if (shape == SHAPE_PPCOTTON and method == METHOD_COVER
                                     and (costs["shell"] != 0 or costs["sx"] != 0 or costs["freight"] != 0)):
                                 suffix_errors.append("ppcotton_nonzero")
                         if suffix_errors:
@@ -801,8 +794,8 @@ def compute_phase2(
                             "SKU": detail.get("skus"),
                             "product_id": detail.get("product_id"),
                             "item_fg": item_fg,
-                            "method": effective_method,
-                            "en_method": method,
+                            "method": method,
+                            "en_method": en_method,
                             "method_source": method_source,
                             "bundle_version": "",
                             "kit_method": "",
