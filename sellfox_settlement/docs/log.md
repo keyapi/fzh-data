@@ -7,6 +7,9 @@ tags: [sellfox, amazon, settlement, okf, log]
 
 # 变更日志
 
+## 2026-11-10
+- **新增 V2→订单匹配口径调研**：实测 2026-10 赛狐 V2（明细 posted=10月 26,381 行、5,081 单；MFN 3,184 / AFN 1,651），与通途 10 月非FBA文件交叉仅约 20%（638/3,184）命中 —— 论证**结算轴与活动轴必须分开**、订单按 `CUS-` 还原的 `orderId + SKU` 连接并**多月份回看（08–11）**、FBA 以 EN 订单同步为主且保留通途缺口（SKU 未及时登记/同步延迟/改名）→ `docs/research/2026-11-10-v2-settlement-to-order-matching.md`。
+
 ## 2026-10-10
 - **收尾沉淀（ce-okf）**：新增约定 `docs/solutions/conventions/external-questionnaire-via-notion.md`（外部问卷：单份仓库 MD + Notion 访客通道；三条硬边界：MCP 无邀请工具 / 国内需翻墙 / 数据出境只私享）；AGENT_HANDOFF 增 §11，记录技术负责人已答的 **T01—T08** 原话（含 **通途尾程人工导入、导入后次日才显示、一次下载不能跨太久、EN `tongtool_integration` 待完善、报表 FBA 订单不一定在通途**）作为 Codex 接手入口。
 - **合并为单份底稿（Notion 可直接导入）**：把填写区重排为 Notion 友好的 4 列表（编号/需确认事项/建议/你的答复+证据）、相对链接改为纯文本仓库路径、`<>` 自动链接改裸 URL，并删除临时派生稿——底稿本身即可导入 Notion，不再有第二份会漂移的副本。
