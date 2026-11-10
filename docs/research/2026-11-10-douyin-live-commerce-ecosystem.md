@@ -524,7 +524,32 @@ EN（ERPNext）
 
 > 所以：**订单侧自研是合理选择**，前面几轮的谨慎主要卡在"资质 + 你已排除 SaaS"，而不是技术。真要把风险压到最低，建议顺序是 **Excel 桥先跑通闭环 → 软著并行办 → 换 API 只替换取数层**。
 
+### 11.5 三个社区开源件评估（2026-11-10 实测元数据）
+
+> 数据来自 GitHub API + 仓库内文件，未做功能实测。**许可证决定"能不能抄代码"，平台规则决定"能不能上线"。**
+
+| 项目 | 许可证 | 技术栈 | 活跃度 | 能借什么 | 不能用在哪 |
+|---|---|---|---|---|---|
+| [`whalesky-labs/doudian-sdk`](https://github.com/whalesky-labs/doudian-sdk) | **MIT** | PHP ≥7.2，Guzzle + Swoole 协程/连接池 | 14★ / 1 fork，最后推送 **2026-03-18** | 710+ 接口的方法清单、**HMAC-SHA256 签名实现**、**token 自动刷新+缓存**、重试与连接池策略、85% 测试覆盖率可参照 | 我们是 Python/Frappe，**不能直接用**；单人维护，新接口覆盖需自行核对 |
+| [`qiutongxue/oba-live-tool`](https://github.com/qiutongxue/oba-live-tool) | **MIT** | TypeScript + **Electron + Playwright** + ws + openai | 1787★ / 341 fork / 65 issues，最后推送 **2026-11-07**（极活跃） | **Playwright 接管直播中控台**的完整落地（登录态、消息监听、WebSocket 广播、AI 回复链路）；多平台适配器结构 | ⚠️ **它是"平台没开放 API 才这么干"的产物**。自动发言、自动弹窗、刷互动属平台明令打击的"虚假人气/虚假互动"，**生产用有封号/限流风险** |
+| [`cs-lazy-tools/ChatGPT-On-CS`](https://github.com/cs-lazy-tools/ChatGPT-On-CS) | **AGPL-3.0** | TypeScript + **Electron + sqlite3** + openai | 4591★ / 592 fork，最后推送 **2026-10-10** | **多平台消息适配层**的设计（每平台一个 adapter，统一消息结构）、知识库/多模型配置、人工接管判定 | ⚠️ **AGPL 传染性**：改后若让外部用户通过网络访问，必须开源修改。**不建议 fork 进私有库**；另注意它是**桌面客户端**，不是服务端，README 自称 SaaS 但开源的是客户端 |
+
+**三条判断**：
+
+1. **`doudian-sdk` 最"干净"**：MIT、有测试、签名/token 实现可直接对照。虽然语言不同，但签名算法、token 缓存、重试退避这些是跨语言的，**读它就等于省掉最容易出错的一块**。
+2. **`oba-live-tool` 技术参考价值最高，合规风险也最高**。可以借它的 Playwright 接中控台方案，但**只做"只读看板/消息提醒"**，不要做自动发言和自动互动——这两件事在平台规则里是"制造虚假人气"，处罚不是限流就是封禁。
+3. **`ChatGPT-On-CS` 功能最贴，许可证最麻烦**。AGPL-3.0 下最稳妥的用法是**只读代码、重写实现**，或做成独立进程 + HTTP 边界隔离，不要把它当私有代码库的一部分。
+
+**低成本验证建议（各半天，风险可控）**：
+
+| 项目 | 怎么测 | 规避什么 |
+|---|---|---|
+| doudian-sdk | 只读 `src/` 的签名与 token 刷新，和官方文档逐条对 | 不需要真实店铺 |
+| oba-live-tool | 用**小号/测试店**连中控台，**只读评论、关闭一切自动发送** | 不要用主店铺号；不要开自动发言/自动弹窗 |
+| ChatGPT-On-CS | 本地跑通一个测试会话，重点看 adapter 怎么抽象 | 不要接生产飞鸽账号 |
+
 ---
+
 
 ## 12. 参考来源
 
@@ -575,6 +600,11 @@ EN（ERPNext）
 - 自研商家对接完整准入清单：https://blog.51cto.com/u_16482102/13287049
 - ISV 对自研成本的说法（立场需打折）：https://www.hupun.com/articles/can-ecommerce-system-connect-douyin-erp-solution.html
 - 聚合 API 路线（绕过资质的代价）：https://www.dianapi.com/biaozhunduijie.htm
+
+**社区开源件（§11.5，已核元数据，未功能实测）**
+- PHP SDK（MIT，710+ 接口，签名/token/Swoole）：https://github.com/whalesky-labs/doudian-sdk
+- 直播中控自动化（MIT，Electron+Playwright，1787★）：https://github.com/qiutongxue/oba-live-tool
+- 多平台 AI 客服（**AGPL-3.0**，Electron+sqlite3，4591★）：https://github.com/cs-lazy-tools/ChatGPT-On-CS
 
 **字段口径（火山引擎官方文档，抖店数据接入）**
 - `buyer_words` / `seller_words` / `encrypt_*` 字段字典：https://docs.volcengine.com/docs/Dataagent/DouyinStoreDataAccess
