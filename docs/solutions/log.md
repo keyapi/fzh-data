@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-03（钉钉群采集 / claude stdin / worktree 计划任务）
+
+- **新增**: `tooling-decisions/dingtalk-group-harvest-dws-user-identity.md` —— 钉钉群历史消息/文件归档用 DWS 个人 OAuth 身份，而不是群机器人、企业内部应用或会话存档；完整性账本 + 水位 + 文件去重 + 数据落仓库外。
+- **新增**: `developer-experience/claude-headless-long-prompt-stdin.md` —— Windows 下 `claude -p` 长提示词塞进 argv 会超 32K 限制并静默回退；改为 `subprocess.run([cli, "-p"], input=prompt)`。
+- **新增**: `developer-experience/windows-schtasks-worktree-path-trap.md` —— 在 worktree 里注册 schtasks 会把任务指向临时目录；合并后必须在主仓库重跑安装脚本。
 ## 2026-11-06（邮件域名到期 / Gmail 550-5.7.26）
 
 - **新增**: `integration-issues/email-domain-expiry-gmail-550-5-7-26.md` —— 域名 2026-11-03 到期后，阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析，腾讯企业邮发出的邮件被 Gmail 以 550-5.7.26 硬拒。11-04 续费成功但邮件未恢复：**续费 ≠ 恢复**，必须回查注册局 NS 并确认记录在服务（直接问权威 NS，不只看控制台）。另一层陷阱是**注册商 ≠ DNS 托管商**（阿里云注册、DNSPod 解析；主域 `vilavi.cn` 在 Cloudflare）。DKIM selector 是腾讯企业邮生成的自定义随机串（`sjnr2306` / `evhe2306`），常见 selector 全 NXDOMAIN 不能证明“没有 DKIM”。恢复后补 DMARC `p=none`、修 MX 优先级 5/10。

@@ -154,6 +154,7 @@ uv sync
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
+| `dingtalk-group-harvest` | `dingtalk/dingtalk_group_harvest/` | 钉钉 AI 项目群：DWS 个人身份增量采集群消息/附件/文档 + 周报（数据落仓库外） |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
@@ -185,6 +186,7 @@ uv sync
 | `design-md` | `.agents/skills/design-md/` | 创建/管理 DESIGN.md（设计方向、tokens、视觉规则单一事实源） |
 | `design-review` | `.agents/skills/design-review/` | 视觉审查 → 原子提交修复 + 前后对比截图（上线前收紧 UI） |
 | `dingtalk-robot` | `.agents/skills/dingtalk-robot/` | 钉钉自定义机器人通知 + 文件附件（经 ERPNext 中转，ActionCard 推送下载链接） |
+| `dingtalk-group-harvest` | `.agents/skills/dingtalk-group-harvest/` | 钉钉 AI 项目群消息/文件/文档增量采集 + 周报（DWS 个人身份，数据落仓库外） |
 | `ecommerce-image-workflow` | `.agents/skills/ecommerce-image-workflow/` | 参考商品图 → 紧凑电商图片集（主图/特性图/场景图） |
 | `erpnext-item-create` | `.agents/skills/erpnext-item-create/` | EN 物料/变体创建（值表→属性→模板→变体→配套物料） |
 | `frontend-design` | `.agents/skills/frontend-design/` | 有辨识度的生产级前端界面（网页/落地页/仪表盘/组件） |
@@ -269,8 +271,8 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 | `workflow-issues/` | 31 | 账期对账、迟交/错位、跨期结算、批处理流程 |
 | `integration-issues/` | 23 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
 | `architecture-patterns/` | 18 | 「这个管道/系统为什么这样设计」 |
-| `tooling-decisions/` | 13 | 脚本、工具选型、产出校验 |
-| `developer-experience/` | 10 | Windows / worktree / MCP / Colab 等本机环境坑 |
+| `tooling-decisions/` | 14 | 脚本、工具选型、产出校验 |
+| `developer-experience/` | 12 | Windows / worktree / MCP / Colab 等本机环境坑 |
 | `conventions/` | 9 | 团队约定（配对、命名、SOP） |
 | `best-practices/` | 8 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
 | `documentation-gaps/` | 2 | 文档与断言的缺口 |

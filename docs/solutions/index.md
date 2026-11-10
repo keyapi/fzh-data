@@ -13,6 +13,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-03 | 钉钉群文件与聊天归档 — 用 DWS 个人身份，不用群机器人 | [tooling-decisions/dingtalk-group-harvest-dws-user-identity.md](tooling-decisions/dingtalk-group-harvest-dws-user-identity.md) |
+| 2026-11-03 | Windows 计划任务在 worktree 里注册会指向临时目录 | [developer-experience/windows-schtasks-worktree-path-trap.md](developer-experience/windows-schtasks-worktree-path-trap.md) |
+| 2026-11-03 | Windows 下 claude -p 长提示词必须走 stdin，不能塞进 argv | [developer-experience/claude-headless-long-prompt-stdin.md](developer-experience/claude-headless-long-prompt-stdin.md) |
 | 2026-11-06 | 邮件域名到期 → Gmail 550-5.7.26 拒收：续费≠恢复，注册商≠DNS 托管商 | [integration-issues/email-domain-expiry-gmail-550-5-7-26.md](integration-issues/email-domain-expiry-gmail-550-5-7-26.md) |
 | 2026-11-05 | EN 服务器 git push 报 Permission denied (publickey) —— 密钥没问题，是 GitHub SSH 链路间歇性阻断 | [integration-issues/github-ssh-intermittent-publickey-denied.md](integration-issues/github-ssh-intermittent-publickey-denied.md) |
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |
