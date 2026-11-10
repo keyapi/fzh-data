@@ -83,7 +83,47 @@ Codex 那套 `sellfox_settlement` 已经明确分开两套窗口：
 - **V2→成本连接已跑**（`十表V2成本连接_202610_*.xlsx`）：交易行 **FBM 99.1%（15,713/15,862）、FBA 95.8%（9,116/9,513）**；订单级 **FBM 99.4%（3,067/3,084）、FBA 95.9%（1,556/1,623）**；未匹配订单 84 个进异常。无 fulfillmentId 的 1,006 行是费用/调整/转账，不参与订单连接。
 - 待做：结算银行桥（缺银行到账输入）、账号法人（待 ZJ 法人表），其余表可从 PDF/V2 汇总后合成十表。
 
-## 7. 参考
+## 7. 84 个未匹配订单：原因（已核到 EN）
+
+- **FBA 67**：EN 里**完全没有**该订单 → 通途 FBA 未导入。其中 **62 个集中在 `百纳-BNCKTRD-US`**，`Daneey-LELEFIDO-NL` 3、`FZH深圳-Strusery-US` 1、`北京如森-Rucener-DE` 1。扩更早月份**无效**（不是回看不够，是没导入）。
+- **FBM 17**：EN 里有（`order_type=自发货`），销售时间 9/8–9/22（10 个）或 10 月（7 个），**`despatch_complete_time` 多为空（14 个未发货）、3 个 11 月才发** → 不在"按发货日期"的通途导出。属**未发货/晚发**，不是丢数。
+
+**结论：84 个不是"月份不够"，扩到 8 月或更早不会改善。** FBA 缺是导入缺口（先查百纳美国），FBM 缺是未发货。
+
+## 8. 退款：V2 里有、且大量跨月
+
+- V2 10 月 `Refund` 行 **2,190 行 / 393 个订单**。
+- 按原单发货/销售月：**2026-08 20、2026-09 197、2026-10 160、未知 16** → **约 55% 的 10 月退款来自 8/9 月的单**。
+- 退款**确实在 V2 里**（含退款本金、税、佣金退回等），必须按 `orderId` 连回原单，并保留"原单月 vs 记账月"两列。冲减原月还是计入退款月，是会计口径，待 ZJ 确认。
+
+## 9. 订单主数据：EN / 通途导出 / 通途 API 的分工
+
+- **EN `tabTongtool Order`**：按**销售时间**同步，**未发货的也在**（`despatch_complete_time` 为空）→ 适合"订单存在性/销售归属"主数据。
+- **通途非FBA导出**：按**发货日期**，只有已发货 → 适合取**尾程/发货成本**；未发货单不在。
+- **通途 API**：可实时查订单（含 FBA），补 EN 未导入的（如百纳美国 62 单）。
+- 结论：**订单存在性以 EN/通途 API 为准，发货与尾程以通途导出为准**；FBA 同理。
+
+## 10. 行业做法（外部调研）
+
+- Settlement report 是**现金与费用的唯一真相**（posted-date），**不是 COGS 真相**；贡献毛利要另配各 SKU 成本。
+- 勾稽按 `order id + posted date + 时区`；退款、费用纠正、赔偿都可能**跨期**。
+- **账户级费用**（仓储、长期仓储、订阅等）**没有 SKU/订单号**；按"有 SKU"过滤会把它们丢掉，毛利率虚高 1–3 个点。
+- **预留金（reserve）是资产负债表项**，不是费用；不要当亏损。
+- **站外广告不在结算里** → 基于结算的 TACoS 会低估。
+- 40+ `amount-description` 归 6 个 P&L 块：销售额、促销、退款、佣金、FBA 费、其他调整；赔偿/chargeback 单列。
+- 来源：<https://www.datadoe.com/blog-posts/amazon-settlement-reports-reconciliation>、<https://novadata.io/resources/blog/amazon-settlement-report-guide>、<https://thefbaguys.com/blog/how-to-read-amazon-settlement-report>、<https://www.neonpanel.com/blog/amazon-seller-reconciliation-payments-fees-inventory>
+
+## 11. 修订后的规划：V2 如何用于"运营利润业绩"
+
+1. **费用真相层**：V2 逐行按 amount-type/description 归 6 块；**保留无 SKU 的账户级费用**，单列"未分摊费用池"。
+2. **订单层**：EN 为订单主数据（含未发货）；通途导出取发货/尾程；通途 API 补 FBA。
+3. **成本层**：SKU 成本（EN BOM/Cost Review）+ 头程 + 尾程（通途运费/EN 预估）+ FBA 履约费（V2）。
+4. **退款/退货**：退款按 orderId 连原单，原单月/记账月双列；退货入库与不可售另记。
+5. **分摊**：账户级费用、站外广告、赔偿/chargeback 单列，再按 销售额/件数/仓储体积 分摊到 账号/SKU/运营。
+6. **业绩口径**：账号 → 运营 → SKU/ASIN 的 毛销售、退款率、平台费、广告、COGS、贡献毛利；预留金只做现金层。
+7. **必查项**：百纳美国 FBA 未导入 62 单；FBM 未发货 14 单是否在途；站外广告缺失；账户级费用未分摊。
+
+## 12. 参考
 
 - `sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md`（十表口径与分层）
 - `tongtool_order_cost/docs/research/2026-08-14-june-fba-sku-remap.md`（FBA 缺口/SKU 改名）
