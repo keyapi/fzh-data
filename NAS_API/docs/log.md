@@ -6,6 +6,14 @@ title: NAS_API 变更日志
 
 # 变更日志
 
+## 2026-11-10
+
+- **新增** `reference/router-port-forward-inventory.md` — 办公室搬迁前的光猫（中兴 ZXHN F4610U）只读盘点：16 条端口转发逐条实测（其中 `5000`、`2049`、`111`、`892` 为内网无监听的死规则）、4 条静态 DHCP 绑定、LAN/PPPoE/DDNS/DMZ/ALG/防火墙/WiFi 现状，以及「新设备逐条重建」与「转发下沉 OpenWrt + DMZ」两套恢复方案。
+- **事实修正**：`AGENT_HANDOFF.md` 原记光猫公网 IP `123.117.236.65`，实测已变为动态 IP；端口转发也不止 3 条，现以清单文档为准。
+- **敏感值**不入库，存 `NAS_API/secrets/router-f4610u.local.md`（gitignore）。
+- **决策**：公网 IPv4 为硬性前提（无 CGNAT）；宽带账号密码由联通配置；`13306` MariaDB 决定关闭；`5000`/`2049`/`111`/`892` 四条死规则只记录、换设备时再处理。
+- **执行**：2026-11-10 已在光猫删除 `NASMariaDB`（13306）规则，现网端口转发由 16 条降为 15 条。
+
 ## 2026-09-20
 
 - **修复（链接）**：`reference/nas-multi-domain-access.md` 三条链接少退一级 —— `../AGENT_HANDOFF.md` → `../../AGENT_HANDOFF.md`；指向根 `docs/solutions/...` 与 `us_openai_api_proxy/...` 的由 `../../` → `../../../`。`.agents/skills/nas-access/SKILL.md` 指向本仓库的 3 条链接同样由 `../../` → `../../../`。

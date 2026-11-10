@@ -11,6 +11,7 @@ tags: [nas, synology, quickconnect, index]
 | 类型 | 文件 | 说明 |
 |------|------|------|
 | Reference | [reference/nas-multi-domain-access.md](reference/nas-multi-domain-access.md) | 多域名访问架构、证书、DDNS、反代、QC 选路 |
+| Reference | [reference/router-port-forward-inventory.md](reference/router-port-forward-inventory.md) | 光猫 16 条端口转发、静态 DHCP 绑定、搬家迁移方案 |
 | Log | [log.md](log.md) | 变更历史 |
 | Agent | [../AGENT_HANDOFF.md](../AGENT_HANDOFF.md) | Agent 接手速查 |
 
