@@ -18,10 +18,10 @@ import pandas as pd
 
 BASE = Path("D:/Work/fzh-order-store/analysis")
 D5 = BASE / "D5v6_7-novcast/D_概率与服务_D5_v6_7_2026-11-09.xlsx"
-D6 = BASE / "D6v6_18-1109/D_Top50沙盒_D6_v6_18_2026-11-09.xlsx"
+D6 = BASE / "D6v6_19-1110/D_Top50沙盒_D6_v6_19_2026-11-10.xlsx"
 V6 = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-06_v6.xlsx"
-OUT = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-09_v9.xlsx"
-DECISION = pd.Timestamp("2026-11-09")
+OUT = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-10_v10.xlsx"
+DECISION = pd.Timestamp("2026-11-10")
 JAN24 = pd.Timestamp("2027-01-24")
 RESTART = pd.Timestamp("2027-02-22")
 PREHAUL = 2

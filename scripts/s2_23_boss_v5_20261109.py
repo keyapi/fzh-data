@@ -13,21 +13,21 @@ from openpyxl.utils import get_column_letter
 BASE = Path("D:/Work/fzh-order-store/analysis")
 D5 = BASE / "D5v6_7-novcast/D_概率与服务_D5_v6_7_2026-11-09.xlsx"
 NC = BASE / "nov_nowcast_20261109.csv"
-D6 = BASE / "D6v6_18-1109/D_Top50沙盒_D6_v6_18_2026-11-09.xlsx"
-CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-09_v9.xlsx"
-TRAJ = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-09_v9.xlsx"
+D6 = BASE / "D6v6_19-1110/D_Top50沙盒_D6_v6_19_2026-11-10.xlsx"
+CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-10_v10.xlsx"
+TRAJ = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-10_v10.xlsx"
 V15 = BASE / "S2_9-delivery-final-20261106/D_补货交付包_2026-11-06_final_v15.xlsx"
 A = BASE / "SKU活跃宇宙_2026-10-29_FINAL.xlsx"
 W3 = BASE / "round15_60cm_dnpo_audit.csv"
-C14 = BASE / "C-refresh-20261109/通途库存_A337_v15_refresh_2026-11-09.xlsx"
-EN_STOCK = BASE / "en_stock_20261109.parquet"
-CG_STOCK = BASE / "cg_stock_20261109.parquet"
+C14 = BASE / "C-refresh-20261110/通途库存_A337_v15_refresh_2026-11-10.xlsx"
+EN_STOCK = BASE / "en_stock_20261110.parquet"
+CG_STOCK = BASE / "cg_stock_20261110.parquet"
 D2B = BASE / "D_删失需求估计_D2b_v2_2026-11-02.xlsx"
-ORDERS_D6 = Path("D:/Work/fzh-order-store/orders_unified.parquet")
-ORDERS_NOV = BASE / "tongtool_orders_20261101_20261108.parquet"
-OUT = BASE / "D_老板版补货建议_2026-11-09_v5.1.xlsx"
+ORDERS_D6 = Path("D:/Work/fzh-order-store/orders_unified_20261110.parquet")
+ORDERS_NOV = BASE / "tongtool_orders_20261101_20261109.parquet"
+OUT = BASE / "D_老板版补货建议_2026-11-10_v5.2.xlsx"
 KEYS = ["product_id", "池", "形态", "UOM"]
-AS_OF = pd.Timestamp("2026-11-09")
+AS_OF = pd.Timestamp("2026-11-10")
 
 
 def sha(p) -> str:
@@ -181,11 +181,11 @@ def main() -> int:
 
     def first_order(r):
         if r["是否春节方案"]:
-            return "2026-11-09"
+            return AS_OF.date().isoformat()
         if str(r.get("推荐main_haul", "")) == "路线待确认":
             return ""
         if str(r.get("建议动作")) == "催已有":
-            return "2026-11-09" if num(r, "新补数量") > 0 else ""
+            return AS_OF.date().isoformat() if num(r, "新补数量") > 0 else ""
         if pd.notna(r["下单日"]):
             return (AS_OF if r["下单日"] < AS_OF else r["下单日"]).date().isoformat() \
                 if hasattr(r["下单日"], "date") else str(r["下单日"])
@@ -440,12 +440,14 @@ def main() -> int:
 
     summary = pd.DataFrame([
         ("覆盖范围", f"三个分公司全部 {len(out)} 个需求键；不是子集。"),
-        ("数据日期", "预测基准 2026-11-02（叠加 11/1–8 同店修正）；库存/CG/EN 2026-11-09；"
-                    "通途订单截至 11-08；PO 2026-11-05；动作重核 2026-11-09。"),
+        ("数据日期", "预测基准 2026-11-02（叠加 11/1–8 同店修正）；库存/CG/EN 2026-11-10；"
+                    "11/09 EN 订单同步不完整；PO 2026-11-05；动作重核 2026-11-10。"),
         ("春节方案", f"{len(cny_rows)} 键/{cny_rows['建议补多少'].sum():,.0f} 件；"
-                  f"按 A/B 原目标重新判定；首批下单已按 11-09 重排。"),
+                  f"按 A/B 原目标重新判定；首批下单已按 11-10 重排。"),
         ("春节第二批停工", f"195 键需停工前插单（142 键有正第二批）；"
-                      "14 个可确认里 6 个，风险情景 2 个失去目标。"),
+                      f"{int(out['一句话建议'].eq('可以补-待确认').sum())} 个可以补 + "
+                      f"{int(out['一句话建议'].eq('先换运输-原目标已过').sum())} 个改空运里 6 个，"
+                      "风险情景 2 个失去目标。"),
         ("原目标核对", f"无断货/无补救/非零中位数 {tgt_total} 键：{tgt_yes} 达、"
                     f"{tgt_total - tgt_yes} 未达。"),
         ("可以补-待确认", f"{len(out[out['一句话建议'].eq('可以补-待确认')])} 键/"
@@ -591,18 +593,21 @@ def main() -> int:
     dictionary = pd.DataFrame(dict_rows, columns=["名词", "白话解释", "怎么用"])
 
     data_notes = pd.DataFrame([
-        ("库存/CG/EN", "2026-11-09", "已接入；C14 六桶对账仍未全绿，数值可用但保留瑕疵"),
-        ("通途订单", "D5 nowcast 11/01–11/08；D6 CG 销量 orders_unified 截至 10/31",
-         "两个文件不是同一口径；D6 主补货动作不依赖 orders_unified，只影响 CG 销量展示"),
+        ("库存/CG/EN", "2026-11-10", "已接入；C14 六桶对账仍未全绿，数值可用但保留瑕疵"),
+        ("通途订单", "D5 nowcast 11/01–11/08；11/09 EN 277 单中 263 单无明细，14 行全是 FBA（美13/法1），EN 三仓 0 明细，未用于 nowcast；D6 CG 销量 10/31",
+         "11/09 EN 订单同步不完整；D6 主补货动作不依赖 orders_unified，只影响 CG 销量展示"),
         ("需求预测", "基准 2026-11-02 + 11/1–8 同店修正", "D5 v6.7；p10/p50/p90/q85/q90/q95 同乘因子，分位次序已校验"),
-        ("PO", "2026-11-05", "通途采购单未收队列 po_open_receipt_queue_20261105.csv；不是 EN Purchase Order。去重后仅 22 件/2 键进入 D6；19+24 候选不依赖 PO"),
+        ("PO", "2026-11-05", "通途采购单未收队列 po_open_receipt_queue_20261105.csv；不是 EN Purchase Order。去重后仅 22 件/2 键进入 D6；候选 44 行不依赖 PO"),
         ("60cm / DN-PO", "2026-11-05 审计", "逐键 11-09 覆盖未重跑；历史量不是当前采购量"),
         ("D5 模型对比", "2024/2025 回测", "使用 2026-11 选定的模型标签，存在前视；只能作回放诊断，不能证明当时生产流程胜出"),
         ("运输路线", f"{int((out['动作'].eq('先确认路线')).sum())} 个键路线待确认", "这些键没有可信到仓日，已从下单表移到拍板表"),
-        ("春节第二批", f"195 个键需停工前插单（其中 142 个有正第二批）；14 个可确认里有 6 个", "不提前插单，6 个里 2 个会失去原目标"),
+        ("春节第二批", f"{int(cny['第二批需停工前插单'].sum())} 个键需停工前插单；"
+                    f"{int(out['一句话建议'].eq('可以补-待确认').sum())} 个可以补、"
+                    f"{int(out['一句话建议'].eq('先换运输-原目标已过').sum())} 个改空运；"
+                    "不提前插单，风险情景 2 个失去原目标"),
     ], columns=["项目", "时点/范围", "说明"])
 
-    risk_path = BASE / "S2_9-delivery-final-20261106/D_春节第二批停工风险_2026-11-09.xlsx"
+    risk_path = BASE / "S2_9-delivery-final-20261106/D_春节第二批停工风险_2026-11-10.xlsx"
     risk_all = pd.read_excel(risk_path, sheet_name="2_逐键")
     cny_ok_keys = out.loc[out["一句话建议"].eq("可以补-待确认"), ["分公司", "商品编码"]]
     risk6 = cny_ok_keys.merge(risk_all, on=["分公司", "商品编码"], how="left")
@@ -622,6 +627,8 @@ def main() -> int:
     late1_7 = out[out["动作"].isin(order_actions) & out["动作"].ne("今天重下")
                   & out["首批数量"].gt(0)
                   & out["到仓晚于需求天数"].between(1, 7)]
+    late8_all = int((dec_late["到仓晚于需求天数"].fillna(-99) >= 8).sum())
+    late1_7_2c = int(dec_late["到仓晚于需求天数"].between(1, 7).sum())
     exp_route = dec_route[dec_route["一句话建议"].eq("催已有+新增")]
     boss = pd.DataFrame([
         ("今天/本周要下的单", f"{len(p1)} 个商品，{p1_qty:,} 件"
@@ -641,20 +648,24 @@ def main() -> int:
                   f"{out.loc[out['一句话建议'].isin(['未达原目标-需调整','换运输也不达原目标-需调整']),'建议补多少'].sum():,.0f} 件",
          "看 2_需要拍板，每行都写了选项 A/B 和后果"),
         ("物流先确认路线", f"{len(dec_route)} 个商品路线待确认", "转物流；没有路线就没有可信到仓日，先不要下单"),
-        ("到仓晚 8 天以上", f"{late8_n} 行 / {late8_qty:,} 件，已从下单表移到 2c",
-         "转运营/物流；能接受晚到就重下，不能就空运"),
-        ("到仓晚 1–7 天", f"{len(late1_7)} 行，留在下单表但标了晚几天", "先核对提前期；能接受就下，不能就空运"),
-        ("运营重排仍晚", f"{len(dec_late)} 个商品（含今天重下晚到 + 到仓晚 8 天以上）",
-         "转运营/物流；能接受晚到就重下，不能就空运"),
+        ("2c 重排/晚到", f"{len(dec_late)} 行/{dec_late['下单件数'].sum():,.0f} 件；"
+                    f"其中 {late8_all} 行晚 8 天以上、{late1_7_2c} 行晚 1–7 天",
+         "看 2c；105 行未来单（重排说明为空）+83 行今天重下，不要与 105 相加"),
+        ("到仓晚 1–7 天（仍在 1 表）", f"{len(late1_7)} 行，留在下单表但标了晚几天", "先核对提前期；能接受就下，不能就空运"),
         ("暂不下单", f"{len(noorder)} 个商品", "库存够或证据不足；看 3_暂不下单"),
-        ("最大风险", "113 个商品/7,586 件所有运输都赶不上断货日；"
-                  "54 个商品/2,696 件达不到原目标",
+        ("最大风险", f"{len(out[out['一句话建议'].eq('可能断货-需拍板')])} 个商品/"
+                  f"{out.loc[out['一句话建议'].eq('可能断货-需拍板'),'建议补多少'].sum():,.0f} 件"
+                  "所有运输都赶不上断货日；"
+                  f"{len(out[out['一句话建议'].isin(['未达原目标-需调整','换运输也不达原目标-需调整'])])} 个商品/"
+                  f"{out.loc[out['一句话建议'].isin(['未达原目标-需调整','换运输也不达原目标-需调整']),'建议补多少'].sum():,.0f} 件达不到原目标",
          "这两类不能靠运营自己决定，必须计划和业务拍板"),
-        ("春节第二批", f"14 个可以补里，{len(risk6)} 个第二批必须停工前插单；不插单 {int(risk6['停工后失去目标'].sum())} 个会失去目标",
+        ("春节第二批", f"{int(out['一句话建议'].eq('可以补-待确认').sum())} 个可以补 + "
+                  f"{int(out['一句话建议'].eq('先换运输-原目标已过').sum())} 个改空运里，"
+                  f"{len(risk6)} 个第二批必须停工前插单；不插单 {int(risk6['停工后失去目标'].sum())} 个会失去目标",
          "看 7_春节第二批停工风险；要工厂确认 12 月产能"),
-        ("数据可信度", "库存/CG/EN 11-09；D5 用 11/01–08 订单；历史销量/CG 只到 10-31；"
-                  "PO 11-05；60cm 11-05",
-         "会上说明历史销量只到 10-31；新单按 43 行；PO/60cm 未刷新"),
+        ("数据可信度", "库存/CG/EN 11-10；D5 用 11/01–08；11/09 EN 277 单中 263 单无明细，"
+                  "14 行全是 FBA（美13/法1），EN 三仓 0 明细；历史销量/CG 10-31；PO 11-05；60cm 11-05",
+         "会上说明 11/09 EN 三仓 0 明细；新单按 1 表 P1；PO/60cm 未刷新"),
         ("看表顺序", "老板看 0；运营下单看 1；要拍板看 2；物流看 2b；重排晚看 2c；"
                   "工厂看 7；8–13 是审计底稿，不用先看", "按角色分表，不要从 8_全量底稿 直接下单"),
     ], columns=["事项", "结论", "你要做什么"])
@@ -683,7 +694,9 @@ def main() -> int:
     ], columns=["项", "结论"])
 
     corrections = pd.DataFrame([
-        ("v2 / v3b / v4", "历史讨论版，已作废；不作为采购依据。"),
+        ("v2 / v3b / v4 / v5.1", "历史讨论版，已作废；v5.2 为 11-10 刷新版。"),
+        ("v5.2 数据刷新", "库存/CG/EN 11-10；C14 11-10；D6 v6.19；CNY v10；轨迹 v10；"
+                        "11/09 EN 订单同步不完整，未用于 nowcast。"),
         ("v5.1 修 1", "同店修正改为对 point_forecast 与 p10/p50/p90/q85/q90/q95 同乘一个因子；"
                      "复算后分位次序 0 违反。"),
         ("v5.1 修 2", f"春节第二批按停工日历重排：{int(cny['第二批需停工前插单'].sum())} 个键改为停工前做完；"
@@ -736,9 +749,9 @@ def main() -> int:
     tail_big = censor_cmp[
         (censor_cmp["当前建议量"].fillna(0) > 0)
         & (censor_cmp["估算新增需求"] > 0.5 * censor_cmp["当前建议量"].fillna(0))]
-    cand43 = out[((out["方案类型"].eq("春节方案")) & (out["目标结果"].eq("达到")))
-                 | out["动作"].eq("催在途")][
-        ["分公司", "商品编码", "形态", "单位"]].merge(
+    cand_all = ops[(ops["方案类型"].eq("春节方案")) | (ops["动作"].eq("催在途"))][
+        ["分公司", "商品编码", "形态", "单位"]]
+    cand43 = cand_all.merge(
         censor_cmp[["分公司", "商品编码", "形态", "单位", "估算新增需求"]],
         on=["分公司", "商品编码", "形态", "单位"], how="inner")
     censor_summary = pd.DataFrame([
@@ -748,10 +761,11 @@ def main() -> int:
          "q95 × (D2b估计/观测 − 1)，是上界情景，不是点估计"),
         ("其中当前动作=补", int(censor_cmp["当前建议"].astype(str).str.startswith("补").sum()),
          "这些键最可能被低估"),
-        ("是否进主表", "否", "不改 v5.1 下单量；先作为断货上界情景"),
-        ("建议", "不按全量 3,196 件加", "43 行仅 8 行命中、+54 件；现有下单已覆盖上界净需求"),
+        ("是否进主表", "否", "不改 v5.2 下单量；先作为断货上界情景"),
+        ("建议", "不按全量 3,196 件加",
+         f"候选 {len(cand_all)} 行中 {len(cand43)} 行命中、+{cand43['估算新增需求'].sum():,.0f} 件；现有下单已覆盖上界净需求"),
         ("可选保守试点", f"{len(tight)} 键 / {tight['估算新增需求'].sum():,.0f} 件",
-         "倍数<1.25、删失月≤2、当前动作=补；与 43 行交集 0；会后业务决定"),
+         f"倍数<1.25、删失月≤2、当前动作=补；与候选 {len(cand_all)} 行交集 0；会后业务决定"),
         ("全量上界不采用原因",
          f"倍数≥2：{len(tail_ratio)} 键/+{tail_ratio['估算新增需求'].sum():,.0f}；"
          f"删失≥5月：{len(tail_months)} 键/+{tail_months['估算新增需求'].sum():,.0f}；"
@@ -761,8 +775,8 @@ def main() -> int:
     boss = pd.concat([boss, pd.DataFrame([
         ("断货影响",
          f"D2b 上界 {len(censor_cmp)} 键/+{censor_cmp['估算新增需求'].sum():,.0f} 件；"
-         f"建议不加全量。43 行仅 {len(cand43)} 行命中/+{cand43['估算新增需求'].sum():,.0f} 件",
-         f"43 行现有下单已覆盖；可选保守试点 {len(tight)} 键/+{tight['估算新增需求'].sum():,.0f} 件，"
+         f"建议不加全量。候选 {len(cand_all)} 行中 {len(cand43)} 行命中/+{cand43['估算新增需求'].sum():,.0f} 件",
+         f"候选行现有下单已覆盖；可选保守试点 {len(tight)} 键/+{tight['估算新增需求'].sum():,.0f} 件，"
          "看 15 后由业务决定"),
     ], columns=["事项", "结论", "你要做什么"])], ignore_index=True)
     data_notes = pd.concat([data_notes, pd.DataFrame([
@@ -775,15 +789,15 @@ def main() -> int:
     src = pd.DataFrame([
         ("D5 v6.7", str(D5), sha(D5)),
         ("11/1–8 同店修正", str(NC), sha(NC)),
-        ("D6 v6.18", str(D6), sha(D6)),
-        ("CNY v9", str(CNY), sha(CNY)),
-        ("轨迹 v9", str(TRAJ), sha(TRAJ)),
-        ("C14 11-09 刷新", str(C14), sha(C14)),
-        ("EN 库存 11-09", str(EN_STOCK), sha(EN_STOCK)),
-        ("CG 库存 11-09", str(CG_STOCK), sha(CG_STOCK)),
+        ("D6 v6.19", str(D6), sha(D6)),
+        ("CNY v10", str(CNY), sha(CNY)),
+        ("轨迹 v10", str(TRAJ), sha(TRAJ)),
+        ("C14 11-10 刷新", str(C14), sha(C14)),
+        ("EN 库存 11-10", str(EN_STOCK), sha(EN_STOCK)),
+        ("CG 库存 11-10", str(CG_STOCK), sha(CG_STOCK)),
         ("D2b 删失需求", str(D2B), sha(D2B)),
         ("orders_unified（D6 CG 销量）", str(ORDERS_D6), sha(ORDERS_D6)),
-        ("11/01–08 订单（D5 nowcast）", str(ORDERS_NOV), sha(ORDERS_NOV)),
+        ("11/01–09 订单（D5 nowcast 用 01–08）", str(ORDERS_NOV), sha(ORDERS_NOV)),
         ("v15 历史交付包", str(V15), sha(V15)),
         ("A 活跃宇宙", str(A), sha(A)),
         ("60cm/DN-PO 审计", str(W3), sha(W3)),
@@ -817,7 +831,7 @@ def main() -> int:
         target31.to_excel(w, sheet_name="9_服务目标核对", index=False)
         past6.to_excel(w, sheet_name="10_新过期清单", index=False)
         src.to_excel(w, sheet_name="11_数据来源", index=False)
-        corrections.to_excel(w, sheet_name="12_v5.1改了什么", index=False)
+        corrections.to_excel(w, sheet_name="12_v5.2改了什么", index=False)
         po60.to_excel(w, sheet_name="13_60cm与DN-PO（审计）", index=False)
         keys60.to_excel(w, sheet_name="13b_60cm逐键", index=False)
         pivot.to_excel(w, sheet_name="14_分公司汇总", index=False)
