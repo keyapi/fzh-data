@@ -423,6 +423,10 @@ def _unit_costs(
     # 二次加工
     if bucket in FBA_BUCKETS:
         processing = 0.0
+    elif method == METHOD_FINISHED and bucket in ("USNJ", "USTX", "PL"):
+        # 分公司发成品：目的地不再加工，加工成本固定 0（BOM 里 PL 成品 valuation
+        # 是历史遗留，如 PLBZCP#KS0230-60=85.05；等 BOM 表重生后也会清 0）。
+        processing = 0.0
     elif bucket == "USNJ":
         processing = _num(bom.get("usnj_valuation_rate"))
     elif bucket in ("USTX", US_OVERSEAS):
@@ -436,8 +440,10 @@ def _unit_costs(
 
     # 绍兴二次加工
     if bucket in FBA_BUCKETS:
-        sx_all = _num(bom.get("sx_cost_all"))
-        sx = None if sx_all is None else sx_all - shell
+        # FBA 成品口径：绍兴包装成品成本（cost_sxbzcp 已含半成品包装，见 95/113 行
+        # sx_cost_all = cost_fg + cost_sxbzcp 的实测）；不再用 sx_cost_all−cost_fg，
+        # 避免 sx_cost_all 缺失时算出负值。
+        sx = _num(bom.get("cost_sxbzcp"))
     elif method == METHOD_SEMI:
         sx = _num(bom.get("cost_sxbzbcp"))
     elif method == METHOD_FINISHED:
@@ -740,7 +746,11 @@ def compute_phase2(
                                 )
                         # 用 BOM 原始字段独立重算恒等式（与 _unit_costs 同一后缀矩阵）
                         if bucket in FBA_BUCKETS:
-                            en_shell = _num(bom.get("sx_cost_all")) or 0.0
+                            sx_all = _num(bom.get("sx_cost_all")) or 0.0
+                            if sx_all <= 0:
+                                sx_all = ((_num(bom.get("cost_fg")) or 0.0)
+                                          + (_num(bom.get("cost_sxbzcp")) or 0.0))
+                            en_shell = sx_all
                             en_sx, en_proc = 0.0, 0.0
                         else:
                             en_shell = _num(bom.get("cost_fg")) or 0.0
@@ -754,6 +764,8 @@ def compute_phase2(
                                 else (_num(bom.get("ustx_valuation_rate")) or 0.0) if bucket in ("USTX", US_OVERSEAS)
                                 else (_num(bom.get("pl_valuation_rate")) or 0.0)
                             )
+                            if method == METHOD_FINISHED and bucket in ("USNJ", "USTX", "PL"):
+                                en_proc = 0.0
                             if shape == SHAPE_COVER:
                                 en_sx, en_proc = 0.0, 0.0
                             elif shape == SHAPE_FOAM and method in (METHOD_SEMI, METHOD_FINISHED):

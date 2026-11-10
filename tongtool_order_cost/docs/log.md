@@ -6,6 +6,8 @@ title: tongtool_order_cost 变更日志
 # 变更日志
 
 ## 2026-11-10
+- **成本规则修正** 分公司发成品（USNJ/USTX/PL）目的地加工成本固定 0（PL 19 个历史遗留 valuation，如 `PLBZCP#KS0230-60=85.05`）；FBA 绍兴二次改用 `cost_sxbzcp`（含半成品包装），不再用 `sx_cost_all−cost_fg`。后者在 `cost_fg=0`、`sx_cost_all=0` 的 193 行会低估/负数；EN 报表问题已提 `keyapi/work_order_task#6`。
+- **GS 全量重跑**：202608 self 二次加工 −1,303.48、利润 +1,303.48；202609 二次加工 −1,341.65、利润 +1,341.65；最终 self 总成本 2,932,001.62 / 1,781,190.54，利润 3,450,333.10 / 1,789,358.67；readback 0。
 - **定案** 定价 method 唯一依据 = **BOM 主档 `shipping_method`**；EN method 仅审计（`en_method`），仓库（主仓/退货仓/皮壳仓）不改变算法；组件后缀也按 BOM method + 后缀矩阵。两月实测仅 46/9 行 EN=皮壳/BOM=半成品，其余一致。见 `docs/reference/tongtool-order-pipeline.md`。
 - **GS 全量替换（202608/202609）**：202608 self 10,870→10,819、merged 12,836→12,785、FBA 1,966 不变；订单总成本 0 差异、利润 +1,729.97；202609 self 6,246→6,221、merged 7,515→7,490，运费按快照 +304,541.93、利润 −303,265.29；两月 readback 0。
 - **GS 最小修补（8/9 月 6 个写回 ws）**：只写 29 个成本/系数列，修正 `皮壳含/不含/系数` 与 method；202608 self 46 行 +1,920.04，202609 self 9 行 +370.55，FBA 只改含/不含；readback 0。明细/备份在 `out/gs_min_patch_<月>/`；历史与列用途见 `docs/research/2026-11-10-gs-cost-write-history-and-column-map.md`。

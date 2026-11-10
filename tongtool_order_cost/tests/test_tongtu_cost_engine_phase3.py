@@ -189,10 +189,10 @@ def test_rehearsal_costs_from_phase2_not_old(tmp_path):
     assert merged["产品成本*数量"] == "30"
     assert passthru["皮壳成本"] == "5"
     assert passthru["头程运费金额"] == "7"
-    assert passthru["二次加工成本"] == "2"
+    assert passthru["二次加工成本"] == "0"   # 分公司发成品：目的地加工=0
     assert passthru["绍兴二次加工成本"] == "1"
     assert passthru["皮壳成本*数量"] == "15"
-    assert passthru["1件产品成本"] == "8"
+    assert passthru["1件产品成本"] == "6"
     # 旧写回 99 不得被沿用
     assert "99" not in (merged["皮壳成本"], passthru["皮壳成本"])
 
@@ -292,9 +292,9 @@ def test_order_total_and_profit_when_inputs_available(tmp_path):
     assert row["发货数量"] == "3"
     assert row["皮壳成本"] == "5"
     assert row["运费"] == "2"
-    # 运费是行总额，不乘数量：(5 + 7 + 2 + 1) × 3 + 2 = 47
-    assert row["订单总成本"] == "47"
-    assert row["订单利润"] == "53"       # 收入 100 − 47
+    # 运费是行总额，不乘数量：(5 + 7 + 0 + 1) × 3 + 2 = 41
+    assert row["订单总成本"] == "41"
+    assert row["订单利润"] == "59"       # 收入 100 − 41
     assert row["derived_reason"] == ""
     assert rehearsal.stats["derived_blank_counts"]["订单总成本"] == 0
 

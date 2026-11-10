@@ -6,7 +6,7 @@
 - 桥接：月份 + 国家 + 归一化 SKU（customer_code 别名 → Item）只用于别名解析；
   BOM/成本查找一律用 EN 明细的 exact `erp_item_code`（保留大小写，如 `110x81x25`）。
 - 四列（成品口径，method=成品；套件用 kit_method 展开）：
-  皮壳=cost_fg；绍兴二次=sx_cost_all−cost_fg；二次加工=FBA valuation=0；
+  皮壳=cost_fg；绍兴二次=cost_sxbzcp（含半成品包装；不再用 sx_cost_all−cost_fg，避免缺失时负数）；二次加工=FBA valuation=0；
   头程=BOM 对应 FBA freight；1件=皮壳+绍兴二次+二次（恒等断言 + 绍兴二次必须非零）。
 - 缺失/歧义 pending，不静默补值；FBA 与自发货同业务键重复即标记。
 - 未登记 SKU：按 Colab 产品名称解析（品类/尺寸/面料/有无扣）匹配 EN Item 出候选；

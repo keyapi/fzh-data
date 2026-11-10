@@ -46,6 +46,8 @@ tags: [cost, bom, phase2, disabled-item, curve-pillow, method-diff]
 ## 3. method / valuation 绑定（Phase 2.1 实测）
 
 - USNJ/USTX/PL 的 valuation_rate **等于**对应 `USNJBZCP#`/`USTXBZCP#`/`PLBZCP#` BOM 的 `total_cost`；与 `shipping_method` 无关。
+- **分公司发成品：目的地加工成本固定 0**（PL 成品 valuation 有 19 条历史遗留非 0，如 `PLBZCP#KS0230-60=85.05`；BOM 重生后会清 0，引擎先行按 0）。
+- **FBA 绍兴二次 = `cost_sxbzcp`**（成品包装成本已含半成品包装；`sx_cost_all = cost_fg + cost_sxbzcp` 在 95/113 行实测成立），不再用 `sx_cost_all−cost_fg`。
 - 二次加工规则**对全部 method 生效**；无目的地 BZCP BOM 时 rate=0（本数据中成品 method 均如此）。
 - **method 规则**（2026-11-10 定案）：
   - **定价 method 一律取 BOM 主档 `shipping_method`**（1104 BOM）；

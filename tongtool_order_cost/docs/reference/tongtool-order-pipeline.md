@@ -69,8 +69,8 @@ EN shipping_method = 仅记录到 en_method，用于审计；不参与任何成�
 |---|---|
 | 皮壳成本 | 当前 BOM `cost_fg` |
 | 头程运费 | 按仓库价格表 + shape/method：`-Cover`→cover；`-Foam`→freight−cover；半成品→sfg；成品→freight；FBA→FBA freight |
-| 二次加工成本（目的地加工） | USNJ→`usnj_valuation_rate`；USTX/美国海外仓→`ustx_valuation_rate`；PL→`pl_valuation_rate`；FBA=0 |
-| 绍兴二次加工成本 | 半成品→`cost_sxbzbcp`；成品→`cost_sxbzcp`；皮壳→0；FBA→`sx_cost_all−cost_fg` |
+| 二次加工成本（目的地加工） | **分公司发成品→0**；皮壳/半成品→USNJ/USTX/PL 对应 `valuation_rate`；美国海外仓按 method；FBA=0 |
+| 绍兴二次加工成本 | 半成品→`cost_sxbzbcp`；成品→`cost_sxbzcp`；皮壳→0；FBA→`cost_sxbzcp`（含半成品包装） |
 
 后缀矩阵（仅非 FBA，shape 由通途SKU 后缀决定）：
 - `-Cover`：绍兴二次=0、二次加工=0、头程=皮壳头程；
@@ -132,10 +132,16 @@ EN shipping_method = 仅记录到 en_method，用于审计；不参与任何成�
 | 同一 SKU 不同仓库/退货仓 | 不影响 method/成本；按产品 BOM 算 |
 | EN method ≠ BOM method | 按 BOM method 定价；EN 记 `en_method` 审计 |
 | 单独卖 `-Cover/-Foam/-PPCotton` | 按后缀矩阵；不按 EN method |
-| FBA | 绕过全部后缀；皮壳=`sx_cost_all`、绍兴二次=`sx_cost_all−cost_fg`、二次=0 |
+| FBA | 绕过全部后缀；皮壳=`cost_fg`、绍兴二次=`cost_sxbzcp`、二次=0 |
 | 合并组 | 1 行、件数=pieces、组件行=0、组内金额/运费守恒 |
 | 缺 BOM/多 BOM/缺仓库分类 | 阻断，不猜、不填 0 |
 | 成本 vs 销售额 | 成本只信 BOM；销售额 = 原始订单（组内求和）；运费 = 真实尾程 |
+
+## 已知数据问题
+
+- EN BOM 报表 `sx_cost_all` 在 `cost_fg=0` 但 `cost_sxbzcp>0` 的 193 行返回 0（报表条件要求
+  `bom_fg` 存在）；已提 issue `keyapi/work_order_task#6`。本地引擎 FBA 绍兴二次改用
+  `cost_sxbzcp`，不依赖该列。
 
 ## Related
 

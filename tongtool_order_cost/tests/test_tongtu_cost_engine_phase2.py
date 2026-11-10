@@ -172,7 +172,7 @@ def test_pass_row_usnj_finished_cost(tmp_path):
     assert row["units"] == 3
     assert row["皮壳成本"] == 15
     assert row["头程运费金额"] == 21
-    assert row["二次加工成本"] == 6
+    assert row["二次加工成本"] == 0       # 分公司发成品：目的地加工=0
     assert row["绍兴二次加工成本"] == 3
 
 
@@ -184,7 +184,8 @@ def test_fba_cost_branch(tmp_path):
     ])
     bom = write_bom(tmp_path, [{
         "item_fg": "KS200-OTHER", "shipping_method": "成品",
-        "cost_fg": 5, "sx_cost_all": 8, "freight_9rr7m7g3aj": 11,
+        "cost_fg": 5, "sx_cost_all": 8, "cost_sxbzcp": 3,
+        "freight_9rr7m7g3aj": 11,
     }])
     p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
     row = p2.rows[0]
@@ -193,7 +194,47 @@ def test_fba_cost_branch(tmp_path):
     assert row["皮壳成本"] == 5
     assert row["头程运费金额"] == 11
     assert row["二次加工成本"] == 0
-    assert row["绍兴二次加工成本"] == 3  # sx_cost_all 8 − cost_fg 5
+    assert row["绍兴二次加工成本"] == 3  # cost_sxbzcp
+
+
+def test_fba_sx_uses_cost_sxbzcp_even_if_sx_all_missing(tmp_path):
+    """FBA 绍兴二次 = cost_sxbzcp；sx_cost_all 缺失时也不能算出负数。"""
+    shadow = _shadow(tmp_path, [
+        ["ORD-2250001", "PSK", "TT777", 1, 10, 50, 0, "WH-FBA"],
+    ], [
+        ["ORD-2250001", "TT777", "", 1, "成品"],
+    ])
+    bom = write_bom(tmp_path, [{
+        "item_fg": "KS200-OTHER", "shipping_method": "成品",
+        "cost_fg": 5, "cost_sxbzcp": 7, "sx_cost_all": 0,
+        "freight_9rr7m7g3aj": 11,
+    }])
+    p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
+    row = p2.rows[0]
+    assert row["status"] == "ok"
+    assert row["绍兴二次加工成本"] == 7
+    assert row["皮壳成本"] + row["绍兴二次加工成本"] + row["二次加工成本"] == 12
+
+
+def test_branch_finished_method_processing_zero(tmp_path):
+    """分公司发成品：目的地加工成本固定 0（PL 历史遗留 85.05 也不计）。"""
+    shadow = _shadow(tmp_path, [
+        ["ORD-2260001", "PSK", "TT777", 1, 10, 50, 0, "WH-PL"],
+    ], [
+        ["ORD-2260001", "TT777", "", 1, "成品"],
+    ])
+    bom = write_bom(tmp_path, [{
+        "item_fg": "KS200-OTHER", "shipping_method": "成品",
+        "cost_fg": 5, "cost_sxbzcp": 7,
+        "pl_valuation_rate": 85.05,
+        "cover_freight_tmvvepd80f": 1, "freight_tmvvepd80f": 3,
+    }])
+    p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
+    row = p2.rows[0]
+    assert row["status"] == "ok"
+    assert row["二次加工成本"] == 0
+    assert row["绍兴二次加工成本"] == 7
+    assert row["1件成本(不含头程)"] == 12
 
 
 def test_cover_pass_row_uses_cover_freight_and_zero_sx(tmp_path):
@@ -301,9 +342,9 @@ def test_writeback_diff_is_reported_not_used(tmp_path):
     assert row["wb_皮壳成本"] == 3
     assert row["diff_vs_writeback_皮壳成本"] == 12   # 15 − 3
     assert row["diff_vs_writeback_头程运费金额"] == 15
-    assert row["diff_vs_writeback_二次加工成本"] == -3
+    assert row["diff_vs_writeback_二次加工成本"] == -9
     assert row["diff_vs_writeback_绍兴二次加工成本"] == -9
-    assert row["diff_vs_writeback_合计"] == 15
+    assert row["diff_vs_writeback_合计"] == 9
     # 写回只对账，不影响 BOM 计算值
     assert row["皮壳成本"] == 15
 
@@ -390,9 +431,9 @@ def test_method_diff_alt_delta_is_audited(tmp_path):
     p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
     row = p2.rows[0]
     assert row["method_diff"] is True
-    # 定价 BOM 成品：5+7+2+1=15；备选 EN 皮壳：5+3+2+0=10 → 审计差 −5
-    assert row["method_diff_alt_delta"] == -5
-    assert p2.stats["phase2_method_diff_alt_delta"] == -5
+    # 定价 BOM 成品：5+7+0+1=13；备选 EN 皮壳：5+3+2+0=10 → 审计差 −3
+    assert row["method_diff_alt_delta"] == -3
+    assert p2.stats["phase2_method_diff_alt_delta"] == -3
 
 
 def test_cover_suffix_uses_bom_method_but_suffix_matrix(tmp_path):
@@ -909,7 +950,7 @@ def test_standalone_foam_rows_zero_shell(tmp_path):
     assert row["皮壳成本"] == 0
     assert row["绍兴二次加工成本"] == 50
     assert row["头程运费金额"] == 17         # 20 − 3
-    assert row["二次加工成本"] == 7
+    assert row["二次加工成本"] == 0          # 分公司发成品：目的地加工=0
 
 
 def test_standalone_ppcotton_zero_cost(tmp_path):
@@ -937,13 +978,13 @@ def test_standalone_ppcotton_zero_cost(tmp_path):
 
 
 def test_fba_bypasses_suffix_rules(tmp_path):
-    """FBA 仓忽略后缀：仍取 cost_fg + (sx_cost_all−cost_fg) + 成品头程。"""
+    """FBA 仓忽略后缀：仍取 cost_fg + cost_sxbzcp + 成品头程。"""
     shadow = _shadow(tmp_path, [
         ["ORD-3400001", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0, "WH-FBA"],
     ], [["ORD-3400001", "TT001-FIN-Cover", "", 1, "成品"]])
     bom = write_bom(tmp_path, [{
         "item_fg": "KS100-FINISH-RED", "shipping_method": "成品",
-        "cost_fg": 10, "sx_cost_all": 25,
+        "cost_fg": 10, "sx_cost_all": 25, "cost_sxbzcp": 15,
         "freight_9rr7m7g3aj": 6,
     }])
     p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))

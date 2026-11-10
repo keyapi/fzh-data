@@ -176,8 +176,10 @@ def _rewrite_fixture(out: Path, *, item: str, bom_rows: list[dict],
 
 
 def _bom_row(item: str, *, cost_fg: float, sx_cost_all: float, freight: float = 3,
-             method: str = "皮壳", name: str = "", sxbzcp: float = 0) -> dict:
+             method: str = "皮壳", name: str = "", sxbzcp: float | None = None) -> dict:
     rec = {c: "0" for c in BOM_COLS}
+    if sxbzcp is None:
+        sxbzcp = sx_cost_all - cost_fg
     rec.update({"item_fg": item, "item_fg_name": name, "shipping_method": method,
                 "cost_fg": cost_fg, "sx_cost_all": sx_cost_all,
                 "cost_sxbzcp": sxbzcp, "freight_9rr7m7g3aj": freight})
@@ -230,8 +232,8 @@ def test_fba_direct_purchase_zero_priced(tmp_path):
     assert res.pending_rows == []
 
 
-def test_fba_zero_sx_non_direct_pending(tmp_path):
-    """sx_cost_all == cost_fg 但 cost_sxbzcp≠0 → 不是直采，仍 pending sx_zero。"""
+def test_fba_sx_uses_sxbzcp_when_sx_all_equals_fg(tmp_path):
+    """sx_cost_all == cost_fg 但 cost_sxbzcp=2 → 按 sxbzcp 定价（FBA 绍兴二次=cost_sxbzcp）。"""
     out = _setup(tmp_path)
     item = "ITEM-NOSX"
     _rewrite_fixture(out, item=item, bom_rows=[
@@ -241,11 +243,27 @@ def test_fba_zero_sx_non_direct_pending(tmp_path):
                            ref_map_csv=out / "item_refcode.csv",
                            bundle_csv=out / "product_bundles.csv",
                            kit_report_csv=out / "kit.csv")
+    assert res.stats["fba_priced"] == 1
+    row = res.fba_rows[0]
+    assert row["bridge_status"] == "ok"
+    assert float(row["绍兴二次加工成本"]) == 2
+
+
+def test_fba_sx_zero_pending_when_sxbzcp_zero(tmp_path):
+    """cost_sxbzcp=0 且非直采（sx_cost_all≠cost_fg）→ pending sx_zero。"""
+    out = _setup(tmp_path)
+    item = "ITEM-NOSX2"
+    _rewrite_fixture(out, item=item, bom_rows=[
+        _bom_row(item, cost_fg=10, sx_cost_all=12, sxbzcp=0)])
+    res = build_fba_shadow(month="202608", root=tmp_path, nonfba_csv=None,
+                           bom_csv=out / "bom_cost_product_with_kits.csv",
+                           ref_map_csv=out / "item_refcode.csv",
+                           bundle_csv=out / "product_bundles.csv",
+                           kit_report_csv=out / "kit.csv")
     assert res.stats["fba_priced"] == 0
     row = res.fba_rows[0]
     assert row["bridge_status"] == "pending"
     assert row["bridge_reason"] == "sx_zero"
-    assert row["绍兴二次加工成本"] == ""
 
 
 def _legacy_fixture(out: Path, legacy: str, product_name: str, bom_rows: list[dict],

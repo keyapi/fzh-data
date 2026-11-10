@@ -98,7 +98,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 - `订单号` = 基于 `(月, 站点, MSKU, SKU, index)` 的确定性 UUID5（旧表为随机 UUID4），
   `index_col = 0..N-1`。
 - 单位成本来自 `fba_shadow`（EN FBA 明细 exact `erp_item_code` + BOM 成品口径）；
-  `绍兴二次加工成本` 为 EN 绍兴成本，`二次加工成本 = 0`，`运费 = 0`（FBA 尾程在账期）。
+  `绍兴二次加工成本 = cost_sxbzcp`（含半成品包装），`二次加工成本 = 0`，`运费 = 0`（FBA 尾程在账期）。
 - 产品属性：`品类/品类统一名/品类别名` = EN 物料组；面料/尺寸/有无扣/带*尺寸 从 BOM
   `item_zlmb_name` + GS 产品名解析；`品类尺寸面料编码` = EN 物料号；仓库来源编码从
   `warehouse_cost_sources.tsv` 覆盖（`发货区域=美国/欧洲`、`汇总分类=美国FBA/欧洲FBA`）；
