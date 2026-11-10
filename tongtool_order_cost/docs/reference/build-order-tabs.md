@@ -42,7 +42,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 | EN 订单明细 | `out/en_items_all_089.csv` | 行级 `erp_item_code` / `shipping_method` |
 | 作废原单标记 | `out/snapshots/<月>/order_flags.csv` | 拆单原单（invalid=1） |
 | 物料组树 | `out/item_group_branch.tsv` | 分支/父组 |
-| BOM 成本 | `out/bom_cost_product_with_kits.csv` | 84 列，含四列成本/头程/valuation |
+| BOM 成本 | `out/bom_cost_product_with_disabled.csv`（1104，含 disabled） | 四列成本/头程/valuation；`with_kits` 仅作套件对账 |
 | 仓库分类 | `out/snapshots/<月>/wh_map.tsv` | 仓库 → USNJ/USTX/PL/FBA/海外仓 |
 | 汇率 | `out/fx_<月>.csv` | `scripts/fetch_fx_rates.py` 导出 |
 | 仓库成本来源 | `out/warehouse_cost_sources.tsv` | `scripts/fetch_warehouse_cost_sources.py` 导出 |
@@ -128,7 +128,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 - `售价*汇率` 增加 = 旧表删除通用填充物行造成的销售额丢失被追回
   （202608 254.79 售价 / 1,729.98 汇率额；202609 188.27 / 1,278.13）。
 - 202609 运费 +304,541.93 是**数据补齐**（旧表 1,344 行有真实尾程，新快照 3,969 行），
-  不是算法差异。**重写 202609 GS 前需财务确认是否采用新尾程。**
+  不是算法差异。**2026-11-10 已按更新后的快照尾程全量替换 202609 GS。**
 - 行数减少 = 合并组 1 行替代旧表的组件行（202608 83 组、202609 42 组）。
 
 ## 已知缺口 / 后续
@@ -145,7 +145,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 - `product_attributes.tsv` 是从历史 self 表抽取的产品属性缓存；新增产品需要更新主数据。
 - 202609 有 1 行 `加拿大FBA仓` 不在 GS 仓库来源表（只有「加拿大海外仓」），
   区域保留 shadow 的 `CA`/`FBA`；成本来源仍是 `COST-USFBA`。
-- 尚未替换 `fill-tables` / GS 写回链路：先对拍、财务确认后，再决定切到本构建器。
+- 2026-11-10 起 GS 三张写回表已切到 build_tabs 全量替换（8/9 月）；`fill-tables` 保留为兼容/回滚路径。
 
 ## 相关
 

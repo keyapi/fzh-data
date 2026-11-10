@@ -201,7 +201,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
 - **GS 写回（2026-11-10）**：先做了 29 列最小修补（8/9 月 6 个 ws，readback 0）；
   随后 **202608 全量替换**为 build_tabs（self 10,870→10,819、merged 12,836→12,785、
   FBA 不变；总成本 0 差异、利润 +1,729.97），readback 0。
-  202609 全量替换仅 dry-run（运费 +304,541.93 属尾程待更新，暂缓）。
+  202609 同期全量替换（运费按更新后的快照 +304,541.93，利润 −303,265.29）。
   备份/明细：`out/gs_min_patch_<月>/`、`out/gs_full_replace_<月>/`。
   端到端步骤与判断标准见 `docs/reference/tongtool-order-pipeline.md`。
 - **未动列**：`运费`（9 月仍是模板旧值）、销售额、商品属性、`EN绍兴包装*`、

@@ -62,8 +62,7 @@ tags: [tongtu, colab, parity, build-order-tabs, split-merge]
 
 ## Why This Matters
 
-- `build-order-tabs` 已能本地出三表，但 **GS 写回链路仍走 `fill-tables` + Colab 模板**；
-  在切换写回之前，停用 Colab 仍会断掉订单表生产。
+- `build-order-tabs` 已能本地出三表；**2026-11-10 起 GS 8/9 月三张写回表已全量替换为 build_tabs**（`fill-tables` 保留为兼容/回滚）。
 - 旧表行数（10,870）与新成熟组视图（10,819）不同，是因为旧表把组件行和合并展示行都留下了；
   新表用「合并组 1 行」并保留全部销售额/运费，不能再用旧行数做验收基准。
 
