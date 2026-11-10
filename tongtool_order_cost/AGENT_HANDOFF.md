@@ -1,6 +1,6 @@
 # tongtool_order_cost — Agent 交接
 
-> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py` · `scripts/upload_monthly_order_sheet.py`
+> **CLI**: `scripts/run_audit_170.py` · `scripts/remap_gsheet_sku.py` · `scripts/lookup_tongtool_sku.py` · `scripts/upload_monthly_order_sheet.py` · `python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --month <月> --root .`
 > **人读**: [README.md](README.md)
 > **Skill**: `.agents/skills/tongtool-order-cost/SKILL.md`
 
@@ -45,7 +45,14 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `tongtool_order_cost/gsheets.py` | 本地 SA JSON → gspread Client / gsheet2df |
 | `tongtool_order_cost/sku_map.py` | 已确认旧→新映射；gray60 / Foam97 例外 |
 | `tongtool_order_cost/tongtool_goods.py` | ERP2 `erp2_product_goodsquery` |
+| `tongtu_cost_engine/domain/build_tabs.py` | **build-order-tabs**：raw+成熟合并+BOM → self 166 / FBA 95 / merged 78 |
+| `tongtu_cost_engine/domain/tab_contracts.py` | 三张表的稳定列合同（166/95/78）与产品属性列 |
 | `scripts/run_audit_170.py` | 1.7.0 特殊规则审计 CLI |
+| `scripts/fetch_fx_rates.py` | GS `和财务部共享/汇率` 按月导出 |
+| `scripts/fetch_special_orders.py` | 特殊订单删除清单 + 过滤 raw |
+| `scripts/check_warehouse_map.py` | raw 发货仓库 vs `wh_map.tsv` 覆盖检查 |
+| `scripts/fetch_warehouse_cost_sources.py` | 仓库 → 成本来源编码映射导出（GS） |
+| `scripts/build_product_attribute_master.py` | 从历史 self 表抽取产品属性主数据 TSV |
 | `scripts/bootstrap_gsheets_credentials.py` | 从 Colab notebook cell 0 抽出 SA 到 `secrets/` |
 | `scripts/remap_gsheet_sku.py` | Google Sheet SKU 列 dry-run / apply |
 | `scripts/lookup_tongtool_sku.py` | 通途主档 SKU 存在性 |
@@ -156,4 +163,29 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 - **FBA 对比**：绍兴包装半成品是共同部分；分公司/FBA 的绍兴二次是扣掉半成品后的增量，`半成品+增量=四列绍兴二次`；FBA合计=皮壳+成品包装+FBA头程。财务表在 `out/fba_vs_branch/`，共享副本在 `D:\Work\王忠于\成本核算\`。
 - 经验：`docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md`、`docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md`。
 - **EN 登记**：只写子表 `customer_items.ref_code`，不写主表 `Item.customer_code`；组件多对多、完整 SKU 唯一；配套 issue `work_order_task#4` / `tongtool_integration#22`。
-- **Colab 退场**：截至 4.8 的成本/拆单合并核心已移植，但本地仍依赖 Colab 生成的 self 166 / FBA 95 / merged 78 三张模板；`build-order-tabs` 是停用 Colab 的关键缺口。对照表见 `docs/research/2026-11-09-colab-local-parity-audit.md`。前置脚本：`scripts/fetch_fx_rates.py`、`scripts/fetch_special_orders.py`、`scripts/check_warehouse_map.py`。
+- **Colab 退场**：截至 4.8 的成本/拆单合并核心已移植；2026-11-10 已补 `build-order-tabs`，可本地重建三表。对照表见 `docs/research/2026-11-09-colab-local-parity-audit.md`。前置脚本：`scripts/fetch_fx_rates.py`、`scripts/fetch_special_orders.py`、`scripts/check_warehouse_map.py`、`scripts/fetch_warehouse_cost_sources.py`、`scripts/build_product_attribute_master.py`。
+
+### build-order-tabs（2026-11-10，停用 Colab 的关键件）
+
+```bash
+cd tongtool_order_cost
+uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --month 202608 --root .
+```
+
+- 输出 `out/build_tabs/<月>/`：`self_build_<月>.csv`（166）、`fba_build_<月>.csv`（95）、
+  `merged_build_<月>.csv`（78）、`parity_<月>.md`、`manifest.json`、`recon_95_78*.csv`、
+  `self_cost_audit.csv`、`fba_cost_audit.csv`。
+- **行集合**：成熟合并组 1 行 + 透传行（202608 10,819；202609 6,221）。
+  旧 Colab 的「组件行 + 合并展示行」双计 **不复刻**。
+- **合并组金额**：发货数量=pieces；售价=组内组件售价之和；售价*汇率=组售价×财务汇率；
+  运费=组内 `物流商运费` 之和。**不要**再用 `包裹总运费`/`通途运费` 当尾程。
+- **FBA 95**：按 GS `订单数量` 展开 UUID 行；首行承载量/额，占位行只保留单位成本；
+  订单号是确定性 UUID5；单位成本来自 `fba_shadow`。
+- **merged 78**：`平台SKU←MSKU`、`通途SKU←SKU`、`售价/汇率` 空、`售价*汇率←销售额`。
+- **对拍**（vs `phase36/<月>/gs_ready`）：FBA 全 0；self/merged 成本与数量 0；
+  202608 利润 +1,729.97（追回旧表丢的填充物销售额）；202609 运费 +304,541.93
+  （旧表生成时尾程只补了 1,344 行，当前快照 3,969 行）→ **重写 9 月 GS 前必须财务确认**。
+- **属性口径**：`品类尺寸面料编码` 写 EN 物料号（不是 Colab 旧键）；`品类` 写 EN 物料组；
+  旧叶子品类/部分编码从 `product_attributes.tsv` 或旧写回兜底，缺失见 parity 报告。
+- **尚未切换写回**：GS 写回仍走 `fill-tables` + 旧模板；先财务确认再切。
+- 详细说明：`docs/reference/build-order-tabs.md`。

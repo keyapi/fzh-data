@@ -126,6 +126,24 @@ def main(argv=None) -> int:
     ad.add_argument("--month", action="append", default=None)
     ad.add_argument("--out-root", default=None)
 
+    bt = sub.add_parser("build-order-tabs",
+                        help="从原始订单重建 self 166 / FBA 95 / merged 78（不依赖 Colab 模板行结构）")
+    bt.add_argument("--month", required=True)
+    bt.add_argument("--root", default=".")
+    bt.add_argument("--out-dir", default=None)
+    bt.add_argument("--raw", default=None)
+    bt.add_argument("--ref-map", default=None)
+    bt.add_argument("--en-items", default=None)
+    bt.add_argument("--flags", default=None)
+    bt.add_argument("--branch-map", default=None)
+    bt.add_argument("--bom-cost", default=None)
+    bt.add_argument("--wh-map", default=None)
+    bt.add_argument("--fx", default=None)
+    bt.add_argument("--wh-sources", default=None)
+    bt.add_argument("--attr-master", default=None)
+    bt.add_argument("--old-writeback", default=None)
+    bt.add_argument("--fba-shadow", default=None)
+
     args = ap.parse_args(argv)
 
     if args.cmd == "snapshot":
@@ -220,6 +238,34 @@ def main(argv=None) -> int:
         print(json.dumps({"ok": True, **res["summary"], "run_dir": res["run_dir"]},
                          ensure_ascii=False))
         return 0
+
+    if args.cmd == "build-order-tabs":
+        from .domain.build_tabs import build_order_tabs
+
+        res = build_order_tabs(
+            month=args.month, root=Path(args.root),
+            out_dir=Path(args.out_dir) if args.out_dir else None,
+            raw_csv=args.raw, ref_map_csv=args.ref_map, en_items_csv=args.en_items,
+            flags_csv=args.flags, branch_map_csv=args.branch_map, bom_csv=args.bom_cost,
+            wh_map_tsv=args.wh_map, fx_csv=args.fx, wh_sources_tsv=args.wh_sources,
+            attr_master_tsv=args.attr_master, old_writeback=args.old_writeback,
+            fba_shadow_csv=args.fba_shadow,
+        )
+        print(json.dumps({
+            "ok": res.ok,
+            "month": res.month,
+            "rows": res.stats["rows"],
+            "assertions": {a["name"]: a["status"] for a in res.assertions},
+            "stats": {"self": {k: v for k, v in res.stats["stats"]["self"].items()
+                               if k != "attr_misses"},
+                      "fba": {k: v for k, v in res.stats["stats"]["fba"].items()
+                              if k != "missing"}},
+            "out_dir": str(Path(args.out_dir) if args.out_dir else
+                           Path(args.root) / "out" / "build_tabs" / args.month),
+        }, ensure_ascii=False,
+            default=lambda o: o.item() if hasattr(o, "item") else str(o)))
+        return 0 if res.ok else 1
+
 
     if args.cmd == "writeback-run":
         flags = args.flags

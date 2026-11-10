@@ -5,6 +5,12 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-11-10
+- **新增 `build-order-tabs`**：本地重建 self 166 / FBA 95 / merged 78，不再读 Colab 模板。self = raw（已删特殊订单）→ 成熟合并组 1 行 + 透传行 → BOM 四列；金额口径：组售价×财务汇率、运费=组内 `物流商运费`；FBA 按 `订单数量` 展开确定性 UUID；merged 按 78 列合同拼接并做 95↔78 对账。见 `docs/reference/build-order-tabs.md`。
+- **新增脚本** `fetch_warehouse_cost_sources.py`（仓库→成本来源编码）、`build_product_attribute_master.py`（历史产品属性主数据）。
+- **对拍** 202608/202609（vs 已写回 GS 的 `phase36/gs_ready`）：FBA 全 0；self/merged 成本与数量 0；202608 利润 +1,729.97（追回旧表丢的填充物销售额）；202609 运费 +304,541.93（旧表生成时尾程只补 1,344 行，现 3,969 行）→ **重写 9 月 GS 前待财务确认**。
+- **口径变更**：`品类尺寸面料编码` 写 EN 物料号；`品类` 写 EN 物料组；旧叶子品类/部分编码走产品主数据兜底（缺失清单见 parity 报告）。
+
 ## 2026-11-09
 - **调研** Colab（截至 4.8）→ 本地引擎 parity 审计：核心成本/拆单合并已移植，但本地仍依赖 Colab 生成的 166/95/78 列模板；`build-order-tabs` 是停用 Colab 的关键缺口。见 `research/2026-11-09-colab-local-parity-audit.md`。
 - **新增脚本** `fetch_fx_rates.py`（GS 汇率按月导出）、`fetch_special_orders.py`（特殊订单删除清单+过滤 raw）、`check_warehouse_map.py`（raw 仓库 vs wh_map）；202608/202609 仓库映射均 0 未覆盖。

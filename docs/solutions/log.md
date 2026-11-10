@@ -10,6 +10,7 @@ tags: [solutions, log]
 ## 2026-11-10
 
 - **更新**: `documentation-gaps/tongtu-colab-local-parity-gap.md` — 重审旧 Colab self 展示规则：23组合并/17行通用填充物删除会低记行级 `售价*汇率`（202608 1,729.98 / 202609 1,278.13 CNY），**不采用**；self 166 改用本地成熟算法合并组视图。
+- **更新**: 同一篇补记 `build-order-tabs` 已落地（本地重建 166/95/78；两月对拍成本/数量 0 差异；202609 尾程 +304,541.93 待财务确认）；构建口径见 `tongtool_order_cost/docs/reference/build-order-tabs.md`。
 
 ## 2026-11-09
 

@@ -44,22 +44,28 @@ tags: [tongtu, colab, parity, build-order-tabs, split-merge]
 
 ### 仍需本地补/明确不移植
 
-- **build-order-tabs（必须）**：本地不生成 self 166 / FBA 95 / merged 78 的行集合与列结构；`fill-tables` 只填 29 个成本/系数列。
-- 特殊订单删除（4.1.0.1）：已补 `scripts/fetch_special_orders.py`。
-- 汇率（4.1.0）：已补 `scripts/fetch_fx_rates.py`；不能用 raw 的 `售价(人民币)/售价` 替代（GBP 不一致）。
-- 仓库映射：`scripts/check_warehouse_map.py`；8/9 月 0 未覆盖。
+- **build-order-tabs（已补，2026-11-10）**：CLI `build-order-tabs --month` 已能本地重建
+  self 166 / FBA 95 / merged 78（`docs/reference/build-order-tabs.md`）。两月对拍
+  （vs 已写回 GS 的 `phase36/gs_ready`）：FBA 全 0 差异；self/merged 成本与数量 0 差异；
+  差额只有旧表丢失的销售额（+1,729.97 / +1,276.64）与 202609 尾程补齐（+304,541.93）。
+- 特殊订单删除（4.1.0.1）：`scripts/fetch_special_orders.py`；构建器默认读
+  `raw_<月>_filtered.csv`。
+- 汇率（4.1.0）：`scripts/fetch_fx_rates.py`；不能用 raw 的 `售价(人民币)/售价` 替代（GBP 不一致）。
+- 仓库映射：`scripts/check_warehouse_map.py`；仓库成本来源：`scripts/fetch_warehouse_cost_sources.py`。
 - 不移植：4.1.1/4.1.2（尾程分区/州名）、4.3.0.2.9（麻将×3）、4.5.2（无海外仓）、4.5.3/4.5.4/4.9（运营人员，非成本）。
 
 ### 关键数字（202608）
 
-- raw 10,912 → 删除特殊订单后 10,910 → Phase1 合并明细 10,821。
+- raw 10,912 → 删除特殊订单后 10,910 → Phase1 合并明细 **10,819**（未过滤时演练为 10,821）。
 - Colab self 表 10,870 行：保留组件行/合并展示行，**不是**合并明细；build 不能只 concat。
-- FBA 95 列 1,966；merged 78 列 12,836。
+- 本地 build：self 10,819；FBA 95 列 1,966；merged 78 列 12,785。
 
 ## Why This Matters
 
-- 只要 self/FBA/merged 模板仍来自 Colab，停用 Colab 就会断掉订单表生产；成本引擎再准也无法落表。
-- 行全集差异（10,870 vs 10,821）说明 build 不是简单合并，必须复刻 Colab 的行集合与列合同。
+- `build-order-tabs` 已能本地出三表，但 **GS 写回链路仍走 `fill-tables` + Colab 模板**；
+  在切换写回之前，停用 Colab 仍会断掉订单表生产。
+- 旧表行数（10,870）与新成熟组视图（10,819）不同，是因为旧表把组件行和合并展示行都留下了；
+  新表用「合并组 1 行」并保留全部销售额/运费，不能再用旧行数做验收基准。
 
 ## When to Apply
 
@@ -69,11 +75,14 @@ tags: [tongtu, colab, parity, build-order-tabs, split-merge]
 
 ## Examples
 
-202608：raw 10,912 → 特殊订单 55 条（删除清单）→ 10,910；合并吸收 91 → 10,821；Colab self 10,870；FBA 1,966；merged 12,836。
-202609：raw 6,268 → 6,267；合并吸收 46 → 6,222；Colab self 6,246；FBA 1,269；merged 7,515。
+202608：raw 10,912 → 特殊订单 55 条（删除清单）→ 10,910；合并吸收 91 → build self 10,819；
+FBA 1,966；merged 12,785。旧 self 10,870 / merged 12,836。
+202609：raw 6,268 → 6,267；合并吸收 46 → build self 6,221；FBA 1,269；merged 7,490。
+旧 self 6,246 / merged 7,515。
 
 ## Related
 
+- 构建器说明：`tongtool_order_cost/docs/reference/build-order-tabs.md`
 - 完整矩阵：`tongtool_order_cost/docs/research/2026-11-09-colab-local-parity-audit.md`
 - 拆单合并成本修复：`docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md`
 - 拆单类型与拆单前 SKU：`docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md`

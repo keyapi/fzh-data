@@ -11,7 +11,9 @@ tags: [colab, parity, build-order-tabs, cost-engine]
 # Colab（截至 4.8）→ 本地引擎 parity 审计
 
 **对象**：`out/colab_live_20261104.ipynb`（含 4.1.0.1/4.5.4 更新；即 20250409 合并EN成本 notebook 的当前版）
-**结论**：成本与拆单合并核心已移植；**还不能停用 Colab**。本地引擎目前是「往 Colab 生成的 166/95/78 列模板里填成本」，不负责从 raw 重建三张订单表。
+**结论**：成本与拆单合并核心已移植；2026-11-10 已补 `build-order-tabs`，
+可在本地重建 166/95/78 三表（两月对拍成本/数量 0 差异）。**尚未正式停用 Colab**：
+需先确认 202609 尾程补齐口径，再把 `fill-tables`/GS 写回切到新构建器。
 
 ## 1. 逐步对照
 
@@ -69,15 +71,27 @@ tags: [colab, parity, build-order-tabs, cost-engine]
 
 **结论：不采用旧 Colab 的 self 展示规则**。它只是旧的展示口径，不是成本/合并规则；会低记销售额。`build-order-tabs` 的 self 166 应使用本地成熟算法的行视图（合并组一行、销售额/运费守恒），并把旧表的行数/销售额差异作为“旧表 bug 修正”记录；不再做 legacy display adapter。
 
-### 2.2 建议的实现
+### 2.2 已实现：`build-order-tabs`（2026-11-10）
 
-新增 CLI `build-order-tabs --month`，分三个 builder：
+新增 CLI `build-order-tabs --month`，分三个 builder（详见
+`docs/reference/build-order-tabs.md`）：
 
-1. **self 166**：raw（先过滤特殊订单）→ 成熟合并组视图（`split_merge`）→ 成本/系数 + 关键列 → 写 `wb_fresh_<月>.csv`。**不复刻旧 Colab 的 23 组合并/17 行删除**；行数与旧表差异按上面的销售额修正解释。
-2. **fba 95**：FBA 销量表 → 订单数量 UUID 展开作为格式适配；EN 明细/BOM 成本 → 95 列 → 写 `wb_fba_<月>.csv`。
-3. **merged 78**：self + FBA concat → 78 列 → 写 `merged_<月>.csv`；复用 `phase36` 的 95↔78 对账。
+1. **self 166**：raw（先过滤特殊订单）→ 成熟合并组视图（`split_merge`）
+   → 成本/系数 + 关键列 → 写 `self_build_<月>.csv`。**不复刻旧 Colab 的
+   23 组合并/17 行删除**；行数与旧表差异按上面的销售额修正解释。
+2. **fba 95**：GS FBA 销量表 → 按 `订单数量` 展开 UUID 行；EN 明细/BOM
+   成本 → 95 列 → 写 `fba_build_<月>.csv`。
+3. **merged 78**：self + FBA 按 78 列合同拼接 → `merged_build_<月>.csv`；
+   附 `recon_95_78*.csv` 粒度对账。
 
-先做 parity 对拍：每月与 Colab 三表比行数、订单/SKU 集合、销售额、四列成本、29 列逐格；三个月全过再停 Colab。
+两月实测（vs `out/phase36/<月>/gs_ready/`，即已写回 GS 的表）：
+
+- self 行数 10,870→10,819 / 6,246→6,221；合并组 83 / 42。
+- FBA 95 逐指标 0 差异；merged 78 成本/数量 0 差异。
+- 202608：`订单总成本` 0 差异，`订单利润` +1,729.97（追回旧表删除填充物行丢失的销售额）。
+- 202609：成本 0 差异；`运费` +304,541.93（旧表生成时 1,344 行有真实尾程，
+  当前快照 3,969 行）；`订单利润` −303,265.29。**重写 202609 GS 前需财务确认尾程口径。**
+
 
 ## 3. 已落地的前置脚本
 
@@ -87,7 +101,11 @@ tags: [colab, parity, build-order-tabs, cost-engine]
 
 ## 4. 待办
 
-1. 补 `build-order-tabs` 的 self/FBA/merged 三个 builder（最大工程）。
-2. 对拍 202608/202609（必要时 202607）三表；差异逐条归因。
-3. 决定是否保留 4.5.3/4.5.4/4.9 的运营人员列；若保留，另建账号→人员单表。
-4. 停用 Colab 前保留回归证据与回滚路径。
+1. ~~补 `build-order-tabs` 的 self/FBA/merged 三个 builder~~ **已完成**（2026-11-10，
+   见 §2.2 与 `docs/reference/build-order-tabs.md`）。
+2. 对拍 202608/202609 **已完成**（vs 已写回 GS 的 `phase36/gs_ready`）：成本/数量 0 差异；
+   差额已归因为旧表销售额丢失（+1,729.97 / +1,276.64）与 202609 尾程补齐（+304,541.93）。
+   202607 尚未跑。
+3. **待财务确认**：202609 是否采用补齐后的真实尾程重写 GS（会令 9 月利润 −303,265.29）。
+4. 决定是否保留 4.5.3/4.5.4/4.9 的运营人员列；若保留，另建账号→人员单表。
+5. 停用 Colab 前保留回归证据与回滚路径；把 `fill-tables` / GS 写回切到 build-order-tabs 输出。

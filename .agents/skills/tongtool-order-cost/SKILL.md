@@ -11,7 +11,7 @@ description: >
 metadata:
   module: tongtool_order_cost
   docs: tongtool_order_cost/docs/index.md
-  updated: 2026-11-09
+  updated: 2026-11-10
 ---
 
 # 通途订单特殊规则 / Google Sheet SKU 改名
@@ -35,6 +35,7 @@ metadata:
 | 通途主档是否存在 | `uv run python tongtool_order_cost/scripts/lookup_tongtool_sku.py SKU1 SKU2` |
 | 月度盈利审计 | `uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py snapshot --month YYYYMM --with-finance` → `analyze --snapshot <目录>` |
 | 美中 USTX 三方案对比 | 复用上面的快照：`... audit_monthly_profitability.py ustx-compare --snapshot <目录>`（纯离线） |
+| 重建三张订单表（Colab 退场） | `cd tongtool_order_cost && uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --month YYYYMM --root .` → `out/build_tabs/<月>/`（self 166 / FBA 95 / merged 78 + parity） |
 
 ## 铁律
 
@@ -62,5 +63,6 @@ metadata:
 - `docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md` —— 拆单合并成本写回五类错误：组行匹配、件数翻倍、PP棉/海绵产品族、订单号截断、审计口径
 - `docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md` —— 通途自动/手动/TikTok 拆单区别；拆单前 SKU 在 EN `platform_sku`，写回键仍用组件
 - `docs/solutions/tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` —— 分公司发货 vs FBA 成本对比口径、必排项与边界
-- `docs/solutions/documentation-gaps/tongtu-colab-local-parity-gap.md` —— Colab（截至 4.8）→ 本地：已移植范围、build-order-tabs 缺口与停用条件
+- `docs/solutions/documentation-gaps/tongtu-colab-local-parity-gap.md` —— Colab（截至 4.8）→ 本地：已移植范围、build-order-tabs 已补齐、停用条件与 202609 尾程待确认
+- `tongtool_order_cost/docs/reference/build-order-tabs.md` —— self 166 / FBA 95 / merged 78 构建口径、UUID 展开、95↔78 对账与两月对拍结论
 - `tongtool_order_cost/docs/research/2026-11-09-colab-local-parity-audit.md` —— 逐步骤完整对照表（含 4.1–4.8）
