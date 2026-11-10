@@ -82,6 +82,7 @@ Codex 那套 `sellfox_settlement` 已经明确分开两套窗口：
 - EN FBA 明细已拉：**1,583 单 / 1,595 条明细，全部含 `item_cost`；FBA 无包裹号**（Amazon 履约）。
 - **V2→成本连接已跑**（`十表V2成本连接_202610_*.xlsx`）：交易行 **FBM 99.1%（15,713/15,862）、FBA 95.8%（9,116/9,513）**；订单级 **FBM 99.4%（3,067/3,084）、FBA 95.9%（1,556/1,623）**；未匹配订单 84 个进异常。无 fulfillmentId 的 1,006 行是费用/调整/转账，不参与订单连接。
 - **账号→运营贡献毛利（含 FBA BOM）**（`Amazon运营利润_202610_*.xlsx`）：修正两处成本口径 —— ① 通途 `商品成本` 是**行合计**、不能乘数量；② EN FBA `item_cost` 全为 0，改用 **EN BOM 单价×数量** 补 FBA 商品成本（当前 BOM，非历史）。合计：净销售 242.8万、平台费 -112.0万、成本 124.4万、**贡献 +6.4万（+2.6%）**。按运营：井海坡 +23.9万、荆春雨 -0.5万、刘小菁 -6.0万、陈立彬 -2.9万、苏燕星 -2.3万、林俊彪 -2.2万、文婷 -1.9万、卢天姿 -1.0万、陈家琪 -0.7万。**待补**：226 个 FBA 明细无 erp_item_code（未套 BOM）、百纳美国 64 行 FBA 无订单；账户级费用未分摊。
+- **SKU 级贡献**（`Amazon_SKU利润_202610_*.xlsx`）：1,152 个「店铺×SKU」；收入/退款/平台费/COGS(BOM)/头程/加工/尾程，广告留账号层分摊。合计与账号版**精确勾稽**：贡献（不含广告）**50.0万**，扣广告 43.6万 = **6.4万**。
 - 待做：结算银行桥（缺银行到账输入）、账号法人（待 ZJ 法人表），其余表可从 PDF/V2 汇总后合成十表。
 
 ## 7. 84 个未匹配订单：原因（已核到 EN）
@@ -144,7 +145,31 @@ Codex 那套 `sellfox_settlement` 已经明确分开两套窗口：
 
 **业绩用成本**：本版用 **EN BOM**；另一对话「老大 调整 gs特殊规则 20261110」在讨论运营业绩用的**低于 EN BOM 的特殊规则/促销成本**，两者需对齐后切换口径。
 
-## 13. 参考
+## 13. 业界成熟做法（调研）与映射
+
+成熟工具（A2X / InventoryLab / Sellerboard / Link My Books）的共同结构：**Settlement 报表 → 分类到收入/费用科目 → 按 SKU 配 COGS → SKU/ASIN 利润**；**Inventory Ledger 是件数与退货的真相源**，中间件必须与 Amazon 源数据对齐。
+
+- **A2X**：把每笔 settlement 映射成收入+各费用科目的会计分录；“**退款当退货冲 COGS**”只在**退款关联到 SKU 且退回库存**时做，否则单独调整；另有 **Deferred 月结调整**把收入/费用/COGS 归到正确期间。
+- **InventoryLab**：从 settlement 拉销售，按录入的**每 SKU 单位成本**算 COGS，SKU 利润 = 收入 − 费用 − COGS − 退货成本；**不含 PPC**（PPC 另配）。
+- **Sellerboard**：按 日/月/产品 出利润，可拆 **Amazon 费用 / 退款成本 / COGS**；含 PPC、仓储、退款、汇率。
+- **Landed cost**：COGS 应含 货值+头程+关税+入仓，不只是货值。
+- 来源：<https://www.a2xaccounting.com/blog/include-refunds-in-cogs-postings-beta>、<https://revenuegeeks.com/software/inventorylab>、<https://help.sellerboard.com/2-1-8-reports>、<https://jonescosman.com/how-to-calculate-your-year-end-inventory-for-amazon-sellers>
+
+**映射到本项目**：
+
+| 业界 | 本项目对应 | 状态 |
+|---|---|---|
+| Settlement（V2） | 赛狐 V2 summary/detail（原币×202610） | ✅ 已有 |
+| COGS per SKU | EN BOM（当前）；特殊规则/促销成本 | ✅ BOM / ⏳ 待对齐 |
+| 退款冲 COGS | 仅"退回库存"才冲；需 Inventory Ledger | ⏳ V2 无退货件数 |
+| Reimbursements 作收入 | V2 赔偿单列 | ✅ |
+| Deferred 月结调整 | V2 deferred 报表 | ⏳ 待接 |
+| PPC | V2 Cost of Advertising（站外缺） | ✅/⚠️ |
+| SKU/ASIN 利润 | 按 SKU 汇总收入/费用/COGS，ads 账号级分摊 | 🔄 下一步 |
+
+**结论**：不另造口径 —— SKU 利润按「收入−退款−平台费−COGS（BOM）−头程/加工/尾程」；PPC/账户级费用在账号层分摊；退款 COGS 冲回等 Inventory Ledger 到位再做（与 A2X 一致）。
+
+## 14. 参考
 
 - `sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md`（十表口径与分层）
 - `tongtool_order_cost/docs/research/2026-08-14-june-fba-sku-remap.md`（FBA 缺口/SKU 改名）
