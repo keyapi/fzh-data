@@ -8,6 +8,7 @@ tags: [sellfox, amazon, settlement, okf, log]
 # 变更日志
 
 ## 2026-11-10
+- **新增 V2 端到端逐步审核**：对照 A2X/Sellerboard/InventoryLab/Finaloop/Nova，逐 15 环节审「取数/币种/费用六块/账户级费用/预留/退款/赔偿/**Deferred(DD+7)**/订单匹配/COGS/头程尾程/广告/分摊/SKU利润/对账」，分级列出高风险缺口（Deferred 未处理、退款月份+未冲COGS、账户级费用未分摊、off-account 广告缺失、尾程 71% 预估）与 9 项 Cursor 待办 → `docs/research/2026-11-10-amazon-v2-endtoend-audit.md`。
 - **诊断 84 未匹配 + 退款跨月 + 行业做法**：FBA 67 在 EN 完全没有（**62 个百纳美国未导入**），FBM 17 在 EN 有但**未发货（14 未发、3 个 11 月才发）**——扩更早月份无效；10 月退款 2,190 行/393 单，**约 55% 来自 8/9 月**；settlement=费用/现金真相非 COGS、账户级费用无 SKU 不能过滤、预留金是资产负债表、站外广告缺失；据此给出 V2→运营利润业绩的修订规划（含分摊与必查项）→ 同上文档 §7–§11。
 - **修正 V2→订单匹配调研**：通途 `订单号` 各账号前缀不同（`CUS-`/`BJRYECLTUS-`/`BNKCUS-`/`DANEEYUS-`…），须正则提取内嵌 3-7-7 Amazon 单号；按此归一后 **FBM 覆盖 99.4%（3,165/3,184）**，单看 10 月仅 1,826、补 9 月 +1,322（8月+17、7月+0），**约42% 10月记账单为9月发货**；FBA 1,651 单在非FBA文件 0 命中须走 EN → `docs/research/2026-11-10-v2-settlement-to-order-matching.md`。
 - **实测 FBA 覆盖**：V2 的 1,652 个 FBA 单直查 EN `tabTongtool Order`（按订单号集合、单次只读 ~34s）命中 **1,583（95.8%，全 order_type=FBA）**，缺 69；合并 FBM 99.4% + FBA 95.8% = **98.2%（4,748/4,836）**，缺口约 88 单进异常。
