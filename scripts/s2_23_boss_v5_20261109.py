@@ -23,6 +23,8 @@ C14 = BASE / "C-refresh-20261109/通途库存_A337_v15_refresh_2026-11-09.xlsx"
 EN_STOCK = BASE / "en_stock_20261109.parquet"
 CG_STOCK = BASE / "cg_stock_20261109.parquet"
 D2B = BASE / "D_删失需求估计_D2b_v2_2026-11-02.xlsx"
+ORDERS_D6 = Path("D:/Work/fzh-order-store/orders_unified.parquet")
+ORDERS_NOV = BASE / "tongtool_orders_20261101_20261108.parquet"
 OUT = BASE / "D_老板版补货建议_2026-11-09_v5.1.xlsx"
 KEYS = ["product_id", "池", "形态", "UOM"]
 AS_OF = pd.Timestamp("2026-11-09")
@@ -590,7 +592,8 @@ def main() -> int:
 
     data_notes = pd.DataFrame([
         ("库存/CG/EN", "2026-11-09", "已接入；C14 六桶对账仍未全绿，数值可用但保留瑕疵"),
-        ("通途订单", "截至 2026-11-08 23:56", "已并入 orders_unified；11/1–8 同店修正只动 22 个需求键"),
+        ("通途订单", "D5 nowcast 11/01–11/08；D6 CG 销量 orders_unified 截至 10/31",
+         "两个文件不是同一口径；D6 主补货动作不依赖 orders_unified，只影响 CG 销量展示"),
         ("需求预测", "基准 2026-11-02 + 11/1–8 同店修正", "D5 v6.7；p10/p50/p90/q85/q90/q95 同乘因子，分位次序已校验"),
         ("PO", "2026-11-05", "通途采购单未收队列 po_open_receipt_queue_20261105.csv；不是 EN Purchase Order。去重后仅 22 件/2 键进入 D6；19+24 候选不依赖 PO"),
         ("60cm / DN-PO", "2026-11-05 审计", "逐键 11-09 覆盖未重跑；历史量不是当前采购量"),
@@ -649,8 +652,9 @@ def main() -> int:
          "这两类不能靠运营自己决定，必须计划和业务拍板"),
         ("春节第二批", f"14 个可以补里，{len(risk6)} 个第二批必须停工前插单；不插单 {int(risk6['停工后失去目标'].sum())} 个会失去目标",
          "看 7_春节第二批停工风险；要工厂确认 12 月产能"),
-        ("数据可信度", "库存/CG/EN 11-09；订单到 11-08；PO 仍 11-05；60cm 审计仍 11-05",
-         "PO 和 60cm 不是最新；涉及这两项的结论要复核"),
+        ("数据可信度", "库存/CG/EN 11-09；D5 用 11/01–08 订单；历史销量/CG 只到 10-31；"
+                  "PO 11-05；60cm 11-05",
+         "会上说明历史销量只到 10-31；新单按 43 行；PO/60cm 未刷新"),
         ("看表顺序", "老板看 0；运营下单看 1；要拍板看 2；物流看 2b；重排晚看 2c；"
                   "工厂看 7；8–13 是审计底稿，不用先看", "按角色分表，不要从 8_全量底稿 直接下单"),
     ], columns=["事项", "结论", "你要做什么"])
@@ -778,6 +782,8 @@ def main() -> int:
         ("EN 库存 11-09", str(EN_STOCK), sha(EN_STOCK)),
         ("CG 库存 11-09", str(CG_STOCK), sha(CG_STOCK)),
         ("D2b 删失需求", str(D2B), sha(D2B)),
+        ("orders_unified（D6 CG 销量）", str(ORDERS_D6), sha(ORDERS_D6)),
+        ("11/01–08 订单（D5 nowcast）", str(ORDERS_NOV), sha(ORDERS_NOV)),
         ("v15 历史交付包", str(V15), sha(V15)),
         ("A 活跃宇宙", str(A), sha(A)),
         ("60cm/DN-PO 审计", str(W3), sha(W3)),
