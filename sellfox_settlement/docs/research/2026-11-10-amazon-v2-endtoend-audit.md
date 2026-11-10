@@ -87,7 +87,25 @@ resource: sellfox_settlement/docs/research/2026-11-10-v2-settlement-to-order-mat
 - **分摊**：按同店销售额分摊**不改变公司总额**；订阅费可用销售额，**仓储应按体积/库龄、广告应按 Sponsored Products SKU 报表**分摊；单店统一费率会让每个 SKU 同 TACoS，**运营排名是分摊结果**。
 - **Cursor 给的优先级**：① 对账（Settlement total=明细合计）+ 拆其他调整 + 一条从 +6.4万 到 -42.6万 的桥；② 补 DD+7 递延滚动；③ 尾程换承运商实际；④ Inventory Ledger 冲可售退货 COGS、未发货 FBM 不结成本、百纳/226 缺口用历史 BOM 补；⑤ 补 off-account 广告，仓储按体积、广告按 SP SKU 报表分摊。
 
-## 7. 来源
+## 7. V2 全科目映射与校验
+
+- V2 detail 共 **100 个（transactionType×amountType×amountDescription）组合 / 26,381 行 / 净额 1,107,645.40 CNY**；映射到 **Summary 分区（Income/Expenses/Tax/Transfers）+ P&L 桶**，**未映射 0 个**，桶汇总=总额（`V2科目全表_202610_*.xlsx`）。
+- 之前"6 块"确实漏项：仓储/长期仓储、订阅、Deal、优惠券、数字服务、入库配置、退货运单、债务调整、准备金、代收税、赔偿明细等，现已全部落桶。
+- **官方依据**：SP-API Settlement 报表只定义 `amount-type/amount-description/amount` 三列；Amazon 未公开逐描述字典。官方分类以 Seller Central **Summary/Account activity** 报表为准。本映射按 SP-API 列 + Summary 科目，逐条标 `官方依据/置信度`；**最终完整性 = 每店 V2 汇总与当月 Summary PDF 对平**（待做）。
+
+## 8. 退货与库存数据源（赛狐 API 已具备）
+
+- `销售/退货报告/FBA退货报告查询`、`销售/退货报告/FBM退货报告查询` → 退货件数与明细。
+- `仓库/库存流水/获取库存流水`（Inventory Ledger）、`仓库/库存明细/查询库存明细`、`仓库/FBA库存/查询FBA库存明细` → 库存增减与处置。
+- 结论：**可售退货冲 COGS、不可售转损失**所需数据，赛狐 API 能取。
+
+## 9. BOM 成本标准（解决"头程是否重复"）
+
+- 项目标准（`docs/bom_cost_explanation.md`）：**尾程前成本 = 绍兴发货成本 + 头程 + 加工**；再加尾程 = 全成本。
+- 此前用 `商品成本 + 头程 + 加工`，若 `商品成本` 已含头程/加工会**重复**（实测 `商品成本` 77.84` vs `绍兴发货成本` 55.71，确非同一字段）。
+- 已改为 **绍兴发货成本(按发货数量) + 头程(按发货数量) + 加工(按发货数量) + 尾程**。分摊后贡献由 -42.6万 修正为 **-32.1万（-13.2%）**。
+
+## 10. 来源
 
 - Nova 结算指南（六块、账户级费用、预留、off-account 广告）：<https://novadata.io/resources/blog/amazon-settlement-report-guide>
 - A2X 退款冲 COGS（仅退回库存时）：<https://www.a2xaccounting.com/blog/include-refunds-in-cogs-postings-beta>
