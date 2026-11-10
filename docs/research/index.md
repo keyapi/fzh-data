@@ -10,6 +10,8 @@ tags: [research, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-10 | 抖音直播电商生态（技术版）— 自研应用门槛、订单/售后/面单/客服机器人权限包、消息推送、千川 M-API、2026 履约与 AI 直播红线、备注传产线链路、EN 分工、分阶段路线 + 5 条待核实 | [2026-11-10-douyin-live-commerce-ecosystem.md](2026-11-10-douyin-live-commerce-ecosystem.md) |
+| 2026-11-10 | 抖音直播电商（管理层版）— 五道红线与罚则、AI 主播三条件、客服机器人买/自建取舍、"备注传不到车间"是误读、EN 能干什么、需拍板三件事 | [2026-11-10-douyin-live-commerce-management-brief.md](2026-11-10-douyin-live-commerce-management-brief.md) |
 | 2026-10-08 | key_test 生产线 vs 测试线逐文件评审清单 — 22 个冲突文件分档 + 引用关系实测（哪些真在跑/哪些死代码）+ 生产 Error Log 里的真 bug + 已建 `main-new`（以生产为基线）与备份分支 | [2026-10-08-key-test-branch-unification-review.md](2026-10-08-key-test-branch-unification-review.md) |
 | 2026-09-21 | 赛狐 API 拉 Amazon 账期报表 — **只有「插件获取报告」一条路且 API 不可触发**；90 店仅 39 店有数据、只有 6/7 两个月；fileUrls 为 1 小时签名 URL | [2026-09-21-sellfox-amazon-settlement-reports.md](2026-09-21-sellfox-amazon-settlement-reports.md) |
 | 2026-09-21 | 赛狐 Walmart 账期 API 实测 — `periodStartDate`/`periodEndDate` 真实可用，`purchaseOrder` 与 EN `Tongtool Order.platform_order_id` 100% 匹配；Wayfair/Overstock 无此路径 | [2026-09-21-sellfox-walmart-settlement-api.md](2026-09-21-sellfox-walmart-settlement-api.md) |
