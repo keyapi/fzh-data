@@ -8,6 +8,12 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 
 # 迁移日志
 
+## 2026-11-10
+
+- **修复（登录后「密码过于简单」安全提醒弹窗）**：通途登录成功后会弹「安全提醒：您的密码过于简单…」，按钮为 `忽略并继续登录 / 7天内不再提醒 / 修改密码`。该弹窗挡在跳转前，导致 `login()` 判不出成功 → 重试时再去找 `input[name=username]` → 15s 超时（`BLOCKED`）。
+  - 新增 `tongtu_login_ocr.dismiss_password_warning(page)`：优先点「7天内不再提醒」，否则「忽略并继续登录」；`login()` 提交等待后先关弹窗再判成功，并增加「登录框已消失即视为登录成功」兜底（避免重试再填 username 超时）。
+  - `tongtu_orderdetail_report`：`wait_for_login` 轮询与登录后/重开报表页后都调用 `_dismiss_password_warning`；`tongtu_fba_sales_export` 打开页面后同样调用。
+
 ## 2026-11-02
 
 - **新增能力 `tongtu.fba-sales.export`**：`legacy-compatible/tongtu_fba_sales_export.py` 导出通途「FBA销量分析报表」（`statisticsreport/fbasalesanalysis/index.htm`）。流程：付款时间=`自定义`（填整月起止 `statisticsTimeFrom/To`）→ 亚马逊账号=全部（默认）→ `查询` → 等 → `导出`（`a[onclick='exportExcelWithPic()']`，`expect_download` 取 zip）。产物 `downloads/通途FBA销量分析报表导出_YYYYMM_<ts>.zip`（内含 25 列 xlsx，表头第 1 行）。已注册 `capabilities.yaml` + 能力矩阵。实测 202610：116 行、销量 1611。

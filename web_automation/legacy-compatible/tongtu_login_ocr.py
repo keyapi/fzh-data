@@ -188,6 +188,32 @@ def fill_credentials(page) -> bool:
     return True
 
 
+def dismiss_password_warning(page) -> bool:
+    """登录后可能弹「安全提醒：您的密码过于简单…」弹窗。
+
+    优先点「7天内不再提醒」（一劳永逸），否则点「忽略并继续登录」。
+    返回是否点了（遇到并处理了弹窗）。
+    """
+    labels = ("7天内不再提醒", "忽略并继续登录")
+    for txt in labels:
+        try:
+            loc = page.get_by_text(txt, exact=False)
+            n = loc.count()
+        except Exception:
+            continue
+        for i in range(n - 1, -1, -1):
+            try:
+                el = loc.nth(i)
+                if el.is_visible():
+                    el.click(timeout=5000)
+                    logger.info("已关闭「密码过于简单」安全提醒：%s", txt)
+                    page.wait_for_timeout(1000)
+                    return True
+            except Exception as e:
+                logger.warning("关闭安全提醒失败(%s): %s", txt, e)
+    return False
+
+
 def login(page) -> bool:
     if not USERNAME or not PASSWORD:
         logger.error("请设置环境变量 TONGTU_USER 和 TONGTU_PASSWORD，或在 .env 文件中配置")
@@ -271,10 +297,21 @@ def login(page) -> bool:
 
         # 等待结果
         page.wait_for_timeout(2000)
+        # 登录后可能弹「密码过于简单」提醒，挡在跳转前 → 先关掉再判成功
+        warned = dismiss_password_warning(page)
+        if warned:
+            page.wait_for_timeout(2000)
         url = page.url or ""
         if SUCCESS_FRAGMENT in url and EXCLUDE_FRAGMENT not in url:
-            logger.info("登录成功！URL: %s", url)
+            logger.info("登录成功%s！URL: %s", "（已忽略密码提醒）" if warned else "", url)
             return True
+        # 即使 URL 未变，只要登录框已消失也视为已登录（避免再填 username 超时）
+        try:
+            if page.locator(SELECTORS["username"]).count() == 0:
+                logger.info("登录成功（登录框已消失）！URL: %s", url)
+                return True
+        except Exception:
+            pass
 
         logger.info("未跳转，刷新重试...")
         time.sleep(0.3)

@@ -16,7 +16,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 from browser_launch import launch_persistent
-from tongtu_orderdetail_report import _auto_login, _semi_auto_login
+from tongtu_orderdetail_report import _auto_login, _semi_auto_login, _dismiss_password_warning
 
 try:
     sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
@@ -88,6 +88,7 @@ def run(args) -> int:
         if "fbasalesanalysis" not in page.url or not _logged_in(page):
             page.goto(FBA_URL, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(2000)
+        _dismiss_password_warning(page)
 
         print("[步骤 1] 付款时间=自定义，填起止...")
         page.locator("#timeRange_text").click()

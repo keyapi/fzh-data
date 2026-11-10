@@ -60,11 +60,23 @@ def is_logged_in(page):
         return False
 
 
+def _dismiss_password_warning(page):
+    try:
+        from tongtu_login_ocr import dismiss_password_warning
+        if dismiss_password_warning(page):
+            print("  [信息] 已关闭「密码过于简单」安全提醒")
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def wait_for_login(page):
     print(f"\n[信息] 请在浏览器中登录通途...")
     print(f"[信息] 脚本将自动检测登录状态（最长等待 {LOGIN_TIMEOUT_SECS} 秒）")
     for i in range(0, LOGIN_TIMEOUT_SECS, 3):
         time.sleep(3)
+        _dismiss_password_warning(page)
         if is_logged_in(page):
             print("[OK] 检测到登录成功！自动继续...")
             page.wait_for_timeout(1000)
@@ -419,11 +431,14 @@ def run(args):
             context.close()
             sys.exit(1)
 
+        _dismiss_password_warning(page)
+
         # 登录跳转会离开订单详情页，确保停留在报表页再设筛选
         if "orderdetail" not in page.url:
             print("[信息] 重新打开订单详情统计页面...")
             page.goto(ORDERDETAIL_URL, wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(2000)
+            _dismiss_password_warning(page)
 
         set_ship_date_range(page, d_from, d_to)
 
