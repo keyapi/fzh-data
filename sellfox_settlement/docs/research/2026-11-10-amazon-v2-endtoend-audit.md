@@ -104,12 +104,16 @@ resource: sellfox_settlement/docs/research/2026-11-10-v2-settlement-to-order-mat
   - FBA 退货：`/api/order/api/report/fbaReturn/pageList.json`
   - FBM 退货：`/api/order/api/report/fbm/return/order/pageList.json`
   - 库存流水：`/api/warehouseInOut/inOutRecords.json`
+- **实调确认（2026-11，非推测）**：
+  - FBA 退货接口可用：传 `returnStartDate/returnEndDate` 即返回；10 月 **146 件**，字段含 `detailedDisposition`（可售/买家损坏/承运人损坏/不可售）与 `status`（商品已退回库存/立即清货/已赔偿/自动捐赠）。分布：**可售 52、买家损坏 91、承运人损坏 1、不可售 2** → **仅 52 件可冲 COGS**。
+  - 库存流水接口存在，但当前 API Key **无权限**（`code=40021 访问的接口暂无权限`），需在赛狐开通"仓库/库存流水"权限。
 
 ## 9. BOM 成本标准（解决"头程是否重复"）
 
+- **用的是哪个表**：`EN上传Cost Review预估尾程 通途非FBA订单202610 202611020918.xlsx` —— 即把通途非FBA订单上传到 EN「上传通途订单Excel（`process_order_excel_for_costs`）」后**回出的成本表**；字段 `商品成本/绍兴发货成本/头程费用/加工成本/最终尾程` 均来自 EN 成本引擎。它是**某一时点的输出**，不是历史成本；EN 侧成本会修正，**口径待与另一对话对齐后才算定稿**。
 - 项目标准（`docs/bom_cost_explanation.md`）：**尾程前成本 = 绍兴发货成本 + 头程 + 加工**；再加尾程 = 全成本。
-- 此前用 `商品成本 + 头程 + 加工`，若 `商品成本` 已含头程/加工会**重复**（实测 `商品成本` 77.84` vs `绍兴发货成本` 55.71，确非同一字段）。
-- 已改为 **绍兴发货成本(按发货数量) + 头程(按发货数量) + 加工(按发货数量) + 尾程**。分摊后贡献由 -42.6万 修正为 **-32.1万（-13.2%）**。
+- 此前用 `商品成本 + 头程 + 加工`，若 `商品成本` 已含头程/加工会**重复**（实测 `商品成本` 77.84 vs `绍兴发货成本` 55.71，确非同一字段）。
+- 已改为 **绍兴发货成本(按发货数量) + 头程(按发货数量) + 加工(按发货数量) + 尾程**。分摊后贡献由 -42.6万 修正为 **-32.1万（-13.2%）**；**成本口径一旦调整需重算**。
 
 ## 10. 首轮 V2 ↔ Summary PDF 对平（Income 分区，2026-10）
 
@@ -123,6 +127,8 @@ resource: sellfox_settlement/docs/research/2026-11-10-v2-settlement-to-order-mat
 | MXN / PLN | 0 | 0 | 0 | 10 |
 
 - **结论：未对平。** USD 约差 2%，EUR 差 18%，不能当"已校验"。
+- **官方原因是设计使然**（不是我们算错）：Settlement 报表**按放款/释放时间**；Transaction/Summary 报表**按 posted date**；**deferred 在释放前不在结算报表**；2026 起报表同时含 deferred+released 并以 posted date 索引。来源：<https://sellercentral.amazon.ie/help/hub/reference/external/G200989190>、<https://sellercentral.amazon.com/help/hub/reference/external/GLRNLZDAKHDBBVBY>、<https://linkmybooks.com/blog/amazon-deferred-transactions>
+- **组件级自查（DANEEY 美国，同店）**：毛销售 V2 19,698.90 vs PDF 20,711.02；退款 -3,328.65 vs -3,363.65；促销 -1,309.90 vs -993.10；代收税 1,287.56 vs 1,205.90；礼品包装 0 vs 5.99 —— **既有时间差，也有分类差**。
 - 注意：PDF 的 `totals` 是**转账净额**（DANEEY 美国 income 16,925.95、totals -40.64），不能拿来比 V2 净额；只能用 Income/Expenses/Tax/Transfers 分区对。
 - 待查原因：deferred/DD+7、退货与费用跨期、PDF income 与 V2 分区的定义差、JPY 币种未识别、每店映射（自动候选 41/73，需账户交叉表确认）。
 
