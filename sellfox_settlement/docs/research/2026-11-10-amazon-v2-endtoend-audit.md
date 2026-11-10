@@ -132,7 +132,19 @@ resource: sellfox_settlement/docs/research/2026-11-10-v2-settlement-to-order-mat
 - 注意：PDF 的 `totals` 是**转账净额**（DANEEY 美国 income 16,925.95、totals -40.64），不能拿来比 V2 净额；只能用 Income/Expenses/Tax/Transfers 分区对。
 - 待查原因：deferred/DD+7、退货与费用跨期、PDF income 与 V2 分区的定义差、JPY 币种未识别、每店映射（自动候选 41/73，需账户交叉表确认）。
 
-## 11. 来源
+## 11. 中国报税用哪张报表（业界经验）
+
+- **平台报送（2025Q3 起，季度）**：亚马逊向中国税局报送 10 项——卖家记号、站点、公司名、统一社会信用代码、季度、**收入总额、退款金额、收入净额、佣金服务费合计、交易数量**。税局拿它和卖家申报比对。
+- **中国申报口径（业界/税局）**：按**权责发生制、全额销售额**（含未回款），按**订单/发货时间**；**回款金额不能替代销售额**（回款=销售额−佣金−广告等，只作到账凭证）。
+- **业界实际用哪张**：
+  - **日期范围报告 / Transaction（Summary）** = 申报与"差异解释"的**核心证据**（活动/发货口径，含退款、税、运费、促销）。
+  - **Settlement 报表** = **回款凭证 + 费用明细**（佣金/广告/FBA/仓储等，有税务认可电子签章），不直接当销售额。
+  - 出口免税/退税另需**报关单 + 收汇 + 物流单据**。
+- **"哪个更有利"不能选低报**：应按真实销售额（Date Range）申报，用结算单证明回款与费用；平台收入总额若**含 VAT/TAX 代收**、或汇率/日期口径不同，差异要能解释并剔除代收代缴税（需税务顾问确认）。卖家反馈"平台收入总额高 25–30%，主要是税被算进收入"。
+- **对本项目**：**V2 用于费用/回款/利润**；**Date Range/Summary 用于申报销售额**；两者并用、互相解释，不能只用一个。
+- 来源：<https://mydidadi.com/亚马逊披露的报税数据引发争议！数据对不上怎么办/>、<https://www.anl-cn.com/mobile/newsdetail/29.html>、<https://www.eccang.com/news/4990>
+
+## 12. 来源
 
 - Nova 结算指南（六块、账户级费用、预留、off-account 广告）：<https://novadata.io/resources/blog/amazon-settlement-report-guide>
 - A2X 退款冲 COGS（仅退回库存时）：<https://www.a2xaccounting.com/blog/include-refunds-in-cogs-postings-beta>
