@@ -12,6 +12,9 @@ tags: [solutions, log]
 - **新增**: `tooling-decisions/dingtalk-group-harvest-dws-user-identity.md` —— 钉钉群历史消息/文件归档用 DWS 个人 OAuth 身份，而不是群机器人、企业内部应用或会话存档；完整性账本 + 水位 + 文件去重 + 数据落仓库外。
 - **新增**: `developer-experience/claude-headless-long-prompt-stdin.md` —— Windows 下 `claude -p` 长提示词塞进 argv 会超 32K 限制并静默回退；改为 `subprocess.run([cli, "-p"], input=prompt)`。
 - **新增**: `developer-experience/windows-schtasks-worktree-path-trap.md` —— 在 worktree 里注册 schtasks 会把任务指向临时目录；合并后必须在主仓库重跑安装脚本。
+## 2026-11-06（邮件域名到期 / Gmail 550-5.7.26）
+
+- **新增**: `integration-issues/email-domain-expiry-gmail-550-5-7-26.md` —— 域名 2026-11-03 到期后，阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析，腾讯企业邮发出的邮件被 Gmail 以 550-5.7.26 硬拒。11-04 续费成功但邮件未恢复：**续费 ≠ 恢复**，必须回查注册局 NS 并确认记录在服务（直接问权威 NS，不只看控制台）。另一层陷阱是**注册商 ≠ DNS 托管商**（阿里云注册、DNSPod 解析；主域 `vilavi.cn` 在 Cloudflare）。DKIM selector 是腾讯企业邮生成的自定义随机串（`sjnr2306` / `evhe2306`），常见 selector 全 NXDOMAIN 不能证明“没有 DKIM”。恢复后补 DMARC `p=none`、修 MX 优先级 5/10。
 
 ## 2026-10-27（供应分型 / frePPLe / 先搜分支）
 
@@ -252,3 +255,7 @@ tags: [solutions, log]
 - **修复（既有漂移）**: `intent_router/tests/test_catalog.py::test_catalog_skill_set_equals_agents_md_table` 在本批之前**已经是红的**（已用 HEAD 版文件核实）：AGENTS.md 有 `sellfox-amazon-settlement` / `dingtalk-oa-approval` / `gsheet-monthly-order` 三行，而 `intent_router/catalog.yaml` 一个都没有 —— 即「加了 AGENTS.md 行却没补 catalog 条目」，正是该文件头部注释与 `ce-okf` 记录里警告过的同一类脱节（这次方向相反）。已补 3 条选项（含各自的 `coverage`/`exclusions`/`examples`，`dir` 均验证存在），本批后 `pytest intent_router/tests colab_kit/tests` → **274 passed, 33 skipped**（原先 1 failed）。同时给 `sellfox-shipping` / `tongtool-order-cost` / `google-drive-permissions` 三条的 `exclusions` 补上新兄弟模块，让路由真正分得开。
 - **新增**: `tooling-decisions/colab-kit-notebook-edit-toolbox.md` —— 为什么把「改同事的 Colab notebook」做成**独立模块 + skill**（`colab_kit/`）而不是塞进 `google_drive_permissions/`。三条取舍：网络/本地命令分开（改 cell 是纯 JSON，可离线单测）；`verify` 与 `guard` 是**一等公民**（手写时最容易省掉的正是这两步）；`sed` 默认拒绝多命中（实测同一锚点命中 2 格）。与 `google_drive_permissions` 的分界写成对照表：**权限 vs 内容**，失败模式从"权限判断错"变成"**写坏别人的活文档**"。另一条动因是会重复 —— `pb_orders/` 已迁过一条，Overstock 这条将来也可能迁。
 - **新增**: `developer-experience/gh-pr-edit-projects-classic-workaround.md` —— `gh pr edit <n> --title/--body-file` 在本机（gh 2.71.2）**exit 1 且改动不生效**，报 `GraphQL: Projects (classic) is being deprecated … (repository.pullRequest.projectCards)`：`gh pr edit` 走 GraphQL 且前置查询会取 `projectCards`，弃用后整条命令在发出修改前就中止。绕法 = **`gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f title=… -F body=@file`**（REST，不碰 `projectCards`），改完 `gh pr view` 回读。**真正的坑是信号不可信**：命令串里接了 `| tail` 时 `$?` 是 `tail` 的、永远 0，报错行也被淹没 —— 本次就是靠回读 PR 才发现标题没变。
+
+## 2026-11-05
+- **新增**: `integration-issues/github-ssh-intermittent-publickey-denied.md` —— EN 测试机 `git push` 报 `Permission denied (publickey)`，但密钥与 GitHub 账户登记**逐字节一致**、无私钥/公钥错配、无 deploy key 冲突、主机密钥真实；同一把钥匙 22/443 端口与亚洲/美国节点都**时通时不通**，本地 Windows 换另一把钥匙同样复现；HTTPS 路径 5/5 稳定 —— 判定为大陆出口到 GitHub SSH 的链路抖动，不是密钥故障。固化三步判定法（`ssh -T` 试 3 次，任一次 `Hi <user>!` 就别动 key）与一键 HTTPS 回退（`EN_API/git_push_https.sh`，推完 `trap` 自动切回 SSH）。
+- **背景**: 现场第一反应是"密钥丢了"，但换 key 只会白折腾；真正需要的是"先证明链路问题"的判定顺序。生产机没有存 PAT，HTTPS 回退目前只对测试机开箱可用。
