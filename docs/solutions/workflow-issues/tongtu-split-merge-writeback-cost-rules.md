@@ -76,6 +76,24 @@ tags: [tongtu, split-merge, phase36, pieces, product-family, gsheet, audit]
 - 组行集合：子单原号 + 子单剥一层尾号 + 拆单前公共单号 + TikTok 数字主体。
 - 后缀审计：合并组内行不套单品后缀矩阵（整组按产品计价）；只检查单独卖 `-Cover/-Foam/-PPCotton` 的行。
 
+### 6. 成本列一致性 + 整成品 method 覆盖（2026-11-10）
+
+- **症状**：同一 SKU 在 GS 里 `皮壳成本=53.939`，但 `皮壳含包装成本/不含/系数=76.961`；
+  `绍兴二次加工成本` 有的行 0、有的 16.522567。
+- **原因**：
+  1. phase36/build 只重算 `皮壳成本`，`皮壳含/不含/系数` 仍从旧写回继承（历史 BOM），造成两套值。
+  2. 0 的行是 EN 订单行 method=皮壳（多在 `退货产品仓`），而 BOM 主档=半成品；raw `发货仓库`
+     却显示 `美中-FZH-DANEEY`，按 raw 过滤看不出差异。
+- **修法**：
+  - `皮壳含/不含/系数` 统一 = 当前 `皮壳成本`；`EN绍兴包装半成品/成品` = 当前 BOM
+    `cost_sxbzbcp/cost_sxbzcp`（旧「成品」列其实是合并后二次加工×系数）。
+  - **整成品 SKU**（无 `-Cover/-Foam/-PPCotton` 后缀）+ BOM=半成品/成品 + EN=皮壳 →
+    按 BOM method 计价（`bom_override_full_product`）；组件后缀行仍按 EN method。
+    202608 49 行 / 202609 12 行，按行重算成本差 +2,116.67 / +911.87。
+  - 新增 `self_method_warehouse_audit.csv`：EN vs BOM method、raw vs EN 仓库逐行差异。
+- **排查顺序**：不要只看 raw `发货仓库`；先看 `self_method_warehouse_audit.csv` 的
+  `EN发货仓库/EN_method/BOM_method`，再判断 0 是后缀规则还是 method 冲突。
+
 ## Why This Works
 
 - 合并组是「一件成品」，只有载体/整件一行有成本，组件行必须为 0；组行匹配正确后成本自然落表。
@@ -88,6 +106,8 @@ tags: [tongtu, split-merge, phase36, pieces, product-family, gsheet, audit]
 
 - `tests/test_tongtu_cost_engine_phase1.py::test_aux_component_rows_do_not_sum_pieces`（原单重复不翻倍）。
 - `tests/test_tongtu_cost_engine_phase2.py::test_filler_type_conflict_uses_filler_product`（PP/海绵由填充行定产品）。
+- `tests/test_tongtu_cost_engine_phase2.py::test_method_diff_full_product_overrides_to_bom_method`、
+  `test_cover_suffix_keeps_en_cover_method`（整成品 method 覆盖 / 组件不覆盖）。
 - `out/_merge_audit.py`：组成本、后缀、守恒三类自查；202608/202609 现为 0/0 失败。
 - `out/_gs_diff.py`：写回前后按备份还原对比，确认变化行与金额（202608 20 行 +23,751.83；202609 10 行 +12,543.13；FBA 表 0 变化）。
 - 写回前备份：`out/gs_full_*_<时间>/backup.csv`；写后逐格回读。

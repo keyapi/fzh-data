@@ -335,9 +335,12 @@ def _build_self_rows(
         else:
             unmapped_wh[wh] += 1
 
-        method = _text(detail.get("pricing_method")) or _text(detail.get("shipping_method"))
+        method = (_text(p2.get("method"))
+                  or _text(detail.get("pricing_method"))
+                  or _text(detail.get("shipping_method")))
         out["是否皮壳"] = "皮壳" if method == "皮壳" else "否"
         out["当月给分公司发货类型"] = method if out.get("发货仓分类") == "分公司" else ""
+        out["_method"] = method
 
         # 产品属性：EN 物料组 / BOM 优先
         old_row = _lookup_old(old, detail.get("订单号"), detail.get("通途SKU"),
@@ -440,11 +443,10 @@ def _build_self_rows(
                 unit[col] = total / cost_qty
             if ok_units:
                 shell = unit["皮壳成本"]
-                shell_in = _num((old_row or {}).get("皮壳含包装成本"))
-                shell_out = _num((old_row or {}).get("皮壳不含包装成本"))
+                # 新引擎只有 BOM cost_fg 一个皮壳口径；含/不含包装两列统一写当前值，
+                # 不再继承旧写回的历史皮壳（否则 76.961 与 53.939 并存）。
                 cells = _fill_cells(
-                    shell=shell, shell_in=shell_in if shell_in is not None else shell,
-                    shell_out=shell_out if shell_out is not None else shell,
+                    shell=shell, shell_in=shell, shell_out=shell,
                     sx2=unit["绍兴二次加工成本"], proc=unit["二次加工成本"],
                     head=unit["头程运费金额"], qty=cost_qty, sales=sales_cny_fx,
                     freight=freight, overseas=overseas or 0.0,
@@ -939,6 +941,59 @@ def build_order_tabs(
         "cost_status": r.get("cost_status"), "cost_reason": r.get("cost_reason"),
     } for r in self_rows]).to_csv(out_dir / "self_cost_audit.csv",
                                   index=False, encoding="utf-8-sig")
+
+    # 方法/仓库口径审计：EN 订单行 method vs BOM master method、raw vs EN 仓库
+    en_idx: dict[str, dict] = {}
+    if en_items.exists():
+        for rec in _read_csv(en_items).to_dict("records"):
+            oid = _text(rec.get("order_id_code"))
+            if oid:
+                en_idx.setdefault(oid, {
+                    "warehouse": _text(rec.get("warehouse_name")),
+                    "method": _text(rec.get("shipping_method")),
+                    "item": _text(rec.get("erp_item_code")),
+                })
+    audit_rows: list[dict] = []
+    method_pairs: Counter = Counter()
+    wh_diff = 0
+    for r in self_rows:
+        item = _text(r.get("品类尺寸面料编码"))
+        bom_rows = bom_index.get(item) or []
+        bom_method = _text(bom_rows[0].get("shipping_method")) if len(bom_rows) == 1 else ""
+        oid = _text(r.get("订单号"))
+        en = en_idx.get(oid) or en_idx.get(re.sub(r"_\d+$", "", oid)) or {}
+        en_method = _text(en.get("method"))
+        en_wh = _text(en.get("warehouse"))
+        raw_wh = _text(r.get("发货仓库"))
+        bad_method = bool(en_method and bom_method and en_method != bom_method)
+        bad_wh = bool(en_wh and raw_wh and en_wh != raw_wh)
+        if bad_method or bad_wh:
+            if bad_method:
+                method_pairs[(en_method, bom_method)] += 1
+            if bad_wh:
+                wh_diff += 1
+            audit_rows.append({
+                "订单号": oid, "平台SKU": r.get("平台SKU"), "通途SKU": r.get("通途SKU"),
+                "raw发货仓库": raw_wh, "EN发货仓库": en_wh,
+                "EN_method": en_method, "BOM_method": bom_method,
+                "实际计价method": _text(r.get("_method")),
+                "item_fg": item, "merge_group": r.get("merge_group"),
+                "cost_status": r.get("cost_status"),
+                "issue": "|".join(x for x in (
+                    "method_diff" if bad_method else "",
+                    "wh_diff" if bad_wh else "",
+                ) if x),
+            })
+    pd.DataFrame(audit_rows).to_csv(out_dir / "self_method_warehouse_audit.csv",
+                                    index=False, encoding="utf-8-sig")
+    self_stats["method_diff_rows"] = sum(
+        1 for a in audit_rows if "method_diff" in a["issue"])
+    self_stats["bom_override_rows"] = sum(
+        1 for a in audit_rows
+        if a["EN_method"] == "皮壳" and a["BOM_method"] in ("半成品", "成品")
+        and a["实际计价method"] == a["BOM_method"])
+    self_stats["warehouse_diff_rows"] = wh_diff
+    self_stats["method_pairs"] = {f"{a}->{b}": n for (a, b), n in method_pairs.items()}
 
     # ── FBA 95 ──
     gs_path = out / f"raw_fba_{month}.csv"

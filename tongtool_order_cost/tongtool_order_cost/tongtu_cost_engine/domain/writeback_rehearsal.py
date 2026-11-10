@@ -393,7 +393,7 @@ def build_writeback_rehearsal(
             "merged": merged,
             "pieces": _nonempty(detail.get("pieces")),
             "cost_qty": f"{cost_qty:g}",
-            "method": _nonempty(detail.get("pricing_method")) or _nonempty(p2.get("method")),
+            "method": _nonempty(p2.get("method")) or _nonempty(detail.get("pricing_method")),
             "method_source": _nonempty(p2.get("method_source")) or _nonempty(detail.get("method_source")),
             "bundle_version": _nonempty(p2.get("bundle_version")),
             "kit_method": _nonempty(p2.get("kit_method")),

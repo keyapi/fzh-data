@@ -6,6 +6,8 @@ title: tongtool_order_cost 变更日志
 # 变更日志
 
 ## 2026-11-10
+- **修复** 订单成本表成本列一致性：`皮壳含包装成本/不含/系数` 不再继承旧写回（76.961），统一=当前 `皮壳成本`（53.939）；`EN绍兴包装半成品/成品成本` 统一=当前 BOM（16.522567/36.930433）。影响 self 202608 10,601 行 / 202609 6,075 行，FBA 1,950 / 1,265 行。
+- **修订** 整成品 method 覆盖：无 `-Cover/-Foam/-PPCotton` 后缀的成品 SKU，BOM=半成品/成品而 EN=皮壳 时按 BOM method 计价（`bom_override_full_product`）；202608 49 行 / 202609 12 行，按行重算成本差 +2,116.67 / +911.87。组件后缀行仍按 EN method。新增 `self_method_warehouse_audit.csv`。
 - **新增 `build-order-tabs`**：本地重建 self 166 / FBA 95 / merged 78，不再读 Colab 模板。self = raw（已删特殊订单）→ 成熟合并组 1 行 + 透传行 → BOM 四列；金额口径：组售价×财务汇率、运费=组内 `物流商运费`；FBA 按 `订单数量` 展开确定性 UUID；merged 按 78 列合同拼接并做 95↔78 对账。见 `docs/reference/build-order-tabs.md`。
 - **新增脚本** `fetch_warehouse_cost_sources.py`（仓库→成本来源编码）、`build_product_attribute_master.py`（历史产品属性主数据）。
 - **对拍** 202608/202609（vs 已写回 GS 的 `phase36/gs_ready`）：FBA 全 0；self/merged 成本与数量 0；202608 利润 +1,729.97（追回旧表丢的填充物销售额）；202609 运费 +304,541.93（旧表生成时尾程只补 1,344 行，现 3,969 行）→ **重写 9 月 GS 前待财务确认**。

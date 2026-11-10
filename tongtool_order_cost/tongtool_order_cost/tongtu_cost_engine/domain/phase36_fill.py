@@ -24,6 +24,7 @@ from typing import Mapping, Sequence
 
 import pandas as pd
 
+from .bom_cost import load_bom_cost
 from .split_merge import normalize_sku
 from ...order_side_input import order_base, platform_body, tiktok_platform_body
 
@@ -238,6 +239,8 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
     fba_shadow = pd.read_csv(paths["fba_source"], dtype=str, keep_default_na=False)
     old = pd.read_csv(paths["old_writeback"], dtype=str, keep_default_na=False)
     old_by_key = _old_index(old)
+    bom_path = out / "bom_cost_product_with_kits.csv"
+    bom_index = load_bom_cost(bom_path) if bom_path.exists() else {}
 
     src_by_key: dict[str, dict] = {}
     src_by_order: dict[str, list[dict]] = defaultdict(list)
@@ -433,12 +436,10 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
                 else:
                     coefs = tuple(x if x != "" else y for x, y in zip(carrier_coefs, oldc))
                     shell = _num(srow.get("皮壳成本"))
-                    shell_out = (_num(old_row.get("皮壳不含包装成本")) if old_row
-                                 else _num(rec.get("皮壳不含包装成本")))
-                    shell_in = (_num(old_row.get("皮壳含包装成本")) if old_row
-                                else _num(rec.get("皮壳含包装成本")))
+                    # 新引擎只有 BOM cost_fg 一个皮壳口径；含/不含包装统一写当前值，
+                    # 不再从旧写回继承历史皮壳（否则 76.961 与 53.939 并存）。
                     cells = _fill_cells(
-                        shell=shell, shell_in=shell_in, shell_out=shell_out,
+                        shell=shell, shell_in=shell, shell_out=shell,
                         sx2=_num(srow.get("绍兴二次加工成本")),
                         proc=_num(srow.get("二次加工成本")),
                         head=_num(srow.get("头程运费金额")), qty=qty, sales=sales,
@@ -448,6 +449,19 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
                         status="ok", reason="")
                     status = "ok"
         row.update(cells)
+        # EN 绍兴包装成本：直接用当前 BOM（旧模板值会陈旧，与新四列打架）
+        src_text = str((srow or {}).get("source") or "")
+        item_fg = src_text[4:].strip() if src_text.startswith("BOM ") else ""
+        bom_rows = bom_index.get(item_fg) or []
+        if len(bom_rows) == 1:
+            row["EN绍兴包装半成品成本"] = _fmt(_num(bom_rows[0].get("cost_sxbzbcp")))
+            row["EN绍兴包装成品成本"] = _fmt(_num(bom_rows[0].get("cost_sxbzcp")))
+        # 有效发货方式（含 BOM 覆盖）：让 是否皮壳/当月类型 与成本列一致
+        eff = str((srow or {}).get("method") or "").strip()
+        if eff:
+            row["是否皮壳"] = "皮壳" if eff == "皮壳" else "否"
+            if str(row.get("发货仓分类") or "").strip() == "分公司":
+                row["当月给分公司发货类型"] = eff
         self_rows.append(row)
         crosswalk_self.append({
             "订单号": rec.get("订单号"), "通途SKU": rec.get("通途SKU"), "平台SKU": rec.get("平台SKU"),
@@ -498,10 +512,11 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
                                 kc=kc, k2=k2, ksx=ksx, status="blocked", reason=reason)
             status = reason
         else:
+            shell = _num(s.get("皮壳成本"))
             cells = _fill_cells(
-                shell=_num(s.get("皮壳成本")),
-                shell_in=_num(rec.get("皮壳含包装成本")),
-                shell_out=_num(rec.get("皮壳不含包装成本")),
+                shell=shell,
+                shell_in=shell,
+                shell_out=shell,
                 sx2=_num(s.get("绍兴二次加工成本")),
                 proc=_num(s.get("二次加工成本")),
                 head=_num(s.get("头程运费金额")), qty=qty, sales=sales,
@@ -510,6 +525,15 @@ def build_phase36(*, month: str, root: str | Path = ".", out_dir: str | Path | N
                 kc=kc, k2=k2, ksx=ksx, status="ok")
             status = "ok"
         row.update(cells)
+        # FBA：EN 绍兴包装成本同样取当前 BOM
+        fba_item = str((s or {}).get("en_item_code") or "").strip()
+        bom_rows = bom_index.get(fba_item) or []
+        if len(bom_rows) == 1:
+            row["EN绍兴包装半成品成本"] = _fmt(_num(bom_rows[0].get("cost_sxbzbcp")))
+            row["EN绍兴包装成品成本"] = _fmt(_num(bom_rows[0].get("cost_sxbzcp")))
+        fba_shell = str((s or {}).get("是否皮壳") or "").strip()
+        if fba_shell:
+            row["是否皮壳"] = fba_shell
         fba_rows.append(row)
         crosswalk_fba.append({"站点": rec.get("站点"), "MSKU": rec.get("MSKU"),
                               "SKU": rec.get("SKU"), "status": status,

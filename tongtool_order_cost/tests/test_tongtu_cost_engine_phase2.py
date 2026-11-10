@@ -257,8 +257,8 @@ def test_negative_cost_blocks(tmp_path):
     assert not p2.ok
 
 
-def test_method_diff_is_flagged_not_blocked(tmp_path):
-    """BOM method 与 EN 不一致：按 EN 定价，method_diff 标记，不阻断。"""
+def test_method_diff_full_product_overrides_to_bom_method(tmp_path):
+    """整成品 SKU（非 -Cover/-Foam）EN=皮壳 与 BOM=成品 冲突：按 BOM 成品计价并标源。"""
     shadow = _shadow(tmp_path, [
         ["ORD-2700001", "PSK", "TT777", 1, 10, 50, 0, "WH-NJ"],
     ], [["ORD-2700001", "TT777", "", 1, "皮壳"]])
@@ -270,10 +270,12 @@ def test_method_diff_is_flagged_not_blocked(tmp_path):
     p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
     row = p2.rows[0]
     assert row["status"] == "ok"
-    assert row["method"] == "皮壳"
+    assert row["method"] == "成品"
+    assert row["en_method"] == "皮壳"
+    assert row["method_source"] == "bom_override_full_product"
     assert row["bom_method"] == "成品"
     assert row["method_diff"] is True
-    assert row["绍兴二次加工成本"] == 0
+    assert row["绍兴二次加工成本"] == 1
     assert p2.stats["phase2_method_diff_rows"] == 1
 
 
@@ -387,9 +389,27 @@ def test_method_diff_alt_delta_is_audited(tmp_path):
     p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
     row = p2.rows[0]
     assert row["method_diff"] is True
-    # EN 皮壳：5+3+2+0=10；BOM 成品：5+7+2+1=15 → 审计差 +5
-    assert row["method_diff_alt_delta"] == 5
-    assert p2.stats["phase2_method_diff_alt_delta"] == 5
+    # 生效 BOM 成品：5+7+2+1=15；备选 EN 皮壳：5+3+2+0=10 → 审计差 −5
+    assert row["method_diff_alt_delta"] == -5
+    assert p2.stats["phase2_method_diff_alt_delta"] == -5
+
+
+def test_cover_suffix_keeps_en_cover_method(tmp_path):
+    """-Cover 组件行即使 BOM=成品，也不做整成品覆盖，仍按 EN 皮壳计价。"""
+    shadow = _shadow(tmp_path, [
+        ["ORD-2750001", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0, "WH-NJ"],
+    ], [["ORD-2750001", "TT001-FIN-Cover", "", 1, "皮壳"]])
+    bom = write_bom(tmp_path, [{
+        "item_fg": "KS100-FINISH-RED", "shipping_method": "成品",
+        "cost_fg": 4, "cost_sxbzcp": 9, "usnj_valuation_rate": 2,
+        "cover_freight_2kk9fsq8ln": 3, "freight_2kk9fsq8ln": 7,
+    }])
+    p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
+    row = p2.rows[0]
+    assert row["method"] == "皮壳"
+    assert row["method_source"] != "bom_override_full_product"
+    assert row["绍兴二次加工成本"] == 0
+    assert row["二次加工成本"] == 0
 
 
 def test_diff_breakdown_dimensions(tmp_path):

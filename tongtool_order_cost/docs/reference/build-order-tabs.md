@@ -75,6 +75,22 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
    `品类编码/品类尺寸编码/材料编码/美版5尺寸` 从产品主数据兜底；
    `当月是否新品/产品发售日期/运营人员/美国分区/海外仓_USHWC` 从旧写回同键行继承。
 
+### 成本列一致性（2026-11-10 修订）
+
+- `皮壳含包装成本` / `皮壳不含包装成本` / 两列的 `*系数` **统一写当前 `皮壳成本`**
+  （新引擎只有 BOM `cost_fg` 一个皮壳口径；旧 Colab 的 76.961 类历史值不再继承）。
+- `EN绍兴包装半成品成本` / `EN绍兴包装成品成本` **统一写当前 BOM**
+  `cost_sxbzbcp` / `cost_sxbzcp`。注意旧 Colab 的「成品」列实际是
+  「合并后二次加工×系数」，语义已更正。
+- **整成品 method 覆盖**：SKU 无 `-COVER/-FOAM/-PPCOTTON` 后缀、BOM=半成品/成品、
+  EN=皮壳 时，按 BOM method 计价（`bom_override_full_product`）。
+  依据：202608 49 行（46 半成品 + 3 成品）/ 202609 12 行（10 + 2），多为退货仓/皮壳仓
+  EN method 与成品 SKU 冲突；不覆盖会漏绍兴二次与头程，按行重算成本差
+  **+2,116.67 / +911.87**。
+- 组件后缀行仍按 EN method + 后缀矩阵（`-Cover` 绍兴二次/二次=0）。
+- 审计：`self_method_warehouse_audit.csv` 列出 EN vs BOM method、raw vs EN 仓库的差异行；
+  202609 有 468 行 raw `美中-FZH-DANEEY` 但 EN 是 `美中-FZH-DANEEY-退货产品仓`。
+
 ## FBA 95 口径
 
 - 业务骨架 = GS FBA 销量表；按 `订单数量` 展开为 N 行（N = 订单数）。

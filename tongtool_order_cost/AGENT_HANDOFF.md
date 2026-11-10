@@ -187,5 +187,15 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
   （旧表生成时尾程只补了 1,344 行，当前快照 3,969 行）→ **重写 9 月 GS 前必须财务确认**。
 - **属性口径**：`品类尺寸面料编码` 写 EN 物料号（不是 Colab 旧键）；`品类` 写 EN 物料组；
   旧叶子品类/部分编码从 `product_attributes.tsv` 或旧写回兜底，缺失见 parity 报告。
+- **成本列一致性（2026-11-10）**：`皮壳含包装成本/不含/系数` 统一=当前 `皮壳成本`；
+  `EN绍兴包装半成品/成品成本` 统一=当前 BOM `cost_sxbzbcp/cost_sxbzcp`。
+  **不要**再从旧写回继承这些列，否则会出现 76.961 与 53.939 并存。
+- **整成品 method 覆盖（2026-11-10）**：无 `-Cover/-Foam/-PPCotton` 后缀的成品 SKU，
+  若 BOM=半成品/成品、EN=皮壳，按 **BOM method** 计价（`bom_override_full_product`），
+  否则会漏绍兴二次/头程。202608 49 行 / 202609 12 行（按行重算成本差 +2,116.67 / +911.87）；
+  组件后缀行仍按 EN method。
+- **方法/仓库审计**：`out/build_tabs/<月>/self_method_warehouse_audit.csv`。
+  202609 有 468 行 raw 仓库=`美中-FZH-DANEEY` 但 EN=`…-退货产品仓`，同一 SKU 会因此
+  出现 绍兴二次 0 vs 16.52；排查先看这张表，不要只看 raw `发货仓库`。
 - **尚未切换写回**：GS 写回仍走 `fill-tables` + 旧模板；先财务确认再切。
 - 详细说明：`docs/reference/build-order-tabs.md`。

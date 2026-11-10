@@ -47,8 +47,17 @@ tags: [cost, bom, phase2, disabled-item, curve-pillow, method-diff]
 
 - USNJ/USTX/PL 的 valuation_rate **等于**对应 `USNJBZCP#`/`USTXBZCP#`/`PLBZCP#` BOM 的 `total_cost`；与 `shipping_method` 无关。
 - 二次加工规则**对全部 method 生效**；无目的地 BZCP BOM 时 rate=0（本数据中成品 method 均如此）。
-- **method_diff 规则**：BOM master method 与 EN 订单行 method 不一致时，**按 EN method 定价**（Phase 1.1 权威口径），BOM method 只记录 + `method_diff_alt_delta` 审计；**不阻断**。
-  - 依据：71 行 EN BOM 独立重算 71/71 通过；method_diff 29 行皮壳/目的地加工与 EN 完全一致；若改按 BOM method 定价，两月审计差异合计 2,290.59。
+- **method_diff 规则**（2026-11-10 修订）：
+  - **整成品 SKU**（无 `-COVER/-FOAM/-PPCOTTON` 后缀）且 BOM=半成品/成品、EN=皮壳 →
+    **按 BOM method 计价**，`method_source=bom_override_full_product`，反向记录
+    `method_diff_alt_delta`。依据：202608 49 行（46 半成品 + 3 成品）/ 202609 12 行
+    （10 + 2），EN 多为退货仓/皮壳仓的旧 method；成品 SKU 按皮壳计价会漏绍兴二次与头程，
+    按行重算成本差 **+2,116.67 / +911.87**。
+    **不阻断**，逐行列在 `self_method_warehouse_audit.csv`。
+  - 其余（`-Cover/-Foam/-PPCotton` 组件后缀、或非「EN 皮壳 vs BOM 半成品/成品」组合）→
+    仍按 EN method 定价，BOM method 只记录 + `method_diff_alt_delta` 审计。
+- 2026-11-04 的旧依据（71 行 EN BOM 重算通过、两月差异 2,290.59）只覆盖正常订单；
+  未覆盖「整成品 SKU 被 EN 标成皮壳」的退货仓/皮壳仓混用场景。
 - 报表 `cost_sxbzcp` 与 EN SXBZCP 存在漂移（抽样 40 行），但漂移集中在 Phase2 未使用的列（半成品用 sxbzcp 以外的 `cost_sxbzbcp`、皮壳 sx=0、成品 method 与 EN 一致），故按 method 选列是必要的。
 
 ## 4. 对账与输出
