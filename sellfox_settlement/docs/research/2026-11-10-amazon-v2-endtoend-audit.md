@@ -91,13 +91,19 @@ resource: sellfox_settlement/docs/research/2026-11-10-v2-settlement-to-order-mat
 
 - V2 detail 共 **100 个（transactionType×amountType×amountDescription）组合 / 26,381 行 / 净额 1,107,645.40 CNY**；映射到 **Summary 分区（Income/Expenses/Tax/Transfers）+ P&L 桶**，**未映射 0 个**，桶汇总=总额（`V2科目全表_202610_*.xlsx`）。
 - 之前"6 块"确实漏项：仓储/长期仓储、订阅、Deal、优惠券、数字服务、入库配置、退货运单、债务调整、准备金、代收税、赔偿明细等，现已全部落桶。
-- **官方依据**：SP-API Settlement 报表只定义 `amount-type/amount-description/amount` 三列；Amazon 未公开逐描述字典。官方分类以 Seller Central **Summary/Account activity** 报表为准。本映射按 SP-API 列 + Summary 科目，逐条标 `官方依据/置信度`；**最终完整性 = 每店 V2 汇总与当月 Summary PDF 对平**（待做）。
+- **官方依据**：SP-API Settlement 报表只定义 `amount-type/amount-description/amount` 三列；Amazon 未公开逐描述字典。官方分类以 Seller Central **Summary/Account activity** 报表为准。**第三方标准字典**：A2X《Amazon Seller Fees & Transactions》全量表、Entriwise 132 项费用词典（明确取自 settlement/reimbursement/returns 的 amount-type/amount-description/reason code）、Sellerboard《Amazon Seller Fees》指南。本映射按这些字典 + Summary 科目核对，逐条标 `官方依据/置信度`；**最终完整性 = 每店 V2 汇总与当月 Summary PDF 对平**。
+  - <https://www.a2xaccounting.com/ecommerce-accounting-hub/amazon-transaction-types-and-fees>
+  - <https://www.entriwise.com/blog/amazon-seller-fees-quickbooks-glossary>
+  - <https://blog.sellerboard.com/2023/07/12/a-comprehensive-guide-to-amazon-seller-fees>
 
 ## 8. 退货与库存数据源（赛狐 API 已具备）
 
 - `销售/退货报告/FBA退货报告查询`、`销售/退货报告/FBM退货报告查询` → 退货件数与明细。
 - `仓库/库存流水/获取库存流水`（Inventory Ledger）、`仓库/库存明细/查询库存明细`、`仓库/FBA库存/查询FBA库存明细` → 库存增减与处置。
-- 结论：**可售退货冲 COGS、不可售转损失**所需数据，赛狐 API 能取。
+- 结论：**可售退货冲 COGS、不可售转损失**所需数据，赛狐 API 能取。OpenAPI 路径（出自本仓库 `SELLFOX_API/docs` 镜像）：
+  - FBA 退货：`/api/order/api/report/fbaReturn/pageList.json`
+  - FBM 退货：`/api/order/api/report/fbm/return/order/pageList.json`
+  - 库存流水：`/api/warehouseInOut/inOutRecords.json`
 
 ## 9. BOM 成本标准（解决"头程是否重复"）
 
