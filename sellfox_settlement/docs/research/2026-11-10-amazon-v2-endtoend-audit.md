@@ -111,7 +111,22 @@ resource: sellfox_settlement/docs/research/2026-11-10-v2-settlement-to-order-mat
 - 此前用 `商品成本 + 头程 + 加工`，若 `商品成本` 已含头程/加工会**重复**（实测 `商品成本` 77.84` vs `绍兴发货成本` 55.71，确非同一字段）。
 - 已改为 **绍兴发货成本(按发货数量) + 头程(按发货数量) + 加工(按发货数量) + 尾程**。分摊后贡献由 -42.6万 修正为 **-32.1万（-13.2%）**。
 
-## 10. 来源
+## 10. 首轮 V2 ↔ Summary PDF 对平（Income 分区，2026-10）
+
+| 币种 | PDF income | V2 income | 差额 | PDF 文件数 |
+|---|---:|---:|---:|---:|
+| USD | 302,401.93 | 308,347.69 | -5,945.76 | 14 |
+| EUR | 39,547.73 | 46,629.79 | -7,082.06 | 33 |
+| SEK | 3,237.97 | 1,728.93 | +1,509.04 | 4 |
+| GBP | 12.10 | 0 | +12.10 | 6 |
+| CAD | 0 | 78.92 | -78.92 | 5 |
+| MXN / PLN | 0 | 0 | 0 | 10 |
+
+- **结论：未对平。** USD 约差 2%，EUR 差 18%，不能当"已校验"。
+- 注意：PDF 的 `totals` 是**转账净额**（DANEEY 美国 income 16,925.95、totals -40.64），不能拿来比 V2 净额；只能用 Income/Expenses/Tax/Transfers 分区对。
+- 待查原因：deferred/DD+7、退货与费用跨期、PDF income 与 V2 分区的定义差、JPY 币种未识别、每店映射（自动候选 41/73，需账户交叉表确认）。
+
+## 11. 来源
 
 - Nova 结算指南（六块、账户级费用、预留、off-account 广告）：<https://novadata.io/resources/blog/amazon-settlement-report-guide>
 - A2X 退款冲 COGS（仅退回库存时）：<https://www.a2xaccounting.com/blog/include-refunds-in-cogs-postings-beta>
