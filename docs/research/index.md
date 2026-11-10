@@ -10,8 +10,8 @@ tags: [research, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
-| 2026-11-10 | 抖音直播电商生态（技术版）— **软著是硬门槛（1–3 个月，ERPNext GPL 不能登记）**、自研应用、订单/售后/面单/飞鸽插件、API 云内云外收费（自用型也收费，云外约 108 元/月）、千川 M-API、2026 履约与 AI 直播红线、备注传产线链路、EN 独立 app vs 买 OMS、分阶段路线 + 6 条待核实 | [2026-11-10-douyin-live-commerce-ecosystem.md](2026-11-10-douyin-live-commerce-ecosystem.md) |
-| 2026-11-10 | 抖音直播电商（管理层版）— 五道红线与罚则、AI 主播三条件、客服机器人买/自建取舍、**软著要等 1–3 个月**、"备注传不到车间"是误读、EN 能干什么、需拍板三件事 | [2026-11-10-douyin-live-commerce-management-brief.md](2026-11-10-douyin-live-commerce-management-brief.md) |
+| 2026-11-10 | 抖音直播电商生态（技术版）— **软著是硬门槛（1–3 个月，ERPNext GPL 不能登记）**、自研应用、订单/售后/面单、飞鸽插件（官方机器人免费无 token、无服务端收发接口）、API 云内云外收费、千川 M-API、2026 履约/AI 直播/**AI 客服算法备案**红线、备注传产线、EN 独立 app vs 买 OMS、**Excel 桥过渡**、发货闭环、9 条待核实 | [2026-11-10-douyin-live-commerce-ecosystem.md](2026-11-10-douyin-live-commerce-ecosystem.md) |
+| 2026-11-10 | 抖音直播电商（管理层版）— 五道红线与罚则、AI 主播三条件、客服机器人（官方免费/自研要过三关）、软著等 1–3 个月、"备注传不到车间"是误读、发货闭环、需拍板三件事 | [2026-11-10-douyin-live-commerce-management-brief.md](2026-11-10-douyin-live-commerce-management-brief.md) |
 | 2026-10-08 | key_test 生产线 vs 测试线逐文件评审清单 — 22 个冲突文件分档 + 引用关系实测（哪些真在跑/哪些死代码）+ 生产 Error Log 里的真 bug + 已建 `main-new`（以生产为基线）与备份分支 | [2026-10-08-key-test-branch-unification-review.md](2026-10-08-key-test-branch-unification-review.md) |
 | 2026-09-21 | 赛狐 API 拉 Amazon 账期报表 — **只有「插件获取报告」一条路且 API 不可触发**；90 店仅 39 店有数据、只有 6/7 两个月；fileUrls 为 1 小时签名 URL | [2026-09-21-sellfox-amazon-settlement-reports.md](2026-09-21-sellfox-amazon-settlement-reports.md) |
 | 2026-09-21 | 赛狐 Walmart 账期 API 实测 — `periodStartDate`/`periodEndDate` 真实可用，`purchaseOrder` 与 EN `Tongtool Order.platform_order_id` 100% 匹配；Wayfair/Overstock 无此路径 | [2026-09-21-sellfox-walmart-settlement-api.md](2026-09-21-sellfox-walmart-settlement-api.md) |
