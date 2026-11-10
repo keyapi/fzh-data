@@ -54,6 +54,10 @@ description: docs/research 目录变更历史
   - **扩大搜索（GitHub `gh search repos`）新增**：`TonyWang-hub/mcp-cn-commerce`（97★，中国电商 MCP 连接器，8 平台 155 工具，**公开联调验收记录**，最值得单独评估）、`Abbotton/laravel-doudian`、`simon2026-spe/doudian-ysm`、`fxl1209739475-fxl/doudian-review-exporter`（只读本地范本）、⚠️ `iamyzc/doudian-scripts`（"批量显示隐藏信息"= 隐私红线，反面示例）。
   - **Gitee**：抖店领域无成规模开源 OMS/客服项目，亮点是 C# 版字节 SDK；**该领域自研项目主体仍在 GitHub**。
   - **jinxiaoai.com 判断确认**：`ChatGPT-On-CS` 开源的是 **Electron 桌面客户端**，SaaS（多店托管/云端值守）在其商业站 —— 开源是获客手段，不能当"可自建的服务端"。
+- **同日八改（深挖 mcp-cn-commerce + 产出话术表）**：
+  - **新增**: [2026-11-10-douyin-cs-faq-template.md](2026-11-10-douyin-cs-faq-template.md) — 飞鸽客服话术表模板：45 条种子话术（发货/规格/定制/价格/售后/发票六类）+ 9 字段定义（含 `auto` / `handoff` / `scope`）+ 转人工规则 + 每周维护流程；明确三条红线（不承诺、不导流、不用绝对化用语）。用途：今天喂官方机器人，将来 ISV/自研原样复用。
+  - **`mcp-cn-commerce` 深挖结论**（§11.7）：MIT / Python 3.11+ / MCP stdio / 97★ / 2026-11-09。抖店已核范围仅**订单与售后的只读查询**，**所有工具默认只读**，且**全部平台 `live_verified=false`**（合同已读、代码已写、CI 已过，但未在任何真店验收）。**它绕不开软著**——仍走官方开放平台、仍需 AppKey 与店铺授权；价值在"把读接口封装成 Agent 工具 + 连接池/限流/重试/脱敏/分页标记"。
+  - **双来源佐证**：该仓库 `docs/official-access-status.md` 独立写明「抖店自用指南要求类目资质、系统材料、**软著**、关联店铺」，与 §3.0 结论一致。另记一个架构级坑：**取 token 漏传 `shop_id` 会静默返回最早授权店铺的 token**；token 默认 7 天、应缓存复用而非每次重取。
 
 ## 2026-09-21
 
