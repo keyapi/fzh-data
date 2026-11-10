@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: Colab（截至 4.8）→ 本地引擎：已移植范围与 build-order-tabs 缺口
 date: 2026-11-09
+last_updated: 2026-11-10
 category: documentation-gaps
 module: tongtool_order_cost
 problem_type: documentation_gap
@@ -29,6 +30,17 @@ tags: [tongtu, colab, parity, build-order-tabs, split-merge]
 - 拆单合并：`split_merge` 结构判据、TikTok 数字主体配对、件数/产品族/守恒（4.2.2/4.2.3 的通用部分）。
 - 订单+成本合并（4.6）、78 列 merged shadow（4.8 的通用部分）。
 - EN 行级 `erp_item_code` + `customer_items.ref_code` 替代 Colab 的产品名称解析（4.2/4.7.2）。
+
+### 旧 self 表的展示合并规则：**不采用**（2026-11-10 重审）
+
+旧 Colab 的 `包含包裹=TRUE` 且公共单号 ≥2 → 23 组合并；通用填充物在单皮壳组删除 17 行。行/键可复现到 202608 10,870/10,870，但**语义审计不通过**：
+
+- 被删的通用填充物行有多行**行级售价非 0**，旧表只留 Cover 行，行级 `售价*汇率` 丢失：
+  - 202608：9 组，Lost 售价 254.79 / `售价*汇率` **1,729.98**
+  - 202609：7 组，Lost 售价 188.27 / `售价*汇率` **1,278.13**
+- 23 组按公共单号合并，**未限制平台SKU/产品**，且对 `运费` 直接求和（共享包裹时会重复）。
+
+因此：`self 166` 用本地成熟算法的**合并组视图**，不复刻旧 Colab 的展示合并/删除；行数差异按“旧表销售额 bug 修正”记录。旧表行键一致只是历史展示口径，不是业务规则。
 
 ### 仍需本地补/明确不移植
 

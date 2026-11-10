@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-10
+
+- **更新**: `documentation-gaps/tongtu-colab-local-parity-gap.md` — 重审旧 Colab self 展示规则：23组合并/17行通用填充物删除会低记行级 `售价*汇率`（202608 1,729.98 / 202609 1,278.13 CNY），**不采用**；self 166 改用本地成熟算法合并组视图。
+
 ## 2026-11-09
 
 - **新增**: `workflow-issues/tongtu-split-merge-writeback-cost-rules.md` — 通途拆单合并成本写回五类错误与修复（组行匹配、件数、产品族、订单号截断、审计口径）；8/9 月合并组自查 0/0 失败，GS 写回变化 20/10 行。
