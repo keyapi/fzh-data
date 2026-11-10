@@ -79,7 +79,15 @@ resource: sellfox_settlement/docs/research/2026-11-10-v2-settlement-to-order-mat
 8. 补 226 条无 `erp_item_code` 的 FBA 明细 + 百纳美国 64 行。
 9. 增加对账页：Settlement total-amount = 各科目合计；PDF 控制数 vs V2。
 
-## 5. 来源
+## 6. Cursor 评审结论（Orca worker `v2-audit-review`）
+
+- **-42.6万 是 posted-date 的现金月贡献，不是 10 月权责利润**；+6.4万（含广告）与 -42.6万（再摊账户级费用）是同一条路径，**广告只算一次**，非重复。
+- 抬高利润的缺口：226 条 FBA 无 `erp_item_code`、百纳美国 62 单缺 EN、17 单 FBM 未发货；退款无 COGS 冲回；赔偿 +5,811 未进贡献；`其他调整 -14.3万` 混合未拆；Settlement total 未与明细对平（107 vs 106 组）。
+- 需确认：BOM 单价是否已含头程（我们又在旁边加了头程，可能重复）；BOM 为当前值非 10 月历史。
+- **分摊**：按同店销售额分摊**不改变公司总额**；订阅费可用销售额，**仓储应按体积/库龄、广告应按 Sponsored Products SKU 报表**分摊；单店统一费率会让每个 SKU 同 TACoS，**运营排名是分摊结果**。
+- **Cursor 给的优先级**：① 对账（Settlement total=明细合计）+ 拆其他调整 + 一条从 +6.4万 到 -42.6万 的桥；② 补 DD+7 递延滚动；③ 尾程换承运商实际；④ Inventory Ledger 冲可售退货 COGS、未发货 FBM 不结成本、百纳/226 缺口用历史 BOM 补；⑤ 补 off-account 广告，仓储按体积、广告按 SP SKU 报表分摊。
+
+## 7. 来源
 
 - Nova 结算指南（六块、账户级费用、预留、off-account 广告）：<https://novadata.io/resources/blog/amazon-settlement-report-guide>
 - A2X 退款冲 COGS（仅退回库存时）：<https://www.a2xaccounting.com/blog/include-refunds-in-cogs-postings-beta>
