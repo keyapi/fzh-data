@@ -13,9 +13,9 @@ from openpyxl.utils import get_column_letter
 BASE = Path("D:/Work/fzh-order-store/analysis")
 D5 = BASE / "D5v6_7-novcast/D_概率与服务_D5_v6_7_2026-11-09.xlsx"
 NC = BASE / "nov_nowcast_20261109.csv"
-D6 = BASE / "D6v6_19-1110/D_Top50沙盒_D6_v6_19_2026-11-10.xlsx"
-CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-10_v10.xlsx"
-TRAJ = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-10_v10.xlsx"
+D6 = BASE / "D6v6_20-1110/D_Top50沙盒_D6_v6_20_2026-11-10.xlsx"
+CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-10_v11.xlsx"
+TRAJ = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-10_v11.xlsx"
 V15 = BASE / "S2_9-delivery-final-20261106/D_补货交付包_2026-11-06_final_v15.xlsx"
 A = BASE / "SKU活跃宇宙_2026-10-29_FINAL.xlsx"
 W3 = BASE / "round15_60cm_dnpo_audit.csv"
@@ -25,7 +25,8 @@ CG_STOCK = BASE / "cg_stock_20261110.parquet"
 D2B = BASE / "D_删失需求估计_D2b_v2_2026-11-02.xlsx"
 ORDERS_D6 = Path("D:/Work/fzh-order-store/orders_unified_20261110.parquet")
 ORDERS_NOV = BASE / "tongtool_orders_20261101_20261109.parquet"
-OUT = BASE / "D_老板版补货建议_2026-11-10_v5.2.xlsx"
+SO_CSV = BASE / "so_20261110.csv"
+OUT = BASE / "D_老板版补货建议_2026-11-10_v5.3.xlsx"
 KEYS = ["product_id", "池", "形态", "UOM"]
 AS_OF = pd.Timestamp("2026-11-10")
 
@@ -667,7 +668,9 @@ def main() -> int:
                   "14 行全是 FBA（美13/法1），EN 三仓 0 明细；历史销量/CG 10-31；PO 11-05；60cm 11-05",
          "会上说明 11/09 EN 三仓 0 明细；新单按 1 表 P1；PO/60cm 未刷新"),
         ("看表顺序", "老板看 0；运营下单看 1；要拍板看 2；物流看 2b；重排晚看 2c；"
-                  "工厂看 7；老板问策略看 16；8–13 是审计底稿", "按角色分表，不要从 8_全量底稿 直接下单"),
+                  "工厂看 7；老板问策略看 16；新SO看17；8–13 是审计底稿", "按角色分表，不要从 8_全量底稿 直接下单"),
+        ("EN 新SO", "SO-26-00136 15:14 已下 2,320 件；36 个波兰键/1,280 件匹配，已计入 D6 v6.20",
+         "这些量不要重复下；看 17_EN新SO"),
     ], columns=["事项", "结论", "你要做什么"])
 
     # 60cm corrected summary + detail
@@ -694,9 +697,11 @@ def main() -> int:
     ], columns=["项", "结论"])
 
     corrections = pd.DataFrame([
-        ("v2 / v3b / v4 / v5.1", "历史讨论版，已作废；v5.2 为 11-10 刷新版。"),
+        ("v2 / v3b / v4 / v5.1 / v5.2", "历史讨论版，已作废；v5.3 为含 EN 新 SO 的 11-10 版。"),
         ("v5.2 数据刷新", "库存/CG/EN 11-10；C14 11-10；D6 v6.19；CNY v10；轨迹 v10；"
                         "11/09 EN 订单同步不完整，未用于 nowcast。"),
+        ("v5.3 EN 新SO", "SO-26-00136 15:14 创建，66 行/2,320 件；36 个波兰键/1,280 件匹配，"
+                        "已作为待发供给计入 D6 v6.20；CNY 量不变。"),
         ("v5.1 修 1", "同店修正改为对 point_forecast 与 p10/p50/p90/q85/q90/q95 同乘一个因子；"
                      "复算后分位次序 0 违反。"),
         ("v5.1 修 2", f"春节第二批按停工日历重排：{int(cny['第二批需停工前插单'].sum())} 个键改为停工前做完；"
@@ -780,12 +785,28 @@ def main() -> int:
          "看 15 后由业务决定"),
     ], columns=["事项", "结论", "你要做什么"])], ignore_index=True)
     data_notes = pd.concat([data_notes, pd.DataFrame([
+        ("EN 新 SO", "SO-26-00136：2026-11-10 15:14 创建，66 行/2,320 件；36 个波兰键/1,280 件匹配 D6，已计入 v6.20 供给",
+         "见 17_EN新SO；这些量不要再重复下"),
         ("断货/删失需求",
          f"D2b 删失键 {len(d2[d2['censor_method'].ne('none')])} 个；匹配 {len(censor_cmp)} 个；"
          f"估算新增 {censor_cmp['估算新增需求'].sum():,.0f} 件",
          "上界情景，未进主表；见 15_断货修正情景"),
     ], columns=["项目", "时点/范围", "说明"])], ignore_index=True)
 
+    pl_so = d6[d6["池"].eq("波兰") & (pd.to_numeric(d6["SO已下"], errors="coerce").fillna(0) > 0)].copy()
+    so_summary = pd.DataFrame([
+        ("SO", "SO-26-00136", "2026-11-10 15:14 创建；客户 波兰公司；交付日 2026-12-15"),
+        ("SO 原始", "66 行 / 2,320 件", "客户 波兰公司；交付日 2026-12-15"),
+        ("匹配 D6 波兰", f"{len(pl_so)} 键 / {pd.to_numeric(pl_so['SO已下'], errors='coerce').fillna(0).sum():,.0f} 件",
+         "按 product+pool 去重后；这些量已计入 v6.20"),
+        ("已计入 D6", f"{len(pl_so)} 键 / {pd.to_numeric(pl_so['SO已下'], errors='coerce').fillna(0).sum():,.0f} 件",
+         "v6.20 把 SO 作为待发供给；不再重复下单"),
+        ("完全覆盖", int(((pd.to_numeric(pl_so["SO已下"], errors="coerce").fillna(0) > 0)
+                     & (pd.to_numeric(pl_so["净需求95"], errors="coerce").fillna(0) <= 0)).sum()),
+         "净需求已为 0 的键"),
+    ], columns=["项", "值", "说明"])
+    so_rows = pl_so[["product_id", "池", "形态", "UOM", "SO已下", "净需求95",
+                     "新补数量", "建议动作", "动作原因"]].rename(columns={"product_id": "商品编码", "池": "分公司"})
     strategy = pd.DataFrame([
         ("一句话", "先算未来最坏情况能卖多少，减掉库存/在途/PO，得到缺口；再按生产+运输倒推下单日；春节按停工日历拆两批。", ""),
         ("策略 A：现在补", "按现在库存，等到下一批到仓前会断货；今天就下。",
@@ -800,6 +821,7 @@ def main() -> int:
          "美东 CMM-140-COFFEE：首批 28 改空运，12-25 到。"),
         ("重排晚到", "今天重下仍晚于需要日；选接受晚到或改空运。",
          "美东 平绒-153-姜黄色：今天重下仍晚 46 天，2c。"),
+        ("EN 新SO", "同事下午已在 EN 下的 SO 不重复下；把它当待发供给，扣减建议量。", "SO-26-00136：36 个波兰键/1,280 件已计入 v6.20。"),
         ("不补/观察/看不清", "库存够、证据不足、需求异常或新资格未确认；不自动下单。",
          "不用补 351、继续观察 89、看不清 66、异常 5、新增资格 19。"),
         ("春节停工", "工厂 1/24 停工、2/22 复工；第二批若会跨停工，就 1/24 前做完；否则 3/23 到。",
@@ -822,6 +844,7 @@ def main() -> int:
         ("D2b 删失需求", str(D2B), sha(D2B)),
         ("orders_unified（D6 CG 销量）", str(ORDERS_D6), sha(ORDERS_D6)),
         ("11/01–09 订单（D5 nowcast 用 01–08）", str(ORDERS_NOV), sha(ORDERS_NOV)),
+        ("EN SO-26-00136 调整", str(SO_CSV), sha(SO_CSV)),
         ("v15 历史交付包", str(V15), sha(V15)),
         ("A 活跃宇宙", str(A), sha(A)),
         ("60cm/DN-PO 审计", str(W3), sha(W3)),
@@ -855,13 +878,15 @@ def main() -> int:
         target31.to_excel(w, sheet_name="9_服务目标核对", index=False)
         past6.to_excel(w, sheet_name="10_新过期清单", index=False)
         src.to_excel(w, sheet_name="11_数据来源", index=False)
-        corrections.to_excel(w, sheet_name="12_v5.2改了什么", index=False)
+        corrections.to_excel(w, sheet_name="12_v5.3改了什么", index=False)
         po60.to_excel(w, sheet_name="13_60cm与DN-PO（审计）", index=False)
         keys60.to_excel(w, sheet_name="13b_60cm逐键", index=False)
         pivot.to_excel(w, sheet_name="14_分公司汇总", index=False)
         censor_summary.to_excel(w, sheet_name="15_断货修正情景", index=False)
         censor_cmp.to_excel(w, sheet_name="15b_断货修正逐键", index=False)
         strategy.to_excel(w, sheet_name="16_策略说明", index=False)
+        so_summary.to_excel(w, sheet_name="17_EN新SO", index=False)
+        so_rows.to_excel(w, sheet_name="17b_EN新SO逐键", index=False)
 
     wb = load_workbook(OUT)
     hf, hfont = PatternFill("solid", fgColor="1F4E78"), Font(color="FFFFFF", bold=True)

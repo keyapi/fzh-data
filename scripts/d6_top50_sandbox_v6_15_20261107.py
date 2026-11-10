@@ -137,6 +137,7 @@ def main(argv=None) -> int:
     ap.add_argument("--en-stock", default=f"{BA}/codex-repair-20261102/C-source-20261102/en_stock.parquet")
     ap.add_argument("--po-open", default=f"{BA}/po_open_receipt_queue_20261105.csv")
     ap.add_argument("--orders", default=f"{B}/orders_unified.parquet")
+    ap.add_argument("--so", default=None, help="可选：已下 SO 供给 CSV（product_id,pool,qty）")
     ap.add_argument("--out-xlsx", default=f"{BA}/D6v6_15-final/"
                     "D_Top50沙盒_D6_v6_15_2026-11-07.xlsx")
     ap.add_argument("--out-report", default=f"{BA}/D6v6_15-final/"
@@ -508,6 +509,19 @@ def main(argv=None) -> int:
     f = f.merge(b[["product_id", "region", "b_market_status", "b_market_confidence"]],
                 on=["product_id", "region"], how="left")
     f = f.merge(ks, left_on=["product_id", "pool"], right_on=["product_x", "pool_x"], how="left")
+    f["stock_inb"] = pd.to_numeric(f["stock_inb"], errors="coerce").fillna(0.0)
+    f["stock_intr"] = pd.to_numeric(f["stock_intr"], errors="coerce").fillna(0.0)
+    f["stock_wait"] = pd.to_numeric(f["stock_wait"], errors="coerce").fillna(0.0)
+    f["so_qty"] = 0.0
+    if args.so:
+        so_adj = pd.read_csv(args.so)
+        so_map = {(str(r.product_id), str(r.pool)): float(r.qty)
+                  for r in so_adj.itertuples(index=False)}
+        f["so_qty"] = [so_map.get((str(p), str(pool)), 0.0)
+                       for p, pool in zip(f["product_id"], f["pool"])]
+        # SO 按“未知货龄的待发”处理：计入 stock_inb 与 stock_wait，由头程情景生成 ETA。
+        f["stock_inb"] += f["so_qty"]
+        f["stock_wait"] += f["so_qty"]
     f = f.merge(kp, left_on=["product_id", "pool"], right_on=["product_x", "pool_x"], how="left")
     f = f.merge(po_eta_basis, left_on=["product_id", "pool"],
                 right_on=["product_x", "pool_x"], how="left")
@@ -880,7 +894,7 @@ def main(argv=None) -> int:
                  "demand_pattern", "owner_basis", "owner_unassigned",
                  "owner_supply_pool_mismatch", "off_pool_supply_qty", "no_supply_record",
                  "p50", "q95", "supply", "supply_join_status", "supply_form_adapted",
-                 "supply_form_source", "stock_inb", "po_extra",
+                 "supply_form_source", "stock_inb", "po_extra", "so_qty",
                  "protection_horizon_days", "sensitivity_horizon_days",
                  "service_validation_status", "po_eta_basis", "po_manual_review",
                  "manual_review_required", "auto_order",
@@ -923,6 +937,7 @@ def main(argv=None) -> int:
         "manual_review_required": "需人工复核", "auto_order": "自动下单",
         "po_eta_basis": "PO ETA依据", "po_manual_review": "PO需人工复核",
         "stock_inb": "en_stock在途+待发", "po_extra": "PO追加(去重)",
+        "so_qty": "SO已下",
         "cg_buffer_credit": "CG缓冲抵扣", "CG可调拨抵扣": "CG可调拨抵扣", "inbound": "在途合计",
         "late_qty": "迟到在途(ETA情景晚于需要日)", "supply_on_time": "到时供给",
         "net_before_cg": "净需求(未扣CG)", "net_95": "净需求95", "net_90": "净需求90",
