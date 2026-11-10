@@ -74,7 +74,15 @@ Codex 那套 `sellfox_settlement` 已经明确分开两套窗口：
 3. **（已实测）三向覆盖**：FBM 单 → 通途（202607–10，99.4%）；FBA 单 → EN（95.8%）；合计 98.2%。缺口约 88 单进异常清单，不补猜数。
 4. 只有覆盖率达标后，才把成本/交易连接写进十表工作簿的第 7、9 表；不足的标"输入缺失"，不补猜数。
 
-## 6. 参考
+## 6. 执行进度（2026-11-10）
+
+- 赛狐 V2 已拉：`sellfox_v2_202610/summary.csv`（107 组）、`detail.csv`（26,381 行）。
+- 通途非FBA 202607–202610 建索引：FBM 覆盖 **99.4%（3,165/3,184）**，缺 19。
+- EN `tabTongtool Order` 按订单号集合直查：FBA 覆盖 **95.8%（1,583/1,652）**，缺 69。
+- EN FBA 明细已拉：**1,583 单 / 1,595 条明细，全部含 `item_cost`；FBA 无包裹号**（Amazon 履约）。
+- 待做：FBM 侧从通途文件取尾程/成本字段；把 V2 交易行按 `订单号+SKU` 连到成本证据；再填十表的第 7（成本覆盖）、9（V2交易连接）表。缺口约 88 单进异常清单，不补猜数。
+
+## 7. 参考
 
 - `sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md`（十表口径与分层）
 - `tongtool_order_cost/docs/research/2026-08-14-june-fba-sku-remap.md`（FBA 缺口/SKU 改名）
