@@ -6,6 +6,7 @@ title: tongtool_order_cost 变更日志
 # 变更日志
 
 ## 2026-11-10
+- **GS 最小修补（8/9 月 6 个写回 ws）**：只写 29 个成本/系数列，修正 `皮壳含/不含/系数` 与整成品 method 覆盖；202608 self 46 行 +1,920.04，202609 self 9 行 +370.55，FBA 只改含/不含；readback 0。明细/备份在 `out/gs_min_patch_<月>/`；历史与列用途见 `docs/research/2026-11-10-gs-cost-write-history-and-column-map.md`。
 - **修复** 订单成本表成本列一致性：`皮壳含包装成本/不含/系数` 不再继承旧写回（76.961），统一=当前 `皮壳成本`（53.939）；`EN绍兴包装半成品/成品成本` 统一=当前 BOM（16.522567/36.930433）。影响 self 202608 10,601 行 / 202609 6,075 行，FBA 1,950 / 1,265 行。
 - **修订** 整成品 method 覆盖：无 `-Cover/-Foam/-PPCotton` 后缀的成品 SKU，BOM=半成品/成品而 EN=皮壳 时按 BOM method 计价（`bom_override_full_product`）；202608 49 行 / 202609 12 行，按行重算成本差 +2,116.67 / +911.87。组件后缀行仍按 EN method。新增 `self_method_warehouse_audit.csv`。
 - **新增 `build-order-tabs`**：本地重建 self 166 / FBA 95 / merged 78，不再读 Colab 模板。self = raw（已删特殊订单）→ 成熟合并组 1 行 + 透传行 → BOM 四列；金额口径：组售价×财务汇率、运费=组内 `物流商运费`；FBA 按 `订单数量` 展开确定性 UUID；merged 按 78 列合同拼接并做 95↔78 对账。见 `docs/reference/build-order-tabs.md`。

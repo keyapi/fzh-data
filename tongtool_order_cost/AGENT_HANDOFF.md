@@ -197,5 +197,11 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
 - **方法/仓库审计**：`out/build_tabs/<月>/self_method_warehouse_audit.csv`。
   202609 有 468 行 raw 仓库=`美中-FZH-DANEEY` 但 EN=`…-退货产品仓`，同一 SKU 会因此
   出现 绍兴二次 0 vs 16.52；排查先看这张表，不要只看 raw `发货仓库`。
+- **GS 写回（2026-11-10 最小修补）**：只写 29 个成本/系数列；8/9 月 6 个写回 ws，
+  202608 self 46 行 +1,920.04、202609 self 9 行 +370.55，FBA 只改含/不含，readback 0。
+  备份/明细：`out/gs_min_patch_<月>/`。历史、列用途、0903 vs 1104 BOM 对照见
+  `docs/research/2026-11-10-gs-cost-write-history-and-column-map.md`。
+- **未动列**：`运费`（9 月仍是模板旧值）、销售额、商品属性、`EN绍兴包装*`、
+  `是否皮壳/当月类型`、行集合；全量替换 build_tabs 前需逐项确认语义。
 - **尚未切换写回**：GS 写回仍走 `fill-tables` + 旧模板；先财务确认再切。
 - 详细说明：`docs/reference/build-order-tabs.md`。

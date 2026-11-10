@@ -9,6 +9,7 @@ tags: [solutions, log]
 
 ## 2026-11-10
 
+- **更新**: `workflow-issues/tongtu-split-merge-writeback-cost-rules.md` — 新增「成本列一致性 + 整成品 method 覆盖」：皮壳含/不含/系数改为当前皮壳成本；整成品 SKU（非组件后缀）EN 皮壳 vs BOM 半成品/成品时按 BOM 计价；GS 最小修补 8/9 月 6 个 ws（202608 46 行 +1,920.04 / 202609 9 行 +370.55）。
 - **更新**: `documentation-gaps/tongtu-colab-local-parity-gap.md` — 重审旧 Colab self 展示规则：23组合并/17行通用填充物删除会低记行级 `售价*汇率`（202608 1,729.98 / 202609 1,278.13 CNY），**不采用**；self 166 改用本地成熟算法合并组视图。
 - **更新**: 同一篇补记 `build-order-tabs` 已落地（本地重建 166/95/78；两月对拍成本/数量 0 差异；202609 尾程 +304,541.93 待财务确认）；构建口径见 `tongtool_order_cost/docs/reference/build-order-tabs.md`。
 
