@@ -206,5 +206,6 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
   端到端步骤与判断标准见 `docs/reference/tongtool-order-pipeline.md`。
 - **未动列**：`运费`（9 月仍是模板旧值）、销售额、商品属性、`EN绍兴包装*`、
   `是否皮壳/当月类型`、行集合；全量替换 build_tabs 前需逐项确认语义。
+- **FBA 绍兴二次 = `cost_sxbzcp`**（含半成品包装）；上游 `sx_cost_all` 在 `cost_fg=0` 时漏计，已提 `work_order_task#6`，消费侧兜底 `tongtool_integration#24`。
 - **尚未切换写回**：GS 写回仍走 `fill-tables` + 旧模板；先财务确认再切。
 - 详细说明：`docs/reference/build-order-tabs.md`。
