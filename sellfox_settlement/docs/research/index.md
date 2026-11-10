@@ -11,5 +11,5 @@ tags: [sellfox, amazon, settlement, research, okf]
 |------|------|
 | Amazon 非 V2 月度报表国内报税分析（2026-08 文件盘点、ZJ 填写总表、平台报送候选、费用成本、法人归属、实施路线；Notion 可直接导入） | [2026-10-09-amazon-non-v2-monthly-tax-analysis.md](2026-10-09-amazon-non-v2-monthly-tax-analysis.md) |
 | ZJ 填写渠道选型（Notion 公开页/表单、自建局域网表单、Google 表单对比与建议） | [2026-10-10-zj-questionnaire-collection-options.md](2026-10-10-zj-questionnaire-collection-options.md) |
-| V2 结算/活动分轴与 FBM/FBA 订单匹配口径（2026-10 实测：80% 10月-posted FBM 单不在10月发货文件） | [2026-11-10-v2-settlement-to-order-matching.md](2026-11-10-v2-settlement-to-order-matching.md) |
+| V2 结算/活动分轴与 FBM/FBA 订单匹配口径（2026-10 实测：前缀归一后 FBM 覆盖 99.4%；约42% 10月记账单为9月发货；FBA 需走 EN） | [2026-11-10-v2-settlement-to-order-matching.md](2026-11-10-v2-settlement-to-order-matching.md) |
 | 赛狐自动拉取 Amazon 账期（背景/可行性/两报表口径/科目/风险/短中长期/引用） | [saihu-amazon-settlement-autofetch-2026-09-09.md](saihu-amazon-settlement-autofetch-2026-09-09.md) |
