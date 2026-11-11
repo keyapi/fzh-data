@@ -13,6 +13,8 @@ updated: 2026-10-27
 
 | 你需要… | 读这个 |
 |---|---|
+| E 已有供给节点、单号级互斥、客户与 ETA | [E_DESIGN.md](E_DESIGN.md) |
+| E 节点账实施与验证顺序 | [E_IMPLEMENTATION_PLAN.md](E_IMPLEMENTATION_PLAN.md) |
 | 引擎口径、两种情景、未知怎么保留 | [reference/netting-engine.md](reference/netting-engine.md) |
 | 阶段余额 / 里程碑 / 可售 tranche 结构 | [reference/supply-facts-contract.md](reference/supply-facts-contract.md) |
 | 输出字段、文件路径、manifest 结构 | [reference/output-schema.md](reference/output-schema.md) |
