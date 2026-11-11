@@ -272,7 +272,7 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 | `integration-issues/` | 25 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
 | `architecture-patterns/` | 21 | 「这个管道/系统为什么这样设计」 |
 | `tooling-decisions/` | 15 | 脚本、工具选型、产出校验 |
-| `developer-experience/` | 13 | Windows / worktree / MCP / Colab 等本机环境坑 |
+| `developer-experience/` | 14 | Windows / worktree / MCP / Colab 等本机环境坑 |
 | `conventions/` | 10 | 团队约定（配对、命名、SOP） |
 | `best-practices/` | 9 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
 | `documentation-gaps/` | 3 | 文档与断言的缺口 |
