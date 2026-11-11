@@ -1078,3 +1078,99 @@ def warehouse_cost_source_check(
             round(cost, 2), STRONG, OWNER_MASTER))
     out.sort(key=lambda f: -(f.monetary_effect or 0))
     return out
+
+
+# ---------------------------------------------------------------------------
+# 分渠道成本审计（cell_222 口径）：按渠道拆成本并验恒等式
+# ---------------------------------------------------------------------------
+
+CHANNEL_COST_MISMATCH = "channel_cost_mismatch"
+
+# cell_222 里各渠道标准成本的**定义**（普通轨）。USNJ/PL 用含包装，其余不含包装；
+# 二次加工来源编码按渠道不同（USNJ=2CJG-US、PL=2CJG-PL、其余=2CJG-SX）。
+CHANNEL_COST_DEFS: dict[str, dict[str, str]] = {
+    "美国分公司_USNJ": {"包装": "含包装", "头程": "HEAD-US", "二次加工": "2CJG-US"},
+    "美国FBA_USFBA": {"包装": "不含包装", "头程": "HEAD-USFBA", "二次加工": "2CJG-SX"},
+    "美国海外仓_USHWC": {"包装": "不含包装", "头程": "HEAD-USHWC", "二次加工": "2CJG-SX"},
+    "波兰分公司_PL": {"包装": "含包装", "头程": "HEAD-PL", "二次加工": "2CJG-PL"},
+    "欧洲海外仓_EUHWC": {"包装": "不含包装", "头程": "HEAD-EUHWC", "二次加工": "2CJG-SX"},
+    "日本FBA_JPFBA": {"包装": "不含包装", "头程": "HEAD-JPFBA", "二次加工": "2CJG-SX"},
+    "绍兴自发货_SX": {"包装": "不含包装", "头程": "", "二次加工": "2CJG-SX"},
+}
+# ⚠️ cell_222 **只**在 `*系数` 块里定义了 `美国分公司_USTX*系数`，**没有普通口径列**
+#    `美国分公司_USTX`；且它用「皮壳**不含包装**成本」，与 `美国分公司_USNJ` 的「含包装」不同。
+CHANNEL_KNOWN_ISSUES = (
+    "美国分公司_USTX 只有 *系数 列、没有普通列（cell_222 不一致）",
+    "美国分公司_USTX*系数 用「皮壳不含包装成本」，与美国分公司_USNJ 的「含包装」不同口径",
+    "*系数 渠道列里「头程」用未乘系数的列，而「皮壳/二次加工」用 *系数 列（三科目口径不一致）",
+)
+
+
+def channel_cost_decomposition(
+    rows: Sequence[SourceRow],
+    *,
+    group_col: str = "发货仓按销售汇总分类",
+    component_cols: Sequence[str] = ("皮壳成本*数量", "绍兴二次加工成本*数量", "二次加工成本*数量"),
+    freight_col: str = "头程运费*数量",
+    last_leg_col: str = "运费",
+    product_cost_col: str = "产品成本*数量",
+    total_cost_col: str = "订单总成本",
+    tol: float = 0.01,
+) -> tuple[list[dict], list[Finding]]:
+    """按渠道拆产品成本/头程/尾程，并验两条恒等式。
+
+    - `产品成本*数量 == 皮壳成本*数量 + 绍兴二次加工成本*数量 + 二次加工成本*数量`
+    - `订单总成本 == 产品成本*数量 + 头程运费*数量 + 运费`
+
+    Returns (渠道明细行, 恒等式不成立的 Finding)。
+    """
+    groups: dict[str, list[SourceRow]] = {}
+    for r in rows:
+        groups.setdefault(r.get(group_col), []).append(r)
+
+    sheet: list[dict] = []
+    findings: list[Finding] = []
+    for channel, group in groups.items():
+        sums = {c: round(sum(_to_float(r.get(c)) for r in group), 2) for c in component_cols}
+        freight = round(sum(_to_float(r.get(freight_col)) for r in group), 2)
+        last_leg = round(sum(_to_float(r.get(last_leg_col)) for r in group), 2)
+        product_cost = round(sum(_to_float(r.get(product_cost_col)) for r in group), 2)
+        total_cost = round(sum(_to_float(r.get(total_cost_col)) for r in group), 2)
+        pieces = sum(o.piece_count for o in order_grain(group))
+        comp_sum = round(sum(sums.values()), 2)
+        id1 = round(product_cost - comp_sum, 2)
+        id2 = round(total_cost - (product_cost + freight + last_leg), 2)
+        packaging = _packaging_mode(group)
+        src_codes = sorted({r.get("二次加工成本来源编码") for r in group if r.get("二次加工成本来源编码")})
+        sheet.append({
+            group_col: channel, "rows": len(group), "pieces": pieces,
+            **sums, "产品成本*数量": product_cost,
+            freight_col: freight, last_leg_col: last_leg, total_cost_col: total_cost,
+            "产品成本恒等式差": id1, "订单总成本恒等式差": id2,
+            "皮壳包装口径": packaging, "二次加工来源编码": ",".join(src_codes),
+        })
+        if abs(id1) > tol:
+            findings.append(Finding(
+                CHANNEL_COST_MISMATCH, "cohort", f"{channel}|产品成本", "high",
+                {"product_cost": product_cost, "components_sum": comp_sum, "diff": id1},
+                id1, PROVEN, OWNER_TECH))
+        if abs(id2) > tol:
+            findings.append(Finding(
+                CHANNEL_COST_MISMATCH, "cohort", f"{channel}|订单总成本", "high",
+                {"total_cost": total_cost, "recomputed": round(product_cost + freight + last_leg, 2),
+                 "diff": id2},
+                id2, PROVEN, OWNER_TECH))
+    return sheet, findings
+
+
+def _packaging_mode(group: Sequence[SourceRow]) -> str:
+    """该渠道实际用的皮壳口径（含包装/不含包装）是否一致。"""
+    has_inc = any(_to_float(r.get("皮壳含包装成本")) != 0 for r in group)
+    has_exc = any(_to_float(r.get("皮壳不含包装成本")) != 0 for r in group)
+    if has_inc and has_exc:
+        return "混合"
+    if has_inc:
+        return "含包装"
+    if has_exc:
+        return "不含包装"
+    return "无"
