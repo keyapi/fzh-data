@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-11（Claude Desktop MCP / npx @latest 装包失败）
+
+- **新增**: `developer-experience/claude-desktop-mcp-server-disconnected-npx.md` —— Claude Desktop 弹 `MCP playwright: Server disconnected`，根因是 `@latest` 在 Windows 更新重启后的首次启动自动升级 0.0.85，解包两个 `.d.ts` 报 `ENOENT`、入口 `cli.js` 缺失，node 立即退出；约 2 分钟后新会话的 npx 把目录补装完整。可排除磁盘满（C 剩 12G）与「重启打断安装」（安装发生在重启之后）。判读口诀：先读 `mcp-server-<name>.log`，找 `will be installed` + `TAR_ENTRY_ERROR` + `MODULE_NOT_FOUND`；npm 对解包错误只 warn 不重试，Claude 也不会在同一会话自动重拉。本次决定保留 `@latest`、不加自愈包装脚本。`docs/mcp-setup.md` 排错表同步加了对应行。
+
 ## 2026-11-11（通途特殊规则换表 / 参考值优先）
 
 - **新增**: `workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则表换维护人/换 ws 后：同一行系数与参考值同时存在时按老板口径**参考值优先**（引擎打印提醒并计 `n_mixed_ref_priority`）；FBA 28 条规则的 `二次加工`/`绍兴二次` 按新成本口径对调（二次=0、绍兴承接），数值和总净额不变；旧 9/3 BOM 制定的参考值遇到最新 BOM 会把扣减翻成增加（阅读枕 776–777 由 −77.8 变 +20.2 元/件），必须先逐条对拍再决定是否重填；老板 2026-11-10 确认按现有参考值执行。

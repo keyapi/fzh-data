@@ -22,3 +22,4 @@ tags: [developer-experience, index]
 | 用 gspread 插列/行把表搞乱了（`insert_cols` 把「行」当「列」） | [gspread-insert-cols-rows-as-columns.md](gspread-insert-cols-rows-as-columns.md) |
 | `claude -p` 长提示词在 Windows 上失败（argv 32K 上限，必须走 stdin） | [claude-headless-long-prompt-stdin.md](claude-headless-long-prompt-stdin.md) |
 | 在 worktree 里注册 Windows 计划任务，合并/删 worktree 后任务失效 | [windows-schtasks-worktree-path-trap.md](windows-schtasks-worktree-path-trap.md) |
+| Claude Desktop 弹 `MCP xxx: Server disconnected`，尤其是 `npx @latest` 启动的 MCP（先读 `mcp-server-<name>.log`） | [claude-desktop-mcp-server-disconnected-npx.md](claude-desktop-mcp-server-disconnected-npx.md) |
