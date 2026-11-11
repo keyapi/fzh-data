@@ -10,6 +10,7 @@ tags: [solutions, log]
 ## 2026-11-11（通途特殊规则换表 / 参考值优先）
 
 - **新增**: `workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则表换维护人/换 ws 后：同一行系数与参考值同时存在时按老板口径**参考值优先**（引擎打印提醒并计 `n_mixed_ref_priority`）；FBA 28 条规则的 `二次加工`/`绍兴二次` 按新成本口径对调（二次=0、绍兴承接），数值和总净额不变；旧 9/3 BOM 制定的参考值遇到最新 BOM 会把扣减翻成增加（阅读枕 776–777 由 −77.8 变 +20.2 元/件），必须先逐条对拍再决定是否重填；老板 2026-11-10 确认按现有参考值执行。
+- **补充**: 分公司发成品二次=0（202609 18 行 −1,341.65；202608 16 行 −1,303.48）；FBA 绍兴二次直接用 `cost_sxbzcp`，不再用 `sx_cost_all−cost_fg`（264 行 `sx_cost_all=0` 会低估）；最终表是 `build_tabs/1104 BOM`，`out/merged_202609.csv` 11-04 为旧表。
 
 ## 2026-11-03（钉钉群采集 / claude stdin / worktree 计划任务）
 

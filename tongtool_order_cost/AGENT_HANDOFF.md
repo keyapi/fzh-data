@@ -56,6 +56,8 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 
 **FBA 列对齐**：28 条 FBA 规则的 `二次加工` 参考值已移到 `绍兴二次加工`（二次=0），参考值数值未改；新成本口径下 FBA 二次加工固定为 0。
 
+**成本口径**：分公司发成品（USNJ/USTX/PL method=成品）二次加工=0（202609 18 行 −1,341.65；202608 16 行 −1,303.48）；FBA 二次=0，绍兴二次直接用 `cost_sxbzcp`，不要再用 `sx_cost_all − cost_fg`（264 行 `sx_cost_all=0` 但 `cost_sxbzcp>0` 会低估；issue `keyapi/work_order_task#6` / `keyapi/tongtool_integration#24`）。最终订单成本表是 `build_tabs/1104 BOM`；`out/merged_202609.csv` 11-04 是旧表，不作最终口径。
+
 六月订单两份 workbook 都有这 3 张 FBA 相关表（列名不完全一样）：
 
 | 工作表 | 常见 SKU 列 |
