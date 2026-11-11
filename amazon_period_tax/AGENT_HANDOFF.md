@@ -58,6 +58,12 @@ uv run python amazon_period_tax/scripts/run_period_tax.py --bucket 账期2026100
 # 仅 Tax 三 sheet：加 --phase1-only
 ```
 
+汇率必须用 `load_exchange_rate_table` 的**第一张**（每个收款币种一行）。别名拆开表按 `收款币种` 合并会把 Tax 乘多遍。见 `docs/solutions/integration-issues/amazon-period-tax-fx-alias-multiplies.md`。
+
+自己重跑只改 `--bucket` / `--exchange-month`。脚本不补 txt；渠道别名读 `channel_account_sync/out/channel_account_gsheet.json` 快照，不是现读 Google 表。见 `docs/solutions/workflow-issues/amazon-period-tax-rerun-without-agent.md`。
+
+```
+
 环境：`dingtalk/dingtalk_oa_approval/.env` → `LOCAL_NAS_PERIOD_ROOT`；`NAS_API/.env` → `NAS_ADMIN_USER` + `NAS_FINANCE_PERIOD_ROOT`。
 
 ```powershell
@@ -88,4 +94,6 @@ Phase3 写 **Google 表** [`钉钉OA收款费用Amazon多平台&附加费&Tax`](
 - txt 命名：`docs/solutions/conventions/amazon-period-file-reconcile.md`
 - Phase3 写表 id：`docs/solutions/integration-issues/amazon-period-phase3-gsheet-not-colab-id.md`
 - 定稿 `keep_approval`：`docs/solutions/workflow-issues/amazon-period-colab-export-keep-approval.md`
+- Tax 汇率别名：`docs/solutions/integration-issues/amazon-period-tax-fx-alias-multiplies.md`
+- 自己重跑 Tax：`docs/solutions/workflow-issues/amazon-period-tax-rerun-without-agent.md`
 - 下游 Phase3 Colab：`钉钉OA收款费用Amazon多平台&附加费&Tax 20250704.ipynb`

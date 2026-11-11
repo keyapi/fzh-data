@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-11（账期 Tax 汇率别名乘多遍）
+
+- **新增**: `integration-issues/amazon-period-tax-fx-alias-multiplies.md` —— `run_period_tax` 曾用货币别名拆开表按 `收款币种` 合并，Tax 人民币被乘多遍。改为每个币种一行，并在 `enrich_with_fx` 去重。8/9/10 月 `Tax{YYYYMM}` 已重写。
+- **新增**: `workflow-issues/amazon-period-tax-rerun-without-agent.md` —— 自己重跑只改 `--bucket` 与 `--exchange-month`。脚本不下载 txt；文件名不必先规范化；渠道别名读 `channel_account_gsheet.json` 快照。
+
 ## 2026-11-09（Amazon 账期 Phase3 本地写表 + 定稿 keep_approval）
 
 - **新增**: `integration-issues/amazon-period-phase3-gsheet-not-colab-id.md` —— Phase3 写回 Google 表须用 Spreadsheet id（`18e64…`），勿用同名 Colab notebook 的 Drive 文件 id（`1tyBOh…`）；400 invalid argument 先核 ID 类型。

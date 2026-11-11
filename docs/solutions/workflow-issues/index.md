@@ -9,6 +9,7 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [amazon-period-tax-rerun-without-agent.md](amazon-period-tax-rerun-without-agent.md) | 自己重跑 Tax：只改桶名和汇率列；脚本不补 txt；别名读本地 JSON 快照 |
 | [amazon-period-colab-export-keep-approval.md](amazon-period-colab-export-keep-approval.md) | 核算定稿须 `keep_approval` + 可选迟交 `--exclude-keys`；旧定稿易多行 |
 | [supply-sku-segmentation-and-stockout-evidence.md](supply-sku-segmentation-and-stockout-evidence.md) | 供应分型先排费用/组件，再按成品/半成品/皮壳分型；PJ 检查点不是每周；Jeck 表是成本表不是促销 |
 | [key-test-login-hook-and-prod-test-divergence.md](key-test-login-hook-and-prod-test-divergence.md) | key_test 每次登录写元数据（~0.75–1.05s）+ 猴补丁核心报表；生产 `production-backup` 与测试 `main` 割裂 |

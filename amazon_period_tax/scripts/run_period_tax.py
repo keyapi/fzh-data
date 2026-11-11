@@ -88,7 +88,9 @@ def main() -> None:
     from tongtool_order_cost.gsheets import client as gs_client  # noqa: E402
 
     gc = gs_client()
-    _, df_fx = load_exchange_rate_table(gc, month_col=args.exchange_month)
+    # 第一张是每个收款币种一行。第二张是货币别名拆开表，同一币种多行，
+    # 按收款币种 merge 会把 Tax 乘多遍。
+    df_fx, _df_fx_aliases = load_exchange_rate_table(gc, month_col=args.exchange_month)
 
     if df.empty:
         print("WARN: 无 Amazon txt，停止")

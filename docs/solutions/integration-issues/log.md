@@ -8,6 +8,7 @@ title: 集成问题 — 变更日志
 
 | 日期 | 操作 | 文档 | 说明 |
 |------|------|------|------|
+| 2026-11-11 | 新增 | [amazon-period-tax-fx-alias-multiplies.md](amazon-period-tax-fx-alias-multiplies.md) | Tax 合并汇率须用每个收款币种一行；别名拆开表按收款币种 merge 会把税额乘多遍。已重写 Tax202608/09/10 |
 | 2026-11-09 | 新增 | [amazon-period-phase3-gsheet-not-colab-id.md](amazon-period-phase3-gsheet-not-colab-id.md) | Phase3 `PHASE3_SPREADSHEET_ID` 是 spreadsheet 非 Colab notebook；400 先查 ID；SA 日常写表 |
 | 2026-11-02 | 新增 | [dingtalk-oa-create-receipt-with-attachments.md](dingtalk-oa-create-receipt-with-attachments.md) | 原生销售收款确认单可用 API 带附件发起：除 Workflow.Instance.Write 外要 `Storage.UploadInfo.Read` + `Storage.File.Write`（开完必须发新版）；OSS PUT 不能用 urllib 默认 Content-Type；unionId 走旧 topapi user/get |
 | 2026-09-23 | 新增 | [grokbot-ssh-via-shanghai-jump-symmetric-nat.md](grokbot-ssh-via-shanghai-jump-symmetric-nat.md) | grok-bot（美东，Tailscale `100.106.238.40`）SSH 接入。要害三条：① 对端**对称 NAT**（`MappingVariesByDestIP: true`、无 `PortMapping`、对 Vultr/上海出口各不同且端口会变）⇒ 本机↔对端**结构性打不成直连**，只能中继；② 四条通路实测里 **Vultr 跳板 299+60≈359ms 与 DERP 373ms 基本持平（原设想是绕远路）**，真正有收益的是**上海跳板 30+205≈235ms**——反直觉点在于**上海→美东 205ms 比北京办公室直连美东 299ms 还快**（阿里云骨干优于办公室出口+DERP）；③ **DERP / Peer Relays / ProxyJump 三者都只改传输、不改认证**，Tailscale SSH 的 check 模式（默认 12h、**按发起设备计**）走跳板时变成要单独验跳板机 ⇒ 真正的免验证做法是**关掉 `tailscale set --ssh=false`，改走对端本就跑着的系统 sshd + 公钥**（对端无 systemd，tailscaled 只占 tailnet 地址的 22）；切换后必须 `ssh-keygen -R` 清旧主机密钥。peer relay（上海做中继，全协议）暂缓，若启用 `src` 只 scope `fzhpc13`。 |

@@ -15,6 +15,8 @@ description: >
 
 - `docs/solutions/integration-issues/amazon-period-phase3-gsheet-not-colab-id.md`
 - `docs/solutions/workflow-issues/amazon-period-colab-export-keep-approval.md`
+- `docs/solutions/integration-issues/amazon-period-tax-fx-alias-multiplies.md`
+- `docs/solutions/workflow-issues/amazon-period-tax-rerun-without-agent.md`
 - txt / 迟交惯例：`docs/solutions/conventions/amazon-period-file-reconcile.md`
 
 定稿输入：`dingtalk/dingtalk_oa_approval/export_colab_period.py`（须 `keep_approval`，可选 `--exclude-keys`）。

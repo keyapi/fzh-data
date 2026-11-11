@@ -7,8 +7,9 @@ import pandas as pd
 
 def enrich_with_fx(df: pd.DataFrame, df_exchange_rate: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
+    rates = df_exchange_rate[["收款币种", "汇率"]].drop_duplicates(subset=["收款币种"], keep="first")
     out = out.merge(
-        df_exchange_rate[["收款币种", "汇率"]],
+        rates,
         how="left",
         left_on="currency",
         right_on="收款币种",

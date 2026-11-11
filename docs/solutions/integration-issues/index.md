@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-11 | 账期 Tax 必须用「每个收款币种一行」的汇率表，别名拆开表会把税额乘多遍 | [amazon-period-tax-fx-alias-multiplies.md](amazon-period-tax-fx-alias-multiplies.md) |
 | 2026-11-09 | Amazon 账期 Phase3 写表须用 Spreadsheet ID，勿与 Colab notebook 文件 ID 混用 | [amazon-period-phase3-gsheet-not-colab-id.md](amazon-period-phase3-gsheet-not-colab-id.md) |
 | 2026-11-02 | 钉钉原生「销售收款确认单」可用 API 带附件发起 | [dingtalk-oa-create-receipt-with-attachments.md](dingtalk-oa-create-receipt-with-attachments.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [layout-field-in-list-view-breaks-metadata-writes.md](layout-field-in-list-view-breaks-metadata-writes.md) |

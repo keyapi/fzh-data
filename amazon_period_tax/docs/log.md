@@ -6,6 +6,10 @@ title: amazon_period_tax 变更日志
 
 # log
 
+## 2026-11-11
+
+- **修复**: Tax 汇率合并改用每个收款币种一行，`enrich_with_fx` 按收款币种去重。重写 `Tax202608` 396,601.69、`Tax202609` 292,240.89、`Tax202610` 192,773.60。
+
 ## 2026-11-09
 
 - **新增**: Phase3 本地 `run_period_phase3.py` / `phase3_merge.py` / `phase3_gsheet.py`；`PHASE3_SPREADSHEET_ID` 纠正为 Google 表 id（非 Colab notebook）。
