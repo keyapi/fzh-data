@@ -32,7 +32,10 @@ tags: [tongtool, pipeline, cost-engine, gsheet, split-merge, fba, build-order-ta
 
 ## 1. 读原始订单 + 解析身份
 
-1. 读 raw（**已删特殊订单**；`fetch_special_orders.py` 生成过滤文件）。
+1. 读 raw（**已删特殊订单**）。`scripts/fetch_special_orders.py` 从 ws `处理特殊订单`
+   导出 `out/special_orders_<月>.csv`；`build-order-tabs` **默认自动应用**该清单
+   （命中即删并写回 `raw_<月>_filtered.csv`），manifest 记录删除行/单数与命中订单号。
+   正式月跑建议加 `--require-special-orders`（清单缺失直接失败，避免静默使用未过滤 raw）。
 2. 用 EN 行级 `erp_item_code` 定产品身份；同一行多个物料 → 不猜，走别名/阻断。
 3. 拆单原单（`order_flags.invalid=1`）只作 aux 校验，不单独出行。
 4. 单行身份优先级：EN 行级 exact item → `customer_items.ref_code` 别名 → 产品族；
