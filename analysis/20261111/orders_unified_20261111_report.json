@@ -1,0 +1,25 @@
+{
+  "base_1109_rows": 416320,
+  "added_1110_rows": 277,
+  "dropped_1110_duplicates": 4,
+  "poland_rows_after_exact_dedupe": 1162,
+  "poland_non_sales_rows_dropped": 20,
+  "poland_units": 1216.0,
+  "poland_rows_with_tt": 1050,
+  "poland_units_with_tt": 1121.0,
+  "poland_rows_without_tt": 92,
+  "poland_units_without_tt": 95.0,
+  "poland_date_min": "2025-12-17",
+  "poland_date_max": "2026-09-30",
+  "final_rows": 417735,
+  "final_qty_all_sources": 444532.0,
+  "output_sha256": "010949f29d99f282ba6426ee96131bc061597d9483a6ed2587321fbda1afb62e",
+  "output_bytes": 17009406,
+  "sources": {
+    "gs": 407897,
+    "202610_gsheet_raw": 6292,
+    "en_tongtool_order_20261109": 2127,
+    "poland_order_gsheet": 1142,
+    "en_20261110": 277
+  }
+}
