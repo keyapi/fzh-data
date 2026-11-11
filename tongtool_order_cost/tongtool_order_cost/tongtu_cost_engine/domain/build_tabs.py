@@ -29,7 +29,7 @@ from typing import Mapping, Sequence
 import pandas as pd
 
 from .bom_cost import Phase2Result, compute_phase2, load_bom_cost
-from .fba_shadow import build_fba_shadow
+from .fba_shadow import build_fba_shadow, validate_fba_cache
 from .phase36_fill import (
     _check_cells,
     _fill_cells,
@@ -668,7 +668,9 @@ def _build_fba_rows(
                 fails = _check_cells(cells, q, sales_for_fill)
                 if fails:
                     checks.append({"站点": site, "MSKU": msku, "SKU": sku, "fails": fails})
-    stats = {"rows": len(rows), "skus": len(gs), "missing_shadow": len(miss)}
+    blocked = sum(1 for r in rows if str(r.get("cost_status")) != "ok")
+    stats = {"rows": len(rows), "skus": len(gs), "missing_shadow": len(miss),
+             "cost_blocked": blocked}
     return rows, checks, {**stats, "missing": miss}
 
 
@@ -858,6 +860,24 @@ def _render_parity(parity: Mapping, stats: Mapping) -> str:
 # ─────────────────────────── 主流程 ───────────────────────────
 
 
+def _cost_gates(self_stats: Mapping, fba_stats: Mapping) -> list[dict]:
+    """成本/缓存门禁：阻断或 shadow 缺失必须让整体失败，不能静默返回成功。"""
+    def gate(name: str, ok: bool, detail: str) -> dict:
+        return {"name": name, "status": "pass" if ok else "fail", "detail": detail}
+
+    self_blocked = int(self_stats.get("cost_blocked", 0) or 0)
+    fba_blocked = int(fba_stats.get("cost_blocked", 0) or 0)
+    fba_missing = int(fba_stats.get("missing_shadow", 0) or 0)
+    return [
+        gate("self 成本阻断=0", self_blocked == 0,
+             f"cost_status≠ok {self_blocked} 行"),
+        gate("FBA 成本阻断=0", fba_blocked == 0,
+             f"cost_status≠ok {fba_blocked} 行；shadow 缺失 {fba_missing} 组"),
+        gate("FBA shadow 已校验", fba_missing == 0,
+             f"缺失/阻断组 {fba_missing}"),
+    ]
+
+
 def build_order_tabs(
     *,
     month: str,
@@ -1002,11 +1022,34 @@ def build_order_tabs(
     if not gs_path.exists():
         raise FileNotFoundError(gs_path)
     gs = _read_csv(gs_path)
+    bundle_csv = out / "product_bundles.csv"
+    kit_csv = out / "bom_cost_product_with_kits.csv"
     shadow_path = Path(fba_shadow_csv) if fba_shadow_csv else (
         out / "fba_shadow" / month / f"fba_shadow_{month}.csv"
     )
-    if not shadow_path.exists():
-        build_fba_shadow(month=month, root=root)
+    cache_args = dict(
+        root=root, bom_csv=bom, ref_map_csv=ref_map,
+        bundle_csv=bundle_csv if bundle_csv.exists() else None,
+        kit_report_csv=kit_csv if kit_csv.exists() else None,
+    )
+    ok, reason = validate_fba_cache(shadow_path, month, **cache_args)
+    if fba_shadow_csv:
+        # 显式指定 shadow：只校验，不擅自重建
+        if not ok:
+            raise ValueError(
+                f"FBA shadow 缓存与当前输入不一致: {shadow_path}（{reason}）；"
+                "请先运行 fba-shadow 重新生成"
+            )
+    elif not ok:
+        print(f"FBA shadow 缓存失效（{reason}），按当前 BOM/EN/GS 重建: {shadow_path}")
+        build_fba_shadow(
+            month=month, root=root, out_dir=shadow_path.parent,
+            bom_csv=bom, ref_map_csv=ref_map,
+            bundle_csv=cache_args["bundle_csv"], kit_report_csv=cache_args["kit_report_csv"],
+        )
+        ok, reason = validate_fba_cache(shadow_path, month, **cache_args)
+        if not ok:
+            raise ValueError(f"FBA shadow 重建后仍无法校验: {shadow_path}（{reason}）")
     fba_shadow_df = _read_csv(shadow_path)
     old_fba_p = out / "phase36" / month / "gs_ready" / f"wb_fba_{month}.csv"
     if not old_fba_p.exists():
@@ -1058,6 +1101,7 @@ def build_order_tabs(
         f"raw {raw_freight:,.2f} → self {_sum(self_df, '运费'):,.2f}")
     add("成本恒等（1件=皮壳+绍兴二次+二次）", not self_checks,
         f"{len(self_rows)} 行；违例 {len(self_checks)}")
+    assertions.extend(_cost_gates(self_stats, fba_stats))
     add("FBA 行数=Σ订单数量", len(fba_rows) == int(
         pd.to_numeric(gs["订单数量"], errors="coerce").fillna(0).sum()),
         f"FBA {len(fba_rows)} / Σ订单数量 "

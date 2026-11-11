@@ -49,7 +49,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 | 产品主数据（可选） | `out/product_attributes.tsv` | `scripts/build_product_attribute_master.py` 抽取历史属性 |
 | GS FBA 销量表 | `out/raw_fba_<月>.csv` | 站点/MSKU/SKU/订单数量/销量/销售额 |
 | 通途 FBA 导出 | `out/fba_export_<月>.csv` | 仅 `fba_shadow` 缺失时重建用（覆盖校验） |
-| FBA shadow 78 | `out/fba_shadow/<月>/fba_shadow_<月>.csv` | 缺失时自动 `build_fba_shadow` |
+| FBA shadow 78 | `out/fba_shadow/<月>/fba_shadow_<月>.csv` + `.manifest.json` | 缺失/输入哈希变化时自动重建；显式指定时哈希不一致直接失败 |
 | 旧写回表（可选） | `out/writeback_<月>.csv` | 只继承系数 / 历史属性；不参与行集合与金额 |
 
 ## self 166 口径
@@ -103,6 +103,8 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
   `item_zlmb_name` + GS 产品名解析；`品类尺寸面料编码` = EN 物料号；仓库来源编码从
   `warehouse_cost_sources.tsv` 覆盖（`发货区域=美国/欧洲`、`汇总分类=美国FBA/欧洲FBA`）；
   `品类编码/品类尺寸编码/材料编码/当月是否新品/产品发售日期` 从旧 FBA 表或产品主数据兜底。
+- **缓存版本**：`fba_shadow_<月>.manifest.json` 记录 BOM/EN/GS 等输入 sha256；BOM 改后重跑会重建，不会复用旧成本。
+- **失败门禁**：`self/FBA 成本阻断=0`、`FBA shadow 已校验`；阻断/缺 shadow 时整体 `ok=False`，不得只解文档冲突就放行。
 - 202608/202609 与 `phase36/gs_ready` 的 FBA 95 **金额指标逐项 0 差异**；属性同键一致率：
   品类orig 100%、品类统一名 93.8%、面料 97.5%、尺寸 89.9%、编码类 100%。
 
@@ -145,7 +147,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 - `product_attributes.tsv` 是从历史 self 表抽取的产品属性缓存；新增产品需要更新主数据。
 - 202609 有 1 行 `加拿大FBA仓` 不在 GS 仓库来源表（只有「加拿大海外仓」），
   区域保留 shadow 的 `CA`/`FBA`；成本来源仍是 `COST-USFBA`。
-- 2026-11-10 起 GS 三张写回表已切到 build_tabs 全量替换（8/9 月）；`fill-tables` 保留为兼容/回滚路径。
+- 2026-11-10 起 GS 三张写回表已切到 build_tabs 全量替换（8/9 月）；写回入口 `scripts/gs_full_replace.py`（默认 dry-run）。`fill-tables` 保留为兼容/回滚路径。
 
 ## 相关
 

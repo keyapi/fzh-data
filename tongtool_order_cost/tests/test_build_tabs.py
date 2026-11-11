@@ -13,6 +13,7 @@ if str(_ROOT) not in sys.path:
 
 from tongtool_order_cost.tongtu_cost_engine.domain.build_tabs import (  # noqa: E402
     _build_fba_rows,
+    _cost_gates,
     _fba_to_merged,
     _parse_bom_attrs,
     _parse_name_attrs,
@@ -20,6 +21,12 @@ from tongtool_order_cost.tongtu_cost_engine.domain.build_tabs import (  # noqa: 
     _source_indices,
     _uuid_for,
     _warehouse_source,
+)
+from tongtool_order_cost.tongtu_cost_engine.domain.fba_shadow import (  # noqa: E402
+    fba_cache_key,
+    fba_input_paths,
+    fba_manifest_path,
+    validate_fba_cache,
 )
 
 
@@ -156,8 +163,64 @@ def test_fba_missing_shadow_blocks_costs() -> None:
     rows, checks, stats = _build_fba_rows("202608", gs, pd.DataFrame())
     assert len(rows) == 3
     assert stats["missing_shadow"] == 1
+    assert stats["cost_blocked"] == 3
     assert rows[0]["订单总成本"] == ""
     assert not checks  # 阻断行不做恒等校验
+
+
+def test_fba_cache_rejects_stale_bom(tmp_path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    for name in ("bom_cost_product_with_kits.csv", "item_refcode.csv",
+                 "product_bundles.csv", "en_items_all_089.csv",
+                 "raw_fba_202608.csv", "fba_export_202608.csv"):
+        (out / name).write_text("x\n1\n", encoding="utf-8")
+    shadow_dir = out / "fba_shadow" / "202608"
+    shadow_dir.mkdir(parents=True)
+    shadow = shadow_dir / "fba_shadow_202608.csv"
+    shadow.write_text("h\n1\n", encoding="utf-8")
+    paths = fba_input_paths("202608", tmp_path)
+    manifest = {
+        "month": "202608",
+        "cache_key": fba_cache_key("202608", paths),
+        "inputs": {
+            name: {"path": str(p), "sha256": __import__("hashlib").sha256(p.read_bytes()).hexdigest()}
+            for name, p in paths.items()
+        },
+    }
+    fba_manifest_path(shadow_dir, "202608").write_text(
+        __import__("json").dumps(manifest), encoding="utf-8")
+    ok, reason = validate_fba_cache(shadow, "202608", root=tmp_path)
+    assert ok, reason
+    # BOM 变化 → 缓存必须失效
+    (out / "bom_cost_product_with_kits.csv").write_text("x\n2\n", encoding="utf-8")
+    ok, reason = validate_fba_cache(shadow, "202608", root=tmp_path)
+    assert not ok
+    assert "cache_key_mismatch" in reason and "bom" in reason
+
+
+def test_fba_cache_missing_manifest_invalid(tmp_path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    shadow_dir = out / "fba_shadow" / "202608"
+    shadow_dir.mkdir(parents=True)
+    shadow = shadow_dir / "fba_shadow_202608.csv"
+    shadow.write_text("h\n1\n", encoding="utf-8")
+    ok, reason = validate_fba_cache(shadow, "202608", root=tmp_path)
+    assert not ok
+    assert reason == "manifest_missing"
+
+
+def test_cost_gates_fail_on_blocked_or_missing_shadow() -> None:
+    good = _cost_gates({"cost_blocked": 0}, {"cost_blocked": 0, "missing_shadow": 0})
+    assert all(g["status"] == "pass" for g in good)
+    bad_self = _cost_gates({"cost_blocked": 3}, {"cost_blocked": 0, "missing_shadow": 0})
+    assert any(g["name"] == "self 成本阻断=0" and g["status"] == "fail" for g in bad_self)
+    # Codex 场景：shadow 只有表头，133 SKU / 1,269 行全部阻断 → 必须失败
+    bad_fba = _cost_gates({"cost_blocked": 0},
+                          {"cost_blocked": 1269, "missing_shadow": 133})
+    assert any(g["name"] == "FBA 成本阻断=0" and g["status"] == "fail" for g in bad_fba)
+    assert any(g["name"] == "FBA shadow 已校验" and g["status"] == "fail" for g in bad_fba)
 
 
 def test_fba_index_col_runs_globally_across_groups() -> None:

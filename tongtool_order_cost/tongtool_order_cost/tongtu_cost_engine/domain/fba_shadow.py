@@ -15,9 +15,12 @@
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -388,6 +391,92 @@ def _canonical(sku: str, resolver: EnResolver, en_keys: set[str]) -> tuple[str, 
     if key in en_keys:
         return key, "en_sku"
     return "", "unresolved"
+
+
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def fba_input_paths(
+    month: str,
+    root: str | Path,
+    *,
+    bom_csv: str | Path | None = None,
+    ref_map_csv: str | Path | None = None,
+    bundle_csv: str | Path | None = None,
+    kit_report_csv: str | Path | None = None,
+) -> dict[str, Path]:
+    """FBA shadow 的输入文件清单（缓存版本校验用）。"""
+    root = Path(root)
+    out = root / "out"
+    return {
+        "bom": Path(bom_csv or out / "bom_cost_product_with_kits.csv"),
+        "ref_map": Path(ref_map_csv or out / "item_refcode.csv"),
+        "bundle": Path(bundle_csv or out / "product_bundles.csv"),
+        "kit_report": Path(kit_report_csv or out / "bom_cost_product_with_kits.csv"),
+        "raw_fba": out / f"raw_fba_{month}.csv",
+        "fba_export": out / f"fba_export_{month}.csv",
+        "en_items": out / "en_items_all_089.csv",
+    }
+
+
+def fba_cache_key(month: str, paths: Mapping[str, Path]) -> str:
+    """输入版本 key：文件路径 + 内容 sha256；缺失文件的标记。"""
+    h = hashlib.sha256()
+    h.update(f"fba-shadow-v1|{month}".encode())
+    for name in sorted(paths):
+        path = Path(paths[name])
+        h.update(f"|{name}|{path}".encode())
+        if path.exists():
+            h.update(b"|" + _sha256_file(path).encode())
+        else:
+            h.update(b"|missing")
+    return h.hexdigest()
+
+
+def fba_manifest_path(out_dir: str | Path, month: str) -> Path:
+    return Path(out_dir) / f"fba_shadow_{month}.manifest.json"
+
+
+def validate_fba_cache(
+    shadow_csv: str | Path,
+    month: str,
+    *,
+    root: str | Path,
+    bom_csv: str | Path | None = None,
+    ref_map_csv: str | Path | None = None,
+    bundle_csv: str | Path | None = None,
+    kit_report_csv: str | Path | None = None,
+) -> tuple[bool, str]:
+    """校验现有 shadow 是否由当前输入生成；返回 (ok, reason)。"""
+    shadow_csv = Path(shadow_csv)
+    if not shadow_csv.exists():
+        return False, "shadow_missing"
+    manifest_path = fba_manifest_path(shadow_csv.parent, month)
+    if not manifest_path.exists():
+        return False, "manifest_missing"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False, "manifest_unreadable"
+    paths = fba_input_paths(
+        month, root, bom_csv=bom_csv, ref_map_csv=ref_map_csv,
+        bundle_csv=bundle_csv, kit_report_csv=kit_report_csv,
+    )
+    expected = fba_cache_key(month, paths)
+    actual = str(manifest.get("cache_key") or "")
+    if actual != expected:
+        changed = [
+            name for name, path in paths.items()
+            if str((manifest.get("inputs") or {}).get(name, {}).get("sha256") or "")
+            != (_sha256_file(path) if path.exists() else "")
+        ]
+        return False, f"cache_key_mismatch changed={changed or 'unknown'}"
+    return True, "ok"
 
 
 def build_fba_shadow(
@@ -974,6 +1063,27 @@ def build_fba_shadow(
             f"皮壳+绍兴二次+二次≠1件 违例 {stats['cost_identity_violations']}", "",
         ]
         (out_dir / f"fba_shadow_{month}.md").write_text("\n".join(lines), encoding="utf-8")
+        # 缓存版本 manifest：BOM/EN/GS 等输入变化后，build-order-tabs 必须重建
+        paths = fba_input_paths(
+            month, root, bom_csv=bom_csv, ref_map_csv=ref_map_csv,
+            bundle_csv=bundle_csv, kit_report_csv=kit_report_csv,
+        )
+        manifest = {
+            "month": month,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "cache_key": fba_cache_key(month, paths),
+            "inputs": {
+                name: {"path": str(p), "sha256": (_sha256_file(p) if p.exists() else "")}
+                for name, p in paths.items()
+            },
+            "missing_inputs": [name for name, p in paths.items() if not p.exists()],
+            "rows": stats.get("fba_rows"),
+            "priced": stats.get("fba_priced"),
+            "pending": stats.get("fba_pending"),
+            "cost_identity_violations": stats.get("cost_identity_violations"),
+        }
+        fba_manifest_path(out_dir, month).write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return FbaShadowResult(month=month, fba_rows=fba_rows, merged_rows=merged_rows,
                            bridge_rows=bridge_rows, recon_rows=recon,
                            pending_rows=pending, stats=stats)

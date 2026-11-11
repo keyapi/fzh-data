@@ -6,6 +6,7 @@ title: tongtool_order_cost 变更日志
 # 变更日志
 
 ## 2026-11-10
+- **修复/门禁** FBA shadow 加 manifest（BOM/EN/GS sha256），输入变化自动重建；`self/FBA 成本阻断=0`、`FBA shadow 已校验` 纳入失败门禁。新增 `scripts/gs_full_replace.py`（dry-run/apply）。测试 301 passed。
 - **成本规则修正** 分公司发成品（USNJ/USTX/PL）目的地加工成本固定 0（PL 19 个历史遗留 valuation，如 `PLBZCP#KS0230-60=85.05`）；FBA 绍兴二次改用 `cost_sxbzcp`（含半成品包装），不再用 `sx_cost_all−cost_fg`。后者在 `cost_fg=0`、`sx_cost_all=0` 的 193 行会低估/负数；EN 报表问题已提 `keyapi/work_order_task#6`，同步侧兜底 `keyapi/tongtool_integration#24`。
 - **GS 全量重跑**：202608 self 二次加工 −1,303.48、利润 +1,303.48；202609 二次加工 −1,341.65、利润 +1,341.65；最终 self 总成本 2,932,001.62 / 1,781,190.54，利润 3,450,333.10 / 1,789,358.67；readback 0。
 - **定案** 定价 method 唯一依据 = **BOM 主档 `shipping_method`**；EN method 仅审计（`en_method`），仓库（主仓/退货仓/皮壳仓）不改变算法；组件后缀也按 BOM method + 后缀矩阵。两月实测仅 46/9 行 EN=皮壳/BOM=半成品，其余一致。见 `docs/reference/tongtool-order-pipeline.md`。
