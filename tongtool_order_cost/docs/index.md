@@ -16,5 +16,6 @@ timestamp: 2026-08-14
 | Google Sheet 凭证 | [reference/gsheets-credentials.md](reference/gsheets-credentials.md) |
 | SKU 旧名→新名 | [reference/sku-remap.md](reference/sku-remap.md) |
 | 六月 FBA 过程 | [research/](research/) |
+| 换表 / 参考值优先 / 旧新 BOM 口径 | [docs/solutions/workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md](../../docs/solutions/workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md) |
 | 经验教训 | [lessons/](lessons/) |
 | 变更历史 | [log.md](log.md) |

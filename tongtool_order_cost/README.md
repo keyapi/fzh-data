@@ -4,7 +4,7 @@
 
 ## 做什么 / 不做什么
 
-- **做**：按规则时间窗、去重、系数/参考值写入、FBA 正数尾程跳过（负数账期差异写入）、衍生列重算；导出 before/after/Δ。通途主档改名后，可把订单 Google Sheet 的旧 SKU 改成井维护的新名（须 dry-run + 用户确认）。
+- **做**：按规则时间窗、去重、系数/参考值写入、FBA 正数尾程跳过（负数账期差异写入）、衍生列重算；导出 before/after/Δ。系数和参考值同时存在时，参考值优先（系数忽略）。通途主档改名后，可把订单 Google Sheet 的旧 SKU 改成井维护的新名（须 dry-run + 用户确认）。
 - **不做**：完整复刻 1.4–1.5；不裁决「参考成本是否合理」；不把规则表改回旧 SKU 名。
 
 ## 快速开始
@@ -14,7 +14,7 @@ cd tongtool_order_cost
 
 uv run python scripts/run_audit_170.py \
   --orders "D:/Work/王忠于/成本核算/特殊规则AMZBAINAUS_2026年6月FBA订单和非FBA订单_order_cost_2026-08-06_15-00-53.xlsx" \
-  --rules "D:/Work/王忠于/成本核算/Jeck特殊规则-订单改销售额成本 20260813.xlsx" \
+  --rules "D:/Work/王忠于/成本核算/黄已填 google表 和财务部共享 Jeck特殊规则-订单改销售额成本 20261109.xlsx" \
   --month 202606 \
   --account AMZBAINAUS \
   --fx-usd 6.8167 \
@@ -54,6 +54,8 @@ uv run python tongtool_order_cost/scripts/lookup_tongtool_sku.py BNFBAvelvetgray
 ```
 
 凭证见 [docs/reference/gsheets-credentials.md](docs/reference/gsheets-credentials.md)。
+
+1.7.0 读「和财务部共享」→ ws「黄-特殊规则-订单改销售额成本」；旧 Jeck ws 只读留存。同一行系数与参考值同时存在时按参考值执行，引擎会打印提醒。
 
 ## 数据文件
 

@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-11（通途特殊规则换表 / 参考值优先）
+
+- **新增**: `workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则表换维护人/换 ws 后：同一行系数与参考值同时存在时按老板口径**参考值优先**（引擎打印提醒并计 `n_mixed_ref_priority`）；FBA 28 条规则的 `二次加工`/`绍兴二次` 按新成本口径对调（二次=0、绍兴承接），数值和总净额不变；旧 9/3 BOM 制定的参考值遇到最新 BOM 会把扣减翻成增加（阅读枕 776–777 由 −77.8 变 +20.2 元/件），必须先逐条对拍再决定是否重填；老板 2026-11-10 确认按现有参考值执行。
+
 ## 2026-11-06（邮件域名到期 / Gmail 550-5.7.26）
 
 - **新增**: `integration-issues/email-domain-expiry-gmail-550-5-7-26.md` —— 域名 2026-11-03 到期后，阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析，腾讯企业邮发出的邮件被 Gmail 以 550-5.7.26 硬拒。11-04 续费成功但邮件未恢复：**续费 ≠ 恢复**，必须回查注册局 NS 并确认记录在服务（直接问权威 NS，不只看控制台）。另一层陷阱是**注册商 ≠ DNS 托管商**（阿里云注册、DNSPod 解析；主域 `vilavi.cn` 在 Cloudflare）。DKIM selector 是腾讯企业邮生成的自定义随机串（`sjnr2306` / `evhe2306`），常见 selector 全 NXDOMAIN 不能证明“没有 DKIM”。恢复后补 DMARC `p=none`、修 MX 优先级 5/10。

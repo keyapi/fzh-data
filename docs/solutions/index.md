@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-11 | 通途特殊规则换表：参考值优先、FBA 列对齐与旧/新 BOM 口径差 | [workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md](workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md) |
 | 2026-11-06 | 邮件域名到期 → Gmail 550-5.7.26 拒收：续费≠恢复，注册商≠DNS 托管商 | [integration-issues/email-domain-expiry-gmail-550-5-7-26.md](integration-issues/email-domain-expiry-gmail-550-5-7-26.md) |
 | 2026-11-05 | EN 服务器 git push 报 Permission denied (publickey) —— 密钥没问题，是 GitHub SSH 链路间歇性阻断 | [integration-issues/github-ssh-intermittent-publickey-denied.md](integration-issues/github-ssh-intermittent-publickey-denied.md) |
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |
