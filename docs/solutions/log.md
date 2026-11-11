@@ -12,6 +12,35 @@ tags: [solutions, log]
 - **新增**: `workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则表换维护人/换 ws 后：同一行系数与参考值同时存在时按老板口径**参考值优先**（引擎打印提醒并计 `n_mixed_ref_priority`）；FBA 28 条规则的 `二次加工`/`绍兴二次` 按新成本口径对调（二次=0、绍兴承接），数值和总净额不变；旧 9/3 BOM 制定的参考值遇到最新 BOM 会把扣减翻成增加（阅读枕 776–777 由 −77.8 变 +20.2 元/件），必须先逐条对拍再决定是否重填；老板 2026-11-10 确认按现有参考值执行。
 - **补充**: 分公司发成品二次=0（202609 18 行 −1,341.65；202608 16 行 −1,303.48）；FBA 绍兴二次直接用 `cost_sxbzcp`，不再用 `sx_cost_all−cost_fg`（264 行 `sx_cost_all=0` 会低估）；最终表是 `build_tabs/1104 BOM`，`out/merged_202609.csv` 11-04 为旧表。
 
+## 2026-11-10
+
+- **更新**: `workflow-issues/tongtu-split-merge-writeback-cost-rules.md` — 新增「成本列一致性 + 整成品 method 覆盖」：皮壳含/不含/系数改为当前皮壳成本；整成品 SKU（非组件后缀）EN 皮壳 vs BOM 半成品/成品时按 BOM 计价；GS 最小修补 8/9 月 6 个 ws（202608 46 行 +1,920.04 / 202609 9 行 +370.55）。
+- **更新**: `documentation-gaps/tongtu-colab-local-parity-gap.md` — 重审旧 Colab self 展示规则：23组合并/17行通用填充物删除会低记行级 `售价*汇率`（202608 1,729.98 / 202609 1,278.13 CNY），**不采用**；self 166 改用本地成熟算法合并组视图。
+- **更新**: 同一篇补记 `build-order-tabs` 已落地（本地重建 166/95/78；两月对拍成本/数量 0 差异；202609 尾程 +304,541.93 待财务确认）；构建口径见 `tongtool_order_cost/docs/reference/build-order-tabs.md`。
+
+## 2026-11-09
+
+- **新增**: `workflow-issues/tongtu-split-merge-writeback-cost-rules.md` — 通途拆单合并成本写回五类错误与修复（组行匹配、件数、产品族、订单号截断、审计口径）；8/9 月合并组自查 0/0 失败，GS 写回变化 20/10 行。
+- **新增**: `conventions/tongtu-split-types-and-presplit-sku.md` — 通途自动拆单 / 手动拆单 / TikTok 跨账号拆单的区别；拆单前组合 SKU 在 EN `platform_sku`（自动）或原单基号（手动）；写回键仍用组件 SKU。
+- **新增**: `tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` — 分公司发货 vs FBA 成本对比口径：共同成本与差异块拆分、必排项、边界，以及 202607-09 重算结果。
+- **更新**: `integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md` — 补登记位置（子表 `customer_items.ref_code`）与组件多对多；配套 issue `work_order_task#4` / `tongtool_integration#22`。
+- **更新**: `tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` — 补「半成品/绍兴二次不重复加」口径：半成品+增量=四列绍兴二次；FBA合计=皮壳+成品包装+头程；说明表头改为共同/增量，共享 Excel 已更新。
+- **新增**: `documentation-gaps/tongtu-colab-local-parity-gap.md` — Colab（截至 4.8）→ 本地：成本/拆单合并已移植，但 self/FBA/merged 三张模板仍由 Colab 生成；`build-order-tabs` 是停用 Colab 的关键缺口；含 FX/特殊订单/仓库检查脚本。
+
+## 2026-11-05
+- **新增**: 通途订单成本引擎本地化三篇经验 → [`architecture-patterns/tongtu-cost-engine-local-migration.md`](architecture-patterns/tongtu-cost-engine-local-migration.md)、[`workflow-issues/tongtu-order-universe-invalid-split-fba.md`](workflow-issues/tongtu-order-universe-invalid-split-fba.md)、[`integration-issues/tongtu-fba-alias-normalization-registration.md`](integration-issues/tongtu-fba-alias-normalization-registration.md)
+
+## 2026-10-17
+- **新增**: 通途SKU↔EN物料 权威映射（ref_code / importBOMCostList.客户物料号）与 gsheet 源头修正 → [`tongtu-en-item-mapping-and-gsheet-source-fix.md`](integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md)
+
+## 2026-10-14（美中 USTX 三方案成本对比：差异即结论 + 歧义键 fail-closed）
+- **新增**: `architecture-patterns/ustx-cost-caliber-comparison.md` —— 美中仓库由 `2CJG-SX`（绍兴加工）改走当地 USTX 加工的 A/B1/B2 三口径只读对比。四条沉淀：**① 先验「测算表是手填还是公式」再定等价闸门**——`测算 美中USTX二次加工成本` 的月度值全是手填（无公式），与 import 重建在 57 个共有键上**无一相等**，原计划「measured vs reconstructed 超差即阻断」的前提被证伪 → **差异本身即交付物**，不设等价阻断；**② 歧义维表键 fail-closed**——`import皮壳成本` 同键指向不同重量模板时摘除索引、对应行记 `ambiguous_shell_key` 排除，不 `setdefault` 猜首/末行；**③ 闸门分级**——阻断级 vs 告警级，`conclusions_blocked` 只能由 blocking 闸门触发（首版误把告警算进去导致永远 blocked）；**④ 只读快照 `render_option` 值/公式双冻结**。7 月美中 4,379 行：A 526,225 → ΔB1 +226,629 / ΔB2 +264,912（￥加权，按 `发货数量`）。
+
+## 2026-10-15（派生成本/规则结果的独立验证 + gspread 插列坑）
+
+- **新增**: 审核派生成本/规则结果的独立验证法（外部对偶、同名列陷阱、无留档只能说"量级吻合"） → `best-practices/auditing-derived-costs-independent-verification.md`
+- **新增**: gspread `insert_cols` 把「行」当「列」→ 一次 252 列的抢救与恢复 → `developer-experience/gspread-insert-cols-rows-as-columns.md`
+
 ## 2026-11-03（钉钉群采集 / claude stdin / worktree 计划任务）
 
 - **新增**: `tooling-decisions/dingtalk-group-harvest-dws-user-identity.md` —— 钉钉群历史消息/文件归档用 DWS 个人 OAuth 身份，而不是群机器人、企业内部应用或会话存档；完整性账本 + 水位 + 文件去重 + 数据落仓库外。

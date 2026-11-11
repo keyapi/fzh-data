@@ -1,9 +1,12 @@
 ---
 name: tongtool-order-cost
 description: >
-  通途订单特殊规则 1.7.0 本地审计、Google Sheet 订单 SKU 改名替换、通途 goodsQuery 校验。
+  通途订单特殊规则 1.7.0 本地审计、Google Sheet 订单 SKU 改名替换、通途 goodsQuery 校验、
+  月度盈利审计（只读冻结→离线分析）、美中 USTX 二次加工成本三方案对比。
   用户提到特殊规则、订单改销售额成本、黄-特殊规则、Jeck特殊规则（旧表只读）、1.7.0、通途订单202606、
-  Google Sheet 通途SKU 替换、gspread、FBA 尾程、账期差异时触发。
+  Google Sheet 通途SKU 替换、gspread、FBA 尾程、账期差异、参考值优先、月度盈利审计、平均成本低、
+  美中USTX、二次加工成本、测算表对比、绍兴发货方式、拆单合并、组合SKU登记、
+  分公司发货 vs FBA 成本对比、Colab 移植/退场、build-order-tabs、parity 时触发。
   不要用于赛狐打单或 ERPNext 工单排查。
 metadata:
   module: tongtool_order_cost
@@ -31,6 +34,9 @@ metadata:
 | SKU 替换预检 | `uv run python tongtool_order_cost/scripts/remap_gsheet_sku.py --sheet 通途订单202606` |
 | 确认后写回 | 同上加 `--apply` |
 | 通途主档是否存在 | `uv run python tongtool_order_cost/scripts/lookup_tongtool_sku.py SKU1 SKU2` |
+| 月度盈利审计 | `uv run python tongtool_order_cost/scripts/audit_monthly_profitability.py snapshot --month YYYYMM --with-finance` → `analyze --snapshot <目录>` |
+| 美中 USTX 三方案对比 | 复用上面的快照：`... audit_monthly_profitability.py ustx-compare --snapshot <目录>`（纯离线） |
+| 重建三张订单表（Colab 退场） | `cd tongtool_order_cost && uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --month YYYYMM --root .` → `out/build_tabs/<月>/`（self 166 / FBA 95 / merged 78 + parity） |
 
 ## 铁律
 
@@ -57,3 +63,13 @@ metadata:
 
 - `docs/solutions/workflow-issues/tongtool-sku-rename-gsheet-remap.md` —— 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet
 - `docs/solutions/workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则换表：参考值优先、FBA 列对齐、旧/新 BOM 口径差
+- `docs/solutions/architecture-patterns/ustx-cost-caliber-comparison.md` —— 美中 USTX 三方案成本对比：**先验测算表是手填还是公式再定等价闸门**（人工测算与 import 重建不等 ⇒ 差异即结论）、歧义维表键 fail-closed、闸门分级
+- `docs/solutions/architecture-patterns/tongtu-cost-engine-local-migration.md` —— 本地成本引擎：合并成品+BOM 单位成本×件数、四列语义、套件/FBA、canary 旧值来源
+- `docs/solutions/workflow-issues/tongtu-order-universe-invalid-split-fba.md` —— 订单全集：作废原单/拆分子单/原始表 vs 写回表/FBA 明细 vs 销量表
+- `docs/solutions/integration-issues/tongtu-fba-alias-normalization-registration.md` —— FBA SKU 别名归一化、KS0001 优先、EN 客户物料号登记
+- `docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md` —— 拆单合并成本写回五类错误：组行匹配、件数翻倍、PP棉/海绵产品族、订单号截断、审计口径
+- `docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md` —— 通途自动/手动/TikTok 拆单区别；拆单前 SKU 在 EN `platform_sku`，写回键仍用组件
+- `docs/solutions/tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` —— 分公司发货 vs FBA 成本对比口径、必排项与边界
+- `docs/solutions/documentation-gaps/tongtu-colab-local-parity-gap.md` —— Colab（截至 4.8）→ 本地：已移植范围、build-order-tabs 已补齐、停用条件与 202609 尾程待确认
+- `tongtool_order_cost/docs/reference/build-order-tabs.md` —— self 166 / FBA 95 / merged 78 构建口径、UUID 展开、95↔78 对账与两月对拍结论
+- `tongtool_order_cost/docs/research/2026-11-09-colab-local-parity-audit.md` —— 逐步骤完整对照表（含 4.1–4.8）

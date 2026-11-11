@@ -6,6 +6,12 @@ title: 集成问题 — 变更日志
 
 # 变更日志
 
+## 2026-11-09
+- **更新**: 通途SKU↔EN物料 权威映射 — 补「登记位置与组件多对多」：唯一登记位置是 Item 子表 `customer_items.ref_code`（不是主表 `Item.customer_code`）；同一 Item 可同时有整件与 `-Cover/-Foam`；组件 SKU 多对多（共享皮壳/填充物），完整 SKU 才唯一；配套 `work_order_task#4`（校验放宽）与 `tongtool_integration#22`（同步不要 LIMIT 1）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
+
+## 2026-10-17
+- **新增**: 通途SKU↔EN物料 权威映射（EN `Item Customer Detail.ref_code` / `importBOMCostList.客户物料号`）+ 「直连优先、旧键兜底」。两个通用坑：改 gsheet 前分清 IMPORTRANGE 源/显示层；覆盖率结论前必反证（自算的 11% 实为前缀过滤丢数据的 bug，真值 99.9%）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
+
 | 日期 | 操作 | 文档 | 说明 |
 |------|------|------|------|
 | 2026-11-06 | 新增 | [email-domain-expiry-gmail-550-5-7-26.md](email-domain-expiry-gmail-550-5-7-26.md) | 域名到期后阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析 → Gmail 550-5.7.26 硬拒。要害：① **续费≠恢复**——RDAP 已显示续到 2027-11-03，但 NS 仍在停放组、权威 NS 对 TXT/MX 只回 NODATA；② **注册商（阿里云）≠ DNS 托管（DNSPod；主域 vilavi.cn 在 Cloudflare）**，改记录前先看 NS；③ 腾讯企业邮的 DKIM selector 是随机自定义串（`sjnr2306` / `evhe2306`），只用 `dkim`/`s1`/`s2` 等常见名探测会误判“没有 DKIM”，必须从企业邮后台「查看配置」取；④ 恢复后补 DMARC `v=DMARC1; p=none`、把两条同优先级 5 的 MX 改成 5/10；⑤ 记录 TTL 600、否定缓存按 SOA minimum、NS 委派最长 24–48h，改完立即重试失败不代表没生效。 |
@@ -26,3 +32,6 @@ title: 集成问题 — 变更日志
 | 2026-08-13 | 新增 | [tongtool-erp2-mcp-shared-rate-limit.md](tongtool-erp2-mcp-shared-rate-limit.md) | 通途 ERP2 MCP 接入、细粒度授权探测和双 App 共享五次每分钟限流验证 |
 | 2026-08-05 | 新增 | [chatgpt-edu-cliproxyapi-429-rate-limit.md](chatgpt-edu-cliproxyapi-429-rate-limit.md) | ChatGPT Edu 单账号 CLIProxyAPI 429 限流调研，含限流机制分析、事件还原、定价确认、缓解方案 |
 | 2026-06-26 | 新增 | [dingtalk-sso-new-api-oidc-bridge.md](dingtalk-sso-new-api-oidc-bridge.md) | 钉钉 SSO + OIDC Bridge 桥接 new-api 方案 |
+
+## 2026-11-05
+- **新增**: FBA SKU 别名归一化、KS0001 优先与 EN 客户物料号登记 — 去空格/连字符/下划线后匹配；同款有无扣优先 KS0001；单候选强依据才自动；disabled BOM 快照；33 条别名登记带旧值乐观锁/回读。 → `tongtu-fba-alias-normalization-registration.md`

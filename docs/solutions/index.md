@@ -14,7 +14,14 @@ tags: [solutions, index]
 | 日期 | 标题 | 文件 |
 |------|------|------|
 | 2026-11-11 | 通途特殊规则换表：参考值优先、FBA 列对齐与旧/新 BOM 口径差 | [workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md](workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md) |
+| 2026-11-09 | 通途拆单类型与拆单前 SKU 位置（自动拆单 / 手动拆单 / TikTok 跨账号） | [conventions/tongtu-split-types-and-presplit-sku.md](conventions/tongtu-split-types-and-presplit-sku.md) |
+| 2026-11-09 | 通途拆单合并成本写回：五类错误与修复（组行匹配 / 件数 / 产品族 / 订单号截断 / 审计口径） | [workflow-issues/tongtu-split-merge-writeback-cost-rules.md](workflow-issues/tongtu-split-merge-writeback-cost-rules.md) |
+| 2026-11-09 | 分公司发货 vs FBA 成本对比口径（共同成本 + 差异块，不夸大节省） | [tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md](tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md) |
+| 2026-11-09 | Colab（截至 4.8）→ 本地引擎：已移植范围与 build-order-tabs 缺口 | [documentation-gaps/tongtu-colab-local-parity-gap.md](documentation-gaps/tongtu-colab-local-parity-gap.md) |
 | 2026-11-06 | 邮件域名到期 → Gmail 550-5.7.26 拒收：续费≠恢复，注册商≠DNS 托管商 | [integration-issues/email-domain-expiry-gmail-550-5-7-26.md](integration-issues/email-domain-expiry-gmail-550-5-7-26.md) |
+| 2026-11-05 | 通途订单成本引擎：Colab 迁移本地包的四列口径与合并/BOM 架构 | [architecture-patterns/tongtu-cost-engine-local-migration.md](architecture-patterns/tongtu-cost-engine-local-migration.md) |
+| 2026-11-05 | 通途订单全集：作废原单、拆分子单、原始表与 FBA 销量表的口径陷阱 | [workflow-issues/tongtu-order-universe-invalid-split-fba.md](workflow-issues/tongtu-order-universe-invalid-split-fba.md) |
+| 2026-11-05 | FBA SKU 别名归一化、KS0001 优先与 EN 客户物料号登记 | [integration-issues/tongtu-fba-alias-normalization-registration.md](integration-issues/tongtu-fba-alias-normalization-registration.md) |
 | 2026-11-05 | EN 服务器 git push 报 Permission denied (publickey) —— 密钥没问题，是 GitHub SSH 链路间歇性阻断 | [integration-issues/github-ssh-intermittent-publickey-denied.md](integration-issues/github-ssh-intermittent-publickey-denied.md) |
 | 2026-11-03 | 钉钉群文件与聊天归档 — 用 DWS 个人身份，不用群机器人 | [tooling-decisions/dingtalk-group-harvest-dws-user-identity.md](tooling-decisions/dingtalk-group-harvest-dws-user-identity.md) |
 | 2026-11-03 | Windows 计划任务在 worktree 里注册会指向临时目录 | [developer-experience/windows-schtasks-worktree-path-trap.md](developer-experience/windows-schtasks-worktree-path-trap.md) |
@@ -22,6 +29,11 @@ tags: [solutions, index]
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |
 | 2026-10-27 | 供应分型与断货证据 — 先排费用/组件，再按角色分型；PJ 检查点不是每周 | [workflow-issues/supply-sku-segmentation-and-stockout-evidence.md](workflow-issues/supply-sku-segmentation-and-stockout-evidence.md) |
 | 2026-10-27 | frePPLe 评估 — 社区 MIT、企业闭源；借求解逻辑，不部署 | [tooling-decisions/frepple-evaluation-and-borrow-logic.md](tooling-decisions/frepple-evaluation-and-borrow-logic.md) |
+| 2026-10-17 | 通途SKU↔EN物料 权威映射（ref_code / importBOMCostList.客户物料号）与 gsheet 源头修正 | [integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md](integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md) |
+| 2026-10-15 | 审核「派生成本/规则结果」的独立验证法（别用自己的引擎验自己） | [best-practices/auditing-derived-costs-independent-verification.md](best-practices/auditing-derived-costs-independent-verification.md) |
+| 2026-10-15 | gspread 的 insert_cols 把「行」当「列」——一次差 252 列的抢救 | [developer-experience/gspread-insert-cols-rows-as-columns.md](developer-experience/gspread-insert-cols-rows-as-columns.md) |
+| 2026-10-14 | 美中 USTX 成本三方案离线对比——口径不对称、「差异即结论」与歧义键 fail-closed | [architecture-patterns/ustx-cost-caliber-comparison.md](architecture-patterns/ustx-cost-caliber-comparison.md) |
+| 2026-10-12 | EN 直接采购件用「自套 BOM」出成本的惯例 + 骨架缺口 | [architecture-patterns/en-direct-purchase-self-bom.md](architecture-patterns/en-direct-purchase-self-bom.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [integration-issues/layout-field-in-list-view-breaks-metadata-writes.md](integration-issues/layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-10-08 | key_test 应用的两个结构性隐患：每次登录写元数据 + 打核心报表猴补丁，且生产/测试分支割裂 | [workflow-issues/key-test-login-hook-and-prod-test-divergence.md](workflow-issues/key-test-login-hook-and-prod-test-divergence.md) |
 | 2026-09-24 | 知识库防腐三件套 — 孤儿检测 / 生成式索引 / 链接图 | [best-practices/knowledge-base-anti-rot.md](best-practices/knowledge-base-anti-rot.md) |

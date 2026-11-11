@@ -274,6 +274,18 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 通途客户物料号匹配按大小写不敏感处理；批量场景可先生成“底层物料 × 数量档”全量计划，再按阶段执行并记录进度。
 登记表整批为“无捆绑SKU”时，可按 `基码-EN物料码-Npcs` 合成唯一客户物料号并提前登记，基码来源（直接/-Cover去尾/同款借用）写入阶段记录备注。
 
+### 客户物料号：组件多对多、完整 SKU 唯一
+通途 SKU 登记的唯一位置是 Item 子表 `customer_items.ref_code`（不是主表 `Item.customer_code`）。同一 Item 可同时登记整件 SKU 与 `-Cover`/`-Foam` 组件。组件 SKU 是**多对多**：同一皮壳可用于 PP棉/海绵两种成品；同一填充物可用于相同品类+相同尺寸、不同面料/颜色。因此组件 `ref_code` 允许出现在多个 Item；完整 SKU（组合 SKU、整件基号）才要求全局唯一。
+
+### 通途拆单类型与拆单前 SKU
+- **自动拆单**：订单号无 `_N`、无 invalid 原单；EN 组件行的 `tongtool_sku` 是组件，`platform_sku` 保留原组合 SKU（如 `JYWM-119122574963497`）。
+- **手动拆单**：原单 `invalid=1`，再生成 `_1/_2`；`platform_sku` 通常是产品基号（如 `TT0031244K0064084`）。
+- **TikTok 跨账号**：不同前缀、数字主体相同，按数字主体配对。
+成本/写回键用组件 SKU；展示“拆单前 SKU”时自动拆单取 EN `platform_sku`，手动拆单取原单基号，新增展示列而不是替换写回键。
+
+### build-order-tabs（本地订单表构建）
+把通途 raw（先删特殊订单）+ 汇率 + 仓库映射 + 合并组 + BOM，生成 self 166 / FBA 95 / merged 78 三张订单表的本地命令（尚未实现）。当前 `fill-tables` 只往 Colab 生成的模板里填 29 个成本/系数列；`build-order-tabs` 是停用 Colab 的关键缺口。
+
 ### 皮壳共享库存代理（赛狐组合商品）
 三角类皮壳 Listing 在通途/赛狐并行期、现场只有一个未拆分实物池时的销售层默认关系：赛狐 `KS` 是有库存普通商品，`PK#` 是 `isGroup=1` 的无独立库存组合商品，唯一子项为 `KS x1`。它让成品与皮壳 Listing 扣同一个**用户确认的**分公司仓库存池，但不表达物理组成、生产 BOM 或 EN Product Bundle，不属于 `套件#`，也不得进入 `TJ#` 同步链。运营在赛狐按**组合商品**、SKU `PK#` 查找；它们不会出现在「普通商品」筛选里，也不要用商品名称「皮壳#」当普通商品搜索词。`PK#` 并非永久必须为组合商品；只有仓库分别盘点皮壳/成品并记录转换时，独立普通库存才成立。美中通途另有皮壳仓库，不得默认把 DANEEY 主仓当共享池。赛狐 `POLAND` 对应通途 covers 仓，不对应 `FZHPoland-finished`。
 
@@ -586,6 +598,23 @@ GLS 波兰自发货单号批量跟踪走 gls-group.com **公开无鉴权 REST**�
 
 ### 处理时间（尾程迟发窗口）
 建标（面单创建 / GLS 数据录入）到站点收件（FedEx/UPS 首扫 / 交接 GLS）之间、允许占用的**营业日**窗口；超出则分类为迟发。UPS / FedEx / GLS 共用同一阈值；假日表仍按承运商（美国联邦 vs 波兰法定）。不要与承运延误（收件之后的在途慢）混为一谈。
+
+## 通途订单成本（2026-11）
+
+### 定价 method = BOM 主档 `shipping_method`
+订单定价只看 BOM 主档的发货方式（皮壳 / 半成品 / 成品 / FBA 仓）；EN 订单行 `shipping_method` 只写审计（`en_method`），不参与定价；发货仓库（主仓/退货仓/皮壳仓）不改变 method 或成本。组件后缀行（`-Cover/-Foam/-PPCotton`）也按 BOM method + 后缀矩阵计价。
+
+### 绍兴发货成本三档
+皮壳→绍兴二次=0；半成品→绍兴二次=`cost_sxbzbcp`；成品→绍兴二次=`cost_sxbzcp`；FBA 仓→绍兴二次=`cost_sxbzcp`（含半成品包装）。**不要用 `sx_cost_all − cost_fg`**：`sx_cost_all=0` 而 `cost_sxbzcp>0` 的行会被算成 0（264 行低估，issue `work_order_task#6` / `tongtool_integration#24`）。
+
+### 合并成品件数 (pieces)
+拆包裹合并后的一件成品数量：成品取成品载体数量；半成品 Cover+Foam 取 Cover 数量，**不把组件行 qty 相加**；多件按数量。合并行的四列成本 = 单位成本 × pieces。
+
+### kit_method
+套件（TJ#/Product Bundle）的绍兴发货方式：所有有效子件 method 非空且完全一致时派生；混合/空 → 待审。订单只有 TJ# 时套件行是唯一成本载体，子件不得另计。
+
+### 目的地加工成本
+EN `valuation_rate`：USNJ/USTX/PL 包装成品；FBA=0；**分公司发成品（USNJ/USTX/PL method=成品）=0**；美国海外仓复用 USTX。写回表「二次加工成本」用它，不再借绍兴包装成品成本。
 
 ## 钉钉群采集 (dingtalk_group_harvest)
 

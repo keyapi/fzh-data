@@ -10,6 +10,7 @@ timestamp: 2026-08-31
 
 | 标题 | 文件 |
 |------|------|
+| 分公司发货 vs FBA 成本对比口径（共同成本 + 差异块；半成品/绍兴二次不重复加） | [tongtu-branch-vs-fba-cost-comparison.md](tongtu-branch-vs-fba-cost-comparison.md) |
 | frePPLe 评估 — 社区 MIT、企业闭源；借求解逻辑，不部署 | [frepple-evaluation-and-borrow-logic.md](frepple-evaluation-and-borrow-logic.md) |
 | Tailscale 2026 新能力盘点与对本仓库的适用性（Tailcat / Peer Relays / Services） | [tailscale-2026-capabilities.md](tailscale-2026-capabilities.md) |
 | Tailscale 慢到不可用：先查直连（UDP 41641 入站），别急着换方案 | [tailscale-relay-vs-public-https-china.md](tailscale-relay-vs-public-https-china.md) |
