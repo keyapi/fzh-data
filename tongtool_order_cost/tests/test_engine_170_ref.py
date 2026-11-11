@@ -188,3 +188,20 @@ def test_fba_zero_lastmile_still_skipped():
     df = result.orders
     assert abs(float(df.loc[1, "运费"]) - 9.0) < 1e-6
     assert abs(float(df.loc[0, "运费"]) - 0.0) < 1e-6
+
+
+def test_mixed_coeff_and_ref_prefers_ref():
+    """系数与参考值同时出现时参考值优先，系数不生效。"""
+    orders = _sample_orders()
+    rules = _sample_rules()
+    rules.loc[0, "皮壳成本系数"] = 0.5
+    fx, src = load_fx_table(fx_usd=7.0)
+    result = apply_special_rules(
+        orders, rules, "202606", fx, fx_source=src, verbose=False
+    )
+    df = result.orders
+    # ref 8 USD × 7 = 56；若系数 0.5 生效会是 15
+    assert abs(float(df.loc[0, "皮壳成本"]) - 56.0) < 1e-6
+    assert result.meta["n_applied"] == 1
+    assert result.meta["n_skipped"] == 0
+    assert result.meta["n_mixed_ref_priority"] == 1

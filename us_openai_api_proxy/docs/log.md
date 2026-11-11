@@ -9,6 +9,11 @@ tags: [openai, api-proxy, changelog]
 
 > 此日志只记录可公开复用的结论。服务器、账号、授权材料、私有地址、订阅与访问凭据均不入库。
 
+## 2026-10-27
+
+- 处理办公室 WiFi 访问某境外 Windows Server RDP 不通：OpenClash 将目标匹配到默认代理出口，远端仅放行办公室直连 IP。按 Lesson 12 在自定义规则中加入目标 `IP-CIDR /32 → DIRECT`，备份后重启 OpenClash；RDP 协商恢复、HTTP 200、普通代理出口不变。
+- 可复用排查与验证步骤见 [office-lan-access.md](office-lan-access.md#openclash-单目标直连业务系统路由例外) 与 [仓库解决方案](../../docs/solutions/best-practices/openclash-per-target-direct-rule.md)。实际目标 IP 只保留在受控路由器配置，不写入仓库。
+
 ## 2026-09-20
 
 - **修复（链接）**：`office-lan-access.md` 指向 `NAS_API/docs/reference/nas-multi-domain-access.md` 的链接多退一级（`../../../` → `../../`）。

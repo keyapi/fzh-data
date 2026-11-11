@@ -16,6 +16,7 @@ timestamp: 2026-08-14
 | Google Sheet 凭证 | [reference/gsheets-credentials.md](reference/gsheets-credentials.md) |
 | SKU 旧名→新名 | [reference/sku-remap.md](reference/sku-remap.md) |
 | 六月 FBA 过程 | [research/](research/) |
+| 换表 / 参考值优先 / 旧新 BOM 口径 | [docs/solutions/workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md](../../docs/solutions/workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md) |
 | 经验教训 | [lessons/](lessons/) |
 | 变更历史 | [log.md](log.md) |
 | 通途成本引擎本地迁移（四列/合并/BOM/FBA） | [reference/cost-engine-spec/32-phase2-bom-cost-policy.md](reference/cost-engine-spec/32-phase2-bom-cost-policy.md) · [33](reference/cost-engine-spec/33-phase3-writeback-rehearsal.md) · [34](reference/cost-engine-spec/34-phase4-run-package-canary.md) · [35](reference/cost-engine-spec/35-phase4-fba-shadow.md) |

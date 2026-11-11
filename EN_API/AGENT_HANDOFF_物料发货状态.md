@@ -156,7 +156,9 @@ fixture 只对工序做**下界**断言（`⊇ 前 4 道`，工序只增不减�
 - **只看本物料**：订单里若还有配套件（内胆 `ND#`、成品 `KS`），其进度不在本脚本范围。
   实测 SO-26-00101 名下 308 张工单（98 订单行 × 皮壳/内胆），全量查既超 Request Line
   限制又是噪音。「整单齐套能不能发」是另一个功能。
-- **退货未抵扣**：退货型 DN / `Sales Invoice` 退货未从已发量净掉。
+- **退货已抵扣**：退货型 DN 行（`is_return=1`、qty 为负、仍带 `against_sales_order`/`so_detail`）
+  由 `enrich_so_rows` 按 docstatus=1 的带符号 qty 汇总进 `shipped_dn`，负数自动抵扣；
+  `Sales Order Item.delivered_qty` 本身已是 ERP 净额值。`Sales Invoice` 退货不涉及（出库以 DN 为准）。
 - **疑似重复下单是启发式**：同物料 + 同量 + 交货日相差 ≤ 3 天，仅 `warn`，绝不自动处置。
 - **`--customer-code` 里的 `%`/`_` 会被当 LIKE 通配符**（ERPNext `like` 无转义钩子）。
 - **`--assert-fixture` 只认 `--customer-code CENKZ1325-Yellow-138`**：`--item` 是不限客户的超集

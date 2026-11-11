@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-11（通途特殊规则换表 / 参考值优先）
+
+- **新增**: `workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则表换维护人/换 ws 后：同一行系数与参考值同时存在时按老板口径**参考值优先**（引擎打印提醒并计 `n_mixed_ref_priority`）；FBA 28 条规则的 `二次加工`/`绍兴二次` 按新成本口径对调（二次=0、绍兴承接），数值和总净额不变；旧 9/3 BOM 制定的参考值遇到最新 BOM 会把扣减翻成增加（阅读枕 776–777 由 −77.8 变 +20.2 元/件），必须先逐条对拍再决定是否重填；老板 2026-11-10 确认按现有参考值执行。
+- **补充**: 分公司发成品二次=0（202609 18 行 −1,341.65；202608 16 行 −1,303.48）；FBA 绍兴二次直接用 `cost_sxbzcp`，不再用 `sx_cost_all−cost_fg`（264 行 `sx_cost_all=0` 会低估）；最终表是 `build_tabs/1104 BOM`，`out/merged_202609.csv` 11-04 为旧表。
+
 ## 2026-11-10
 
 - **更新**: `workflow-issues/tongtu-split-merge-writeback-cost-rules.md` — 新增「成本列一致性 + 整成品 method 覆盖」：皮壳含/不含/系数改为当前皮壳成本；整成品 SKU（非组件后缀）EN 皮壳 vs BOM 半成品/成品时按 BOM 计价；GS 最小修补 8/9 月 6 个 ws（202608 46 行 +1,920.04 / 202609 9 行 +370.55）。
@@ -35,6 +40,25 @@ tags: [solutions, log]
 
 - **新增**: 审核派生成本/规则结果的独立验证法（外部对偶、同名列陷阱、无留档只能说"量级吻合"） → `best-practices/auditing-derived-costs-independent-verification.md`
 - **新增**: gspread `insert_cols` 把「行」当「列」→ 一次 252 列的抢救与恢复 → `developer-experience/gspread-insert-cols-rows-as-columns.md`
+
+## 2026-11-03（钉钉群采集 / claude stdin / worktree 计划任务）
+
+- **新增**: `tooling-decisions/dingtalk-group-harvest-dws-user-identity.md` —— 钉钉群历史消息/文件归档用 DWS 个人 OAuth 身份，而不是群机器人、企业内部应用或会话存档；完整性账本 + 水位 + 文件去重 + 数据落仓库外。
+- **新增**: `developer-experience/claude-headless-long-prompt-stdin.md` —— Windows 下 `claude -p` 长提示词塞进 argv 会超 32K 限制并静默回退；改为 `subprocess.run([cli, "-p"], input=prompt)`。
+- **新增**: `developer-experience/windows-schtasks-worktree-path-trap.md` —— 在 worktree 里注册 schtasks 会把任务指向临时目录；合并后必须在主仓库重跑安装脚本。
+
+## 2026-11-06（邮件域名到期 / Gmail 550-5.7.26）
+
+- **新增**: `integration-issues/email-domain-expiry-gmail-550-5-7-26.md` —— 域名 2026-11-03 到期后，阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析，腾讯企业邮发出的邮件被 Gmail 以 550-5.7.26 硬拒。11-04 续费成功但邮件未恢复：**续费 ≠ 恢复**，必须回查注册局 NS 并确认记录在服务（直接问权威 NS，不只看控制台）。另一层陷阱是**注册商 ≠ DNS 托管商**（阿里云注册、DNSPod 解析；主域 `vilavi.cn` 在 Cloudflare）。DKIM selector 是腾讯企业邮生成的自定义随机串（`sjnr2306` / `evhe2306`），常见 selector 全 NXDOMAIN 不能证明“没有 DKIM”。恢复后补 DMARC `p=none`、修 MX 优先级 5/10。
+
+## 2026-10-27（供应分型 / frePPLe / 先搜分支）
+
+- **更新**: `workflow-issues/search-first-before-implementing.md`（`last_updated: 2026-10-27`）—— 补 Case 4：**main 上 grep 不到 ≠ 项目没有**。预测（statsforecast 2.1.1）、供应净额、库存政策、交期配置分别在本地的 `keyapi/forecast-refresh-oct27`、`keyapi/supply-integrate-oct27` 分支和 PR #300；先查 `git branch -a` / `git log --all` / `gh pr list --state all` / `git ls-tree`，再决定“复用 / 接线 / 重造”。
+- **新增**: `tooling-decisions/frepple-evaluation-and-borrow-logic.md` —— frePPLe 社区版 8.0+ MIT、7.x AGPL、企业/云闭源；库存规划/承诺交期/Gantt 仅商业版；ERPNext 连接器 GPL-3.0 且 2022-02 后未更新（LICENSE 与 hooks 的 MIT 声明不一致，以 GPL-3.0 为准）。结论：**借 solver 逻辑（lead-time offset / allocation / pegging / CTP），不部署系统**；预测/库存/交期/净额复用本仓库已有资产。
+- **新增**: `workflow-issues/supply-sku-segmentation-and-stockout-evidence.md` —— 分型前先排包装费/无 `sku_item` 映射的非商品（`497268621` 是“礼盒包装费 ETSY”），再按成品/半成品/皮壳分型；`monthly_series` 只覆盖三个主仓，会漏渠道把畅销皮壳误判成长尾；PJ 检查点 22 个日期、6 个间隔 >7 天（最大 38 天），不能证明“断货超过一周”；零库存当日仍有销量的仅 1.3%；Jeck 表是成本系数表不是促销表；`item_attr.moq` 非零仅 21/15,230，是字段未维护，不是工厂 MOQ。
+
+## 2026-10-27（OpenClash 单目标直连）
+- **新增**: `best-practices/openclash-per-target-direct-rule.md` — 办公室 WiFi 下单个境外主机/RDP 不通、直连光猫正常时的最小修复：先看 OpenClash 日志的 `match ... using ...` 行，确认目标落到默认 `Match`/代理节点；在自定义规则文件加 `IP-CIDR /32 → DIRECT`（域名用 `DOMAIN-SUFFIX`），备份后重启 OpenClash。验收必须做目标协议的端到端验证（RDP X.224 协商），不能只看端口 OPEN；同时回归普通代理出口。含多级 NAT 无法按设备隔离、远端白名单、目标 IP 变更等边界。本次实际目标 IP 只保留在受控路由器配置，不写入公开仓库。
 
 ## 2026-10-08（PB 无货件：UPS 才算真发 + 重复建单加后缀）
 - **更新**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md`（`last_updated: 2026-10-08`）—— 三处补料：**① §2.1.1 新增「重复建单也占 `-N`」**：通途不允许重复订单号；`-N` 与拆单后缀是**同一命名空间**（同批多行占 `-1…-M`、跨批补发继续排），所以**下一个可用 = 该 PO 已用过的最大 `-N` + 1**，不是固定 `-2`（用户纠正：「不一定后缀 -2，比如之前建了 2 单 -1 -2 但是都没发货呢？」）。两种查法都实测：**离线扫历史 `PB_*导入*.xlsx` 的 `PO Number-Line` 列**（286 个文件，结果与「`PBUS-<PO>` 存不存在」完全吻合）或通途模糊搜 `PBUS-{PO}`；注意导入 xlsx 里存的是**光号**（`137770200-1`），`PBUS-` 是通途侧店铺码。已在 `pb_orders` 落地成 `--reorder`/`--history-dir`。**② §6.1 补「通途 `orderStatus=despatched` 同样不等于真发」**：它和 ASN/面单一样只证明「建了单/建了标」，判定「真发」只有 **UPS 取件**一个口径。**③ §6.6 新增 2026-10-08 无货件复核实测**（10 个 PO：真发 2 —— `137770200-1` 与 `137974027` 的有货行 `-194`；只建标未取件 8），并记下本次**先拿 shipment/ASN 反推「已发货」、把 7 行改成已发、被用户纠正**的教训 —— ASN 与通途状态都替代不了 UPS。
@@ -266,3 +290,7 @@ tags: [solutions, log]
 - **修复（既有漂移）**: `intent_router/tests/test_catalog.py::test_catalog_skill_set_equals_agents_md_table` 在本批之前**已经是红的**（已用 HEAD 版文件核实）：AGENTS.md 有 `sellfox-amazon-settlement` / `dingtalk-oa-approval` / `gsheet-monthly-order` 三行，而 `intent_router/catalog.yaml` 一个都没有 —— 即「加了 AGENTS.md 行却没补 catalog 条目」，正是该文件头部注释与 `ce-okf` 记录里警告过的同一类脱节（这次方向相反）。已补 3 条选项（含各自的 `coverage`/`exclusions`/`examples`，`dir` 均验证存在），本批后 `pytest intent_router/tests colab_kit/tests` → **274 passed, 33 skipped**（原先 1 failed）。同时给 `sellfox-shipping` / `tongtool-order-cost` / `google-drive-permissions` 三条的 `exclusions` 补上新兄弟模块，让路由真正分得开。
 - **新增**: `tooling-decisions/colab-kit-notebook-edit-toolbox.md` —— 为什么把「改同事的 Colab notebook」做成**独立模块 + skill**（`colab_kit/`）而不是塞进 `google_drive_permissions/`。三条取舍：网络/本地命令分开（改 cell 是纯 JSON，可离线单测）；`verify` 与 `guard` 是**一等公民**（手写时最容易省掉的正是这两步）；`sed` 默认拒绝多命中（实测同一锚点命中 2 格）。与 `google_drive_permissions` 的分界写成对照表：**权限 vs 内容**，失败模式从"权限判断错"变成"**写坏别人的活文档**"。另一条动因是会重复 —— `pb_orders/` 已迁过一条，Overstock 这条将来也可能迁。
 - **新增**: `developer-experience/gh-pr-edit-projects-classic-workaround.md` —— `gh pr edit <n> --title/--body-file` 在本机（gh 2.71.2）**exit 1 且改动不生效**，报 `GraphQL: Projects (classic) is being deprecated … (repository.pullRequest.projectCards)`：`gh pr edit` 走 GraphQL 且前置查询会取 `projectCards`，弃用后整条命令在发出修改前就中止。绕法 = **`gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f title=… -F body=@file`**（REST，不碰 `projectCards`），改完 `gh pr view` 回读。**真正的坑是信号不可信**：命令串里接了 `| tail` 时 `$?` 是 `tail` 的、永远 0，报错行也被淹没 —— 本次就是靠回读 PR 才发现标题没变。
+
+## 2026-11-05
+- **新增**: `integration-issues/github-ssh-intermittent-publickey-denied.md` —— EN 测试机 `git push` 报 `Permission denied (publickey)`，但密钥与 GitHub 账户登记**逐字节一致**、无私钥/公钥错配、无 deploy key 冲突、主机密钥真实；同一把钥匙 22/443 端口与亚洲/美国节点都**时通时不通**，本地 Windows 换另一把钥匙同样复现；HTTPS 路径 5/5 稳定 —— 判定为大陆出口到 GitHub SSH 的链路抖动，不是密钥故障。固化三步判定法（`ssh -T` 试 3 次，任一次 `Hi <user>!` 就别动 key）与一键 HTTPS 回退（`EN_API/git_push_https.sh`，推完 `trap` 自动切回 SSH）。
+- **背景**: 现场第一反应是"密钥丢了"，但换 key 只会白折腾；真正需要的是"先证明链路问题"的判定顺序。生产机没有存 PAT，HTTPS 回退目前只对测试机开箱可用。

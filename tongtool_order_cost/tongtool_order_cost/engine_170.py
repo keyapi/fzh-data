@@ -168,8 +168,7 @@ def has_any_ref(row: pd.Series) -> bool:
 
 def get_rule_mode(row: pd.Series) -> str:
     hc, hr = has_any_coeff(row), has_any_ref(row)
-    if hc and hr:
-        return "invalid_mixed"
+    # 老板口径：系数与参考值同时出现时，参考值优先，忽略系数。
     if hr:
         cur = rule_cell_str(row, "收款币种")
         if not cur:
@@ -313,6 +312,7 @@ def apply_special_rules(
     skipped_rows: list[pd.Series] = []
     applied_count = 0
     skipped_invalid = 0
+    mixed_ref_priority = 0
 
     def apply_ref_per_unit(
         mask: pd.Series,
@@ -380,6 +380,14 @@ def apply_special_rules(
     for idx, rule in active.iterrows():
         mode = rule["rule_mode"]
         sku = rule_cell_str(rule, "通途SKU")
+        if mode == "ref" and has_any_coeff(rule):
+            mixed_ref_priority += 1
+            if verbose:
+                coeff_cols = [c for c in COEFF_COLS if pd.notna(rule.get(c))]
+                print(
+                    f"  ⚠️ 规则[{rule.get('excel_row', idx)}] SKU={sku}："
+                    f"系数与参考值同时存在，按参考值优先，忽略系数 {coeff_cols}"
+                )
         if mode.startswith("invalid") or mode == "none":
             skipped_invalid += 1
             skipped_rows.append(rule)
@@ -640,6 +648,7 @@ def apply_special_rules(
         "n_applied": applied_count,
         "n_unmatched": len(unmatched_df),
         "n_skipped": skipped_invalid,
+        "n_mixed_ref_priority": mixed_ref_priority,
         "n_affected_rows": int(all_affected.sum()),
         "n_events": len(events_df),
     }

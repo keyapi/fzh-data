@@ -137,3 +137,5 @@ $ tailscale status | grep -E 'direct|relay'
 - [../tooling-decisions/tailscale-2026-capabilities.md](../tooling-decisions/tailscale-2026-capabilities.md)
   —— Peer Relays / Tailcat 等新能力对本拓扑的适用性
 - `us_openai_api_proxy/docs/office-lan-access.md` —— 办公室网络逐级拓扑与 OpenWrt/新华三配置
+- [../best-practices/openclash-per-target-direct-rule.md](../best-practices/openclash-per-target-direct-rule.md)
+  —— 单目标直连规则；排查「WiFi 不通、直连光猫正常」时先看目标是否落到默认 Match

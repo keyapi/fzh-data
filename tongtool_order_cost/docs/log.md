@@ -5,6 +5,12 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-11-11
+- **特殊规则换表**：1.7.0 改读 ws `黄-特殊规则-订单改销售额成本`；旧 `Jeck特殊规则-订单改销售额成本` 只读留存。13 行混合规则按老板口径**参考值优先**（清系数），引擎打印提醒并新增 `meta["n_mixed_ref_priority"]`。
+- **FBA 列对齐**：28 条 FBA 规则的 `二次加工`/`绍兴二次` 参考值对调（二次=0、绍兴承接），数值和总净额不变；Colab cell 22 同步参考值优先。
+- **成本口径**：记录旧 9/3 BOM 与最新 BOM 的差异，阅读枕第 776–777 行由扣减 −77.8/件变为 +20.2/件；老板 2026-11-10 确认按现有参考值执行。详见 `docs/solutions/workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md`。
+- **成本口径补充**：分公司发成品二次=0（202609 18 行 −1,341.65；202608 16 行 −1,303.48）；FBA 绍兴二次直接用 `cost_sxbzcp`，不再用 `sx_cost_all−cost_fg`（264 行 `sx_cost_all=0` 会低估）；最终表是 `build_tabs/1104 BOM`，`out/merged_202609.csv` 11-04 为旧表。
+
 ## 2026-11-10
 - **修复/门禁** FBA shadow 加 manifest（BOM/EN/GS sha256），输入变化自动重建；`self/FBA 成本阻断=0`、`FBA shadow 已校验` 纳入失败门禁。新增 `scripts/gs_full_replace.py`（dry-run/apply）。测试 301 passed。
 - **成本规则修正** 分公司发成品（USNJ/USTX/PL）目的地加工成本固定 0（PL 19 个历史遗留 valuation，如 `PLBZCP#KS0230-60=85.05`）；FBA 绍兴二次改用 `cost_sxbzcp`（含半成品包装），不再用 `sx_cost_all−cost_fg`。后者在 `cost_fg=0`、`sx_cost_all=0` 的 193 行会低估/负数；EN 报表问题已提 `keyapi/work_order_task#6`，同步侧兜底 `keyapi/tongtool_integration#24`。

@@ -232,6 +232,20 @@ Tailscale v1.32.3 的 ts-forward MARK 规则匹配条件是 `in=tailscale0`，�
 | 策略路由 | Tailscale table 52 vs Clash fwmark 0x162 — 各自独立 |
 | 进程直连 | 建议在 OpenClash 添加 `PROCESS-NAME,tailscaled,DIRECT` 规则 |
 
+## OpenClash 单目标直连（业务系统路由例外）
+
+当某个境外主机/业务系统在 WiFi 下不通、直连光猫正常时，先查 OpenClash 日志是否把它匹配到默认 `Match`/代理节点。若是，在自定义规则文件中加最小 DIRECT 规则，**不要关闭全局代理**：
+
+```yaml
+# 单目标直连：<TARGET_HOST>
+- IP-CIDR,<TARGET_IP>/32,DIRECT
+```
+
+- 目标是域名时用 `- DOMAIN-SUFFIX,<TARGET_DOMAIN>,DIRECT`。
+- 改前备份、改后重启 OpenClash；复查 `grep "<TARGET_IP>" /tmp/openclash.log` 应出现 `using DIRECT`。
+- 多级 NAT 下无法按单台客户端隔离，该规则对全办公室目标生效；变更前取得授权。
+- 详细排查与验证记录见 [仓库解决方案：OpenClash 单目标直连](../../docs/solutions/best-practices/openclash-per-target-direct-rule.md)。
+
 ## 维护命令
 
 ```bash

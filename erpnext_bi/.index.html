@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EN 生产 BI 看板</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --card:#fff; --line:#e3e8ef; --text:#1f2733; --muted:#6b7785;
+    --blue:#2f6fed; --green:#1f9d55; --orange:#e08a00; --red:#d9534f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+       background:var(--bg);color:var(--text);font-size:14px}
+  header{padding:18px 24px;background:var(--card);border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:20px}
+  .sub{color:var(--muted);font-size:12px;margin-top:4px}
+  .bar{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
+  .cards{display:flex;gap:12px;flex-wrap:wrap;padding:16px 24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;
+        padding:12px 16px;min-width:130px}
+  .card .k{color:var(--muted);font-size:12px}
+  .card .v{font-size:20px;font-weight:600;margin-top:4px}
+  .toolbar{padding:0 24px 12px;display:flex;gap:10px;align-items:center}
+  input[type=text]{padding:8px 12px;border:1px solid var(--line);border-radius:8px;min-width:260px}
+  button{padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}
+  button:hover{background:#eef2f7}
+  table{width:100%;border-collapse:collapse;background:var(--card)}
+  th,td{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#f0f3f8;color:var(--muted);font-weight:600;position:sticky;top:0}
+  .wrap{padding:0 24px 32px;overflow-x:auto}
+  .order-row{cursor:pointer}
+  .order-row:hover{background:#f7faff}
+  .base{font-weight:600}
+  .splits{color:var(--muted);font-size:12px}
+  .badge{display:inline-block;background:#eef2f7;color:var(--muted);border-radius:6px;
+          padding:1px 8px;font-size:11px;margin:1px 2px 1px 0}
+  .pb{background:#eef2f7;border-radius:6px;height:16px;width:160px;overflow:hidden;position:relative}
+  .pb > span{display:block;height:100%}
+  .pbtxt{font-size:12px;color:var(--muted);margin-left:8px}
+  .detail td{background:#fafcff}
+  .detail table{width:100%}
+  .muted{color:var(--muted)}
+  .empty{padding:40px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>EN 生产 BI 看板</h1>
+  <div class="sub">链路: 销售订单(下单) → 生产制程(生产) → 发货(DN) ｜ 数据实时取自 EN 生产环境 ｜ 包装阶段暂未纳入</div>
+  <div class="bar">
+    <span class="muted">更新时间: <b id="updated">—</b></span>
+    <span class="muted">源物料行: <b id="srcrows">—</b></span>
+  </div>
+</header>
+
+<section class="cards" id="cards"></section>
+
+<div class="toolbar">
+  <input type="text" id="q" placeholder="按订单号 / 客户 过滤…" oninput="render()">
+  <button onclick="load(true)">↻ 强制刷新</button>
+</div>
+
+<div class="wrap">
+  <table id="tbl">
+    <thead>
+      <tr>
+        <th>订单号(基础)</th><th>客户</th><th>拆分单</th>
+        <th>下单</th><th>生产</th><th>发货</th><th>状态</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div class="empty" id="empty" style="display:none">无匹配订单</div>
+</div>
+
+<script>
+let DATA = null;
+
+async function load(force){
+  const url = '/api/orders' + (force ? '?refresh=1' : '');
+  const res = await fetch(url);
+  DATA = await res.json();
+  document.getElementById('updated').textContent = DATA.updated_at || '—';
+  document.getElementById('srcrows').textContent = DATA.source_rows ?? '—';
+  render();
+}
+
+function pctBar(pct, color){
+  pct = Math.max(0, Math.min(100, pct||0));
+  const c = pct>=100 ? 'var(--green)' : color;
+  return '<div class="pb"><span style="width:'+pct+'%;background:'+c+'"></span></div>'+
+         '<span class="pbtxt">'+pct.toFixed(1)+'%</span>';
+}
+
+function render(){
+  if(!DATA) return;
+  const q = (document.getElementById('q').value||'').trim().toLowerCase();
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  // 汇总卡
+  let tO=0,tP=0,tD=0;
+  DATA.orders.forEach(o=>{tO+=o.ordered;tP+=o.produced;tD+=o.delivered;});
+  const op = tO? (tP/tO*100):0, od = tO? (tD/tO*100):0;
+  document.getElementById('cards').innerHTML =
+    card('进行中订单', DATA.order_count) +
+    card('总下单', fmt(tO)) +
+    card('总生产', fmt(tP)) +
+    card('总发货', fmt(tD)) +
+    card('整体生产', op.toFixed(1)+'%', op>=100?'var(--green)':'var(--blue)') +
+    card('整体发货', od.toFixed(1)+'%', od>=100?'var(--green)':'var(--orange)');
+
+  const filtered = DATA.orders.filter(o =>
+    !q || o.base_so.toLowerCase().includes(q) ||
+    (o.customer||'').toLowerCase().includes(q) ||
+    o.splits.join(' ').toLowerCase().includes(q));
+
+  document.getElementById('empty').style.display = filtered.length? 'none':'block';
+
+  filtered.forEach((o, idx) => {
+    const tr = document.createElement('tr');
+    tr.className = 'order-row';
+    tr.innerHTML =
+      '<td class="base">'+o.base_so+'</td>'+
+      '<td>'+(o.customer||'')+'</td>'+
+      '<td class="splits">'+o.splits.length+' 张<br>'+o.splits.join('<br>')+'</td>'+
+      '<td>'+fmt(o.ordered)+'</td>'+
+      '<td style="display:flex;align-items:center">'+pctBar(o.prod_pct,'var(--blue)')+'</td>'+
+      '<td style="display:flex;align-items:center">'+pctBar(o.deliv_pct,'var(--orange)')+'</td>'+
+      '<td>'+o.statuses.map(s=>'<span class="badge">'+s+'</span>').join('')+'</td>';
+    tr.onclick = ()=>toggle(idx);
+    tbody.appendChild(tr);
+
+    const dr = document.createElement('tr');
+    dr.id = 'd'+idx; dr.className='detail'; dr.style.display='none';
+    const items = o.items.map(it =>
+      '<tr><td>'+it.item_code+'</td><td class="muted">'+(it.item_name||'')+'</td>'+
+      '<td>'+fmt(it.ordered)+'</td>'+
+      '<td style="display:flex;align-items:center">'+pctBar(it.prod_pct,'var(--blue)')+'</td>'+
+      '<td style="display:flex;align-items:center">'+pctBar(it.deliv_pct,'var(--orange)')+'</td></tr>'
+    ).join('');
+    dr.innerHTML = '<td colspan="7"><table>'+
+      '<thead><tr><th>物料</th><th>名称</th><th>下单</th><th>生产</th><th>发货</th></tr></thead>'+
+      '<tbody>'+items+'</tbody></table></td>';
+    tbody.appendChild(dr);
+  });
+}
+
+function toggle(idx){
+  const d = document.getElementById('d'+idx);
+  d.style.display = d.style.display==='none' ? 'table-row' : 'none';
+}
+
+function card(k,v,c){
+  return '<div class="card"><div class="k">'+k+'</div><div class="v" style="'+(c?'color:'+c:'')+'">'+v+'</div></div>';
+}
+function fmt(n){ return (Math.round(n*100)/100).toLocaleString(); }
+
+load(false);
+</script>
+</body>
+</html>

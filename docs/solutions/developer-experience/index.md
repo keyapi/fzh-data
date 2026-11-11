@@ -20,3 +20,5 @@ tags: [developer-experience, index]
 | Colab/notebook 打包报 `zip error: Nothing to do!` 或 `FileNotFoundError: Cannot find file`（`!zip` 被空格分词） | [colab-shell-out-filename-spaces.md](colab-shell-out-filename-spaces.md) |
 | `gh pr edit` 报 `Projects (classic) is being deprecated` 且标题没改成（改 PR 要走 `gh api PATCH`；管道会掩盖退出码） | [gh-pr-edit-projects-classic-workaround.md](gh-pr-edit-projects-classic-workaround.md) |
 | 用 gspread 插列/行把表搞乱了（`insert_cols` 把「行」当「列」） | [gspread-insert-cols-rows-as-columns.md](gspread-insert-cols-rows-as-columns.md) |
+| `claude -p` 长提示词在 Windows 上失败（argv 32K 上限，必须走 stdin） | [claude-headless-long-prompt-stdin.md](claude-headless-long-prompt-stdin.md) |
+| 在 worktree 里注册 Windows 计划任务，合并/删 worktree 后任务失效 | [windows-schtasks-worktree-path-trap.md](windows-schtasks-worktree-path-trap.md) |

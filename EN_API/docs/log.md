@@ -6,6 +6,42 @@ title: EN_API 文档变更日志
 
 # 变更日志
 
+## 2026-10-13（晚 2：Stage 2 原生报表，测试机已部署）
+
+- **新增（路线第 2 档：原生 KPI/例外）**：Script Report「**SO Chain Overview**」 —— 每行「还未发完」的订单行（阶段/已发/未发/异常）+ 顶部 KPI 卡（行数·未发总量·交期已过·死单）+ 阶段分布柱图。产物见 `supply_chain_visibility/key_test/key_test__report__so_chain_overview__*`。
+  - **测试机已部署并验证**：`frappe.desk.query_report.run` 返回 **10 列 / 107 行 / KPI / 柱图**（0.10s）。
+  - **两个坑（已记进 handoff）**：① 报表文件路径要**多一层** `key_test`（模块名==app 名 → `apps/key_test/key_test/**key_test**/report/<name>/`），放少一层会被 migrate 生成返回 `([],[])` 的桩；② 加/改 `.py` 后**必须 `bench restart`**，`clear-cache` 不重载 Python 模块。
+
+## 2026-10-13（晚：Stage 1 嵌入单据，测试机已部署）
+
+- **新增（呈现形式路线第 1 档：嵌入单据）**：`supply_chain_visibility/key_test/` —— 在 ERPNext 销售订单表单内嵌「供应链链条摘要」（阶段/已发/未发/工单工序）。
+  - 服务端：`key_test/so_chain.py`（`@frappe.whitelist() get_so_chain`）；前端：追加进 `key_test/public/js/sales_order.js`（`doctype_js` 只允许一个文件，故追加）。
+  - **测试机（站点 erpnext.vilavi.cn）已部署并验证**：方法 REST 调用 HTTP 200、stage/工序/DN 净额正确；`getdoctype.__js` 已含嵌入代码；备份在 `/tmp/sales_order.js.bak_*`。**生产未部署**（步骤见 handoff）。
+  - 交接：`supply_chain_visibility/key_test/AGENT_HANDOFF.md`（含 prod 部署/回滚 + Stage 2/3 设计）。
+- **更正调研**：`supply_chain_visibility/docs/reference/en-supply-chain-map.md` —— API **实测记录数**发现 `Cutting Plan/Cutting Task/Work Order Split/Wip Transfer` 四个 doctype **生产 0 条**（建了没用）；真实车辆是 `Initial Work Order`(开料 750)、`Tracking Number`(菲号 4887)、`Job Card`(扫码 48854，含 WIP 外包自定义字段)，拆分走 Cancel+Amend。并补 `key_test` 为 SO 定制主战场 + app 各自独立仓库。
+
+## 2026-10-13（下午：EN 全链路调研）
+
+- **新增调研**：[supply_chain_visibility/docs/reference/en-supply-chain-map.md](../supply_chain_visibility/docs/reference/en-supply-chain-map.md) —— 用 REST API 枚举 EN 生产系统的 DocType 后，得出**真实全链路实体地图**：除原生 `Sales Order/Production Plan/Work Order/Job Card/BOM/Stock Entry` 外，还有 4 个**自定义 app** —— `Light Mes`（`Initial Work Order`/`Job Card Scan Input` 扫码/`Tracking Number` 菲号/`Wip Transfer` 外发回收/`Defect Code`/工序价）、`Work Order Task`（`Cutting Plan`/`Cutting Task` 开料/`Work Order Split`）、`Delivery Plan`（出货计划/外箱号）、`Tongtool Integration`。附**仓库覆盖 vs 空白**表：开料/扫码/WIP/工单拆分/物料需求/采购(MR/PO/PR) 在 EN 侧基本空白。
+- **新增调研**：`supply_chain_visibility/docs/research/presentation-forms.md` —— 呈现形式四类对比（ERPNext 原生 / 独立大屏 / AI 查询 / 嵌入单据，带原始 URL）+ 供应链可视化设计要素（事件时间线/阶段状态机/数量对账/例外管理/OTIF/EPCIS·DCSA）+ 本场景适配 + 需求头脑风暴 + **建议路线**（嵌入单据 → 原生 KPI/例外 → 小范围独立屏；AI/MCP 仅内部受监督助手）。
+- **范围决定**：物料需求 / 采购订单 / 采购入库 **先记录不做**（EN 侧空白且业务未明确）；头程阶段 4–8 沿用暂缓接入。
+
+## 2026-10-13
+
+- **新增（统一履约查询入口）**: `EN_API/fulfillment_query.py` + `EN_API/fulfillment/` 包 —— 在 `item_shipment_status.py` 引擎之上叠加 多输入 / 阶段 0–3 状态机 / 数量阶梯对账 / 事实·推导·估算分层 / 异常 §8 结构 + 下一行动；输出 JSON（权威）+ 控制台 + Excel（9 分区，`--legacy-sheets` 复刻旧 3 Sheet）。实现按蓝图 §3/§4/§8/§9/§12 V1。
+  - **落点取舍**：**包裹引擎而非整体搬迁** —— 引擎带 fixture 断言与单测（`tests/test_item_shipment_status.py` 用 `monkeypatch.setattr(iss, "api_get_status", ...)` 打桩，要求 `paginated_get`/`api_get_status` 同模块命名空间），整体搬迁会破坏该契约且回归风险高。引擎文件**未改动**。
+  - **实测踩坑**：ERPNext 对突发请求限流 —— 多打一轮冗余 DN 查询会让后续 WO 查询返回 **403 PermissionError**。已改为出库单只查一次。
+  - **回归**：`--codes CENKZ1325-Yellow-138 --assert-fixture` 稳定档 14/14 通过、exit 0；`uv run pytest EN_API/tests/` 38 项通过（引擎老测试零改动）。
+- **新增**: [reference/en-order-to-shipment-chain.md](reference/en-order-to-shipment-chain.md) —— **链路导航单一入口**：给一个通途 SKU，它在 ERPNext 里如何串起 销售订单→生产计划→工单→工序卡→销售出库；含链路图、每段 DocType/字段/代码落点（`item_shipment_status.py` 函数+行号）、7 条易错口径、统一查询入口、相关子项目与 PR 清单、最新实跑快照。
+  **背景**：仓库此前有零散的 handoff 与蓝图，但没有一篇把「链路 + 子项目 + PR」串起来导航的文，新同事/新会话找不到入口。
+- **实跑留证**: `--customer-code CENKZ1325-Yellow-138`（2026-10-13）10 张 SO / 330 件 = 有效 310 + 已改单 20；已发 166 / 未发 144（`DN 实算 == ERP delivered_qty` ✓）。
+- **索引修正**: reference 索引补登此前遗漏的 `en-server-access.md`。
+- **补业务口径（更准）**:
+  - **退货净额抵扣**（修 bug）：`shipped_dn` 原先把退货型 DN 行（`is_return`）排除，导致有退货时 `DN 实算 == ERP delivered_qty` 校验翻车。改由新抽出的引擎函数 `enrich_so_rows` 按 docstatus=1 的**带符号 qty** 汇总（退货行负数自动抵扣）；`build_context` 与 fulfillment 共用该函数，避免口径分叉。Sheet2「计入已发」增「退货抵扣」标记。fixture 客户无退货 → 数字零变化。
+  - **异常新增**：交期逾期（真实 SO 交期已过仍未发，与引擎「下单+3月」估算不同）、工序停滞（在产工单 N 天无新报工，阈值 `--stall-days` 默认 14）。
+  - **整单齐套**（`--scope full_order_kit`，opt-in）：按**成品 BOM**（`BOM.items`，权威来源，非前缀约定）展开配套件，逐件算「已完工（工序卡第一道工序）+ 工厂侧库存」的可信可用量，取 min；简化（→`SXBZPK#`）/自引用 BOM 标「无法展开」。组件可用量为**全局**（未按订单行分配），到货仓/国外仓库存不计入（蓝图 §5/§13）。
+  - 测试：`uv run pytest EN_API/tests/` **45 项通过**；`--assert-fixture` 仍 14/14、exit 0。
+
 ## 2026-09-24
 
 - **新增**: [reference/en-server-access.md](reference/en-server-access.md) —— EN 服务器与环境访问单一事实源（生产/测试 SSH 别名、`bench restart` 规矩、REST 凭证、3 条常见坑）。

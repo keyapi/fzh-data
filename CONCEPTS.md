@@ -314,10 +314,12 @@ ERPNext 用原生 Product Bundle 表示组合销售对象；work_order_task 扩�
 EN（测试与生产）侧的订单成本核算，用户确认依据通途完整 SKU 后缀（至少 `-Cover`、`-Foam`、`-1`、`-2`）和销售订单「皮壳/成品/半成品」交付形态，从 BOM 选**局部**成本。完整选路源码不在本仓库，Agent 不得用本地文件杜撰公式。赛狐组合商品扣子件批次不能复现这套逻辑。
 
 ### 特殊规则 1.7.0 引擎（engine_170.py）
-本仓库 `tongtool_order_cost/tongtool_order_cost/engine_170.py` 可验证会重写皮壳/产品、绍兴加工、国外二次加工、头程、海外仓和尾程等分量，再重算产品成本、订单总成本与利润。它**不是** Tongtool Cost Review，而是本地对共享 Google Sheet Jeck 规则的落地；不能拿它当 Cost Review 的实现，也不能用它解释赛狐原生成本。
+本仓库 `tongtool_order_cost/tongtool_order_cost/engine_170.py` 可验证会重写皮壳/产品、绍兴加工、国外二次加工、头程、海外仓和尾程等分量，再重算产品成本、订单总成本与利润。它**不是** Tongtool Cost Review，而是本地对共享 Google Sheet「黄-特殊规则」的落地（旧 Jeck 表只读留存）；不能拿它当 Cost Review 的实现，也不能用它解释赛狐原生成本。
 
 ### 特殊规则（订单改销售额成本）
-运营在共享 Google Sheet 里按通途 SKU 改订单销售额或成本科目的规则。当前 notebook 1.7.0 读「和财务部共享」里的 Jeck 工作表。一行里系数模式与参考值模式不能共存；参考值按收款币种乘汇率再乘发货数量写入目标列。本地落地见「特殊规则 1.7.0 引擎（engine_170.py）」，与 EN Tongtool Cost Review 是两套东西。
+运营在共享 Google Sheet 里按通途 SKU 改订单销售额或成本科目的规则。当前 notebook 1.7.0 读「和财务部共享」里的 **黄-特殊规则-订单改销售额成本** 工作表；旧 Jeck 工作表只读留存。同一行同时有系数和参考值时，**参考值优先**（老板 2026-11-10 确认），系数忽略；参考值按收款币种乘汇率再乘发货数量写入目标列。本地落地见「特殊规则 1.7.0 引擎（engine_170.py）」，与 EN Tongtool Cost Review 是两套东西。
+
+成本口径：分公司发成品（USNJ/USTX/PL method=成品）二次加工=0（202609 18 行 −1,341.65；202608 16 行 −1,303.48）；FBA 二次=0，绍兴二次直接用 `cost_sxbzcp`，不要再用 `sx_cost_all−cost_fg`（264 行 `sx_cost_all=0` 会低估）。
 
 ### 通途主档 SKU 改名
 通途允许修改货品主档上的 SKU 字符串。改名后，历史订单导出仍保留导出当时的名字，而规则表通常已是新名。精确匹配管道必须改订单侧旧名去对齐新名，而不是把规则改回旧名。
@@ -549,6 +551,19 @@ Amazon 财务数据两种口径：**结算报告（settlement）= 打款(payout)
 - **PB 账期 (Pottery Barn settlement cycle)**: 按 PB 付款日起 **19 号 ~ 次月 18 号**（美国中部时间）切分，与 Amazon 的「4 号 ~ 下月 3 号」**不是同一套窗口**，不能混用。PB 通过 SPS 下单/发货，付款日 ≈ 仓库**实际交给承运商**（UPS "We Have Your Package"）后约 30 天——不是发票日、也不是建标日；因此同一批订单的实际付款会跨账期错位，一个账期不完全付清是常态。
 - **双开票（SPS 双 invoice 号）**: SPS 里有时一个订单创建了 **2 个 invoice 号**，发票 CSV 只保留其中一个，而 PB 可能按另一个号付款。对账时必须把付款行归一到 CSV 留用的号再比对，否则会误报「对账单上有、台账里没有」= 漏记。台账要在备注列留下「弃用 A 留用 B」的痕迹，供下轮和财务追溯。
 
+## 供应分型（补货政策）
+
+### 正常 / 慢销 / 长尾 / 短史
+按**全渠道**销量形态分：正常（非间歇、月均≥5）、慢销（非间歇、月均<5）、长尾/间歇（零月≥40% 或 ADI≥2 且月均<5）、短史/新品（跨度<12 月）。“高销量但间歇”单列 **正常（断货/季节干扰）**，不能直接当长尾。皮壳/半成品按角色跟成品/BOM 走，不能按独立成品判死库存。
+
+### 清仓 / 停售 / 季节性
+- **清仓**：降价卖现有库存，不补货（常见于回笼资金）。
+- **停售**：不再生产/采购，处理尾货，不补货。
+- **季节性**：有固定旺季/淡季，淡季 0 销量正常；判断看去年同月/前年同月是否也这样，不能把淡季 0 当死库存。
+
+### 促销日历
+运营登记的“SKU × 渠道 × 起止 × 活动类型 × 折扣 × 是否补货”。赛狐 OpenAPI 只有订单级 `isPromotion`/`discountAmount`（事后），**没有未来活动日历**；当前阶段不建表，留 EN 下一阶段。
+
 ## 群晖 NAS 外网访问
 
 ### QuickConnect 统一入口
@@ -586,8 +601,11 @@ GLS 波兰自发货单号批量跟踪走 gls-group.com **公开无鉴权 REST**�
 
 ## 通途订单成本（2026-11）
 
+### 定价 method = BOM 主档 `shipping_method`
+订单定价只看 BOM 主档的发货方式（皮壳 / 半成品 / 成品 / FBA 仓）；EN 订单行 `shipping_method` 只写审计（`en_method`），不参与定价；发货仓库（主仓/退货仓/皮壳仓）不改变 method 或成本。组件后缀行（`-Cover/-Foam/-PPCotton`）也按 BOM method + 后缀矩阵计价。
+
 ### 绍兴发货成本三档
-EN 订单同步字段 `sx_shipping_cost`：皮壳→皮壳成本；半成品→皮壳+绍兴包装半成品；成品→绍兴总成本；FBA 仓→绍兴总成本（不看发货方式）。与报表列 `sx_cost_all`（半成品走「成品成本−剔除」）口径不同，勿混用。
+皮壳→绍兴二次=0；半成品→绍兴二次=`cost_sxbzbcp`；成品→绍兴二次=`cost_sxbzcp`；FBA 仓→绍兴二次=`cost_sxbzcp`（含半成品包装）。**不要用 `sx_cost_all − cost_fg`**：`sx_cost_all=0` 而 `cost_sxbzcp>0` 的行会被算成 0（264 行低估，issue `work_order_task#6` / `tongtool_integration#24`）。
 
 ### 合并成品件数 (pieces)
 拆包裹合并后的一件成品数量：成品取成品载体数量；半成品 Cover+Foam 取 Cover 数量，**不把组件行 qty 相加**；多件按数量。合并行的四列成本 = 单位成本 × pieces。
@@ -596,4 +614,15 @@ EN 订单同步字段 `sx_shipping_cost`：皮壳→皮壳成本；半成品→�
 套件（TJ#/Product Bundle）的绍兴发货方式：所有有效子件 method 非空且完全一致时派生；混合/空 → 待审。订单只有 TJ# 时套件行是唯一成本载体，子件不得另计。
 
 ### 目的地加工成本
-EN `valuation_rate`：USNJ/USTX/PL 包装成品 BOM total_cost；FBA=0；美国海外仓复用 USTX。写回表「二次加工成本」用它，不再借绍兴包装成品成本。
+EN `valuation_rate`：USNJ/USTX/PL 包装成品；FBA=0；**分公司发成品（USNJ/USTX/PL method=成品）=0**；美国海外仓复用 USTX。写回表「二次加工成本」用它，不再借绍兴包装成品成本。
+
+## 钉钉群采集 (dingtalk_group_harvest)
+
+### DWS（钉钉 Workspace CLI）
+钉钉官方开源的跨平台 CLI（Apache-2.0），用**用户 OAuth 身份**访问群消息、文件、钉盘、在线文档、知识库、日历、审批等。它不是企业内部应用：权限跟着登录用户的群成员身份走，能读历史消息与消息附件；群机器人只能发不能读。本机入口 `C:\Users\zhang\.local\bin\dws.exe`。
+
+### 采集水位 (harvest watermark)
+每个群保存 `last_message_time` + `last_message_id`，下次从上次时间前 1 秒开始重叠拉取，按 `messageId` 去重。**只有 DWS 返回 `complete=true`、`hasMore=false`、`failures=[]` 时才推进**；否则下次重拉，防止把半页数据当成完整历史。
+
+### 完整性账本 (completeness ledger)
+DWS `+chat-messages` / `+chat-search` 返回的 `complete` / `hasMore` / `failures` / `nextPage` 字段集合。它是采集能否推进水位的硬门槛，不是提示信息；缺页时 DWS 会明确报 `chat_list_incomplete`，不会静默返回半截数据。

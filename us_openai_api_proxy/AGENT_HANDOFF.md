@@ -24,6 +24,7 @@ tags: [openai, api-proxy, handoff, authentication]
 | 现象 | 首先读 / 做 |
 |------|-------------|
 | 服务启动、日志、重启或资源问题 | [docs/operations.md](docs/operations.md) 的“快速登录与服务检查” |
+| WiFi 下单个境外主机/RDP 不通、直连光猫正常 | [docs/solutions/best-practices/openclash-per-target-direct-rule.md](../docs/solutions/best-practices/openclash-per-target-direct-rule.md) |
 | `503 auth_unavailable` | [docs/operations.md](docs/operations.md) 的“诊断”和“授权恢复” |
 | ChatGPT/Codex OAuth 需要刷新 | [docs/operations.md](docs/operations.md) 的“授权恢复”（含浏览器 OAuth、隔离失效记录、重启和目标模型验收） |
 | 服务 active 但模型仍失败 | 对**目标模型**运行最小真实请求，不以 health check 为结论 |

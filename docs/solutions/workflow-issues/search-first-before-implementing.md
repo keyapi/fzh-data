@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: "Search First Before Implementing: Always Check Official and Project Documentation Before Making Changes"
 date: 2026-07-14
-last_updated: 2026-09-21
+last_updated: 2026-10-27
 category: workflow-issues
 module: development_workflow
 problem_type: workflow_issue
@@ -16,6 +16,7 @@ applies_when:
   - "Setting up integrations (MCP servers, API clients, SDKs) with version-pinned dependencies"
   - "拼自己系统的内部 URL / 深链 / 错误码约定 —— 这类内部约定优先搜项目已有实现"
   - "评估第三方方案（该抄它们的「能力清单」，不只是拿来对比后自建）"
+  - "在 main 上 grep 不到某模块，准备下『没有』结论或从零新建"
 symptoms:
   - "Agent edits the wrong configuration file multiple times without effect"
   - "Configuration changes have no observable impact despite correct syntax"
@@ -218,7 +219,41 @@ sudo grep -rln "<关键词>" /home/frappe/frappe-bench/apps/<app>/ --include="*.
 我猜的深链格式照样返回 200，用户点开才发现进不去 —— 与「吞异常」那类 bug 同性质。
 而这类约定**项目里通常已经有唯一正解**，搜一次就能省掉整轮返工。
 
+## Case 4（2026-10-27 补充）: 搜「分支 / PR」，不只是 main
+
+本仓库大量成果**不在 main**。2026-10-27 评估 frePPLe 时，用户问“statsforecast 是不是已经装过”，
+如果只在 main 上 grep，会得到“没有”的错误结论；实际：
+
+- `statsforecast==2.1.1` 在本地分支 `keyapi/forecast-refresh-oct27` 的 `pyproject.toml` / `uv.lock`，
+  已有实际预测产物和 45 个测试；
+- `supply_netting/` 在本地分支 `keyapi/supply-integrate-oct27`，35 个测试；
+- 库存政策 / 交期配置在 `docs/supply-chain-integration-handoff`（PR #300）；
+- W1 / supply facts 在 PR #312 / #318。
+
+**做法**：判断“有没有”之前，按这个顺序查：
+
+```bash
+git branch -a
+git log --all --oneline --grep="<关键词>"
+git branch -a --contains <commit>
+gh pr list --state all --limit 50
+git ls-tree -r --name-only <branch> -- <path>
+```
+
+**判据**：`main` 没有 ≠ 项目没有；本地未 push 的分支、open/closed-unmerged PR 都算“已有资产”。
+先读资产审计/交接文档，再决定“复用 / 接线 / 重造”。
+
+## Why This Matters（Case 4 补充）
+
+这次“以为没有”的代价不是多写几行，而是**差一点建议从零再建一套预测/库存**：
+已有 statsforecast 预测、库存政策评估器、交期配置、供应净额引擎，只是分散在未合并分支。
+正确动作是**合并/接线**，不是重造。资产审计见
+[2026-10-27-existing-assets-forecast-inventory.md](../../research/supply-chain/2026-10-20/claude/control/reviews/2026-10-27-existing-assets-forecast-inventory.md)。
+
 ## Related
+
+- [supply-sku-segmentation-and-stockout-evidence.md](supply-sku-segmentation-and-stockout-evidence.md) — 供应分型/断货证据；先排费用/组件，PJ 检查点不是每周
+- [../tooling-decisions/frepple-evaluation-and-borrow-logic.md](../tooling-decisions/frepple-evaluation-and-borrow-logic.md) — frePPLe 评估：借逻辑不部署
 
 - [mcp-to-chatgpt-bringup-lessons.md](mcp-to-chatgpt-bringup-lessons.md) — ChatGPT 连接器接入 FAC 的实测记录（同批 NAS MCP 工作）
 - [docs/fac-mcp-setup.md](../../../docs/fac-mcp-setup.md) — FAC MCP 配置文档，已记录 3P 模式与普通模式的配置文件路径差异

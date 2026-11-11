@@ -57,6 +57,13 @@ tags: [lessons, pitfalls, operations, authentication]
 
 直连或特殊路由可能改变全网行为。先测证据、确认影响范围、取得授权，再写入最小规则，并保留回滚方式。
 
+操作要点：
+
+- 先看 OpenClash 日志的 `match ... using ...` 行，确认目标实际走了哪条规则/节点；不要只看端口是否 OPEN（tproxy 本地握手会假阳性）。
+- 单个主机/域名用 `IP-CIDR /32` 或 `DOMAIN-SUFFIX` 直连；不要切全局模式。
+- 改自定义规则文件前备份，重启 OpenClash 后复查日志出现 `using DIRECT`，并回归普通代理出口。
+- 多级 NAT 下规则是目标级、对全办公室生效；无法按单台客户端隔离。
+
 ## Lesson 13: 专用模型必须匹配协议端点
 
 模型出现在目录中不代表适用于聊天请求。调用前确认模型支持的 API 端点和客户端协议。

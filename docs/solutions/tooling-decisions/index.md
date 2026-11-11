@@ -11,6 +11,7 @@ timestamp: 2026-08-31
 | 标题 | 文件 |
 |------|------|
 | 分公司发货 vs FBA 成本对比口径（共同成本 + 差异块；半成品/绍兴二次不重复加） | [tongtu-branch-vs-fba-cost-comparison.md](tongtu-branch-vs-fba-cost-comparison.md) |
+| frePPLe 评估 — 社区 MIT、企业闭源；借求解逻辑，不部署 | [frepple-evaluation-and-borrow-logic.md](frepple-evaluation-and-borrow-logic.md) |
 | Tailscale 2026 新能力盘点与对本仓库的适用性（Tailcat / Peer Relays / Services） | [tailscale-2026-capabilities.md](tailscale-2026-capabilities.md) |
 | Tailscale 慢到不可用：先查直连（UDP 41641 入站），别急着换方案 | [tailscale-relay-vs-public-https-china.md](tailscale-relay-vs-public-https-china.md) |
 | 中文意图路由（intent_router）—— TypeSafe Jev + 置信度闸门 | [typesafe-jev-intent-router.md](typesafe-jev-intent-router.md) |
@@ -23,3 +24,4 @@ timestamp: 2026-08-31
 | 把「改同事的 Colab notebook」做成独立工具箱 colab_kit（而不是塞进 google_drive_permissions） | [colab-kit-notebook-edit-toolbox.md](colab-kit-notebook-edit-toolbox.md) |
 | Excel 交付物金额核对 —— 公式单元格无缓存值 + LibreOffice 重算 | [excel-formula-cells-and-recalc-verification.md](excel-formula-cells-and-recalc-verification.md) |
 | 赛狐自动拉取 Amazon 账期（结算中心V2 + 紫鸟插件列式报表）与两报表口径取舍 | [amazon-settlement-autofetch-sellfox.md](amazon-settlement-autofetch-sellfox.md) |
+| 钉钉群文件与聊天归档 — 用 DWS 个人身份，不用群机器人 | [dingtalk-group-harvest-dws-user-identity.md](dingtalk-group-harvest-dws-user-identity.md) |
