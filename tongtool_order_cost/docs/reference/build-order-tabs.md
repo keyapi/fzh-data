@@ -38,6 +38,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 | 输入 | 默认位置 | 说明 |
 |---|---|---|
 | 非 FBA 原始订单 | `out/snapshots/<月>/raw_<月>_filtered.csv`（无则 `out/raw_<月>.csv`） | 已删特殊订单（4.1.0.1） |
+| 特殊订单删除清单 | `out/special_orders_<月>.csv` | `fetch_special_orders.py` 从 `处理特殊订单` ws 导出；build **自动应用**（见下） |
 | EN 物料/别名 | `out/item_refcode.csv` | `name/customer_code/item_group/variant_of` |
 | EN 订单明细 | `out/en_items_all_089.csv` | 行级 `erp_item_code` / `shipping_method` |
 | 作废原单标记 | `out/snapshots/<月>/order_flags.csv` | 拆单原单（invalid=1） |
@@ -56,7 +57,13 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 
 1. **行集合**：`split_merge` 成熟合并明细 = 合并组 1 行 + 透传行。
    202608：raw 10,912 → 删特殊订单 10,910 → 吸收 91 → **10,819**。
-   202609：6,268 → 6,267 → 吸收 46 → **6,221**。
+   202609：6,268 → 删特殊订单 6,265 → 吸收 46 → **6,219**。
+   > **特殊订单自动处理（2026-11-11）**：`build-order-tabs` 默认读
+   > `out/special_orders_<月>.csv`（`fetch_special_orders.py` 从 ws `处理特殊订单` 导出），
+   > 按 `通途订单号` 自动从 raw 删除并写回 `raw_<月>_filtered.csv`；
+   > manifest 记录 `stats.special_orders`（清单路径、条目数、删除行数/单数、命中订单号）。
+   > 清单缺失时默认告警（断言 `特殊订单清单已应用=warn`），正式月跑加
+   > `--require-special-orders` 直接失败，避免静默使用未过滤 raw。
 2. **合并组**：`发货数量 = pieces`（成品件数），`售价 = 组内全部组件行售价之和`，
    `售价*汇率 = 组售价 × 财务汇率`，`运费 = 组内「物流商运费」之和`。
    **不再复刻**旧 Colab 的“组件行 + 合并展示行”双计，也不再删除通用填充物行。
@@ -132,6 +139,9 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 - 202609 运费 +304,541.93 是**数据补齐**（旧表 1,344 行有真实尾程，新快照 3,969 行），
   不是算法差异。**2026-11-10 已按更新后的快照尾程全量替换 202609 GS。**
 - 行数减少 = 合并组 1 行替代旧表的组件行（202608 83 组、202609 42 组）。
+- **2026-11-11**：`处理特殊订单` 新增 QDY 2 单（`DY-LAPW-25909` 客户退回已退款、
+  `DY-LAPW-25883` 丢件已理赔），build 自动应用清单后 202609 self **6,219** / merged **7,488**，
+  GS 两个写回 ws 已同步替换（readback 0）；FBA 无变化。
 
 ## 已知缺口 / 后续
 

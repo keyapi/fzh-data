@@ -22,7 +22,7 @@ tags: [colab, parity, build-order-tabs, cost-engine]
 | 1–2 | 品类使用面料、材料价格/损耗、工时、皮壳入库等 gsheet 中间表 | **可不用**。本地用 EN BOM Cost List + `item_group_branch.tsv` + `wh_map.tsv`，不再做「品类-尺寸-面料编码」解析；1–2 的历史表不再依赖 |
 | 3 | 头程（GS + EN 头程合并） | **已替代**：本地用 BOM 头程列 + 仓库分类（USNJ/USTX/PL/FBA）；无需 Colab 3.x |
 | 4.1.0 | 读非 FBA 订单、汇率（和财务部共享/汇率）、仓库成本来源 | **部分**：订单/仓库已用 raw + wh_map；**汇率新增本地导出脚本** `scripts/fetch_fx_rates.py`（GS 汇率表按月列）；raw 的 `售价(人民币)/售价` 在 GBP 上与汇率表不一致，不能替代汇率表 |
-| 4.1.0.1 | 删除特殊订单（`处理特殊订单` ws，`处理方式=删除`） | **已补**：`scripts/fetch_special_orders.py` 导出删除清单并可过滤 raw；202608 删除 55 单（raw 10912→10910）、202609 删除 56 单（raw 6268→6267，本月命中 1 单）。写回表核过 0 命中 |
+| 4.1.0.1 | 删除特殊订单（`处理特殊订单` ws，`处理方式=删除`） | **已自动化（2026-11-11）**：`fetch_special_orders.py` 导出 `out/special_orders_<月>.csv`；`build-order-tabs` 默认自动应用该清单并写回 filtered raw，manifest 记录删除行/单数与命中订单号；`--require-special-orders` 缺失即失败。202608 删除 55 单（raw 10912→10910）；202609 截至 2026-11-11 共 58 条清单、本月命中 3 单（raw 6268→6265 → self 6,219） |
 | 4.1.1 | 美国邮编分区、007/008 区 153+ 纸箱 $2.5 | **不移植**（用户确认后来无实际用途；只影响尾程/分区，不影响四列成本）。如未来要用，按 GS `美国UPS邮编分区` + zip 前 3 位实现 |
 | 4.1.2 | 美国州名规范化/缩写 | **不移植**（同上；不影响四列成本） |
 | 4.2 / 4.7.2 | 从产品名称解析品类/面料/尺寸/有无扣 | **替代实现**：本地用 EN 行级 `erp_item_code` + `customer_items.ref_code` + 基号/产品族兜底，不解析产品名；EN 解析不出则阻断，不按名称猜。暂不做名称解析兜底 |
@@ -96,7 +96,7 @@ tags: [colab, parity, build-order-tabs, cost-engine]
 ## 3. 已落地的前置脚本
 
 - `scripts/fetch_fx_rates.py`：从 `和财务部共享/汇率` 取指定月列 → `fx_<月>.csv`
-- `scripts/fetch_special_orders.py`：导出 `处理特殊订单` 删除清单，并可过滤 raw
+- `scripts/fetch_special_orders.py`：导出 `处理特殊订单` 删除清单；`build-order-tabs` 默认自动应用（`--require-special-orders` 缺失即失败）
 - `scripts/check_warehouse_map.py`：raw 发货仓库 vs `wh_map.tsv`；202608/202609 均 0 未映射
 
 ## 4. 待办

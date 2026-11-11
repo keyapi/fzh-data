@@ -94,6 +94,29 @@ def _read_csv(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, dtype=str, low_memory=False, keep_default_na=False)
 
 
+SPECIAL_ORDER_COL = "通途订单号"
+
+
+def load_special_order_ids(path: str | Path) -> set[str]:
+    """读 `处理特殊订单` 导出清单（fetch_special_orders.py 产出），返回要删除的订单号。"""
+    p = Path(path)
+    df = _read_csv(p)
+    if SPECIAL_ORDER_COL not in df.columns:
+        raise ValueError(f"特殊订单清单缺列 {SPECIAL_ORDER_COL}: {p}")
+    return {oid for oid in (_text(v) for v in df[SPECIAL_ORDER_COL]) if oid}
+
+
+def filter_special_orders(
+    raw: pd.DataFrame, ids: set[str]
+) -> tuple[pd.DataFrame, list[str], int]:
+    """按删除清单过滤 raw；返回 (过滤后 df, 命中的订单号, 删除行数)。"""
+    if not ids or "订单号" not in raw.columns:
+        return raw, [], 0
+    hit = raw["订单号"].map(_text).isin(ids)
+    removed = sorted(set(raw.loc[hit, "订单号"].map(_text)))
+    return raw.loc[~hit].copy(), removed, int(hit.sum())
+
+
 def _load_fx(path: Path) -> dict[str, float]:
     if not path.exists():
         raise FileNotFoundError(f"汇率表不存在: {path}")
@@ -895,6 +918,8 @@ def build_order_tabs(
     attr_master_tsv: str | Path | None = None,
     old_writeback: str | Path | None = None,
     fba_shadow_csv: str | Path | None = None,
+    special_orders_csv: str | Path | None = None,
+    require_special_orders: bool = False,
 ) -> BuildResult:
     root = Path(root)
     out = root / "out"
@@ -916,6 +941,32 @@ def build_order_tabs(
     )
     if not raw_path.exists():
         raise FileNotFoundError(raw_path)
+
+    # 4.1.0.1 特殊订单：默认读 out/special_orders_<月>.csv（fetch_special_orders.py 产出），
+    # 命中即从 raw 删除并落盘 filtered 文件；清单缺失时默认告警，--require 则失败。
+    special_path = (Path(special_orders_csv) if special_orders_csv
+                    else out / f"special_orders_{month}.csv")
+    if special_orders_csv and not special_path.exists():
+        raise FileNotFoundError(f"指定的特殊订单清单不存在: {special_path}")
+    special_stats: dict = {"file": None, "listed": 0, "removed_rows": 0, "removed_orders": 0}
+    if special_path.exists():
+        ids = load_special_order_ids(special_path)
+        raw_all = _read_csv(raw_path)
+        filtered, removed_orders, removed_rows = filter_special_orders(raw_all, ids)
+        if removed_rows:
+            filtered_path = out / "snapshots" / month / f"raw_{month}_filtered.csv"
+            filtered_path.parent.mkdir(parents=True, exist_ok=True)
+            filtered.to_csv(filtered_path, index=False, encoding="utf-8-sig")
+            raw_path = filtered_path
+        special_stats = {
+            "file": str(special_path), "listed": len(ids),
+            "removed_rows": removed_rows, "removed_orders": len(removed_orders),
+            "orders": removed_orders,
+        }
+    elif require_special_orders:
+        raise FileNotFoundError(
+            f"缺少特殊订单清单 {special_path}；先运行 "
+            f"scripts/fetch_special_orders.py --book 通途订单{month}")
     ref_map = _pick(ref_map_csv, out / "item_refcode.csv")
     en_items = _pick(en_items_csv, out / "en_items_all_089.csv",
                      out / "snapshots" / month / "en_items_all_089.csv")
@@ -1102,6 +1153,14 @@ def build_order_tabs(
     add("成本恒等（1件=皮壳+绍兴二次+二次）", not self_checks,
         f"{len(self_rows)} 行；违例 {len(self_checks)}")
     assertions.extend(_cost_gates(self_stats, fba_stats))
+    assertions.append({
+        "name": "特殊订单清单已应用",
+        "status": "pass" if special_stats["file"] else "warn",
+        "detail": (f"{special_stats['file']}；删除 {special_stats['removed_rows']} 行 / "
+                   f"{special_stats['removed_orders']} 单"
+                   if special_stats["file"] else
+                   f"未找到 out/special_orders_{month}.csv，按原始 raw 构建"),
+    })
     add("FBA 行数=Σ订单数量", len(fba_rows) == int(
         pd.to_numeric(gs["订单数量"], errors="coerce").fillna(0).sum()),
         f"FBA {len(fba_rows)} / Σ订单数量 "
@@ -1113,6 +1172,7 @@ def build_order_tabs(
     add("FBA 成本恒等", not fba_checks, f"违例 {len(fba_checks)}")
 
     stats = {"self": self_stats, "fba": fba_stats,
+             "special_orders": special_stats,
              "inputs": {k: str(v) for k, v in {
                  "raw": raw_path, "ref_map": ref_map, "en_items": en_items,
                  "flags": flags, "branch_map": branch, "bom": bom,

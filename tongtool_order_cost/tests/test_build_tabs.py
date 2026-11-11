@@ -21,6 +21,8 @@ from tongtool_order_cost.tongtu_cost_engine.domain.build_tabs import (  # noqa: 
     _source_indices,
     _uuid_for,
     _warehouse_source,
+    filter_special_orders,
+    load_special_order_ids,
 )
 from tongtool_order_cost.tongtu_cost_engine.domain.fba_shadow import (  # noqa: E402
     fba_cache_key,
@@ -261,3 +263,33 @@ def test_self_to_merged_blanks_non_contract_columns() -> None:
     assert out["售价*汇率"] == "88"
     assert out["图片"] == ""
     assert out["运营部当月是否新品"] == ""
+
+
+def test_filter_special_orders_removes_and_reports() -> None:
+    raw = pd.DataFrame({"订单号": ["A", "B", "C", "B_1"], "售价": ["1", "2", "3", "4"]})
+    out, removed, n = filter_special_orders(raw, {"B", "Z"})
+    assert list(out["订单号"]) == ["A", "C", "B_1"]
+    assert removed == ["B"]
+    assert n == 1
+    assert len(raw) == 4  # 原表不被修改
+
+
+def test_filter_special_orders_noop_without_ids() -> None:
+    raw = pd.DataFrame({"订单号": ["A"]})
+    out, removed, n = filter_special_orders(raw, set())
+    assert out is raw and removed == [] and n == 0
+
+
+def test_load_special_order_ids(tmp_path: Path) -> None:
+    p = tmp_path / "special.csv"
+    pd.DataFrame({"通途订单号": ["A", "", "B", " A "]}).to_csv(p, index=False)
+    assert load_special_order_ids(p) == {"A", "B"}
+
+    bad = tmp_path / "bad.csv"
+    pd.DataFrame({"订单号": ["A"]}).to_csv(bad, index=False)
+    try:
+        load_special_order_ids(bad)
+    except ValueError as exc:
+        assert "通途订单号" in str(exc)
+    else:
+        raise AssertionError("缺列应报错")

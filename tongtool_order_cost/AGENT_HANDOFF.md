@@ -49,7 +49,7 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `tongtu_cost_engine/domain/tab_contracts.py` | 三张表的稳定列合同（166/95/78）与产品属性列 |
 | `scripts/run_audit_170.py` | 1.7.0 特殊规则审计 CLI |
 | `scripts/fetch_fx_rates.py` | GS `和财务部共享/汇率` 按月导出 |
-| `scripts/fetch_special_orders.py` | 特殊订单删除清单 + 过滤 raw |
+| `scripts/fetch_special_orders.py` | 从 ws `处理特殊订单` 导出删除清单；`build-order-tabs` 默认自动应用（`--require-special-orders` 缺失即失败） |
 | `scripts/check_warehouse_map.py` | raw 发货仓库 vs `wh_map.tsv` 覆盖检查 |
 | `scripts/fetch_warehouse_cost_sources.py` | 仓库 → 成本来源编码映射导出（GS） |
 | `scripts/build_product_attribute_master.py` | 从历史 self 表抽取产品属性主数据 TSV |
@@ -190,8 +190,12 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
 - 输出 `out/build_tabs/<月>/`：`self_build_<月>.csv`（166）、`fba_build_<月>.csv`（95）、
   `merged_build_<月>.csv`（78）、`parity_<月>.md`、`manifest.json`、`recon_95_78*.csv`、
   `self_cost_audit.csv`、`fba_cost_audit.csv`。
-- **行集合**：成熟合并组 1 行 + 透传行（202608 10,819；202609 6,221）。
+- **行集合**：成熟合并组 1 行 + 透传行（202608 10,819；202609 6,219，2026-11-11 新增 2 单 QDY 删除）。
   旧 Colab 的「组件行 + 合并展示行」双计 **不复刻**。
+- **特殊订单自动处理**：build 默认读 `out/special_orders_<月>.csv`（`fetch_special_orders.py`
+  从 ws `处理特殊订单` 导出）并自动过滤 raw、写回 `raw_<月>_filtered.csv`；
+  `manifest.stats.special_orders` 记录删除行/单数与命中订单号。正式月跑加
+  `--require-special-orders`，清单缺失直接失败（否则断言为 `warn` 并按原始 raw 构建）。
 - **合并组金额**：发货数量=pieces；售价=组内组件售价之和；售价*汇率=组售价×财务汇率；
   运费=组内 `物流商运费` 之和。**不要**再用 `包裹总运费`/`通途运费` 当尾程。
 - **FBA 95**：按 GS `订单数量` 展开 UUID 行；首行承载量/额，占位行只保留单位成本；

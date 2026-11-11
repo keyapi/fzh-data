@@ -6,6 +6,7 @@ title: tongtool_order_cost 变更日志
 # 变更日志
 
 ## 2026-11-11
+- **自动化** `build-order-tabs` 默认应用 `out/special_orders_<月>.csv`（Colab 4.1.0.1）：命中即删 raw 并写回 `raw_<月>_filtered.csv`；manifest 记录删除行/单数与命中订单号；`--require-special-orders` 缺失即失败。新增 3 个单测。202609 QDY 2 单（`DY-LAPW-25909`/`25883`）删除后 self 6,219 / merged 7,488，GS 两表已同步（readback 0）。
 - **特殊规则换表**：1.7.0 改读 ws `黄-特殊规则-订单改销售额成本`；旧 `Jeck特殊规则-订单改销售额成本` 只读留存。13 行混合规则按老板口径**参考值优先**（清系数），引擎打印提醒并新增 `meta["n_mixed_ref_priority"]`。
 - **FBA 列对齐**：28 条 FBA 规则的 `二次加工`/`绍兴二次` 参考值对调（二次=0、绍兴承接），数值和总净额不变；Colab cell 22 同步参考值优先。
 - **成本口径**：记录旧 9/3 BOM 与最新 BOM 的差异，阅读枕第 776–777 行由扣减 −77.8/件变为 +20.2/件；老板 2026-11-10 确认按现有参考值执行。详见 `docs/solutions/workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md`。

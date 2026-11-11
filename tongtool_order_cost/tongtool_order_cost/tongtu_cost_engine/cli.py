@@ -143,6 +143,10 @@ def main(argv=None) -> int:
     bt.add_argument("--attr-master", default=None)
     bt.add_argument("--old-writeback", default=None)
     bt.add_argument("--fba-shadow", default=None)
+    bt.add_argument("--special-orders", default=None,
+                    help="特殊订单删除清单 CSV（缺省取 out/special_orders_<月>.csv）")
+    bt.add_argument("--require-special-orders", action="store_true",
+                    help="清单缺失时直接失败（月度正式运行建议开启）")
 
     args = ap.parse_args(argv)
 
@@ -250,6 +254,8 @@ def main(argv=None) -> int:
             wh_map_tsv=args.wh_map, fx_csv=args.fx, wh_sources_tsv=args.wh_sources,
             attr_master_tsv=args.attr_master, old_writeback=args.old_writeback,
             fba_shadow_csv=args.fba_shadow,
+            special_orders_csv=args.special_orders,
+            require_special_orders=args.require_special_orders,
         )
         print(json.dumps({
             "ok": res.ok,
@@ -259,7 +265,8 @@ def main(argv=None) -> int:
             "stats": {"self": {k: v for k, v in res.stats["stats"]["self"].items()
                                if k != "attr_misses"},
                       "fba": {k: v for k, v in res.stats["stats"]["fba"].items()
-                              if k != "missing"}},
+                              if k != "missing"},
+                      "special_orders": res.stats["stats"].get("special_orders")},
             "out_dir": str(Path(args.out_dir) if args.out_dir else
                            Path(args.root) / "out" / "build_tabs" / args.month),
         }, ensure_ascii=False,
