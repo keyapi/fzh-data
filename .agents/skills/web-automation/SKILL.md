@@ -82,3 +82,4 @@ uv run python web_automation/scripts/doctor.py
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/architecture-patterns/web-automation-capability-pod-monorepo.md` —— web-automation-capability-pod-monorepo.md
+- `docs/solutions/workflow-issues/dingtalk-attendance-export-runbook.md` —— 钉钉考勤表导出操作手册（入口/权限/考勤组范围/单月限制/下载与核对）

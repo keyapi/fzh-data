@@ -10,6 +10,9 @@ tags: [solutions, log]
 ## 2026-11-11（Claude Desktop MCP / npx @latest 装包失败）
 
 - **新增**: `developer-experience/claude-desktop-mcp-server-disconnected-npx.md` —— Claude Desktop 弹 `MCP playwright: Server disconnected`，根因是 `@latest` 在 Windows 更新重启后的首次启动自动升级 0.0.85，解包两个 `.d.ts` 报 `ENOENT`、入口 `cli.js` 缺失，node 立即退出；约 2 分钟后新会话的 npx 把目录补装完整。可排除磁盘满（C 剩 12G）与「重启打断安装」（安装发生在重启之后）。判读口诀：先读 `mcp-server-<name>.log`，找 `will be installed` + `TAR_ENTRY_ERROR` + `MODULE_NOT_FOUND`；npm 对解包错误只 warn 不重试，Claude 也不会在同一会话自动重拉。本次决定保留 `@latest`、不加自愈包装脚本。`docs/mcp-setup.md` 排错表同步加了对应行。
+## 2026-11-11（钉钉考勤导出操作手册）
+
+- **新增**: `workflow-issues/dingtalk-attendance-export-runbook.md` —— 只记录操作路径与坑：`oa.dingtalk.com → 工作台 → 考勤打卡 → 考勤统计 → 报表管理`；权限决定了能看到哪些报表；人员范围按**考勤组**全选并用组人数对账；单次最多一个月；导出为快照；MCP 下载落 `.playwright-mcp/`。不含人名、人数与考勤数据。
 
 ## 2026-11-11（通途特殊规则换表 / 参考值优先）
 
