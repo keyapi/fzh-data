@@ -584,3 +584,14 @@ GLS 波兰自发货单号批量跟踪走 gls-group.com **公开无鉴权 REST**�
 
 ### 处理时间（尾程迟发窗口）
 建标（面单创建 / GLS 数据录入）到站点收件（FedEx/UPS 首扫 / 交接 GLS）之间、允许占用的**营业日**窗口；超出则分类为迟发。UPS / FedEx / GLS 共用同一阈值；假日表仍按承运商（美国联邦 vs 波兰法定）。不要与承运延误（收件之后的在途慢）混为一谈。
+
+## 钉钉群采集 (dingtalk_group_harvest)
+
+### DWS（钉钉 Workspace CLI）
+钉钉官方开源的跨平台 CLI（Apache-2.0），用**用户 OAuth 身份**访问群消息、文件、钉盘、在线文档、知识库、日历、审批等。它不是企业内部应用：权限跟着登录用户的群成员身份走，能读历史消息与消息附件；群机器人只能发不能读。本机入口 `C:\Users\zhang\.local\bin\dws.exe`。
+
+### 采集水位 (harvest watermark)
+每个群保存 `last_message_time` + `last_message_id`，下次从上次时间前 1 秒开始重叠拉取，按 `messageId` 去重。**只有 DWS 返回 `complete=true`、`hasMore=false`、`failures=[]` 时才推进**；否则下次重拉，防止把半页数据当成完整历史。
+
+### 完整性账本 (completeness ledger)
+DWS `+chat-messages` / `+chat-search` 返回的 `complete` / `hasMore` / `failures` / `nextPage` 字段集合。它是采集能否推进水位的硬门槛，不是提示信息；缺页时 DWS 会明确报 `chat_list_incomplete`，不会静默返回半截数据。
