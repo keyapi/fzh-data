@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-11（钉钉考勤导出操作手册）
+
+- **新增**: `workflow-issues/dingtalk-attendance-export-runbook.md` —— 只记录操作路径与坑：`oa.dingtalk.com → 工作台 → 考勤打卡 → 考勤统计 → 报表管理`；权限决定了能看到哪些报表；人员范围按**考勤组**全选并用组人数对账；单次最多一个月；导出为快照；MCP 下载落 `.playwright-mcp/`。不含人名、人数与考勤数据。
+
 ## 2026-11-11（通途特殊规则换表 / 参考值优先）
 
 - **新增**: `workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则表换维护人/换 ws 后：同一行系数与参考值同时存在时按老板口径**参考值优先**（引擎打印提醒并计 `n_mixed_ref_priority`）；FBA 28 条规则的 `二次加工`/`绍兴二次` 按新成本口径对调（二次=0、绍兴承接），数值和总净额不变；旧 9/3 BOM 制定的参考值遇到最新 BOM 会把扣减翻成增加（阅读枕 776–777 由 −77.8 变 +20.2 元/件），必须先逐条对拍再决定是否重填；老板 2026-11-10 确认按现有参考值执行。
