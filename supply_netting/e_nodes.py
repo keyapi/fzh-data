@@ -26,6 +26,8 @@ NODE_COLUMNS = [
     "source_row", "source_record_id", "source_as_of", "as_of", "voucher_no",
     "voucher_line_id", "voucher_line_status", "overlap_group", "additive_supply",
     "counted_qty", "counting_reason", "c_bucket", "physical_form", "source_timezone",
+    "linkage_status", "en_item_code", "event_at", "en_disabled", "legacy_c_uom",
+    "eta_evidence", "against_so", "so_line_id", "document_status",
 ]
 STOCK_FIELDS = {"available": "available", "intransit": "intransit_observed",
                 "waiting_shipment": "waiting_observed", "defects": "defects"}
@@ -108,8 +110,9 @@ def stock_nodes(stock, facts, as_of, source):
                 node_id=_id(source, r["stock_key"], field), sku=sku,
                 product_id=_value(c.get("product_id")), warehouse=wh,
                 destination_warehouse=wh, customer=WAREHOUSE_CUSTOMER.get(wh),
-                node=node, qty=_value(r[field]), uom=_value(c.get("uom")),
-                uom_status=_value(c.get("单位状态")) or "unknown", source=source,
+                node=node, qty=_value(r[field]), uom="个",
+                uom_status="tongtool_pieces_user_confirmed", legacy_c_uom=_value(c.get("uom")), source=source,
+                en_item_code=_value(c.get("resolved_supply_item")),
                 source_row=i, source_record_id=r["stock_key"],
                 source_as_of=r["snapshot_at"], as_of=as_of,
                 counting_reason="raw_stock_not_additive_with_C" if field == "available"
@@ -158,6 +161,7 @@ def so_nodes(items, summary, as_of, source):
             promised_at=_value(r["delivery_date"]), source=source, source_row=i,
             source_record_id=f"{r['so']}:export_row:{i}", as_of=as_of,
             voucher_no=r["so"], voucher_line_status="export_row_only_not_SO_Item_name",
+            event_at=r["transaction_date"], linkage_status="export_only",
             source_timezone="unknown"))
     recon["check"] = "so_summary_vs_items"
     return pd.DataFrame(rows, columns=NODE_COLUMNS), recon
@@ -224,10 +228,12 @@ def validate_nodes(nodes):
     if nodes.node_id.duplicated().any() or nodes.node_id.isna().any():
         raise ValueError("duplicate/empty node_id")
     numbers(nodes, ["qty"], "nodes")
-    if nodes.additive_supply.any() or nodes.counted_qty.notna().any():
-        raise ValueError("unproven current inputs must not become additive supply")
-    if nodes.eta.notna().any():
-        raise ValueError("current inputs have no confirmed ETA")
+    counted = nodes.additive_supply | nodes.counted_qty.notna()
+    allowed = nodes.node.eq("available") & nodes.counting_reason.eq("unique_snapshot_same_unit")
+    if (counted & ~allowed).any():
+        raise ValueError("unproven future inputs must not become additive supply")
+    if (nodes.eta.notna() & nodes.eta_status.eq("unknown")).any():
+        raise ValueError("ETA value requires explicit confidence/basis")
 
 
 def reconcile_stock(stock, facts):

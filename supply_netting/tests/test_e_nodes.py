@@ -25,7 +25,8 @@ def test_snapshot_balances_preserved_but_no_unproven_future_addition():
     assert out.counted_qty.isna().all()
     assert not out.additive_supply.any()
     assert out.eta.isna().all()
-    assert out.uom_status.eq("unknown").all()
+    assert out.uom_status.eq("tongtool_pieces_user_confirmed").all()
+    assert out.uom.eq("个").all()
 
 
 def test_same_stock_key_conflict_fails_instead_of_summing():

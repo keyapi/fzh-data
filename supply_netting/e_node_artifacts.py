@@ -10,6 +10,9 @@ import pandas as pd
 from .e_nodes import (NODE_COLUMNS, STOCK_FIELDS, available_view, coverage_table, cutoff,
                       digest, reconcile_stock, so_nodes, stock_nodes, validate_nodes)
 from .e_node_history import load_history
+from .e_node_views import (enrich_identity, lifecycle_table, mapping_table, pack_metadata,
+                           quantity_views)
+from .e_node_timing import eta_scenarios, timing_samples
 
 
 def _records(frame):
@@ -36,6 +39,26 @@ def _markdown(report):
         lines.append(f"| {r['customer'] or '未归属'} | {r['node']} | "
                      f"{r['uom'] or 'unknown'}/{r['uom_status']} | {r['rows']} | "
                      f"{r['qty'] if r['qty'] is not None else 'unknown'} | {r['unknown_counted_rows']} |")
+    lines += ["", "## SKU×客户×节点双总量（观测 vs 已证）", "",
+              "| 客户 | 产品行 | observed_total | confirmed_total |", "|---|---:|---:|---:|"]
+    for r in report.get("product_totals_by_customer", []):
+        lines.append(f"| {r['customer']} | {r['rows']} | {r['observed_total']} | {r['confirmed_total']} |")
+    lines += ["", "观测总量可能重叠、不可直接相加；已证量只覆盖唯一快照/无映射歧义的部分。",
+              "", "## 客户级生命周期", "",
+              "| 状态 | 行数 |", "|---|---:|"]
+    for r in report.get("lifecycle_by_status", []):
+        lines.append(f"| {r['lifecycle_status']} | {r['rows']} |")
+    lines += ["", f"待确认 lifecycle：{report.get('lifecycle_pending_rows')} 行；未知状态不自动补。",
+              "", "| SKU | 客户 | 推断 | 证据 |", "|---|---|---|---|"]
+    for r in report.get("lifecycle_examples", [])[:10]:
+        lines.append(f"| {r['sku']} | {r['customer']} | {r['inferred_status']} | {str(r['evidence'])[:120]} |")
+    lines += ["", "## 时效（ETA）", "",
+              f"- ETA 行 {report.get('eta_rows')}；scenario {report.get('eta_scenario_rows')}、unknown {report.get('eta_unknown_rows')}、confirmed {report.get('eta_confirmed_rows')}。",
+              f"- 生产样本：{report.get('timing_audit', {}).get('production_n')}；头程样本：{report.get('timing_audit', {}).get('haul_n')}。",
+              f"- 限制：{report.get('timing_audit', {}).get('limitations')}。",
+              "", "| 客户 | 模式 | 状态 | 行数 |", "|---|---|---|---:|"]
+    for r in report.get("eta_by_customer_mode", []):
+        lines.append(f"| {r['customer']} | {r['mode']} | {r['eta_status']} | {r['rows']} |")
     lines += ["", "## 源输入去向", "", "| 输入 | 输入行 | 去向 |", "|---|---:|---|"]
     for r in report["input_disposition"]:
         lines.append(f"| {r['source']} | {r['rows']} | {r['disposition']} |")
@@ -115,6 +138,12 @@ def run():
     orders, so_recon = so_nodes(items, summary, args.as_of, f"SO:{source_hashes['so_items']}")
     nodes = pd.concat([stock_rows, orders], ignore_index=True)
     validate_nodes(nodes)
+    mapping_raw = pd.read_csv(root / "sku_map.tsv", sep="	", dtype=str).iloc[:, :2]
+    mapping_raw.columns = ["en_sku", "tongtool_sku"]
+    mapping_raw["customer_raw"] = "ALL"
+    mapping = mapping_table(mapping_raw)
+    nodes = enrich_identity(nodes, mapping)
+    nodes = pack_metadata(nodes)
     view = available_view(c, args.as_of)
     # 当前 C 是同一 EN 快照的变换，不凭文件名猜日期。
     dates = pd.to_datetime(facts.snapshot_date, errors="raise")
@@ -144,7 +173,9 @@ def run():
     checks = [
         dict(name="EN 4 fields each retained", passed=len(stock_rows) == 4*len(stock), actual=len(stock_rows)),
         dict(name="node id duplicates", passed=not nodes.node_id.duplicated().any(), actual=int(nodes.node_id.duplicated().sum())),
-        dict(name="unproven future counted rows", passed=nodes.counted_qty.isna().all(), actual=int(nodes.counted_qty.notna().sum())),
+        dict(name="counted qty only on confirmed available", passed=bool(nodes.loc[~nodes.node.eq("available"), "counted_qty"].isna().all()),
+             actual=int(nodes.loc[~nodes.node.eq("available"), "counted_qty"].notna().sum())),
+        dict(name="mapping does not expand source rows", passed=len(mapping) <= len(mapping_raw), actual=f"{len(mapping)}<={len(mapping_raw)}"),
         dict(name="EN/C raw differences", passed=True, actual=0),
         dict(name="C Poland display baseline delta", passed=abs(c_poland["delta_to_brief"]) < 1e-9,
              actual=c_poland["delta_to_brief"]),
@@ -170,13 +201,40 @@ def run():
                disposition=f"retained {r['retained_rows']}; future {r['future_rows']}; unknown date {r['unknown_date_rows']}")
           for r in hist_audits],
     ]
-    report = dict(schema_version="e-nodes/v1", as_of=args.as_of, partial=True, auto_order=False,
+    product_node_view, product_totals = quantity_views(nodes)
+    lifecycle = lifecycle_table(nodes, pd.DataFrame(), pd.DataFrame(), args.as_of)
+    dn_src = pd.read_csv(analysis / "leadtime/dn_leadtime_rows.csv")
+    sh_src = pd.read_csv(analysis / "shipment_native_20261109.csv")
+    sh_src["dest"] = sh_src["custom_zmt_dest"]
+    sh_src["transport"] = sh_src["custom_zmt_transport"]
+    sh_src["dlvr"] = pd.to_datetime(sh_src["custom_zmt_ata"], errors="coerce")
+    sh_src["full_lt"] = (sh_src["dlvr"] - pd.to_datetime(sh_src["custom_zmt_atd"], errors="coerce")).dt.days
+    production, haul, timing_audit = timing_samples(dn_src, sh_src, args.as_of)
+    eta = eta_scenarios(nodes, production, haul, args.as_of)
+    checks.append(dict(name="ETA confirmed rows", passed=not eta.eta_status.eq("confirmed").any(), actual=int(eta.eta_status.eq("confirmed").sum())))
+    checks.append(dict(name="unknown lifecycle not replenishment-eligible",
+                       passed=not lifecycle.loc[lifecycle.lifecycle_status.eq("unknown_pending"), "replenishment_eligible"].any(),
+                       actual=int(lifecycle.loc[lifecycle.lifecycle_status.eq("unknown_pending"), "replenishment_eligible"].sum())))
+    report = dict(schema_version="e-nodes/v2", as_of=args.as_of, partial=True, auto_order=False,
                   current_node_rows=len(nodes), node_summary=_records(node_summary(nodes)),
                   stock_reconciled_rows=len(stock_recon), input_disposition=disposition,
                   poland_raw_available=float(stock.loc[stock.warehouse_name.eq("波兰-FZHPoland-covers"), "available"].sum()),
                   poland_c_buckets=_records(buckets), c_poland=c_poland, c_poland_by_uom=_records(by_uom),
                   so_item_rows=len(items), so_summary_rows=len(summary), so_qty=float(orders.qty.sum()),
-                  history_audits=hist_audits, checks=checks)
+                  history_audits=hist_audits, checks=checks,
+                  product_node_view_rows=len(product_node_view), product_total_rows=len(product_totals),
+                  product_totals_by_customer=_records(product_totals.groupby("customer", dropna=False).agg(
+                      rows=("product_key", "size"), observed_total=("observed_total", "sum"),
+                      confirmed_total=("confirmed_total", "sum")).reset_index()),
+                  lifecycle_examples=_records(lifecycle[lifecycle.inferred_status.ne("unknown_pending")].head(20)),
+                  eta_by_customer_mode=_records(eta.groupby(["customer", "mode", "eta_status"], dropna=False).size().reset_index(name="rows")),
+                  lifecycle_rows=len(lifecycle),
+                  lifecycle_pending_rows=int(lifecycle.requires_confirmation.sum()),
+                  lifecycle_by_status=_records(lifecycle.groupby("lifecycle_status").size().reset_index(name="rows")),
+                  eta_rows=len(eta), eta_confirmed_rows=int(eta.eta_status.eq("confirmed").sum()),
+                  eta_scenario_rows=int(eta.eta_status.eq("scenario").sum()),
+                  eta_unknown_rows=int(eta.eta_status.eq("unknown").sum()),
+                  timing_audit=timing_audit)
     frames = {
         f"E_nodes_{stamp}.parquet": nodes,
         f"E_available_view_{stamp}.parquet": view,
@@ -185,23 +243,34 @@ def run():
         f"E_inventory_history_{stamp}.parquet": history,
         f"E_inventory_history_summary_{stamp}.parquet": hist_summary,
         f"E_node_summary_{stamp}.parquet": node_summary(nodes),
+        f"E_sku_mapping_{stamp}.parquet": mapping,
+        f"E_product_node_view_{stamp}.parquet": product_node_view,
+        f"E_product_totals_{stamp}.parquet": product_totals,
+        f"E_lifecycle_{stamp}.parquet": lifecycle,
+        f"E_lifecycle_pending_{stamp}.parquet": lifecycle[lifecycle.requires_confirmation].copy(),
+        f"E_eta_scenario_{stamp}.parquet": eta,
     }
-    names = [*frames, f"E_nodes_{stamp}_report.json", f"E_nodes_{stamp}_报告.md", f"E_nodes_{stamp}.manifest.json"]
+    names = [*frames, f"E_timing_audit_{stamp}.json", f"E_nodes_{stamp}_report.json",
+             f"E_nodes_{stamp}_报告.md", f"E_nodes_{stamp}.manifest.json"]
     if any((output / name).resolve() in {p.resolve() for p in inputs.values()} for name in names):
         raise ValueError("output must not overwrite input")
     output.mkdir(parents=True, exist_ok=True)
     for name, frame in frames.items():
         frame.to_parquet(output / name, index=False)
+    (output / f"E_timing_audit_{stamp}.json").write_text(
+        json.dumps(timing_audit, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
     (output / f"E_nodes_{stamp}_report.json").write_text(
         json.dumps(report, ensure_ascii=False, indent=2, allow_nan=False), encoding="utf-8")
     (output / f"E_nodes_{stamp}_报告.md").write_text(_markdown(report), encoding="utf-8")
     artifacts = {name: dict(path=str(output/name), sha256=digest(output/name), rows=len(frame))
                  for name, frame in frames.items()}
-    for name in names[-3:-1]:
+    for name in [f"E_timing_audit_{stamp}.json", f"E_nodes_{stamp}_report.json", f"E_nodes_{stamp}_报告.md"]:
         artifacts[name] = dict(path=str(output/name), sha256=digest(output/name))
     code_paths = [Path(__file__), Path(__file__).with_name("e_nodes.py"),
-                  Path(__file__).with_name("e_node_history.py"), Path(__file__).with_name("facts.py")]
-    manifest = dict(schema_version="e-nodes/v1", as_of=args.as_of, partial=True, auto_order=False,
+                  Path(__file__).with_name("e_node_history.py"), Path(__file__).with_name("facts.py"),
+                  Path(__file__).with_name("e_node_views.py"), Path(__file__).with_name("e_node_timing.py"),
+                  Path(__file__).with_name("e_node_extra_sources.py")]
+    manifest = dict(schema_version="e-nodes/v2", as_of=args.as_of, partial=True, auto_order=False,
                     inputs={k: dict(path=str(p), sha256=source_hashes[k]) for k, p in inputs.items()},
                     code={str(p): digest(p) for p in code_paths}, outputs=artifacts,
                     checks=checks, c_poland=c_poland,
