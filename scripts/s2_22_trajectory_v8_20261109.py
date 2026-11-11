@@ -20,11 +20,11 @@ import pandas as pd
 
 BASE = Path("D:/Work/fzh-order-store/analysis")
 D5 = BASE / "D5v6_7-novcast/D_概率与服务_D5_v6_7_2026-11-09.xlsx"
-CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-10_v11.xlsx"
-D6 = BASE / "D6v6_20-1110/D_Top50沙盒_D6_v6_20_2026-11-10.xlsx"
-OUT = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-10_v11.xlsx"
+CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-11_v12.xlsx"
+D6 = BASE / "D6v6_21-1111/D_Top50沙盒_D6_v6_21_2026-11-11.xlsx"
+OUT = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-11_v12.xlsx"
 KEYS = ["product_id", "pool", "physical_form", "canonical_uom"]
-DECISION = pd.Timestamp("2026-11-10")
+DECISION = pd.Timestamp("2026-11-11")
 N = 1000
 SEED = 42
 H_SENS = 180

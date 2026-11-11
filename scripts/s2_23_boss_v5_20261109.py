@@ -13,9 +13,9 @@ from openpyxl.utils import get_column_letter
 BASE = Path("D:/Work/fzh-order-store/analysis")
 D5 = BASE / "D5v6_7-novcast/D_概率与服务_D5_v6_7_2026-11-09.xlsx"
 NC = BASE / "nov_nowcast_20261109.csv"
-D6 = BASE / "D6v6_20-1110/D_Top50沙盒_D6_v6_20_2026-11-10.xlsx"
-CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-10_v11.xlsx"
-TRAJ = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-10_v11.xlsx"
+D6 = BASE / "D6v6_21-1111/D_Top50沙盒_D6_v6_21_2026-11-11.xlsx"
+CNY = BASE / "S2_9-delivery-final-20261106/D_春节排期优化_2026-11-11_v12.xlsx"
+TRAJ = BASE / "S2_9-delivery-final-20261106/D_统一逐日轨迹_2026-11-11_v12.xlsx"
 V15 = BASE / "S2_9-delivery-final-20261106/D_补货交付包_2026-11-06_final_v15.xlsx"
 A = BASE / "SKU活跃宇宙_2026-10-29_FINAL.xlsx"
 W3 = BASE / "round15_60cm_dnpo_audit.csv"
@@ -25,10 +25,11 @@ CG_STOCK = BASE / "cg_stock_20261110.parquet"
 D2B = BASE / "D_删失需求估计_D2b_v2_2026-11-02.xlsx"
 ORDERS_D6 = Path("D:/Work/fzh-order-store/orders_unified_20261110.parquet")
 ORDERS_NOV = BASE / "tongtool_orders_20261101_20261109.parquet"
-SO_CSV = BASE / "so_20261110.csv"
-OUT = BASE / "D_老板版补货建议_2026-11-10_v5.3.xlsx"
+SO_CSV = BASE / "so_20261110_20261111.csv"
+SO_ITEMS = BASE / "so_items_20261110_20261111.csv"
+OUT = BASE / "D_老板版补货建议_2026-11-11_v5.4.xlsx"
 KEYS = ["product_id", "池", "形态", "UOM"]
-AS_OF = pd.Timestamp("2026-11-10")
+AS_OF = pd.Timestamp("2026-11-11")
 
 
 def sha(p) -> str:
@@ -442,9 +443,9 @@ def main() -> int:
     summary = pd.DataFrame([
         ("覆盖范围", f"三个分公司全部 {len(out)} 个需求键；不是子集。"),
         ("数据日期", "预测基准 2026-11-02（叠加 11/1–8 同店修正）；库存/CG/EN 2026-11-10；"
-                    "11/09 EN 订单同步不完整；PO 2026-11-05；动作重核 2026-11-10。"),
+                    "11/09 EN 订单同步不完整；PO 2026-11-05；动作重核 2026-11-11。"),
         ("春节方案", f"{len(cny_rows)} 键/{cny_rows['建议补多少'].sum():,.0f} 件；"
-                  f"按 A/B 原目标重新判定；首批下单已按 11-10 重排。"),
+                  f"按 A/B 原目标重新判定；首批下单已按 11-11 重排。"),
         ("春节第二批停工", f"195 键需停工前插单（142 键有正第二批）；"
                       f"{int(out['一句话建议'].eq('可以补-待确认').sum())} 个可以补 + "
                       f"{int(out['一句话建议'].eq('先换运输-原目标已过').sum())} 个改空运里 6 个，"
@@ -669,9 +670,9 @@ def main() -> int:
          "会上说明 11/09 EN 三仓 0 明细；新单按 1 表 P1；PO/60cm 未刷新"),
         ("看表顺序", "老板看 0；运营下单看 1；要拍板看 2；物流看 2b；重排晚看 2c；"
                   "工厂看 7；老板问策略看 16；新SO看17；8–13 是审计底稿", "按角色分表，不要从 8_全量底稿 直接下单"),
-        ("EN 新SO", "SO-26-00136 15:14 已下 2,320 件；36 个波兰键/1,280 件匹配，"
-                  "但到 12/15，只有部分算按时：4 键仍补 216 件、23 键转催已有 623 件",
-         "看 17_EN新SO；不要重复下已覆盖量，4+23 仍要处理"),
+        ("EN 新SO", "昨天 2 张 SO（00135/00136）+ 今天 1 张（00137），原始 3,674 件；"
+                  "49 个波兰键/2,064 件匹配；5 键仍补 409（对应 SO 220）、31 键催已有 1,070（对应 SO 1,324）",
+         "看 17_EN新SO；SO 到 12/05–12/15，只有部分按时；5+31 仍要处理"),
     ], columns=["事项", "结论", "你要做什么"])
 
     # 60cm corrected summary + detail
@@ -698,11 +699,11 @@ def main() -> int:
     ], columns=["项", "结论"])
 
     corrections = pd.DataFrame([
-        ("v2 / v3b / v4 / v5.1 / v5.2", "历史讨论版，已作废；v5.3 为含 EN 新 SO 的 11-10 版。"),
+        ("v2 / v3b / v4 / v5.1 / v5.2 / v5.3", "历史讨论版，已作废；v5.4 为含 3 张 SO 的 11-11 版。"),
         ("v5.2 数据刷新", "库存/CG/EN 11-10；C14 11-10；D6 v6.19；CNY v10；轨迹 v10；"
                         "11/09 EN 订单同步不完整，未用于 nowcast。"),
-        ("v5.3 EN 新SO", "SO-26-00136 15:14 创建，66 行/2,320 件；36 个波兰键/1,280 件匹配，"
-                        "已作为待发供给计入 D6 v6.20；CNY 量不变。"),
+        ("v5.4 三张SO", "00135（1,334）+00136（2,320）+00137（20）=3,674 件；49 个波兰键/2,064 件匹配；"
+                        "D6 v6.21；5 键仍补 409、31 键催已有 1,070。"),
         ("v5.1 修 1", "同店修正改为对 point_forecast 与 p10/p50/p90/q85/q90/q95 同乘一个因子；"
                      "复算后分位次序 0 违反。"),
         ("v5.1 修 2", f"春节第二批按停工日历重排：{int(cny['第二批需停工前插单'].sum())} 个键改为停工前做完；"
@@ -786,9 +787,9 @@ def main() -> int:
          "看 15 后由业务决定"),
     ], columns=["事项", "结论", "你要做什么"])], ignore_index=True)
     data_notes = pd.concat([data_notes, pd.DataFrame([
-        ("EN 新 SO", "SO-26-00136：2026-11-10 15:14 创建，66 行；按 product+pool 去重 54 行/2,320 件；"
-                    "36 个波兰键/1,280 件匹配 D6",
-         "见 17_EN新SO；SO 到 12/15，部分按时；4 键仍补 216、23 键转催已有 623；不要重复下已覆盖量"),
+        ("EN 新 SO", "3 张 SO：00135（1,334）、00136（2,320）、00137（20），原始 3,674 件；"
+                    "按 product+pool 去重 71 行；49 个波兰键/2,064 件匹配 D6",
+         "见 17_EN新SO；SO 到 12/05–12/15，部分按时；5 键仍补 409（SO 220）、31 键催已有 1,070（SO 1,324）"),
         ("断货/删失需求",
          f"D2b 删失键 {len(d2[d2['censor_method'].ne('none')])} 个；匹配 {len(censor_cmp)} 个；"
          f"估算新增 {censor_cmp['估算新增需求'].sum():,.0f} 件",
@@ -797,16 +798,22 @@ def main() -> int:
 
     pl_so = d6[d6["池"].eq("波兰") & (pd.to_numeric(d6["SO已下"], errors="coerce").fillna(0) > 0)].copy()
     so_summary = pd.DataFrame([
-        ("SO", "SO-26-00136", "2026-11-10 15:14 创建；客户 波兰公司；交付日 2026-12-15"),
-        ("SO 原始", "66 行；按 product+pool 去重 54 行 / 2,320 件", "客户 波兰公司；交付日 2026-12-15"),
+        ("SO", "SO-26-00135 / 00136 / 00137", "00135 11-10 09:22 交付 12-05；00136 11-10 15:14 交付 12-15；00137 11-11 08:45 交付 12-05"),
+        ("SO 原始", "3 张 SO / 88 行 / 3,674 件；按 product+pool 去重 71 行 / 3,674 件（2 键共 280 件跨 SO 重叠）", "客户 波兰公司；原始明细见 so_items_20261110_20261111.csv"),
         ("匹配 D6 波兰", f"{len(pl_so)} 键 / {pd.to_numeric(pl_so['SO已下'], errors='coerce').fillna(0).sum():,.0f} 件",
-         "按 product+pool 去重后；这些量已计入 v6.20"),
+         "按 product+pool 去重后；这些量已计入 v6.21"),
         ("已计入 D6", f"{len(pl_so)} 键 / {pd.to_numeric(pl_so['SO已下'], errors='coerce').fillna(0).sum():,.0f} 件",
-         "v6.20 把 SO 作为待发供给；未覆盖部分仍需处理"),
-        ("净需求=0", int(pl_so["建议动作"].eq("不补").sum()), "8 个不补；另有 1 个观察"),
-        ("仍需处理", f"{int(pl_so['建议动作'].eq('补').sum())} 键/216 件仍补 + "
-                  f"{int(pl_so['建议动作'].eq('催已有').sum())} 键/623 件催已有",
-         "SO 到 12/15，只有部分算按时；不能当全部已覆盖"),
+         "v6.21 把 SO 作为待发供给；未覆盖部分仍需处理"),
+        ("净需求=0", int(pl_so["建议动作"].eq("不补").sum()),
+         f"{int(pl_so['建议动作'].eq('不补').sum())} 个不补；另有 {int(pl_so['建议动作'].eq('观察').sum())} 个观察"),
+        ("按时/净需求", "按时供给约 +230；净需求约 -183", "SO 到得晚，不能把 2,064 全当按时"),
+        ("仍需处理", f"{int(pl_so['建议动作'].eq('补').sum())} 键仍补 "
+                  f"{pd.to_numeric(pl_so.loc[pl_so['建议动作'].eq('补'),'新补数量'],errors='coerce').fillna(0).sum():,.0f} 件"
+                  f"（对应 SO {pd.to_numeric(pl_so.loc[pl_so['建议动作'].eq('补'),'SO已下'],errors='coerce').fillna(0).sum():,.0f}）；"
+                  f"{int(pl_so['建议动作'].eq('催已有').sum())} 键催已有/新增 "
+                  f"{pd.to_numeric(pl_so.loc[pl_so['建议动作'].eq('催已有'),'新补数量'],errors='coerce').fillna(0).sum():,.0f} 件"
+                  f"（对应 SO {pd.to_numeric(pl_so.loc[pl_so['建议动作'].eq('催已有'),'SO已下'],errors='coerce').fillna(0).sum():,.0f}）",
+         "409/1,070 是新补量，不是 SO 件数；SO 总量 3,674"),
     ], columns=["项", "值", "说明"])
     so_rows = pl_so[["product_id", "池", "形态", "UOM", "SO已下", "净需求95",
                      "新补数量", "建议动作", "动作原因"]].rename(columns={"product_id": "商品编码", "池": "分公司"})
@@ -838,16 +845,17 @@ def main() -> int:
     src = pd.DataFrame([
         ("D5 v6.7", str(D5), sha(D5)),
         ("11/1–8 同店修正", str(NC), sha(NC)),
-        ("D6 v6.20", str(D6), sha(D6)),
-        ("CNY v11", str(CNY), sha(CNY)),
-        ("轨迹 v11", str(TRAJ), sha(TRAJ)),
+        ("D6 v6.21", str(D6), sha(D6)),
+        ("CNY v12", str(CNY), sha(CNY)),
+        ("轨迹 v12", str(TRAJ), sha(TRAJ)),
         ("C14 11-10 刷新", str(C14), sha(C14)),
         ("EN 库存 11-10", str(EN_STOCK), sha(EN_STOCK)),
         ("CG 库存 11-10", str(CG_STOCK), sha(CG_STOCK)),
         ("D2b 删失需求", str(D2B), sha(D2B)),
         ("orders_unified（D6 CG 销量）", str(ORDERS_D6), sha(ORDERS_D6)),
         ("11/01–09 订单（D5 nowcast 用 01–08）", str(ORDERS_NOV), sha(ORDERS_NOV)),
-        ("EN SO-26-00136 调整", str(SO_CSV), sha(SO_CSV)),
+        ("EN SO 去重供给", str(SO_CSV), sha(SO_CSV)),
+        ("EN SO 原始明细", str(SO_ITEMS), sha(SO_ITEMS)),
         ("v15 历史交付包", str(V15), sha(V15)),
         ("A 活跃宇宙", str(A), sha(A)),
         ("60cm/DN-PO 审计", str(W3), sha(W3)),
@@ -881,7 +889,7 @@ def main() -> int:
         target31.to_excel(w, sheet_name="9_服务目标核对", index=False)
         past6.to_excel(w, sheet_name="10_新过期清单", index=False)
         src.to_excel(w, sheet_name="11_数据来源", index=False)
-        corrections.to_excel(w, sheet_name="12_v5.3改了什么", index=False)
+        corrections.to_excel(w, sheet_name="12_v5.4改了什么", index=False)
         po60.to_excel(w, sheet_name="13_60cm与DN-PO（审计）", index=False)
         keys60.to_excel(w, sheet_name="13b_60cm逐键", index=False)
         pivot.to_excel(w, sheet_name="14_分公司汇总", index=False)
