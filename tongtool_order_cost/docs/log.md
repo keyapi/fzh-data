@@ -6,6 +6,7 @@ title: tongtool_order_cost 变更日志
 # 变更日志
 
 ## 2026-11-11
+- **新增** `scripts/fetch_month_orders.py`：把 Colab 4.1.0/4.7.1 的源表读取（`YYYY年M月订单` / `FBA订单`）落成本地 `raw_<月>.csv` / `raw_fba_<月>.csv` + manifest（行数/表头/sha256）；新增 4 个单测。补 `docs/reference/tongtool-order-pipeline.md` §0.1「GS 读写触点矩阵」，明确唯一未移植写回是 `检查运营人员-写回…`（依赖 4.9 渠道账号映射）。
 - **自动化** `build-order-tabs` 默认应用 `out/special_orders_<月>.csv`（Colab 4.1.0.1）：命中即删 raw 并写回 `raw_<月>_filtered.csv`；manifest 记录删除行/单数与命中订单号；`--require-special-orders` 缺失即失败。新增 3 个单测。202609 QDY 2 单（`DY-LAPW-25909`/`25883`）删除后 self 6,219 / merged 7,488，GS 两表已同步（readback 0）。
 - **特殊规则换表**：1.7.0 改读 ws `黄-特殊规则-订单改销售额成本`；旧 `Jeck特殊规则-订单改销售额成本` 只读留存。13 行混合规则按老板口径**参考值优先**（清系数），引擎打印提醒并新增 `meta["n_mixed_ref_priority"]`。
 - **FBA 列对齐**：28 条 FBA 规则的 `二次加工`/`绍兴二次` 参考值对调（二次=0、绍兴承接），数值和总净额不变；Colab cell 22 同步参考值优先。

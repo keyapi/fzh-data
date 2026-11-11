@@ -30,6 +30,34 @@ tags: [tongtool, pipeline, cost-engine, gsheet, split-merge, fba, build-order-ta
 | FBA shadow | `out/fba_shadow/<月>/fba_shadow_<月>.csv` | 146/133 个 SKU 的 EN BOM 单位成本与 78 列属性 |
 | 旧写回表（可选） | `out/writeback_<月>.csv` | 只继承财务系数/历史属性；**不参与行集合与成本** |
 
+## 0.1 月度 GS 触点矩阵（读 / 写）
+
+Colab 的 GS 读取全部改为本地导出后离线读取；写回只保留三张成本表。
+
+### 读取
+
+| Colab 步骤 | GS 对象 | 本地入口 | 状态 |
+|---|---|---|---|
+| 4.1.0 | `通途订单<月>` / `<YYYY年M月订单>` | `scripts/fetch_month_orders.py --kind raw` → `raw_<月>.csv` | ✅ |
+| 4.7.1 | 同上 / `<YYYY年M月FBA订单>` | `scripts/fetch_month_orders.py --kind fba` → `raw_fba_<月>.csv` | ✅ |
+| 4.1.0 | `和财务部共享/汇率` | `scripts/fetch_fx_rates.py` → `fx_<月>.csv` | ✅ |
+| 4.1.0 | `和财务部共享/订单发货仓库对应成本来源` | `scripts/fetch_warehouse_cost_sources.py` → `warehouse_cost_sources.tsv` | ✅ |
+| 4.1.0.1 | `处理特殊订单` | `scripts/fetch_special_orders.py`；build 默认自动应用 | ✅ |
+| 4.1.1 / 4.1.2 | 美国 UPS 邮编分区 / 州名规范 | — | 不移植（已确认） |
+| 4.5.3 / 4.5.4 / 4.9 | 渠道账号 / 运营人员对照、深圳细分 | — | 不移植（已确认，202607+ 一人一账号） |
+| 1–3、4.3、4.4、4.5.1、4.5.2 | 绍兴成本核算表单、头程 GS、二次加工、海外仓/FBA 成本 | EN BOM + `wh_map` + `warehouse_cost_sources` | 替代 / 不移植（已确认） |
+
+### 写回
+
+| Colab 步骤 | GS 工作表 | 本地入口 | 状态 |
+|---|---|---|---|
+| 4.6 | `写回<YYYY年M月订单>`（self 166） | `scripts/gs_full_replace.py --label self` | ✅ |
+| 4.7.2 / 4.7.3 | `写回<YYYY年M月FBA订单>`（95） | `--label fba` | ✅ |
+| 4.8 | `写回<YYYY年M月FBA订单和非FBA订单>`（78） | `--label merged` | ✅ |
+| 4.9.4 | `检查运营人员-写回…` | — | **未移植**：依赖 4.9 渠道账号→运营人员映射；透视表会读它，若报表仍要运营人员列需单独恢复 |
+| 1.8 / 2.2 / 3.2 / 4.5.1 / 18.x | 各类中间成本表 | — | 不需要（中间产物，已由 EN/BOM 替代） |
+| 4.8.2 / 5.x | `写回Amazon…` / 多月原始订单 | — | 账期分析流程，不属于月度成本写回 |
+
 ## 1. 读原始订单 + 解析身份
 
 1. 读 raw（**已删特殊订单**）。`scripts/fetch_special_orders.py` 从 ws `处理特殊订单`

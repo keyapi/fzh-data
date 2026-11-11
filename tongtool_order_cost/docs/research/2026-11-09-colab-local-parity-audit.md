@@ -38,6 +38,24 @@ tags: [colab, parity, build-order-tabs, cost-engine]
 | 4.7 / 4.7.1.1 | FBA 订单、订单数量按 UUID 展开 | **部分**：`fba_shadow` 用 EN 明细 + 销量表出 78 列；95 列 FBA 模板仍来自 Colab，UUID 展开未在本地实现 |
 | 4.8 | 非 FBA + FBA 合并成 78 列 | **模板来自 Colab**；本地 `fba_shadow`/`phase36` 出 78 列合并 shadow/成本，但依赖 self/FBA 模板 |
 
+### 1.1 GS 写回侧（2026-11-11 补审）
+
+之前的对照表只列了计算步骤，漏掉了「Colab 往哪张 ws 写」这一侧。补审结果：
+
+| Colab | 写回 ws | 本地状态 |
+|---|---|---|
+| 4.6 | `写回<YYYY年M月订单>`（self 166） | ✅ `gs_full_replace.py --label self` |
+| 4.7.2 / 4.7.3 | `写回<YYYY年M月FBA订单>`（95） | ✅ `--label fba` |
+| 4.8 | `写回<YYYY年M月FBA订单和非FBA订单>`（78） | ✅ `--label merged` |
+| 4.9.4 | `检查运营人员-写回…`（78 + 渠道账号/运营人员） | ❌ **未移植**：依赖 4.9 渠道账号映射；透视表仍读该 ws，若报表需要运营人员列需单独恢复 |
+| 1.8 / 2.2 / 3.2 / 4.5.1 / 18.x | 中间成本表（写回成本工时、皮壳入库、头程合并、二次加工合并等） | 不需要（中间产物） |
+| 4.8.2 / 5.x | `写回Amazon…` / 多月原始订单 | 账期分析流程，不属月度成本 |
+
+读取侧也补齐了源表导出：`scripts/fetch_month_orders.py` 把
+`<YYYY年M月订单>` / `<YYYY年M月FBA订单>` 落成 `raw_<月>.csv` / `raw_fba_<月>.csv`，
+并写 `fetch_month_orders_manifest.json`（行数/表头/sha256）。完整触点矩阵见
+`docs/reference/tongtool-order-pipeline.md` §0.1。
+
 ## 2. build-order-tabs 评估
 
 **需要做**，否则不能停 Colab。现有本地引擎的输入是：
@@ -95,6 +113,7 @@ tags: [colab, parity, build-order-tabs, cost-engine]
 
 ## 3. 已落地的前置脚本
 
+- `scripts/fetch_month_orders.py`：导出源表 `YYYY年M月订单` / `YYYY年M月FBA订单` → `raw_<月>.csv` / `raw_fba_<月>.csv` + manifest
 - `scripts/fetch_fx_rates.py`：从 `和财务部共享/汇率` 取指定月列 → `fx_<月>.csv`
 - `scripts/fetch_special_orders.py`：导出 `处理特殊订单` 删除清单；`build-order-tabs` 默认自动应用（`--require-special-orders` 缺失即失败）
 - `scripts/check_warehouse_map.py`：raw 发货仓库 vs `wh_map.tsv`；202608/202609 均 0 未映射
@@ -107,5 +126,6 @@ tags: [colab, parity, build-order-tabs, cost-engine]
    差额已归因为旧表销售额丢失（+1,729.97 / +1,276.64）与 202609 尾程补齐（+304,541.93）。
    202607 尚未跑。
 3. **待财务确认**：202609 是否采用补齐后的真实尾程重写 GS（会令 9 月利润 −303,265.29）。
-4. 决定是否保留 4.5.3/4.5.4/4.9 的运营人员列；若保留，另建账号→人员单表。
-5. 停用 Colab 前保留回归证据与回滚路径；把 `fill-tables` / GS 写回切到 build-order-tabs 输出。
+4. 决定是否保留 4.5.3/4.5.4/4.9 的运营人员列；若保留，另建账号→人员单表，
+   并恢复写回 `检查运营人员-写回…`（当前唯一未移植的 GS 写回）。
+5. 停用 Colab 前保留回归证据与回滚路径；三张写回表已切到 `gs_full_replace.py`（2026-11-10/11）。

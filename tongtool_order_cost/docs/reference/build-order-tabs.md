@@ -37,7 +37,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 
 | 输入 | 默认位置 | 说明 |
 |---|---|---|
-| 非 FBA 原始订单 | `out/snapshots/<月>/raw_<月>_filtered.csv`（无则 `out/raw_<月>.csv`） | 已删特殊订单（4.1.0.1） |
+| 非 FBA 原始订单 | `out/snapshots/<月>/raw_<月>_filtered.csv`（无则 `out/raw_<月>.csv`） | 已删特殊订单（4.1.0.1）；源表由 `scripts/fetch_month_orders.py --kind raw` 导出 |
 | 特殊订单删除清单 | `out/special_orders_<月>.csv` | `fetch_special_orders.py` 从 `处理特殊订单` ws 导出；build **自动应用**（见下） |
 | EN 物料/别名 | `out/item_refcode.csv` | `name/customer_code/item_group/variant_of` |
 | EN 订单明细 | `out/en_items_all_089.csv` | 行级 `erp_item_code` / `shipping_method` |
@@ -48,7 +48,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 | 汇率 | `out/fx_<月>.csv` | `scripts/fetch_fx_rates.py` 导出 |
 | 仓库成本来源 | `out/warehouse_cost_sources.tsv` | `scripts/fetch_warehouse_cost_sources.py` 导出 |
 | 产品主数据（可选） | `out/product_attributes.tsv` | `scripts/build_product_attribute_master.py` 抽取历史属性 |
-| GS FBA 销量表 | `out/raw_fba_<月>.csv` | 站点/MSKU/SKU/订单数量/销量/销售额 |
+| GS FBA 销量表 | `out/raw_fba_<月>.csv` | 源表由 `scripts/fetch_month_orders.py --kind fba` 导出；站点/MSKU/SKU/订单数量/销量/销售额 |
 | 通途 FBA 导出 | `out/fba_export_<月>.csv` | 仅 `fba_shadow` 缺失时重建用（覆盖校验） |
 | FBA shadow 78 | `out/fba_shadow/<月>/fba_shadow_<月>.csv` + `.manifest.json` | 缺失/输入哈希变化时自动重建；显式指定时哈希不一致直接失败 |
 | 旧写回表（可选） | `out/writeback_<月>.csv` | 只继承系数 / 历史属性；不参与行集合与金额 |

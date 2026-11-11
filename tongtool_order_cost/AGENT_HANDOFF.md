@@ -48,6 +48,7 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `tongtu_cost_engine/domain/build_tabs.py` | **build-order-tabs**：raw+成熟合并+BOM → self 166 / FBA 95 / merged 78 |
 | `tongtu_cost_engine/domain/tab_contracts.py` | 三张表的稳定列合同（166/95/78）与产品属性列 |
 | `scripts/run_audit_170.py` | 1.7.0 特殊规则审计 CLI |
+| `scripts/fetch_month_orders.py` | 导出源表 `YYYY年M月订单`/`FBA订单` → `raw_<月>.csv`/`raw_fba_<月>.csv` + manifest |
 | `scripts/fetch_fx_rates.py` | GS `和财务部共享/汇率` 按月导出 |
 | `scripts/fetch_special_orders.py` | 从 ws `处理特殊订单` 导出删除清单；`build-order-tabs` 默认自动应用（`--require-special-orders` 缺失即失败） |
 | `scripts/check_warehouse_map.py` | raw 发货仓库 vs `wh_map.tsv` 覆盖检查 |
@@ -178,7 +179,7 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 - **FBA 对比**：绍兴包装半成品是共同部分；分公司/FBA 的绍兴二次是扣掉半成品后的增量，`半成品+增量=四列绍兴二次`；FBA合计=皮壳+成品包装+FBA头程。财务表在 `out/fba_vs_branch/`，共享副本在 `D:\Work\王忠于\成本核算\`。
 - 经验：`docs/solutions/workflow-issues/tongtu-split-merge-writeback-cost-rules.md`、`docs/solutions/conventions/tongtu-split-types-and-presplit-sku.md`。
 - **EN 登记**：只写子表 `customer_items.ref_code`，不写主表 `Item.customer_code`；组件多对多、完整 SKU 唯一；配套 issue `work_order_task#4` / `tongtool_integration#22`。
-- **Colab 退场**：截至 4.8 的成本/拆单合并核心已移植；2026-11-10 已补 `build-order-tabs`，可本地重建三表。对照表见 `docs/research/2026-11-09-colab-local-parity-audit.md`。前置脚本：`scripts/fetch_fx_rates.py`、`scripts/fetch_special_orders.py`、`scripts/check_warehouse_map.py`、`scripts/fetch_warehouse_cost_sources.py`、`scripts/build_product_attribute_master.py`。
+- **Colab 退场**：截至 4.8 的成本/拆单合并核心已移植；2026-11-10 已补 `build-order-tabs`，可本地重建三表。对照表见 `docs/research/2026-11-09-colab-local-parity-audit.md`。前置脚本：`scripts/fetch_month_orders.py`、`scripts/fetch_fx_rates.py`、`scripts/fetch_special_orders.py`、`scripts/check_warehouse_map.py`、`scripts/fetch_warehouse_cost_sources.py`、`scripts/build_product_attribute_master.py`。GS 读写触点矩阵见 `docs/reference/tongtool-order-pipeline.md` §0.1（唯一未移植写回：`检查运营人员-写回…`）。
 
 ### build-order-tabs（2026-11-10，停用 Colab 的关键件）
 
