@@ -47,10 +47,16 @@ lookup_tongtool_sku.py <SKU...>             # 主档是否存在
 | `scripts/lookup_tongtool_sku.py` | 通途主档 SKU 存在性 |
 | `scripts/estimate_pp_cotton.py` | PP 棉用量估算 CLI |
 
-## Notebook / Google Sheet 约定（2026-08-14 核实）
+## Notebook / Google Sheet 约定（2026-11-10 更新）
 
-1.7.0 读 gs **和财务部共享** → ws **Jeck特殊规则-订单改销售额成本**（`use_local_rule_csv_170 = NO`）。
-旧 ws **特殊规则-订单改销售额成本** notebook 已不用。
+1.7.0 读 gs **和财务部共享** → ws **黄-特殊规则-订单改销售额成本**（`use_local_rule_csv_170 = NO`）。
+旧 ws **Jeck特殊规则-订单改销售额成本** 自 2026-11-10 起只读留存，不再作为 1.7.0 输入。
+
+**参考值优先（老板 2026-11-10 确认）**：同一行同时有系数和参考值时，按参考值执行、忽略系数；引擎打印 `⚠️ ... 按参考值优先`，并在 `meta["n_mixed_ref_priority"]` 计数。Colab cell 22 同步。
+
+**FBA 列对齐**：28 条 FBA 规则的 `二次加工` 参考值已移到 `绍兴二次加工`（二次=0），参考值数值未改；新成本口径下 FBA 二次加工固定为 0。
+
+**成本口径**：分公司发成品（USNJ/USTX/PL method=成品）二次加工=0（202609 18 行 −1,341.65；202608 16 行 −1,303.48）；FBA 二次=0，绍兴二次直接用 `cost_sxbzcp`，不要再用 `sx_cost_all − cost_fg`（264 行 `sx_cost_all=0` 但 `cost_sxbzcp>0` 会低估；issue `keyapi/work_order_task#6` / `keyapi/tongtool_integration#24`）。最终订单成本表是 `build_tabs/1104 BOM`；`out/merged_202609.csv` 11-04 是旧表，不作最终口径。
 
 六月订单两份 workbook 都有这 3 张 FBA 相关表（列名不完全一样）：
 
@@ -84,6 +90,7 @@ Workbook 标题：`通途订单202606-特殊规则`（1.7.0 用）、`通途订�
 2. FBA 尾程：参考值 **>0 或 =0** 不改 `运费`；参考值 **<0** 按账期差异写入 `运费`
 3. `01_科目瀑布` 各科 Δ 与总览一致
 4. SKU 替换：apply 后旧名计数为 0，新名计数 = 原旧名计数，gray60 计数不变
+5. 混合规则：`meta["n_mixed_ref_priority"]` 应等于同时有系数/参考值的生效规则数；这些行不应进入 `n_skipped`
 
 ## 凭证
 
@@ -98,4 +105,6 @@ Cursor Agent 用用户级 MCP `user-tongtool_erp2_primary`（`~/.cursor/mcp.json
 
 - 不要把订单/规则大 xlsx 提交进 git
 - 不要提交 service account JSON / notebook 私钥
+- 不要修改旧 ws「Jeck特殊规则-订单改销售额成本」（只读留存）
+- 不要把新 ws 第 511–516、610–614、776–777 行的系数重新填回；参考值优先，系数只作历史对照
 - 不要直接 push main；走 `feature/...` + PR
