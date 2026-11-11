@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-11 | 钉钉考勤表导出操作手册（管理后台） | [workflow-issues/dingtalk-attendance-export-runbook.md](workflow-issues/dingtalk-attendance-export-runbook.md) |
 | 2026-11-11 | 通途特殊规则换表：参考值优先、FBA 列对齐与旧/新 BOM 口径差 | [workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md](workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md) |
 | 2026-11-09 | 通途拆单类型与拆单前 SKU 位置（自动拆单 / 手动拆单 / TikTok 跨账号） | [conventions/tongtu-split-types-and-presplit-sku.md](conventions/tongtu-split-types-and-presplit-sku.md) |
 | 2026-11-09 | 通途拆单合并成本写回：五类错误与修复（组行匹配 / 件数 / 产品族 / 订单号截断 / 审计口径） | [workflow-issues/tongtu-split-merge-writeback-cost-rules.md](workflow-issues/tongtu-split-merge-writeback-cost-rules.md) |

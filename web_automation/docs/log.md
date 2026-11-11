@@ -8,6 +8,13 @@ tags: [web-automation, tongtu, sellfox, playwright, log]
 
 # 迁移日志
 
+## 2026-11-11 — 钉钉考勤导出操作手册（Ad-hoc）
+
+- **新增**：`AGENT_HANDOFF.md` 增加「钉钉考勤导出（Ad-hoc，未脚本化）」段与 dispatcher 表下提示。
+  要点：入口在「考勤统计 → 报表管理」；权限细分决定可见报表；人员范围按**考勤组全选**并用组人数对账；
+  单次最多一个月；导出为快照；Playwright MCP 下载落 `.playwright-mcp/` 而非工作目录。
+- **依据**：`docs/solutions/workflow-issues/dingtalk-attendance-export-runbook.md`（仅操作，不含考勤数据）。
+
 ## 2026-09-20
 
 - **修复（链接）**：`solutions/integration-issues/ddddocr-playwright-login-fixes.md` 指向 `docs/lessons/`、`docs/reference/` 的 2 条链接少退一级，由 `../` → `../../`。
