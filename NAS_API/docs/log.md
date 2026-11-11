@@ -6,6 +6,10 @@ title: NAS_API 变更日志
 
 # 变更日志
 
+## 2026-11-11
+
+- **新增** `reference/router-port-forward-inventory.md` 的「光猫要不要改桥接」调研：结论是**新办公室保持路由模式、不桥接**。核实要点：`光猫 LAN2 → 新华三 WAN2` 是策略路由已禁用的备用口，"直连"用户实际连的是光猫自带 WiFi；桥接后光猫 WiFi 不能上网，且 PPPoE 只能单台设备拨号；座机在上网/语音分 VLAN 时通常不受影响但须装维拨测；H3C ER3208G3-P-E 官方支持 PPPoE、双 WAN、多 SSID + SSID 绑 VLAN（含来源 URL）。
+
 ## 2026-11-10
 
 - **新增** `reference/router-port-forward-inventory.md` — 办公室搬迁前的光猫（中兴 ZXHN F4610U）只读盘点：16 条端口转发逐条实测（其中 `5000`、`2049`、`111`、`892` 为内网无监听的死规则）、4 条静态 DHCP 绑定、LAN/PPPoE/DDNS/DMZ/ALG/防火墙/WiFi 现状，以及「新设备逐条重建」与「转发下沉 OpenWrt + DMZ」两套恢复方案。
