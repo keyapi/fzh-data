@@ -163,3 +163,31 @@ def test_override_nan_reason_or_owner_rejected():
         row[field] = np.nan
         with pytest.raises(ValueError):
             apply_overrides(pol, pd.DataFrame([row]))
+
+
+def _load_pilot_builder():
+    path = ROOT / "scripts" / "build_usnj_pilot_20261112.py"
+    spec = importlib.util.spec_from_file_location("build_usnj_pilot", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _wape_row(layer, wape):
+    return {"product_id": "P", "pool": "美东USNJ", "physical_form": "成品",
+            "canonical_uom": "个", "model": "naive", "split": "validation",
+            "层级": layer, "wape": wape}
+
+
+def test_wape_index_uses_model_layer_not_origin():
+    mod = _load_pilot_builder()
+    idx = mod.build_wape_index(pd.DataFrame([
+        _wape_row("model", 0.5), _wape_row("origin", 9.9)]))
+    assert idx[("P", "美东USNJ", "成品", "个", "naive", "validation")] == 0.5
+
+
+def test_wape_index_duplicate_model_rows_rejected():
+    mod = _load_pilot_builder()
+    with pytest.raises(ValueError):
+        mod.build_wape_index(pd.DataFrame([
+            _wape_row("model", 0.5), _wape_row("model", 0.6)]))

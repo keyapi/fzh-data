@@ -118,6 +118,20 @@ def load_sales(series_path: str) -> pd.DataFrame:
     return pd.concat([s30, s90], axis=1).reset_index()
 
 
+def build_wape_index(res: pd.DataFrame) -> dict:
+    """只取 4_回测_asof 的 model 层（汇总），origin 明细绝不覆盖。
+
+    键 = 源键 + model + split；同键重复直接报错，不静默覆盖。
+    """
+    keys = ["product_id", "pool", "physical_form", "canonical_uom", "model", "split"]
+    r = res[res["层级"].astype(str) == "model"].copy()
+    if r.duplicated(keys).any():
+        raise ValueError("4_回测_asof model 层同键重复，拒绝回填")
+    return {(str(x.product_id), str(x.pool), str(x.physical_form),
+             str(x.canonical_uom), str(x.model), str(x.split)): x.wape
+            for x in r.itertuples(index=False)}
+
+
 def build_pilot(d6: pd.DataFrame, b: pd.DataFrame, sales: pd.DataFrame,
                 cls: pd.DataFrame, res: pd.DataFrame,
                 meta: pd.DataFrame) -> pd.DataFrame:
@@ -138,12 +152,8 @@ def build_pilot(d6: pd.DataFrame, b: pd.DataFrame, sales: pd.DataFrame,
     for c in KEYS:
         cl[c] = cl[c].astype(str)
     us = us.merge(cl, on=KEYS, how="left")
-    # 每个模型的 validation/holdout WAPE（只取该行模型，不拿 adopted 别的模型）
-    wape_idx = {}
-    for r in res.itertuples(index=False):
-        k = (str(r.product_id), str(r.pool), str(r.physical_form), str(r.canonical_uom),
-             str(r.model), str(r.split))
-        wape_idx[k] = r.wape
+    # 每个模型的 validation/holdout WAPE：只取 model 层汇总，origin 明细不覆盖
+    wape_idx = build_wape_index(res)
     us["name"] = us["name"].fillna(us["product_id"])
     us["item_group"] = us["item_group"].fillna("")
     us["model"] = us["采用模型"].fillna(us["D5模型"]).fillna(us["adopted_model"])
