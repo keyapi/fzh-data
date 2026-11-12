@@ -38,7 +38,7 @@ METHOD_NOTE = {
     "sba": "间歇需求（SBA，偏差校正）",
     "tsb": "间歇/淘汰（TSB）",
     "ensemble": "多模型平均",
-    "none": "无可靠模型；相似品/池化/新品法（低置信）",
+    "none": "无可靠模型",
 }
 
 
@@ -49,8 +49,8 @@ def sha256(p) -> str:
 def _read_d3b(path):
     audit = pd.read_excel(path, sheet_name="10_责任重述审计")
     cls = pd.read_excel(path, sheet_name="3_分类")
-    acls = pd.read_excel(path, sheet_name="3a_分类_asof")
-    return audit, cls, acls
+    res = pd.read_excel(path, sheet_name="4_回测_asof")
+    return audit, cls, res
 
 
 def build_b_list(audit: pd.DataFrame, trend: pd.DataFrame,
@@ -119,7 +119,7 @@ def load_sales(series_path: str) -> pd.DataFrame:
 
 
 def build_pilot(d6: pd.DataFrame, b: pd.DataFrame, sales: pd.DataFrame,
-                cls: pd.DataFrame, acls: pd.DataFrame,
+                cls: pd.DataFrame, res: pd.DataFrame,
                 meta: pd.DataFrame) -> pd.DataFrame:
     us = d6[d6["池"].astype(str) == "美东USNJ"].copy()
     us = us.rename(columns={"池": "pool", "形态": "physical_form", "UOM": "canonical_uom"})
@@ -133,14 +133,17 @@ def build_pilot(d6: pd.DataFrame, b: pd.DataFrame, sales: pd.DataFrame,
     us = us.merge(sales, on=KEYS, how="left")
     for c in ("近30天销量_202610", "近90天销量_202608_10"):
         us[c] = us[c].fillna(0.0)
-    cl = cls[KEYS + ["n_obs_train", "demand_pattern_train", "holdout_wape",
-                     "adopted_model"]].copy()
+    cl = cls[KEYS + ["n_obs_train", "demand_pattern_train",
+                     "adopted_model", "adopted_sources"]].copy()
     for c in KEYS:
         cl[c] = cl[c].astype(str)
-    ac = acls[KEYS + ["validation_wape"]].copy()
-    for c in KEYS:
-        ac[c] = ac[c].astype(str)
-    us = us.merge(cl, on=KEYS, how="left").merge(ac, on=KEYS, how="left")
+    us = us.merge(cl, on=KEYS, how="left")
+    # 每个模型的 validation/holdout WAPE（只取该行模型，不拿 adopted 别的模型）
+    wape_idx = {}
+    for r in res.itertuples(index=False):
+        k = (str(r.product_id), str(r.pool), str(r.physical_form), str(r.canonical_uom),
+             str(r.model), str(r.split))
+        wape_idx[k] = r.wape
     us["name"] = us["name"].fillna(us["product_id"])
     us["item_group"] = us["item_group"].fillna("")
     us["model"] = us["采用模型"].fillna(us["D5模型"]).fillna(us["adopted_model"])
@@ -155,20 +158,21 @@ def build_pilot(d6: pd.DataFrame, b: pd.DataFrame, sales: pd.DataFrame,
         | us["product_id"].astype(str).str.startswith(("ZTGJ5525", "KS0319", "KS0385",
                                                        "KS0443", "KS0454"))
         | us["name"].astype(str).str.contains("印花", na=False))
-    us.loc[us["is_low_conf"], "算法说明"] = "相似品/池化/新品法（低置信）"
+    us.loc[us["is_low_conf"], "算法说明"] = (
+        "沿用原模型（" + us["模型一句话"] + "），未做相似品/池化预测；低置信")
     us["is_special"] = us["is_triangle"] | us["is_low_conf"]
     us["特殊产品"] = np.where(us["is_special"], "是", "")
     us["特殊说明"] = np.where(
         us["is_triangle"],
         "长历史三角靠枕；部分面料已从 USNJ 迁 USTX，按当前 owner，不把迁走面料算回 USNJ",
         np.where(us["is_low_conf"],
-                 "2026 才卖/短历史/骨架/印花；不用 naive 硬套，相似品/池化/新品法（低置信）",
+                 "2026 才卖/短历史/骨架/印花；沿用原模型，未做相似品/池化预测；低置信（需人工用相似品复核）",
                  ""))
     us["置信度"] = np.where(us["is_low_conf"], "低", us["置信度"].astype(str))
     us["CNY优先"] = np.where(us["is_triangle"], "是", "")
     us["CNY说明"] = (
         f"停工 {CNY_STOP}→复工 {CNY_RESUME}→首批到货 {CNY_FIRST_RECEIPT}；"
-        "97/157 窗均不足，需 D5 183 天窗/pre-build"
+        "97/157 窗不足；bridge 备货待核（需 D5 183 天窗）；157 净需求仅参考，不作 bridge"
         + np.where(us["is_triangle"], "；三角靠枕优先", ""))
     us["可覆盖天数"] = [
         (pd.Timestamp(r.需要日).date() - AS_OF).days
@@ -177,11 +181,33 @@ def build_pilot(d6: pd.DataFrame, b: pd.DataFrame, sales: pd.DataFrame,
         "OK" if str(r.C完整键状态) in ("exact_full", "adapted_full_form")
         and pd.notna(r.C可发供给) else "待核"
         for r in us.itertuples(index=False)]
-    us["回测"] = [
-        (f"val {r.validation_wape:.3f} / holdout {r.holdout_wape:.3f}"
-         if pd.notna(r.validation_wape) and pd.notna(r.holdout_wape)
-         else (f"holdout {r.holdout_wape:.3f}" if pd.notna(r.holdout_wape) else "—"))
-        for r in us.itertuples(index=False)]
+    def _backtest(r):
+        model = str(r.model)
+        if model in ("nan", "none", ""):
+            return "—"
+        sources = []
+        if isinstance(r.adopted_sources, str) and r.adopted_sources.strip():
+            try:
+                sources = json.loads(r.adopted_sources)
+            except json.JSONDecodeError:
+                sources = []
+        cands = [x for x in sources if str(x.get("model")) == model]
+        if cands:
+            src = max(cands, key=lambda x: float(x.get("qty", 0.0)))
+            src_key = tuple(str(src.get("source_key", "")).split("|"))
+        else:
+            src_key = (r.product_id, r.pool, r.physical_form, r.canonical_uom)
+        val = wape_idx.get(src_key + (model, "validation"), np.nan)
+        hold = wape_idx.get(src_key + (model, "holdout"), np.nan)
+        if pd.notna(val) and pd.notna(hold):
+            return f"val {val:.3f} / holdout {hold:.3f}"
+        if pd.notna(val):
+            return f"val {val:.3f}"
+        if pd.notna(hold):
+            return f"holdout {hold:.3f}"
+        return "—"
+
+    us["回测"] = [_backtest(r) for r in us.itertuples(index=False)]
     us["理由"] = [
         f"{r.动作原因}；{r.服务档}/{r.分位标签}；{r.算法说明}"
         + ("；特殊/短历史，低置信" if r.is_special else "")
@@ -215,13 +241,13 @@ def main(argv=None) -> int:
     Path(args.out_dir).mkdir(parents=True, exist_ok=True)
 
     d6 = pd.read_excel(args.d6, sheet_name="1_全量动作")
-    audit, cls, acls = _read_d3b(args.d3b)
+    audit, cls, res = _read_d3b(args.d3b)
     trend = pd.read_csv(args.demand_trend, dtype={"product_id": str})
     meta = pd.read_csv(args.eligibility, dtype={"product_id": str},
                        usecols=["product_id", "name", "item_group"])
     sales = load_sales(args.series)
     b, pending = build_b_list(audit, trend, meta)
-    us = build_pilot(d6, b, sales, cls, acls, meta)
+    us = build_pilot(d6, b, sales, cls, res, meta)
 
     b_cols = ["product_id", "current_owner", "current_pool", "hist_pools",
               "hist_qty_USNJ", "hist_qty_USTX", "moved_qty", "direction",
@@ -243,12 +269,15 @@ def main(argv=None) -> int:
                   "moved_qty", "标记", "CNY优先", "CNY说明", "特殊产品", "特殊说明"]
     spec = us[us["特殊产品"] == "是"].copy()
     cny = us[["product_id", "name", "item_group", "服务档", "建议动作",
-              "净需求157", "CNY优先", "CNY说明"]].copy()
+              "净需求157", "CNY优先", "CNY说明"]].rename(
+        columns={"净需求157": "157天净需求_参考(非bridge)"}).copy()
+    cny["bridge备货"] = "待核（需 D5 183 天窗）"
+    cny["bridge窗"] = f"{CNY_STOP}→{CNY_FIRST_RECEIPT}"
     cny["停工"] = str(CNY_STOP)
     cny["复工"] = str(CNY_RESUME)
     cny["首批到货"] = str(CNY_FIRST_RECEIPT)
     cny["到首批天数"] = (CNY_FIRST_RECEIPT - AS_OF).days
-    cny = cny.sort_values(["CNY优先", "净需求157"], ascending=[False, False])
+    cny = cny.sort_values(["CNY优先", "157天净需求_参考(非bridge)"], ascending=[False, False])
 
     Path(args.out_dir, "B_USNJ归属清单.csv").write_text(
         b[b_cols].to_csv(index=False), encoding="utf-8-sig")
@@ -272,7 +301,8 @@ def main(argv=None) -> int:
             ("D6", args.d6),
             ("D3b", args.d3b),
             ("4 周", "上线后的监控期，不是等待期；本包现在出"),
-            ("CNY", f"停工 {CNY_STOP} → 复工 {CNY_RESUME} → 首批到货 {CNY_FIRST_RECEIPT}"),
+            ("CNY", f"停工 {CNY_STOP} → 复工 {CNY_RESUME} → 首批到货 {CNY_FIRST_RECEIPT}；"
+                     "bridge 备货待核（需 D5 183 天窗）；157 净需求仅参考"),
             ("未知供给", "C 完整键/供给未知标“待核”，不当 0"),
             ("30/90 天销量", "月度口径：2026-10 / 2026-08..10（D3b current 序列）"),
             ("列口径", "C可发供给=C14/通途可发；EN已发运/待发；PO追加(去重)/SO；"
@@ -300,9 +330,11 @@ def main(argv=None) -> int:
 - 未知 C 供给标“待核”，不当 0；30/90 天销量为月度口径（2026-10 / 2026-08..10）。
 - 供给侧列：`C可发供给`=C14/通途可发；`EN已发运量/EN待发量`；`PO追加(去重)`/`SO已下`；
   `CG可调拨抵扣/CG缓冲抵扣`；`ETA_p50/p90`。
-- **CNY**：停工 {CNY_STOP} → 复工 {CNY_RESUME} → 首批到货 {CNY_FIRST_RECEIPT}；97/157 窗不足，需 D5 183 天窗/pre-build；三角靠枕优先。
-- **特殊产品**：三角靠枕按当前 owner（不把已迁走面料算回 USNJ）；麻将沙发/铁架/印花/短历史用相似品/池化/新品法，标低置信。
+- **CNY**：停工 {CNY_STOP} → 复工 {CNY_RESUME} → 首批到货 {CNY_FIRST_RECEIPT}；97/157 窗不足；
+  **bridge 备货待核（需 D5 183 天窗）**；157 净需求仅参考、不作 bridge；三角靠枕优先。
+- **特殊产品**：三角靠枕按当前 owner（不把已迁走面料算回 USNJ）；麻将沙发/铁架/印花/短历史**沿用原模型，未做相似品/池化预测**，标低置信，需人工复核。
 - 可直接改 `2_补货建议` 的 **建议量_可编辑 / 需要日_可编辑 / 理由_可编辑**。
+- `回测` 只取该行 `采用模型` 在 D3b as-of 源键的 validation/holdout WAPE；无同模型回测显示 `—`，不展示别的模型成绩。
 
 ## 文件
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -144,3 +145,21 @@ def test_apply_overrides_rejects_unknown_key_and_blank_reason():
         apply_overrides(pol, pd.DataFrame([dict(
             sku="P1", pool="波兰", preset_or_quantile="control",
             reason="", owner="ops", as_of="2026-11-12")]))
+
+
+def test_override_quantile_must_be_standard():
+    from supply_netting.service_policy import resolve_override
+    assert resolve_override("0.85")["quantile_label"] == "q85"
+    assert resolve_override("q90")["quantile"] == 0.90
+    with pytest.raises(ValueError):
+        resolve_override("0.851")
+
+
+def test_override_nan_reason_or_owner_rejected():
+    pol = _policy_two_rows()
+    for field in ("reason", "owner", "as_of"):
+        row = dict(sku="P1", pool="波兰", preset_or_quantile="control",
+                   reason="ok", owner="ops", as_of="2026-11-12")
+        row[field] = np.nan
+        with pytest.raises(ValueError):
+            apply_overrides(pol, pd.DataFrame([row]))

@@ -124,9 +124,22 @@ def preset_class_quantile(preset: str, service_class: str) -> dict:
     return dict(p[key])
 
 
+def _is_blank(value) -> bool:
+    if value is None:
+        return True
+    try:
+        if pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip().lower() in ("", "nan", "none", "nat")
+
+
 def resolve_override(value) -> dict:
-    """覆盖值：preset 名 / q95|q90|q85|fill_rate / 0-1 数值。"""
-    raw = str(value or "").strip()
+    """覆盖值：preset 名 / q95|q90|q85|fill_rate / 标准分位 0.95/0.90/0.85。"""
+    if _is_blank(value):
+        raise ValueError("override 值不能为空")
+    raw = str(value).strip()
     low = raw.lower()
     if low in PRESETS:
         return dict(kind="preset", preset=low)
@@ -139,11 +152,12 @@ def resolve_override(value) -> dict:
         q = float(raw)
     except (TypeError, ValueError):
         raise ValueError(f"无法解析 override 值：{value!r}") from None
-    if not 0 < q <= 1:
-        raise ValueError(f"override 分位必须在 (0,1]：{value!r}")
-    return dict(kind="quantile", preset="custom", quantile=q,
-                quantile_label=f"q{round(q * 100)}",
-                service_level_prior=q, basis=f"override_q{round(q * 100)}")
+    for target, label in ((0.95, "q95"), (0.90, "q90"), (0.85, "q85")):
+        if abs(q - target) < 1e-9:
+            return dict(kind="quantile", preset="custom", quantile=target,
+                        quantile_label=label, service_level_prior=target,
+                        basis=f"override_{label}")
+    raise ValueError(f"只允许 q95/q90/q85/fill_rate 或 0.95/0.90/0.85；收到 {value!r}")
 
 
 def apply_overrides(policy: pd.DataFrame, overrides: pd.DataFrame | None = None,
@@ -194,7 +208,7 @@ def apply_overrides(policy: pd.DataFrame, overrides: pd.DataFrame | None = None,
         key = (str(r.product_id), str(r.pool))
         if key not in pos:
             raise ValueError(f"override 键不在 policy：{key}")
-        if not str(r.reason).strip() or not str(r.owner).strip() or not str(r.as_of).strip():
+        if _is_blank(r.reason) or _is_blank(r.owner) or _is_blank(r.as_of):
             raise ValueError(f"override 必须填 reason/owner/as_of：{key}")
         resolved = resolve_override(r.preset_or_quantile)
         for i in pos[key]:

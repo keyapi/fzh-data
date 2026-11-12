@@ -143,8 +143,9 @@ def main(argv=None) -> int:
 
     d3b_cls = pd.read_excel(args.d3b, sheet_name="3_分类")
     series = pd.read_parquet(args.series)
-    overrides = (pd.read_csv(args.overrides, dtype=str)
-                 if args.overrides and Path(args.overrides).exists() else None)
+    if args.overrides and not Path(args.overrides).exists():
+        raise FileNotFoundError(f"overrides 文件不存在：{args.overrides}")
+    overrides = (pd.read_csv(args.overrides, dtype=str) if args.overrides else None)
     pol = build_policy(d3b_cls, series, preset=args.preset, overrides=overrides)
 
     missing = int((~pol["class"].isin(SERVICE_CLASSES)).sum())

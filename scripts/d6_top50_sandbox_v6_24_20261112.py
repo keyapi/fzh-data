@@ -178,8 +178,10 @@ def main(argv=None) -> int:
     pol[KEYS] = pol[KEYS].astype(str)
     if pol.duplicated(KEYS).any():
         raise ValueError("duplicate service_policy keys")
+    if args.service_overrides and not Path(args.service_overrides).exists():
+        raise FileNotFoundError(f"service_overrides 文件不存在：{args.service_overrides}")
     ov = (pd.read_csv(args.service_overrides, dtype=str)
-          if args.service_overrides and Path(args.service_overrides).exists() else None)
+          if args.service_overrides else None)
     if ov is not None:
         inputs["SERVICE_OVERRIDES"] = dict(path=str(args.service_overrides),
                                            sha256=sha256(args.service_overrides))
