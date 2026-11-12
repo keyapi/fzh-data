@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-10（Amazon 结算 V2 → 成本/利润的口径踩坑）
+- **新增**: `integration-issues/amazon-settlement-v2-original-currency-and-order-identity.md` —— 赛狐 Settlement V2 原币与订单身份：`currency` 是**折算目标币种**（默认 CNY），原币要按结算组原生币种取 identity 值；通途 `订单号` **各账号前缀不同**（`CUS-`/`BJRYECLTUS-`/`BNKCUS-`/`DANEEYUS-`…），须提取内嵌 3-7-7，否则误报 80% 缺失；单月发货只覆盖 57%、**补 9 月到 99.4%**；FBA 走 EN，`item_cost` 全 0 改用 BOM。
+- **新增**: `workflow-issues/amazon-settlement-period-cost-and-tax-decisions.md` —— 结算/记账/履约三轴与**预留=资产负债表**；退款**可售才冲 COGS**（需退货报告 `detailedDisposition`+`status`，赛狐 API 已实调）；EN 成本字段（`商品成本`=行合计、`绍兴发货成本`=单价，标准 `尾程前成本=绍兴+头程+加工`）；中国报税用 **Date Range 申报、Settlement 做回款凭证**；运营业绩用**结算期净额（accountNetIncome，剔预留）− 订单明细成本**，不要用打款。
+
 ## 2026-10-10（外部问卷通道：单份仓库 MD + Notion）
 - **新增**: `conventions/external-questionnaire-via-notion.md` —— 把结构化问卷交给仓库外、不用 AI 工具的同事（财务 ZJ）填写的做法：**单一事实源仍是仓库 MD**，把它写成"双向可用"（4 列填写表 / 去掉相对链接改纯文本路径 / `<>` 自动链接改裸 URL / 表格保持简单单行），**Notion 只做填写通道**；分享用**访客 + `Can edit`**，**不要"发布到网"**（公开页只读；公开+允许编辑有 prompt-injection 风险）。三条硬边界：**Notion MCP 无分享/邀请工具**（访客邀请须界面手动；集成建的页归集成）、**国内访问需翻墙兜底**、**数据出境只可私享单访客**。教训：本次一度同时存在"底稿 + 填充版"两份文件，用户立刻要求合并 —— **单一源才有唯一真值**。落地底稿见 `sellfox_settlement/docs/research/2026-10-09-amazon-non-v2-monthly-tax-analysis.md`，选型见同目录 `2026-10-10-zj-questionnaire-collection-options.md`。
 

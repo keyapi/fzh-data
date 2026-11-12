@@ -95,3 +95,13 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
   - T06 FBM 连接：可用 `order id + sku` 法；**或手动下载通途订单 Excel（含尾程）**；**通途尾程靠人工导入，导入后第二天通途下载才显示更新后的尾程**；通途 API 时效**未验证**；**一次下载不能跨太久时间**；**EN 侧是否及时/完整更新未知**；**EN App `tongtool_integration` 对接通途可能需进一步完善**。
   - T07 FBA 探针：**报表里的 FBA 订单不一定出现在通途**；仍先做探针（见底稿 §11 阶段 6）。
 - **Codex 接手入口**：先读本 §11 + 底稿 §11（阶段 1→8）；阶段 1—3 与 5—8 不依赖财务，可直接开工；阶段 4/5/6 受上面 T 答复与 ZJ 的 F 答复约束（**财务未拍板的口径只并列输出候选值，不写死**）。
+
+## 12. Settlement V2 → 成本/利润：2026-11 实操结论（踩坑）
+- **原币**：`fetch` 明细的 `currency` 是**折算目标币种**（默认 CNY）；原币按 `summary` 结算组原生币种、取对应币种文件的 identity 值。
+- **订单号**：通途 `订单号` 各账号前缀不同（`CUS-`/`BJRYECLTUS-`/`BNKCUS-`/`DANEEYUS-`…），须正则提取内嵌 3-7-7；单月发货只覆盖 57%，**多月份回看（至少 9+10 月）到 99.4%**。
+- **FBA**：不在非FBA导出；EN `item_cost` 实测全 0，改用 **EN BOM 单价×数量**。
+- **成本字段**：通途 `商品成本`=行合计、`绍兴发货成本`=单价；标准 `尾程前成本 = 绍兴发货成本 + 头程 + 加工`，再 + 尾程（见 `docs/bom_cost_explanation.md`）。
+- **退款/退货**：可售才冲 COGS；赛狐 API 有 FBA/FBM 退货报告（`detailedDisposition`/`status`），库存流水接口存在但需开权限。
+- **中国报税**：申报用 Date Range/Transaction（订单/发货、全额销售额）；Settlement 做回款/费用凭证。
+- **运营业绩**：用**结算期贡献** = `accountNetIncome（剔预留） − 订单明细匹配的产品/头程/尾程 − 其他`，**不用打款 transferAmount**。
+- 详见 `docs/solutions/integration-issues/amazon-settlement-v2-original-currency-and-order-identity.md` 与 `docs/solutions/workflow-issues/amazon-settlement-period-cost-and-tax-decisions.md`；研究报告在 `docs/research/2026-11-10-*.md`。
