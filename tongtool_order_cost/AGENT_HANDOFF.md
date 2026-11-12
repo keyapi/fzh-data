@@ -246,3 +246,6 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
 - **别名登记**：FBA 3 个 Rosoon SKU 已写入 EN `customer_items.ref_code`；本地补丁
   `config/item_alias_overrides.csv`。美国销售尺寸 138 = EN 140。
 - **大件云仓**：第三方大件（金属文件柜）显式零成本 `third_party_warehouse`，不按未登记阻断。
+- **已用 EN 报表验证**（`BOM Cost List V2`，filters 见 `build-order-tabs.md`）：KS0050 六个尺寸
+  `cost_fg=0 / cost_sxbzcp=0 / shipping_method=成品`，USNJ/USTX valuation 正确（5LB=35.4239/35.8839）。
+  日报表带 `show_ref_code=1` 会按每个客户码重复行；本地导出用 `show_ref_code=0` 或按 `item_fg` 去重。

@@ -43,7 +43,7 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 | EN 订单明细 | `out/en_items_all_089.csv` | 行级 `erp_item_code` / `shipping_method` |
 | 作废原单标记 | `out/snapshots/<月>/order_flags.csv` | 拆单原单（invalid=1） |
 | 物料组树 | `out/item_group_branch.tsv` | 分支/父组 |
-| BOM 成本 | `out/bom_cost_product_with_disabled.csv`（1104，含 disabled） | 四列成本/头程/valuation；`with_kits` 仅作套件对账 |
+| BOM 成本 | `out/bom_cost_product_with_disabled.csv`（1104，含 disabled） | 四列成本/头程/valuation；`with_kits` 仅作套件对账。来源：`BOM Cost List V2`，filters `item_group=产品`、`show_disabled=1`、`show_ref_code=0`、`sum_columns_at_end=1`、`pllc_sfg_missing_use_cover=0`、`simplified_column_view=0`、`ignore_prepared_report=1`；按 `item_fg` 唯一 |
 | 仓库分类 | `out/snapshots/<月>/wh_map.tsv` | 仓库 → USNJ/USTX/PL/FBA/海外仓 |
 | 汇率 | `out/fx_<月>.csv` | `scripts/fetch_fx_rates.py` 导出 |
 | 仓库成本来源 | `out/warehouse_cost_sources.tsv` | `scripts/fetch_warehouse_cost_sources.py` 导出 |
