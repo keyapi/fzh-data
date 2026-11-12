@@ -72,8 +72,11 @@ OWNER_EVIDENCE_RANK = {"dn2026": 7, "dn2025": 6, "own90": 5, "own180": 4,
 END_MONTH = "202610"
 OBS_MONTHS = [f"{y}{m:02d}" for y in range(2023, 2027) for m in range(1, 13)]
 OBS_MONTHS = [m for m in OBS_MONTHS if m <= END_MONTH]     # 202301..202610
-ORIGINS = ("202604", "202605", "202606", "202607")   # 各测 3 个日历月；202608 只有 2 个月→剔除
+ORIGINS = ("202604", "202605", "202606", "202607")   # A/B/C 仓级回测起点
+VALID_ORIGINS = ("202512", "202601")                  # 选模：test 202601..202604
+HOLDOUT_ORIGINS = ("202604",)                         # 最终 holdout：test 202605..202610
 H = 3
+HOLDOUT_H = 6
 MIN_TRAIN_OBS = 12
 MIN_HIST_CLASS = 12
 ADI_THR, CV2_THR = 1.32, 0.49
@@ -331,40 +334,58 @@ HOLT_PHIS = (0.80, 0.90, 0.98)
 THETA_ALPHAS = np.round(np.arange(0.02, 0.99, 0.02), 2)
 
 
-def _fit_damped_holt(y, h):
-    """Holt 加性阻尼趋势（无季节）网格拟合；NaN 月跳过、不压缩日历。"""
+def _fit_damped_holt(y, h, clip=True):
+    """Holt 加性阻尼趋势（无季节）网格拟合。
+
+    缺测月按**日历**推进状态（level=预测值, trend=phi*trend），不用 0/均值填充，
+    也不跳过月份；尾部缺测同样推进到预测起点。clip=True 时最后截零。
+    """
     vals = np.asarray(y, dtype=float)
     idx = np.where(np.isfinite(vals))[0]
     if not len(idx):
         raise ValueError("Holt 训练无可观测月")
     if len(idx) == 1:
-        return np.repeat(vals[idx[0]], h)
+        out = np.repeat(vals[idx[0]], h)
+        return np.maximum(out, 0.0) if clip else out
     first, last = int(idx[0]), int(idx[-1])
     b0 = (vals[last] - vals[first]) / max(1, last - first)
     l0 = vals[first]
+
+    def _run(a, b, phi, upto):
+        level, trend = l0, b0
+        sse = 0.0
+        for i in range(first + 1, upto + 1):
+            pred = level + phi * trend
+            if np.isfinite(vals[i]):
+                err = vals[i] - pred
+                sse += err * err
+                new_level = a * vals[i] + (1 - a) * pred
+                trend = b * (new_level - level) + (1 - b) * phi * trend
+                level = new_level
+            else:
+                # 缺测月：按状态转移推进，不把 0/均值写进 level
+                level = pred
+                trend = phi * trend
+        return sse, level, trend
+
     best_sse, best = np.inf, None
     for a in HOLT_ALPHAS:
         for b in HOLT_BETAS:
             for phi in HOLT_PHIS:
-                level, trend = l0, b0
-                sse = 0.0
-                for i in idx[1:]:
-                    pred = level + phi * trend
-                    err = vals[i] - pred
-                    sse += err * err
-                    new_level = a * vals[i] + (1 - a) * pred
-                    trend = b * (new_level - level) + (1 - b) * phi * trend
-                    level = new_level
+                sse, _, _ = _run(a, b, phi, last)
                 if sse < best_sse - 1e-12:
-                    best_sse, best = sse, (a, b, phi, level, trend)
+                    best_sse, best = sse, (a, b, phi)
     if best is None:
-        return np.repeat(vals[last], h)
-    _, _, phi, level, trend = best
+        out = np.repeat(vals[last], h)
+        return np.maximum(out, 0.0) if clip else out
+    a, b, phi = best
+    _, level, trend = _run(a, b, phi, len(vals) - 1)
     out, damp = [], 0.0
     for step in range(1, h + 1):
         damp += phi ** step
         out.append(level + damp * trend)
-    return np.maximum(np.asarray(out, dtype=float), 0.0)
+    out = np.asarray(out, dtype=float)
+    return np.maximum(out, 0.0) if clip else out
 
 
 def _seasonal_additive(y, period=12):
@@ -407,7 +428,8 @@ def f_ets_aaa(y, h, **kw):
     if seasonal is None:
         raise ValueError("AAA 季节项估计失败（<2 个完整周期）")
     deseason = _deseasonalize(vals, seasonal)
-    fc = _fit_damped_holt(deseason, h)
+    # 先还季节再截零：去季节序列可能为负，Holt 内部不截，还原后统一截零
+    fc = _fit_damped_holt(deseason, h, clip=False)
     n = len(vals)
     out = [fc[k] + seasonal[(n + k) % 12] for k in range(h)]
     return np.maximum(np.asarray(out, dtype=float), 0.0)
@@ -560,13 +582,16 @@ def trend_diagnostics(vals, obs) -> dict:
     vals = np.asarray(vals, dtype=float)
     obs = np.asarray(obs, dtype=bool)
 
-    def _period_sum(start, end):
-        idx = [i for i, m in enumerate(OBS_MONTHS)
-               if start <= m <= end and obs[i] and np.isfinite(vals[i])]
-        return float(vals[idx].sum()) if idx else 0.0
-
-    s2025 = _period_sum("202501", "202510")
-    s2026 = _period_sum("202601", "202610")
+    # YoY：只比较“同月两边都有效观测”的配对月；新品/单边删失不进入分母
+    pairs = []
+    for month in range(1, 11):
+        i25 = OBS_MONTHS.index(f"2025{month:02d}")
+        i26 = OBS_MONTHS.index(f"2026{month:02d}")
+        if obs[i25] and obs[i26] and np.isfinite(vals[i25]) and np.isfinite(vals[i26]):
+            pairs.append((float(vals[i25]), float(vals[i26])))
+    s2025 = float(sum(a for a, _ in pairs))
+    s2026 = float(sum(b for _, b in pairs))
+    paired_months = len(pairs)
     if s2025 > 0:
         yoy = s2026 / s2025 - 1.0
         if yoy <= -0.30:
@@ -581,7 +606,8 @@ def trend_diagnostics(vals, obs) -> dict:
             bucket = "up>30"
     else:
         yoy = np.nan
-        bucket = "no_2025_base" if s2026 > 0 else "no_data"
+        bucket = ("no_2025_base" if (paired_months and s2026 > 0)
+                  else "no_data")
 
     def _slope(n):
         idx = [i for i in range(len(vals)) if obs[i] and np.isfinite(vals[i])][-n:]
@@ -628,6 +654,7 @@ def trend_diagnostics(vals, obs) -> dict:
             shift_z = _z
 
     return dict(sum_2025_jan_oct=s2025, sum_2026_jan_oct=s2026,
+                paired_months=paired_months,
                 yoy_pct=(yoy * 100 if np.isfinite(yoy) else np.nan),
                 slope_3m=slope3, slope_6m=slope6, slope_12m=slope12,
                 slope_6m_pct=(slope6_pct * 100 if np.isfinite(slope6_pct) else np.nan),
@@ -774,7 +801,8 @@ def build_asof_adoption_map(cls_tbl, res_tbl, hist_qty):
     返回 {(pid,pool,form,uom): {model,status,reason,qty}}；任何不一致直接 fail closed。
     """
     key_cols = ["product_id", "pool", "physical_form", "canonical_uom"]
-    adopted_rows = res_tbl[res_tbl["adopted"].astype(str) == "是"]
+    adopted_rows = res_tbl[(res_tbl["adopted"].astype(str) == "是")
+                           & (res_tbl["split"] == "validation")]
     by_key = adopted_rows.groupby(key_cols, sort=False)["model"].apply(list).to_dict()
     out = {}
     for r in cls_tbl.itertuples(index=False):
@@ -796,7 +824,8 @@ def build_asof_adoption_map(cls_tbl, res_tbl, hist_qty):
                 f"3a_分类_asof 非 adopted 却带模型：{key} status={status} model={cls_model}")
         out[key] = dict(model=(cls_model if status == "adopted" else "none"),
                         status=status, reason=str(getattr(r, "selection_reason", "") or ""),
-                        qty=float(hist_qty.get(key, 0.0)))
+                        qty=float(hist_qty.get(key, 0.0)),
+                        holdout_wape=float(getattr(r, "holdout_wape", np.nan)))
     if len(out) != len(cls_tbl):
         raise AssertionError(f"as-of adoption map 键数不守恒：{len(out)} != {len(cls_tbl)}")
     return out
@@ -822,25 +851,41 @@ def build_current_adoption_map(k_current, current_multi_from, asof_map, hist_qty
             info = asof_map[sk]
             statuses.append(info["status"] or "not_adopted")
             if info["model"] not in ("none", ""):
-                candidates.append((info["model"], float(hist_qty.get(sk, info["qty"])), sk))
+                candidates.append((info["model"], float(hist_qty.get(sk, info["qty"])), sk,
+                                   float(info.get("holdout_wape", np.nan))))
         tracing = [dict(source_key="|".join(sk), model=asof_map[sk]["model"],
                         qty=float(hist_qty.get(sk, asof_map[sk]["qty"])))
                    for sk in srcs]
+        all_models = [asof_map[sk]["model"] for sk in srcs]
+        has_none = any(m in ("none", "") for m in all_models)
         if not candidates:
             out[ck] = dict(model="none", source="asof_join_none",
-                           status=(statuses[0] if statuses else "not_adopted"),
-                           sources=tracing)
+                           status="none", sources=tracing, holdout_wape=np.nan)
             continue
-        models = {m for m, _, _ in candidates}
+        models = {m for m, _, _, _ in candidates}
         if len(models) == 1:
             model = next(iter(models))
-            source = "asof_join" if len(srcs) == 1 else "asof_join_multi_agree"
+            best = max([c for c in candidates if c[0] == model],
+                       key=lambda t: (t[1], t[2]))
+            holdout_wape = best[3]
+            if has_none:
+                source, status = "asof_join_multi_partial", "adopted_partial"
+            else:
+                source = ("asof_join" if len(srcs) == 1
+                          else "asof_join_multi_agree")
+                status = "adopted"
         else:
-            model, _, _ = max(candidates, key=lambda t: (t[1], t[2]))
-            source = "asof_join_multi_maxqty"
+            model, _, _, holdout_wape = max(candidates, key=lambda t: (t[1], t[2]))
+            source = ("asof_join_multi_partial_maxqty" if has_none
+                      else "asof_join_multi_maxqty")
+            status = "adopted_partial" if has_none else "adopted"
         if model not in models:
             raise AssertionError(f"current join 模型不在源键集合：{ck} {model} {models}")
-        out[ck] = dict(model=model, source=source, status="adopted", sources=tracing)
+        if source == "asof_join_multi_agree":
+            assert not has_none and len(models) == 1, (
+                f"asof_join_multi_agree 必须全部源键同模型且无 none：{ck} {all_models}")
+        out[ck] = dict(model=model, source=source, status=status, sources=tracing,
+                       holdout_wape=holdout_wape)
     if set(out) != set(k_current):
         raise AssertionError("current adoption map 键集不守恒")
     return out
@@ -1258,40 +1303,45 @@ def main(argv=None) -> int:
             cls_rows.append(row)
             continue
         models = models_for(c["demand_pattern"], c["sbc_class"])
-        rows = backtest(y, usable, models)
-        per = {}
+        # 选模用 validation；最终 6 个月 holdout 只评估，不参与 select()
+        rows_val = backtest(y, usable, models, origins=VALID_ORIGINS, h=H)
+        rows_hold = backtest(y, usable, models, origins=HOLDOUT_ORIGINS, h=HOLDOUT_H)
+        per_val, per_hold = {}, {}
         for name in models:
-            mm = agg([r for r in rows if r.get("model") == name])
-            per[name] = mm
-            res_rows.append(dict(key_version=KEY_VERSION, product_id=pid, pool=pool,
-                                 physical_form=form,
-                                 canonical_uom=uom, demand_pattern=c["demand_pattern"],
-                                 model=name, family=("baseline" if name in BASELINES else "new"),
-                                 status=mm["status"], n_obs=mm["n"], wape=mm["wape"],
-                                 mae=mm["mae"], pinball50=mm["pinball50"],
-                                 positive_test_actual=bool(mm.get("den", 0) > 0),
-                                 den=float(mm.get("den", 0.0)),
-                                 failure_reason=mm["reason"]))
-        for r in rows:
-            if r.get("status") == "ok":
-                mm = agg([r])
-                det_rows.append(dict(key_version=KEY_VERSION, product_id=pid, pool=pool,
+            mv = agg([r for r in rows_val if r.get("model") == name])
+            mh = agg([r for r in rows_hold if r.get("model") == name])
+            per_val[name], per_hold[name] = mv, mh
+            for split, mm in (("validation", mv), ("holdout", mh)):
+                res_rows.append(dict(key_version=KEY_VERSION, product_id=pid, pool=pool,
                                      physical_form=form,
-                                     canonical_uom=uom, model=r["model"], origin=r["origin"],
-                                     n_train=r["n_train"], test_months=r["test_months"],
-                                     n_test=r["n_test"], wape=mm["wape"], mae=mm["mae"]))
-            elif r.get("status") in ("skipped", "failed"):
-                fail_rows.append(dict(层级="origin", product_id=pid, pool=pool,
-                                      physical_form=form, canonical_uom=uom,
-                                      类型=f"{r.get('model', 'origin')}:{r['status']}",
-                                      原因=r.get("reason", ""),
-                                      fallback="该 origin 跳过（不补 0）"))
-        sel = select(per, c["demand_pattern"], rows=rows)
-        evaluated = [v for v in per.values() if v["status"] == "ok"]
+                                     canonical_uom=uom, demand_pattern=c["demand_pattern"],
+                                     model=name, family=("baseline" if name in BASELINES else "new"),
+                                     split=split, status=mm["status"], n_obs=mm["n"],
+                                     wape=mm["wape"], mae=mm["mae"], pinball50=mm["pinball50"],
+                                     positive_test_actual=bool(mm.get("den", 0) > 0),
+                                     den=float(mm.get("den", 0.0)),
+                                     failure_reason=mm["reason"], adopted=""))
+        for split, rows in (("validation", rows_val), ("holdout", rows_hold)):
+            for r in rows:
+                if r.get("status") == "ok":
+                    mm = agg([r])
+                    det_rows.append(dict(key_version=KEY_VERSION, product_id=pid, pool=pool,
+                                         physical_form=form, canonical_uom=uom,
+                                         split=split, model=r["model"], origin=r["origin"],
+                                         n_train=r["n_train"], test_months=r["test_months"],
+                                         n_test=r["n_test"], wape=mm["wape"], mae=mm["mae"]))
+                elif r.get("status") in ("skipped", "failed"):
+                    fail_rows.append(dict(层级="origin", split=split, product_id=pid, pool=pool,
+                                          physical_form=form, canonical_uom=uom,
+                                          类型=f"{r.get('model', 'origin')}:{r['status']}",
+                                          原因=r.get("reason", ""),
+                                          fallback="该 origin 跳过（不补 0）"))
+        sel = select(per_val, c["demand_pattern"], rows=rows_val)
+        evaluated = [v for v in per_val.values() if v["status"] == "ok"]
         row["backtested"] = bool(evaluated)
         if not evaluated:
             row["adoption_status"] = "no_origin"
-            skips = [r for r in rows if r.get("status") == "skipped"]
+            skips = [r for r in rows_val if r.get("status") == "skipped"]
             if skips:
                 sel = dict(adopted="none", baseline="none",
                            reason="无可回测 origin：" + "；".join(
@@ -1304,11 +1354,23 @@ def main(argv=None) -> int:
                                       else "no_candidate")
         else:
             row["adoption_status"] = "adopted"
+        _vw = per_val.get(sel["adopted"], {})
+        _vh = per_hold.get(sel["adopted"], {})
+        _hb = per_hold.get(sel["baseline"], {})
         row.update(adopted_model=sel["adopted"], best_baseline=sel["baseline"],
-                   selection_reason=sel["reason"])
+                   selection_reason=sel["reason"],
+                   validation_wape=(_vw.get("wape") if _vw.get("status") == "ok" else np.nan),
+                   validation_mae=(_vw.get("mae") if _vw.get("status") == "ok" else np.nan),
+                   holdout_wape=(_vh.get("wape") if _vh.get("status") == "ok" else np.nan),
+                   holdout_mae=(_vh.get("mae") if _vh.get("status") == "ok" else np.nan),
+                   holdout_n=(_vh.get("n") if _vh.get("status") == "ok" else 0),
+                   holdout_best_baseline_wape=(_hb.get("wape")
+                                               if _hb.get("status") == "ok" else np.nan))
         cls_rows.append(row)
+        # adopted 只标 validation；holdout 永不参与采用
         for rr in res_rows:
-            if (rr["product_id"], rr["pool"], rr["physical_form"], rr["canonical_uom"]) == key:
+            if ((rr["product_id"], rr["pool"], rr["physical_form"], rr["canonical_uom"]) == key
+                    and rr["split"] == "validation"):
                 rr["adopted"] = "是" if rr["model"] == sel["adopted"] else "否"
 
     cls_tbl = pd.DataFrame(cls_rows)
@@ -1377,6 +1439,7 @@ def main(argv=None) -> int:
             adopted_model=join["model"], model_source=join["source"],
             adoption_status=join["status"],
             adopted_sources=json.dumps(join["sources"], ensure_ascii=False),
+            holdout_wape=join.get("holdout_wape", np.nan),
             asof_qty_total=asof_qty))
     hist_cur_tbl = pd.DataFrame(hist_cur_rows)
     cls_cur_tbl = pd.DataFrame(cls_cur_rows)
@@ -1409,6 +1472,8 @@ def main(argv=None) -> int:
         single_source=int((cls_cur_tbl["model_source"] == "asof_join").sum()),
         multi_agree=int((cls_cur_tbl["model_source"] == "asof_join_multi_agree").sum()),
         multi_maxqty=int((cls_cur_tbl["model_source"] == "asof_join_multi_maxqty").sum()),
+        multi_partial=int(cls_cur_tbl["model_source"].isin(
+            ["asof_join_multi_partial", "asof_join_multi_partial_maxqty"]).sum()),
         no_model=int((cls_cur_tbl["model_source"] == "asof_join_none").sum()),
         adopted=int((cls_cur_tbl["adopted_model"] != "none").sum()),
         source_membership_rate=1.0,
@@ -1953,7 +2018,7 @@ def main(argv=None) -> int:
     _met = {(r.product_id, r.pool, r.physical_form, r.canonical_uom, r.model):
             dict(wape=r.wape, mae=r.mae, den=float(getattr(r, "den", 0.0)),
                  status=r.status)
-            for r in res_tbl.itertuples(index=False)}
+            for r in res_tbl[res_tbl["split"] == "validation"].itertuples(index=False)}
 
     def _informative(m):
         return (m is not None and m["status"] == "ok" and m["den"] > 0
@@ -2028,10 +2093,12 @@ def main(argv=None) -> int:
         ck = (r.product_id, r.pool, r.physical_form, r.canonical_uom)
         j = current_adoption[ck]
         _join_rows.append((j["model"], j["source"], j["status"],
-                           json.dumps(j["sources"], ensure_ascii=False)))
+                           json.dumps(j["sources"], ensure_ascii=False),
+                           j.get("holdout_wape", np.nan)))
     _join_df = pd.DataFrame(
         _join_rows, index=cls_cur_tbl.index,
-        columns=["adopted_model", "model_source", "adoption_status", "adopted_sources"])
+        columns=["adopted_model", "model_source", "adoption_status", "adopted_sources",
+                 "holdout_wape"])
     for col in _join_df.columns:
         cls_cur_tbl[col] = _join_df[col]
     # fail-closed 复核（最终版）
@@ -2053,6 +2120,8 @@ def main(argv=None) -> int:
         single_source=int((cls_cur_tbl["model_source"] == "asof_join").sum()),
         multi_agree=int((cls_cur_tbl["model_source"] == "asof_join_multi_agree").sum()),
         multi_maxqty=int((cls_cur_tbl["model_source"] == "asof_join_multi_maxqty").sum()),
+        multi_partial=int(cls_cur_tbl["model_source"].isin(
+            ["asof_join_multi_partial", "asof_join_multi_partial_maxqty"]).sum()),
         no_model=int((cls_cur_tbl["model_source"] == "asof_join_none").sum()),
         adopted=int((cls_cur_tbl["adopted_model"] != "none").sum()),
         source_membership_rate=1.0,
@@ -2107,7 +2176,11 @@ def main(argv=None) -> int:
     ] + [
         dict(指标="序列总数", 值=len(cls_tbl), 说明="D2 v3 需求键"),
         dict(指标="eligible（≥12 有效月）", 值=n_eligible, 说明="≥12 有效月 + 有正销 + 非老品"),
-        dict(指标="backtested（有有效 origin）", 值=n_backtested, 说明="至少 1 个 origin 达标且有模型可评估"),
+        dict(指标="选模 origins（validation）", 值="/".join(VALID_ORIGINS),
+             说明=f"h={H}；test 202601..202604；select 只看这里"),
+        dict(指标="独立 holdout", 值=f"{'/'.join(HOLDOUT_ORIGINS)} h={HOLDOUT_H}",
+             说明="test 202605..202610；只评估，不参与选择"),
+        dict(指标="backtested（有有效 origin）", 值=n_backtested, 说明="至少 1 个 validation origin 达标且有模型可评估"),
         dict(指标="adopted（测试窗有正销）", 值=n_adopted, 说明="通过共同可评估测试窗比较后选定"),
         dict(指标="no_positive（测试窗无正销）", 值=n_no_pos, 说明="WAPE 未定义，不算证据"),
         dict(指标="zero_error（兼容状态）", 值=n_zero_err, 说明="MAE=0 不再被视为无比较证据；本状态仅保留兼容计数"),
@@ -2126,11 +2199,12 @@ def main(argv=None) -> int:
              说明="3_分类 不再按产品另选模型；只 join as-of 采用结果，断言 fail closed"),
         dict(指标="adopted join·单源精确", 值=adoption_join_stats["single_source"],
              说明=f"{adoption_join_stats['single_source_exact_rate']:.1%} 与 4_回测_asof 同键同模型"),
-        dict(指标="adopted join·多源一致/最大量/无模型",
+        dict(指标="adopted join·多源一致/最大量/部分none/无模型",
              值=f"{adoption_join_stats['multi_agree']}/"
                  f"{adoption_join_stats['multi_maxqty']}/"
+                 f"{adoption_join_stats['multi_partial']}/"
                  f"{adoption_join_stats['no_model']}",
-             说明="多源键按一致→直接采用；不一致→历史量最大源键（留痕 adopted_sources）"),
+             说明="部分none=有源键无模型，标 adopted_partial，不再算“一致”；留痕 adopted_sources"),
         dict(指标="current 键 adopted 覆盖率", 值=f"{adoption_join_stats['adopted_rate']:.1%}",
              说明=f"{adoption_join_stats['adopted']} / {adoption_join_stats['current_keys']} 键有模型"),
         dict(指标="趋势桶分布（2026 vs 2025 同期）",
@@ -2259,12 +2333,25 @@ def main(argv=None) -> int:
                 .groupby(["scenario", "product_id", "origin", "month"])
                 .agg(alloc=("_sum", "first"), fc=("forecast_total", "first")))
         alloc_conservation_bad = int(((_grp["alloc"] - _grp["fc"]).abs() > 1e-6).sum())
-        _act = (alloc_detail.assign(_a=alloc_detail["actual_nj"]
-                                          + alloc_detail["actual_tx"])
+        # 共同键对账：A 是 as-of 历史仓口径，可能缺 B/C 的 current-owner 键；
+        # 只在三场景都有的 product×form×uom×origin×month 上比 actual，缺口单列。
+        _key_cols = ["product_id", "physical_form", "canonical_uom", "origin", "month"]
+        _sets = [set(map(tuple, alloc_detail.loc[alloc_detail["scenario"] == s,
+                                                 _key_cols].values))
+                 for s in alloc_detail["scenario"].unique()]
+        _common = set.intersection(*_sets) if _sets else set()
+        _mask = [tuple(r) in _common for r in alloc_detail[_key_cols].values]
+        _common_df = alloc_detail[_mask]
+        _act = (_common_df.assign(_a=_common_df["actual_nj"] + _common_df["actual_tx"])
                 .groupby("scenario")["_a"].sum().to_dict())
         abc_actual_consistent = int(len(set(round(v, 6) for v in _act.values())) > 1)
+        abc_common_keys = len(_common)
+        abc_excluded_actual = round(
+            float(alloc_detail["actual_nj"].sum() + alloc_detail["actual_tx"].sum())
+            - float(_common_df["actual_nj"].sum() + _common_df["actual_tx"].sum()), 6)
     else:
         alloc_conservation_bad, abc_actual_consistent = 0, 0
+        abc_common_keys, abc_excluded_actual = 0, 0.0
     _same = {r.warehouse: r.same_owner_qty for r in recon90_tbl.itertuples(index=False)}
     _cross = {r.warehouse: r.cross_owner_qty for r in recon90_tbl.itertuples(index=False)}
 
@@ -2302,6 +2389,7 @@ def main(argv=None) -> int:
                                                & (res_tbl["physical_form"] == r.physical_form)
                                                & (res_tbl["canonical_uom"] == r.canonical_uom)
                                                & (res_tbl["model"] == r.adopted_model)
+                                               & (res_tbl["split"] == "validation")
                                                ]["positive_test_actual"].iloc[0])))),
         dict(检查项="backtested_without_origin", 期望=0,
              实际=int(((cls_tbl["backtested"]) & (cls_tbl["adoption_status"] == "no_origin")).sum())),
@@ -2322,11 +2410,11 @@ def main(argv=None) -> int:
         dict(检查项="old_key_conservation（旧键全部有去向）", 期望=0, 实际=old_key_conservation),
         dict(检查项="censor_unassigned（无法归属的删失记录，列出）", 期望="列出",
              实际=int(cens_unassigned)),
-        dict(检查项="WayfairCG 订单量（应在 4,887）", 期望=4887,
+        dict(检查项="WayfairCG 订单量（应在本期 4,985）", 期望=4985,
              实际=int(round(_cg_total))),
-        dict(检查项="WayfairCG→美东USNJ（应为 1,564）", 期望=1564,
+        dict(检查项="WayfairCG→美东USNJ（本期 1,603）", 期望=1603,
              实际=int(round(_cg_parts.get("美东USNJ", 0.0)))),
-        dict(检查项="WayfairCG→美中USTX（应为 3,323）", 期望=3323,
+        dict(检查项="WayfairCG→美中USTX（本期 3,382）", 期望=3382,
              实际=int(round(_cg_parts.get("美中USTX", 0.0)))),
         dict(检查项="key_version 标记覆盖（分类行）",
              期望=len(cls_tbl),
@@ -2348,10 +2436,10 @@ def main(argv=None) -> int:
                    .eq("是").all() else "否")),
         dict(检查项="A/B/C 分配守恒（仓合计=产品总预测）", 期望=0,
              实际=alloc_conservation_bad),
-        dict(检查项="A/B/C 仓级实际总量一致", 期望=0, 实际=abc_actual_consistent),
-        dict(检查项="90天 same-owner USNJ（7,650）", 期望=7650,
+        dict(检查项="A/B/C 仓级实际总量一致（共同键）", 期望=0, 实际=abc_actual_consistent),
+        dict(检查项="90天 same-owner USNJ（本期 7,699）", 期望=7699,
              实际=round(_same.get("美东USNJ", np.nan), 6)),
-        dict(检查项="90天 same-owner USTX（11,398）", 期望=11398,
+        dict(检查项="90天 same-owner USTX（本期 11,423）", 期望=11423,
              实际=round(_same.get("美中USTX", np.nan), 6)),
         dict(检查项="90天交叉量 USNJ←USTX（22）", 期望=22,
              实际=round(_cross.get("美东USNJ", np.nan), 6)),
@@ -2361,19 +2449,20 @@ def main(argv=None) -> int:
              实际=int(cons_cur["行数"].sum())),
         dict(检查项="current 守恒·数量", 期望=round(float(o["qty"].sum()), 6),
              实际=round(cons_cur_total, 6)),
-        dict(检查项="owner-known US qty", 期望=281490, 实际=round(audit_known_qty, 6)),
-        dict(检查项="US_unassigned qty", 期望=31033, 实际=round(audit_unassigned_qty, 6)),
-        dict(检查项="US 需求总量", 期望=312523, 实际=round(audit_total_qty, 6)),
-        dict(检查项="审计产品数（无重复）", 期望=1145, 实际=len(audit_tbl)),
+        dict(检查项="owner-known US qty", 期望=283989, 实际=round(audit_known_qty, 6)),
+        dict(检查项="US_unassigned qty", 期望=31044, 实际=round(audit_unassigned_qty, 6)),
+        dict(检查项="US 需求总量", 期望=round(audit_known_qty + audit_unassigned_qty, 6),
+             实际=round(audit_total_qty, 6)),
+        dict(检查项="审计产品数（无重复）", 期望=1152, 实际=len(audit_tbl)),
         dict(检查项="迁移产品数", 期望=181,
              实际=int((audit_tbl["moved_qty"] > 0).sum())),
         dict(检查项="双池产品数（owner-known）", 期望=178,
              实际=audit_counts["both_pools_products"]),
         dict(检查项="current USNJ / hist USTX 特例", 期望=53,
              实际=int(audit_tbl["exception_current_USNJ_hist_USTX"].sum())),
-        dict(检查项="迁移量 USNJ→USTX", 期望=83458,
+        dict(检查项="迁移量 USNJ→USTX", 期望=83843,
              实际=round(audit_counts["direction"].get(("美东USNJ", "美中USTX"), 0.0), 6)),
-        dict(检查项="迁移量 USTX→USNJ", 期望=885,
+        dict(检查项="迁移量 USTX→USNJ", 期望=905,
              实际=round(audit_counts["direction"].get(("美中USTX", "美东USNJ"), 0.0), 6)),
     ])
     def _eq(e, a):
@@ -2396,6 +2485,13 @@ def main(argv=None) -> int:
                 why = "no_demand（无正销）"
             _lost.append(why)
     _lost_reasons = pd.Series(_lost).value_counts().to_dict() if _lost else {}
+
+    # fail-closed：自检不过不得写工作簿/报告/manifest，且非零退出
+    if not sc_ok:
+        _fails = sc[~sc["通过"].astype(str).str.startswith("是")]
+        print("SELF-CHECK FAILED：未写工作簿/报告/manifest")
+        print(_fails.to_string(index=False))
+        return 1
 
     if args.dry_run:
         np_zero = hist_tbl[hist_tbl["months_positive"] == 0]
@@ -2433,7 +2529,8 @@ def main(argv=None) -> int:
                                 if len(det_tbl) else {}),
             ntest=dict(min_n_test_in_backtest_rows=min_ntest,
                        rows_with_lt3=int(((det_tbl["n_test"] < 3).sum()) if len(det_tbl) else 0),
-                       origins=list(ORIGINS),
+                       origins=list(ORIGINS), validation_origins=list(VALID_ORIGINS),
+                       holdout_origins=list(HOLDOUT_ORIGINS), holdout_h=HOLDOUT_H,
                        insufficient_test_rows=int((fail_tbl["原因"].astype(str)
                                                    .str.contains("insufficient_test")).sum())
                        if len(fail_tbl) else 0),
@@ -2558,7 +2655,7 @@ def main(argv=None) -> int:
          "| 项 | 数值 | 说明 |", "|---|---:|---|",
          f"| owner-known US 需求 | {audit_known_qty:.0f} | B r10 唯一「美国责任方」 |",
          f"| US_unassigned | {audit_unassigned_qty:.0f} | 无唯一 owner，单列，不进入 current 需求键 |",
-         f"| US 需求总量 | {audit_total_qty:.0f} | 281,490 + 31,033 |",
+         f"| US 需求总量 | {audit_total_qty:.0f} | owner-known {audit_known_qty:.0f} + unassigned {audit_unassigned_qty:.0f} |",
          f"| 历史池 USNJ / USTX | {audit_tbl['hist_qty_USNJ'].sum():.0f} / "
          f"{audit_tbl['hist_qty_USTX'].sum():.0f} | 原始订单仓 |",
          f"| current owner USNJ / USTX | "
@@ -2676,7 +2773,7 @@ def main(argv=None) -> int:
           "| demand_pattern | 序列数 |", "|---|---:|"]
     for k, v in cls_cur_tbl["demand_pattern"].value_counts().items():
         L.append(f"| {k} | {v} |")
-    L += ["", "## 4. 重回测（仅 as-of；current-owner 不做历史回测）", "",
+    L += ["", "## 4. 重回测（仅 as-of；validation 选模，holdout 只评估）", "",
           f"- eligible **{n_eligible}** / with-origin **{n_backtested}** / adopted "
           f"**{n_adopted}** / no-positive **{n_no_pos}** / zero-error **{n_zero_err}** / "
           f"no-origin **{n_no_origin}**｜采用新方法 **{new_adopted}**"
@@ -2696,6 +2793,27 @@ def main(argv=None) -> int:
             L.append(f"| {v['product_id']}/{v['pool']}/{v['physical_form']}/{v['canonical_uom']} "
                      f"| {v['model']} | {v['reason']} |")
         L += [""]
+    _hold = cls_tbl.loc[cls_tbl["adoption_status"] == "adopted", "holdout_wape"].dropna()
+    _hold_base = cls_tbl.loc[cls_tbl["adoption_status"] == "adopted",
+                             "holdout_best_baseline_wape"].dropna()
+    _hold_pair = cls_tbl.loc[cls_tbl["adoption_status"] == "adopted",
+                             ["holdout_wape", "holdout_best_baseline_wape"]].dropna()
+    _hold_win = int((_hold_pair["holdout_wape"] < _hold_pair["holdout_best_baseline_wape"]).sum())
+    _hold_fva = (1 - float(np.median(_hold)) / float(np.median(_hold_base))
+                 if len(_hold) and len(_hold_base) and np.median(_hold_base) > 0 else np.nan)
+    L += ["### 4.1b 独立 holdout（只评估，不参与选择）", "",
+          f"- 选模：validation origins {'/'.join(VALID_ORIGINS)}（h={H}，test 202601..202604）。",
+          f"- holdout：{ '/'.join(HOLDOUT_ORIGINS)}（h={HOLDOUT_H}，test 202605..202610）；"
+          f"`select()` 从未读取 holdout。",
+          f"- adopted 中 holdout 可用 **{len(_hold)}** 条；holdout WAPE "
+          f"中位数 **{np.median(_hold):.3f}** / 均值 **{np.mean(_hold):.3f}**。"
+          if len(_hold) else "- adopted 中 holdout 可用 0 条。",
+          f"- 同批 adopted 的 holdout 最佳基线 WAPE 中位数 **{np.median(_hold_base):.3f}**；"
+          f"holdout FVA（中位数口径）**{_hold_fva:.1%}**；"
+          f"adopted 在 holdout 上优于最佳基线的键 **{_hold_win}/{len(_hold_pair)}**。"
+          if len(_hold_base) and np.isfinite(_hold_fva) else
+          "- 同批 adopted 的 holdout 基线无可评估样本。",
+          ""]
     L += [
           "### 4.2 趋势诊断（current-owner 键）", "",
           "| 趋势桶 | 键数 |", "|---|---:|"]
@@ -2703,16 +2821,16 @@ def main(argv=None) -> int:
         L.append(f"| {k} | {v} |")
     L += ["", f"- 结构突变：`{json.dumps(trend_tbl['structural_break'].value_counts().to_dict(), ensure_ascii=False)}`"
               "（最近 12 个已观测月对半；|z|≥2 且相对变化≥30%，启发式，非正式检验）。", "",
-          "**软包墙围 4 SKU（as-of 回测 WAPE + current 采用）**：", "",
-          "| 产品 | 池 | 3_分类 adopted | source | naive | ets_ann | ets_aadn | ets_aaa | theta | sba | YoY% | 趋势桶 | 突变 |",
-          "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|"]
+          "**软包墙围 4 SKU（validation WAPE + holdout WAPE + current 采用）**：", "",
+          "| 产品 | 池 | 3_分类 adopted | source | holdout WAPE | naive | ets_ann | ets_aadn | ets_aaa | theta | sba | YoY% | 趋势桶 | 突变 |",
+          "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|"]
     _cur_idx = {(r.product_id, r.pool, r.physical_form, r.canonical_uom): r
                 for r in cls_cur_tbl.itertuples(index=False)}
     _trend_idx = {(r.product_id, r.pool, r.physical_form, r.canonical_uom): r
                   for r in trend_tbl.itertuples(index=False)}
     _wall_idx = {}
     for r in res_tbl.itertuples(index=False):
-        if r.product_id not in WALL_KEYS:
+        if r.product_id not in WALL_KEYS or r.split != "validation":
             continue
         key = (r.product_id, r.pool, r.physical_form, r.canonical_uom)
         _wall_idx.setdefault(key, {})[r.model] = r.wape
@@ -2724,16 +2842,20 @@ def main(argv=None) -> int:
         w = _wall_idx[key]
         cur = _cur_idx.get(key)
         tr = _trend_idx.get(key)
+        _brk = (getattr(tr, "structural_break", "") if tr is not None else "")
+        _brk = "" if _brk in (None, "nan") or (isinstance(_brk, float) and np.isnan(_brk)) else _brk
         L.append(
             f"| {key[0]} | {key[1]} | {cur.adopted_model if cur else '—'} | "
             f"{cur.model_source if cur else '—'} | "
+            f"{_fmt(getattr(cur, 'holdout_wape', None)) if cur else '—'} | "
             + " | ".join(_fmt(w.get(m)) for m in
                          ("naive", "ets_ann", "ets_aadn", "ets_aaa", "theta", "sba"))
             + f" | {_fmt(getattr(tr, 'yoy_pct', None))} | "
-              f"{getattr(tr, 'trend_bucket', '—') if tr else '—'} | "
-              f"{getattr(tr, 'structural_break', '') if tr else '—'} |")
-    L += ["", "> `3_分类 adopted` 只来自 `4_回测_asof`；`asof_join`=单源精确，"
-              "`asof_join_multi_*`=多源合并（见 `adopted_sources`）。", ""]
+              f"{getattr(tr, 'trend_bucket', '—') if tr else '—'} | {_brk} |")
+    L += ["", "> `3_分类 adopted` 只来自 `4_回测_asof`（validation）；"
+              "holdout 只评估、不参与选择。表内 validation WAPE 为全部 validation 行聚合；"
+              "`select()` 用共同可评估 origin/测试月份，二者可能不完全一致。"
+              "`asof_join`=单源精确，`asof_join_multi_*`=多源合并/部分 none（见 `adopted_sources`）。", ""]
     L += [
           "## 5. 失败分类", ""]
     if len(fail_tbl):
@@ -2823,7 +2945,8 @@ def main(argv=None) -> int:
                           "current-owner 键：D3b v3.5 product×current_pool×form×uom"),
         date_basis="sale_date; source month retained as source_month partition label only",
         date_report=date_report,
-        origins=list(ORIGINS), min_test_months=3,
+        origins=list(ORIGINS), validation_origins=list(VALID_ORIGINS),
+        holdout_origins=list(HOLDOUT_ORIGINS), holdout_h=HOLDOUT_H, min_test_months=3,
         censoring=dict(applied=True, source="D2 v3 2_删失（2026-04..10）",
                        v1_bug="v1 month 格式 2026-04 与 202604 不匹配，删失从未生效"),
         reconciliation=rec, lost_reasons=_lost_reasons,
@@ -2855,7 +2978,7 @@ def main(argv=None) -> int:
     print("工作簿：", out, "sha256=", out_sha)
     print("报告：", args.out_report)
     print("manifest：", args.manifest)
-    return 0 if all(ok for _, ok, _ in tests) else 1
+    return 0 if (sc_ok and all(ok for _, ok, _ in tests)) else 1
 
 
 if __name__ == "__main__":

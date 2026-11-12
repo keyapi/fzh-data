@@ -338,3 +338,6 @@ updated: 2026-10-27
   `4_回测_asof` → `3_分类` 单一事实源；春节供给日历 + bridge 窗；趋势诊断口径。
 - 依据：`D:/Work/fzh-order-store/analysis/FORECAST_RESEARCH_SYNTHESIS_20261112.md` 及两份独立调研。
 - 边界：只定规则，不改 D5/D6/CNY；P1 在 D3b v3.11 落地。
+- P1（Codex 复审返修）：validation/holdout 分离（selection 不看 holdout）；Holt 缺测按日历推进；
+  AAA 先还季节再截零；多源含 none 标 `adopted_partial` 不算“一致”；同比按同月配对；
+  自检 FAIL 不写工作簿且非零退出；ABC 实际分母改为共同键对账。

@@ -69,6 +69,7 @@ buffer  = 安全/季节缓冲，默认 ≥ 7 天
 
 1. **Rolling origin、expanding window**；每个 origin 只用该时点前数据、重拟合；按 horizon 分别评估；禁止随机 CV。
 2. **Selection 在 validation 上做，final 用最后 6 个月 holdout 只评估不选择**；报告按 horizon 给 WAPE + pinball loss + 覆盖率。
+   P1 落地：validation origins **202512/202601**（h=3，test 202601..202604）；holdout origin **202604**（h=6，test 202605..202610），`select()` 不读取 holdout。
 3. 候选集：
    - 基线族：`naive`、`ma3`、`snaive`、`ets_ann`、`ets_aadn`、`ets_aaa`（加性季节分解 + 阻尼 Holt / STL+ETS）、`theta`（简化 Theta：线性趋势与 SES 各 50%）。
    - 间歇族（挑战者）：`croston`、`sba`；`tsb` 仅 `obsolescent`。
@@ -83,11 +84,11 @@ buffer  = 安全/季节缓冲，默认 ≥ 7 天
 - **唯一权威**：`4_回测_asof` 的 `adopted` 标记与 `3a_分类_asof.adopted_model`；两者必须一一对应。
 - `3_分类`（current-owner，预测口径）**不再按产品历史量另选模型**；只 join as-of 采用结果：
   1. 单源键（`len(current_multi_from[key]) == 1`）：`adopted_model` 必须等于该 as-of 键的 adopted（精确 join）。
-  2. 多源键（USNJ/USTX 合并）：源键模型一致 → 直接采用；不一致 → 取历史量最大的源键（确定性 tie-break），并在 `adopted_sources` 留痕。
+  2. 多源键（USNJ/USTX 合并）：源键模型全部一致且非 none → 直接采用；非 none 模型不一致 → 取历史量最大的源键（确定性 tie-break）；**部分源键为 none → 标 `adopted_partial`，不得算“一致”**。均在 `adopted_sources` 留痕。
   3. 无源键 adopted → `none`，不得凭空生成模型。
 - **断言 fail closed**：源键缺失、同键多条 adopted、`3_分类` 模型不在源键模型集合、非 adopted 却带模型 → 直接抛错，不静默降级。
 - **回退后必须重 join**：采用门槛复核可能把新方法回退成基线；`3_分类` 必须在回退后重建，不能沿用回退前的 as-of 模型。
-- 输出 `model_source`：`asof_join` / `asof_join_multi_agree` / `asof_join_multi_maxqty` / `asof_join_none`，便于审计。
+- 输出 `model_source`：`asof_join` / `asof_join_multi_agree` / `asof_join_multi_maxqty` / `asof_join_multi_partial` / `asof_join_multi_partial_maxqty` / `asof_join_none`，便于审计。
 
 ### D5 春节：供给日历 + bridge 窗，不拉大常规需求窗
 
