@@ -13,6 +13,7 @@ updated: 2026-10-27
 
 | 你需要… | 读这个 |
 |---|---|
+| **服务分档政策（P2a：ABC×XYZ→A/B/C/D、D6 v6.23 按 class 选分位）** | [service-policy-20261112.md](service-policy-20261112.md) |
 | **预测 ADR（计划窗 H_key / 98-154-161-91-112 / A-B-C-D 服务档 / 模型选择 / 春节 bridge）** | [FORECAST_ADR_20261112.md](FORECAST_ADR_20261112.md) |
 | **11-02 D3-D6返修计划与接手** | [计划](demand-repair-2026-11-02.md) / [结果与限制](demand-repair-handoff-2026-11-02.md) |
 | 引擎口径、两种情景、未知怎么保留 | [reference/netting-engine.md](reference/netting-engine.md) |
