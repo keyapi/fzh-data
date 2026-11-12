@@ -13,6 +13,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-12 | 把本地侧应用嵌进 ERPNext Desk Page：Page 路径、空 payload 与 iframe allow-forms | [integration-issues/frappe-desk-page-iframe-rpc-bridge.md](integration-issues/frappe-desk-page-iframe-rpc-bridge.md) |
+| 2026-11-12 | 侧台账的行级范围：默认拒绝 + bridge 过滤 + 快照对象不外发 | [architecture-patterns/side-ledger-row-scope-default-deny.md](architecture-patterns/side-ledger-row-scope-default-deny.md) |
+| 2026-11-12 | D5 导入的四分法：接受 / 范围外 / 缺预测 / 非法，不要一律当拒收 | [tooling-decisions/d5-import-out-of-scope-vs-missing-forecast.md](tooling-decisions/d5-import-out-of-scope-vs-missing-forecast.md) |
 | 2026-11-11 | 钉钉考勤表导出操作手册（管理后台） | [workflow-issues/dingtalk-attendance-export-runbook.md](workflow-issues/dingtalk-attendance-export-runbook.md) |
 | 2026-11-11 | 通途特殊规则换表：参考值优先、FBA 列对齐与旧/新 BOM 口径差 | [workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md](workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md) |
 | 2026-11-11 | Claude Desktop 的 MCP「Server disconnected」——先读 mcp-server-<name>.log，多半是 npx @latest 装包被打断 | [developer-experience/claude-desktop-mcp-server-disconnected-npx.md](developer-experience/claude-desktop-mcp-server-disconnected-npx.md) |

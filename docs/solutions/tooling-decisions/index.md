@@ -10,6 +10,7 @@ timestamp: 2026-08-31
 
 | 标题 | 文件 |
 |------|------|
+| D5 导入四分法：接受 / 范围外 / 缺预测 / 非法 | [d5-import-out-of-scope-vs-missing-forecast.md](d5-import-out-of-scope-vs-missing-forecast.md) |
 | 分公司发货 vs FBA 成本对比口径（共同成本 + 差异块；半成品/绍兴二次不重复加） | [tongtu-branch-vs-fba-cost-comparison.md](tongtu-branch-vs-fba-cost-comparison.md) |
 | frePPLe 评估 — 社区 MIT、企业闭源；借求解逻辑，不部署 | [frepple-evaluation-and-borrow-logic.md](frepple-evaluation-and-borrow-logic.md) |
 | Tailscale 2026 新能力盘点与对本仓库的适用性（Tailcat / Peer Relays / Services） | [tailscale-2026-capabilities.md](tailscale-2026-capabilities.md) |

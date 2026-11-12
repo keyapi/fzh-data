@@ -626,3 +626,14 @@ EN `valuation_rate`：USNJ/USTX/PL 包装成品；FBA=0；**分公司发成品�
 
 ### 完整性账本 (completeness ledger)
 DWS `+chat-messages` / `+chat-search` 返回的 `complete` / `hasMore` / `failures` / `nextPage` 字段集合。它是采集能否推进水位的硬门槛，不是提示信息；缺页时 DWS 会明确报 `chat_list_incomplete`，不会静默返回半截数据。
+
+## 运营需求协同 (demand_collaboration)
+
+### 需求情景 (demand scenario)
+运营在系统基准 D 之上，按商品×分公司×明确源期间提交未来业务变化（促销、收缩、差评、停售、渠道迁移），由另一人审核并发布的版本化需求数量。**三种数值输入必须分开**：增减量（delta）、预计总量（total）、比例（percent）；另有仅事件（event_only，不改变数量）。发布快照标 `service_certified=false`、`replenishment_eligible=false`，不是采购指令。
+
+### 行级范围 (row-level scope)
+侧台账的 `(product_id, branch)` 授权集合，默认拒绝；不是历史仓归属。范围外用户看不到行、不能提交；发布快照/下载仅 Reviewer/SM。
+
+### 整期总量 (entire source period)
+97/157 天源期间的整段数量。不能直接当剩余期需求，也不能擅自拆周；期中发布必须标 `needs_remaining_period_forecast=true`。
