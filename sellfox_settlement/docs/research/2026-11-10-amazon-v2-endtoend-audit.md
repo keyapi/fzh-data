@@ -145,7 +145,15 @@ resource: sellfox_settlement/docs/research/2026-11-10-v2-settlement-to-order-mat
 - **对本项目**：**V2 用于费用/回款/利润**；**Date Range/Summary 用于申报销售额**；两者并用、互相解释，不能只用一个。
 - 来源：<https://mydidadi.com/亚马逊披露的报税数据引发争议！数据对不上怎么办/>、<https://www.anl-cn.com/mobile/newsdetail/29.html>、<https://www.eccang.com/news/4990>
 
-## 12. 来源
+## 12. 能否用"回款 − 账外成本"算渠道业绩？
+
+- **回款是否已扣费用**：是。payout/deposit = 销售额 − 退款 − Amazon 各项费用 − **预留（DD+7 + Account Level Reserve）** ± 调整；费用确实已扣。
+- **但 payout ≠ 当月销售额**：Amazon 结算周期约 14 天 + DD+7 延迟，**本月回款含上月销售、漏本月未放款销售**；预留金是**资产负债表**项，不是费用；**站外广告不从回款扣**；用本月成本配本月回款还会**期间错配**（跨月退款/发货）。
+- **业界成熟做法**：**payout/deposit 只用于回款率/现金桥**；P&L 与运营业绩用 **posted/履约日**的收入 + 逐项费用（结算明细，不是 deposit），COGS 按订单匹配。Link My Books、NeonPanel、Evolved Commerce 均明确"deposit ≠ revenue，按 payout 记收入会 misstate 月度 P&L"。
+  - <https://evolvedcommerce.com/resources/blog/amazon-seller-accounting-payouts-vs-pnl>、<https://help.linkmybooks.com/en/articles/12080631-amazon-deferred-transactions-revenue-recognition>、<https://neonpanel.com/blog/amazon-deferred-transactions-dd7-accounting>
+- **若一定要简化**：可用"**结算组净收入（accountNetIncome，不是打款 transferAmount）− 该结算组对应订单成本**"作为**结算期口径**的近似，并标注"结算期≠自然月"；或做 DD+7 月末调整后看自然月。**不建议把"打款−账外成本"当运营业绩**，会随放款节奏忽高忽低。
+
+## 13. 来源
 
 - Nova 结算指南（六块、账户级费用、预留、off-account 广告）：<https://novadata.io/resources/blog/amazon-settlement-report-guide>
 - A2X 退款冲 COGS（仅退回库存时）：<https://www.a2xaccounting.com/blog/include-refunds-in-cogs-postings-beta>
