@@ -1096,6 +1096,13 @@ def compute_phase2(
     stats = {
         "phase2_rows": len(rows),
         "phase2_priced": len(priced),
+        "phase2_us_local_rows": sum(
+            1 for r in priced
+            if r.get("method") == METHOD_FINISHED
+            and (r.get("皮壳成本") or 0) == 0
+            and (r.get("绍兴二次加工成本") or 0) == 0
+            and (r.get("二次加工成本") or 0) > 0
+        ),
         "phase2_blocked": len(blocked),
         "phase2_skipped": len(skipped),
         "phase2_zero_cost": len(zero_cost),
@@ -1171,6 +1178,7 @@ def phase2_summary_rows(phase2: Phase2Result) -> list[dict]:
         {"指标": "Phase2 阻断行", "值": s["phase2_blocked"]},
         {"指标": "Phase2 跳过行（Phase1 不可定价）", "值": s["phase2_skipped"]},
         {"指标": "Phase2 非商品配件 0 成本行", "值": s["phase2_zero_cost"]},
+        {"指标": "Phase2 美国本地（皮壳/绍兴=0，仅二次加工）行", "值": s["phase2_us_local_rows"]},
         {"指标": "Phase2 套件待审行", "值": s["phase2_pending_bundle"]},
         {"指标": "Phase2 套件可定价 / 待审", "值": f"{s['phase2_kit_priced']} / {s['phase2_kit_pending']}"},
         {"指标": "Phase2 kit_method 分布", "值": str(s["kit_method_counts"])},

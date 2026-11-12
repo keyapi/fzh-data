@@ -196,6 +196,7 @@ def test_us_local_finished_uses_destination_valuation(tmp_path):
     assert row["绍兴二次加工成本"] == 0
     assert row["头程运费金额"] == 0
     assert row["二次加工成本"] == 71.767833  # 35.8839167 × 2
+    assert p2.stats["phase2_us_local_rows"] == 1
 
 
 def test_fba_cost_branch(tmp_path):
