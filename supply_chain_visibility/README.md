@@ -4,19 +4,21 @@
 > 起因：绍兴工厂负责人希望把整条链的信息呈现/查询做到 EN 上（形式未定）。
 > 本子项目 = **事实地图 + 呈现形式调研 + 已落地的 app 产物**。
 
-## 现状（2026-10-13）
+## 现状（2026-11-12）
 
 | 项 | 状态 | 在哪 |
 |---|---|---|
 | EN 全链路**事实地图**（含自定义 app） | ✅ 已实测 | [docs/reference/en-supply-chain-map.md](docs/reference/en-supply-chain-map.md) |
 | 呈现形式**调研 + 建议路线** | ✅ 已出 | [docs/research/presentation-forms.md](docs/research/presentation-forms.md) |
-| **Stage 1**：SO 表单内嵌链条摘要 | ✅ 测试机已部署验证 | [key_test/](key_test/)、[key_test/AGENT_HANDOFF.md](key_test/AGENT_HANDOFF.md) |
-| **Stage 2**：原生报表 SO Chain Overview | ✅ 测试机已部署验证 | 同上 |
+| **Stage 1**：SO 表单内嵌链条摘要 | ✅ 测试机 + 生产 | [key_test/](key_test/)、[key_test/AGENT_HANDOFF.md](key_test/AGENT_HANDOFF.md) |
+| **Stage 2**：原生报表 SO Chain Overview | ✅ 测试机 + 生产 | 同上 |
 | **Stage 3**：小范围独立屏 | ⏳ 仅设计 | [key_test/AGENT_HANDOFF.md](key_test/AGENT_HANDOFF.md) §5 |
-| 生产部署 | ⏳ 未做 | 部署步骤见 handoff |
+| 生产部署 | ✅ 已部署（2026-11-12 实测 `get_so_chain` 返回 200） | 部署步骤见 handoff |
 
-**边界**：只覆盖**阶段 0–3**（销售订单→生产计划→工单→工序卡→销售出库）。头程/海运/国外仓（阶段 4–8）
-外置（钉钉表 / 同事「智美通数据大屏」，代码未共享），**2026-10-13 决定暂缓接入**。
+**边界**：核心仍覆盖**阶段 0–3**（销售订单→生产计划→工单→工序卡→销售出库）。线上 E 已额外返回
+`shipment_progress`（DN 之后到货代的在途阶段与 ETA），但 `inventory/receipt` 仍 `not_integrated`；
+**库存 / 采购在途 / 物料齐套 / lifecycle 未接入**，补货决策前必须另取数据。
+（头程原始数据仍外置：钉钉表 / 同事「智美通数据大屏」，代码未共享。）
 **物料需求 / 采购订单 / 采购入库** 在 EN 侧基本空白，**先记录不做**。
 
 ## 已有可复用的查询能力（在 `EN_API/`）

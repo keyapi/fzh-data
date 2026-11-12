@@ -4,6 +4,7 @@ type: Reference
 title: EN「已生产」口径 —— 工单入库(produced_qty) vs 工序卡报工，生产实测
 description: produced_qty 的真身（入库单回写）、两类不一致（完工未入库 4 成因 / 报工 2× 录入重复）、末道必经工序判定与护栏、B 方案口径
 date: 2026-10-14
+last_updated: 2026-11-12
 category: reference
 module: supply_chain_visibility
 tags: [erpnext, work-order, produced-qty, manufacture-stock-entry, job-card, tracking-number,
@@ -118,3 +119,48 @@ tags: [erpnext, work-order, produced-qty, manufacture-stock-entry, job-card, tra
   （反引号不会被本地/远程 shell 展开）；外网别拼 `user@ip`，用 `~/.ssh/config` 别名。
 - 入库量：`Stock Entry`(purpose='Manufacture', docstatus=1) join `Stock Entry Detail`(is_finished_item=1)。
 - 末道工序卡：`Job Card`(docstatus=1) 且 operation = WO 必经工序里最大 sequence；拆 `IFNULL(tracking_number,'')=''`（整批）与 `<>''`（逐菲号）。
+
+## 7. 三层口径：工序完成 / 完工入库 / 可发（2026-11-12 补）
+
+前面 §5 解决的是「已完工 vs 已入库」。做交期或补货判断时还要多一层：**可发**。
+三者不要混：
+
+| 问题 | 看哪里 | 说明 |
+|---|---|---|
+| 做到哪道工序了？ | `Job Card`（按工序/菲号） | `WO.status` 不是完工信号 |
+| 完工入库了吗？ | `Stock Entry`(purpose=Manufacture, docstatus=1) / `produced_qty` | `produced_qty` 本身可信，**它就是入库回写** |
+| 现在能发吗？ | **可用库存**（actual − reserved，按仓库）+ **质检放行** | 仅「工序完成」≠ 可发 |
+
+### 7.1 质检是末道必经工序
+
+`质检` 在实测中 100% 是末道（无质检的极少数为缝制/裁剪）。因此：
+
+- `质检 Pending/Open`（完成 0）→ **不算完工**，即使前面所有缝制工序都已完成；
+- 这类工单通常**没有 Manufacture 入库单**，只有 `Material Consumption for Manufacture` 领料单；
+- `produced_qty=0` 的正确解读是「未完工/未入库」，不是「货做完了躺在车间」。
+
+实例 `WO-26-03113`（皮壳，100 件 / 6 个菲号，共 102 件）：六个菲号的裁剪 + 7 道 seq2 工序全部
+Completed，**质检 6 张 Job Card 全 Open、完成 0**；Stock Entry 只有耗料单，没有完工入库单。
+所以它既不能算「已生产」，也不能算「可发」。
+
+### 7.2 跨工序求和不等于件数
+
+`Job Card.total_completed_qty` 是**每道工序**的完成量。8 道工序 × 102 件相加 = 816，
+这不是 816 件成品。只有按「同一工序」或「同一菲号的末道」去看才有件数含义。
+
+### 7.3 可发 = 入库 + 质检放行 + 可用库存
+
+- `instock`（E 的字段）是**累计入库**（= `produced_sum`），不是当前库存；不能直接当可发。
+- 当前库存要按仓库取 `Bin.actual_qty − Bin.reserved_qty`，并注意海外仓（如美东 USNJ 到货仓）
+  与国内半成品仓是两处。
+- 举例：某物料 E 显示 `instock=72`、已发 72；实际半成品仓 0（reserved 45）、美东到货仓 481。
+  只看 E 会既重复计已发、又漏掉海外仓现货。
+
+> 延伸：把 E 直接用于补货/下单决策的完整边界与改进清单，见
+> `docs/solutions/architecture-patterns/en-supply-line-e-replenishment-decision-boundary.md`。
+
+## 8. 相关
+
+- `docs/solutions/integration-issues/en-so-dn-forwarder-job-status-lookup.md` — 出库→在途查询链
+- `docs/solutions/workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md` — 工单状态与死单
+- `docs/reference/en-chain-cardinality.md` — 行级外键与基数

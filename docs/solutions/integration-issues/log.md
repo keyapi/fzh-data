@@ -6,6 +6,9 @@ title: 集成问题 — 变更日志
 
 # 变更日志
 
+## 2026-11-12
+- **新增**: `en-so-dn-forwarder-job-status-lookup.md` — SO→DN→`Shipment`→货代 job→`ZMT Shipment Snapshot` 查询链。两个字段坑：① Snapshot 的 `job` 才是货代单号，`tracking` 是尾程单号（按 tracking 查 0 行）；② `Shipment.status` 长期 Draft，在途看 `custom_zmt_events` / Snapshot 的 `status11/status4/eta/atd/ata/dlvr/appt`。另记：子表直接 GET 会 403 要按父单 + 子表过滤；SO `delivered_qty` 与 DN 净额应一致（三张 SO 8,870/708/1,468 全符）；签收是货代回传，E 标 `signed_status_proven=false`；同一票 ETA 可多源冲突。
+
 ## 2026-11-09
 - **更新**: 通途SKU↔EN物料 权威映射 — 补「登记位置与组件多对多」：唯一登记位置是 Item 子表 `customer_items.ref_code`（不是主表 `Item.customer_code`）；同一 Item 可同时有整件与 `-Cover/-Foam`；组件 SKU 多对多（共享皮壳/填充物），完整 SKU 才唯一；配套 `work_order_task#4`（校验放宽）与 `tongtool_integration#22`（同步不要 LIMIT 1）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
 
