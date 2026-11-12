@@ -21,8 +21,8 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from supply_netting.service_policy import (
-    CLASS_QUANTILE, SERVICE_CLASSES, assign_abc, assign_service_class, assign_xyz,
-    class_quantile,
+    CLASS_QUANTILE, DEFAULT_PRESET, PRESETS, SERVICE_CLASSES, apply_overrides,
+    assign_abc, assign_service_class, assign_xyz, class_quantile,
 )
 
 B = "D:/Work/fzh-order-store"
@@ -35,7 +35,9 @@ def sha256(p) -> str:
     return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 
 
-def build_policy(d3b_cls: pd.DataFrame, series: pd.DataFrame) -> pd.DataFrame:
+def build_policy(d3b_cls: pd.DataFrame, series: pd.DataFrame,
+                 preset: str = DEFAULT_PRESET,
+                 overrides: pd.DataFrame | None = None) -> pd.DataFrame:
     """纯计算：分类 + 2026 销量 → service policy 行。"""
     df = d3b_cls.copy()
     for c in KEYS:
@@ -65,8 +67,7 @@ def build_policy(d3b_cls: pd.DataFrame, series: pd.DataFrame) -> pd.DataFrame:
     df["class"] = [assign_service_class(a, x, d, s)
                    for a, x, d, s in zip(df["abc_class"], df["xyz_class"], dp,
                                          df["sales_2026"])]
-    for field in ("service_level_prior", "quantile", "quantile_label", "basis"):
-        df[field] = [class_quantile(c)[field] for c in df["class"]]
+    df = apply_overrides(df, overrides=overrides, preset=preset)
     df["demand_pattern"] = dp.astype(str)
     df["sbc_class"] = sbc.astype(str)
     for c in ("adi", "cv2", "n_obs_train", "n_pos_train"):
@@ -124,6 +125,12 @@ def main(argv=None) -> int:
                     "service_policy_20261112_报告.md")
     ap.add_argument("--manifest", default=f"{BA}/service-policy-20261112/"
                     "service_policy_20261112.manifest.json")
+    ap.add_argument("--preset", default=DEFAULT_PRESET, choices=sorted(PRESETS),
+                    help="服务预设：balance/control/service")
+    ap.add_argument("--overrides", default="",
+                    help="例外覆盖 CSV：sku,pool,preset_or_quantile,reason,owner,as_of")
+    ap.add_argument("--out-overrides-audit", default=f"{BA}/service-policy-20261112/"
+                    "service_policy_overrides_audit_20261112.csv")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args(argv)
 
@@ -136,18 +143,31 @@ def main(argv=None) -> int:
 
     d3b_cls = pd.read_excel(args.d3b, sheet_name="3_分类")
     series = pd.read_parquet(args.series)
-    pol = build_policy(d3b_cls, series)
+    if args.overrides and not Path(args.overrides).exists():
+        raise FileNotFoundError(f"overrides 文件不存在：{args.overrides}")
+    overrides = (pd.read_csv(args.overrides, dtype=str) if args.overrides else None)
+    pol = build_policy(d3b_cls, series, preset=args.preset, overrides=overrides)
 
     missing = int((~pol["class"].isin(SERVICE_CLASSES)).sum())
-    qbad = int((~pol.apply(
-        lambda r: r["quantile"] == CLASS_QUANTILE[r["class"]]["quantile"], axis=1)).sum())
+    qbad = 0
+    for _, r in pol.iterrows():
+        if r["preset"] in PRESETS:
+            if r["quantile"] != PRESETS[r["preset"]][r["class"]]["quantile"]:
+                qbad += 1
+        elif r["preset"] == "custom":
+            if abs(float(r["quantile"]) - float(r["service_level_prior"])) > 1e-9:
+                qbad += 1
+        else:
+            qbad += 1
     conv = [("键数", len(pol)),
+            ("preset", args.preset),
             ("2026 销量", round(float(pol["sales_2026"].sum()), 3)),
             ("class 分布", json.dumps(pol["class"].value_counts().to_dict(),
                                     ensure_ascii=False)),
             ("ABC×XYZ", json.dumps(
                 pd.crosstab(pol["abc_class"], pol["xyz_class"]).to_dict(),
                 ensure_ascii=False)),
+            ("overrides", int(pol["override_applied"].sum())),
             ("未知 class 行", missing),
             ("class→quantile 不一致", qbad)]
     if missing or qbad:
@@ -158,11 +178,15 @@ def main(argv=None) -> int:
     Path(args.out_report).parent.mkdir(parents=True, exist_ok=True)
     Path(args.manifest).parent.mkdir(parents=True, exist_ok=True)
     out_cols = ["sku", "pool", "physical_form", "canonical_uom", "class",
-                "abc_class", "xyz_class", "service_level_prior", "quantile",
+                "abc_class", "xyz_class", "preset", "service_level_prior", "quantile",
                 "quantile_label", "basis", "sales_2026", "sales_share", "cum_share",
-                "demand_pattern", "sbc_class", "adi", "cv2", "n_obs_train", "n_pos_train"]
+                "demand_pattern", "sbc_class", "adi", "cv2", "n_obs_train", "n_pos_train",
+                "override_applied", "override_value", "override_reason",
+                "override_owner", "override_as_of", "override_status"]
     pol_out = pol.rename(columns={"product_id": "sku"})[out_cols]
     pol_out.to_csv(args.out_csv, index=False, encoding="utf-8-sig")
+    audit = pol_out[pol_out["override_applied"].astype(bool)].copy()
+    audit.to_csv(args.out_overrides_audit, index=False, encoding="utf-8-sig")
 
     cls_tbl = (pol.groupby("class").agg(keys=("product_id", "size"),
                                         sales=("sales_2026", "sum"))
@@ -170,22 +194,28 @@ def main(argv=None) -> int:
                .rename(columns={"class": "service_class"}))
     total_sales = float(pol["sales_2026"].sum())
     cls_tbl["sales_share"] = (cls_tbl["sales"] / total_sales) if total_sales > 0 else 0.0
-    cls_tbl["quantile"] = [CLASS_QUANTILE[c]["quantile"] for c in cls_tbl["service_class"]]
-    cls_tbl["prior"] = [CLASS_QUANTILE[c]["service_level_prior"]
+    cls_tbl["quantile"] = [PRESETS[args.preset][c]["quantile"]
+                           for c in cls_tbl["service_class"]]
+    cls_tbl["prior"] = [PRESETS[args.preset][c]["service_level_prior"]
                         for c in cls_tbl["service_class"]]
-    cls_tbl["basis"] = [CLASS_QUANTILE[c]["basis"] for c in cls_tbl["service_class"]]
+    cls_tbl["basis"] = [PRESETS[args.preset][c]["basis"]
+                        for c in cls_tbl["service_class"]]
 
-    L = ["# 服务分档政策（P2a，2026-11-12）", "",
-         f"- 规则版本：`{RULE_VERSION}`",
+    L = ["# 服务分档政策（P2c，2026-11-12）", "",
+         f"- 规则版本：`{RULE_VERSION}`；预设 **{args.preset}**",
          f"- 输入：D3b v3.11 `3_分类` + 2026-01..10 当前 owner 销量",
-         f"- 键数 **{len(pol)}**；2026 销量 **{total_sales:.0f}**",
+         f"- 键数 **{len(pol)}**；2026 销量 **{total_sales:.0f}**；"
+         f"覆盖 **{int(pol['override_applied'].sum())}** 行",
          "", "## 1. 方法", "",
          "- **ABC**：2026 销量降序累计 **80/15/5**；跨过 80% 的那一件留在 A（A 可略超 80%）。",
          "- **XYZ**：X=`smooth`；Y=`intermittent`；Z=`lumpy/erratic/n/a` 或 "
          "`obsolescent/new/short/no_demand`（用 `sbc_class_train`/`demand_pattern_train`）。",
          "- **A/B/C/D**：A(X/Y)=A；A(Z)/B(X/Y)=B；B(Z)/C(X/Y)=C；"
          "C(Z)、零销量、新品、淘汰、短史=D。",
-         "- **分位**：A q95 / B q90 / C q85 / D q85（D 用 fill-rate 代理，未直接算 fill-rate）。",
+         f"- **预设**：`{args.preset}` → {json.dumps(
+             {c: PRESETS[args.preset][c]['quantile_label'] for c in SERVICE_CLASSES},
+             ensure_ascii=False)}；D 为 fill-rate 代理。",
+         "- 覆盖 CSV：`sku,pool,preset_or_quantile,reason,owner,as_of`；未知键/空 reason/非法值直接报错。",
          "- 不是服务承诺；未知 class 不自动补，D6 遇到 missing/unknown 会转“观察”。",
          "", "## 2. 各类键数/销量", "",
          "| class | 键数 | 2026 销量 | 销量占比 | quantile | prior | basis |",
@@ -207,19 +237,36 @@ def main(argv=None) -> int:
              "KS0211-KJB-90-DEEPGREY", "KS0211-DM-60-DEEPGREY"])].iterrows():
         L.append(f"| {r['product_id']} | {r['pool']} | {r['abc_class']} | {r['xyz_class']} | "
                  f"{r['class']} | {r['quantile']:.2f} | {r['sales_2026']:.0f} |")
+    if len(audit):
+        L += ["", "## 5. 覆盖审计", "",
+              "| sku | pool | class | preset | quantile | 覆盖值 | reason | owner | as_of |",
+              "|---|---|---|---|---:|---|---|---|---|"]
+        for _, r in audit.iterrows():
+            L.append(f"| {r['sku']} | {r['pool']} | {r['class']} | {r['preset']} | "
+                     f"{r['quantile']:.2f} | {r['override_value']} | "
+                     f"{r['override_reason']} | {r['override_owner']} | {r['override_as_of']} |")
+    else:
+        L += ["", "## 5. 覆盖审计", "", "- 本轮无覆盖。"]
     Path(args.out_report).write_text("\n".join(L) + "\n", encoding="utf-8")
 
     manifest = dict(
         rule_version=RULE_VERSION,
+        preset=args.preset,
         generated_at_utc=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         inputs=dict(d3b=dict(path=args.d3b, sha256=sha256(args.d3b)),
-                    series=dict(path=args.series, sha256=sha256(args.series))),
+                    series=dict(path=args.series, sha256=sha256(args.series)),
+                    overrides=(dict(path=args.overrides, sha256=sha256(args.overrides))
+                               if args.overrides and Path(args.overrides).exists() else None)),
         outputs=dict(csv=dict(path=args.out_csv, sha256=sha256(args.out_csv),
                               rows=len(pol_out)),
-                     report=dict(path=args.out_report, sha256=sha256(args.out_report))),
+                     report=dict(path=args.out_report, sha256=sha256(args.out_report)),
+                     overrides_audit=dict(path=args.out_overrides_audit,
+                                          sha256=sha256(args.out_overrides_audit),
+                                          rows=len(audit))),
         counts=dict(keys=len(pol), total_sales_2026=total_sales,
                     class_counts=pol["class"].value_counts().to_dict(),
-                    class_sales=pol.groupby("class")["sales_2026"].sum().to_dict()),
+                    class_sales=pol.groupby("class")["sales_2026"].sum().to_dict(),
+                    overrides=int(pol["override_applied"].sum())),
         selfcheck=dict(unknown_class_rows=missing, class_quantile_mismatch=qbad),
     )
     Path(args.manifest).write_text(
