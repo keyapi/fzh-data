@@ -6,6 +6,9 @@ title: 集成问题 — 变更日志
 
 # 变更日志
 
+## 2026-11-12
+- **新增**: `frappe-desk-page-iframe-rpc-bridge.md` — Desk Page + iframe srcdoc + `frappe.xcall` 嵌本地侧应用。两个只在真实浏览器出现的坑：GET 时 `payload` 是空字符串（桥接要视为 `{}`，否则 417）；iframe sandbox 必须带 `allow-forms`，否则表单提交被浏览器拦截。另记 Page 路径在 module==app 时多一层。
+
 ## 2026-11-09
 - **更新**: 通途SKU↔EN物料 权威映射 — 补「登记位置与组件多对多」：唯一登记位置是 Item 子表 `customer_items.ref_code`（不是主表 `Item.customer_code`）；同一 Item 可同时有整件与 `-Cover/-Foam`；组件 SKU 多对多（共享皮壳/填充物），完整 SKU 才唯一；配套 `work_order_task#4`（校验放宽）与 `tongtool_integration#22`（同步不要 LIMIT 1）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
 

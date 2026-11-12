@@ -151,6 +151,7 @@ uv sync
 | `yiglobal-api` | `yiglobal-api/` | 蜴国际打单 API 文档（原 `蜴国际-API/`；env：`YIGLOBAL_*`） |
 | `en-image-upload` | `EN_API/` | EN/ERPNext 生产系统操作总目录（图片上传、物料组/BOM 维护、出货计划与报关、服务器与凭证入口） |
 | `supply-chain-visibility` | `supply_chain_visibility/` | EN 供应链可视化：全链路实体地图 + 呈现形式调研 + SO 表单内嵌摘要 / 原生报表（`key_test` 产物） |
+| `demand-collaboration` | `demand_collaboration/` | 运营需求协同工作台：运营提交销量判断/事件，审核发布版本化需求情景；EN Page + 行级范围 |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
@@ -264,14 +265,14 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 
 ### 经验库路由（`docs/solutions/`）
 
-**动手前先查这里有没有现成结论**——踩过的坑基本都在。131 篇按 category 分 8 类，每类一份 `index.md`：
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。135 篇按 category 分 8 类，每类一份 `index.md`：
 
 | 类别 | 篇数 | 什么时候读 |
 |------|-----|-----------|
 | `workflow-issues/` | 35 | 账期对账、迟交/错位、跨期结算、批处理流程 |
-| `integration-issues/` | 25 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
-| `architecture-patterns/` | 21 | 「这个管道/系统为什么这样设计」 |
-| `tooling-decisions/` | 15 | 脚本、工具选型、产出校验 |
+| `integration-issues/` | 26 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
+| `architecture-patterns/` | 22 | 「这个管道/系统为什么这样设计」 |
+| `tooling-decisions/` | 16 | 脚本、工具选型、产出校验 |
 | `developer-experience/` | 14 | Windows / worktree / MCP / Colab 等本机环境坑 |
 | `conventions/` | 10 | 团队约定（配对、命名、SOP） |
 | `best-practices/` | 9 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |

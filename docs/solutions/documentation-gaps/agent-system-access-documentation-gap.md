@@ -3,6 +3,7 @@ okf: v0.1
 type: Reference
 title: AGENTS.md Missing ERPNext Environment Access Distinction
 date: 2026-07-03
+last_updated: 2026-11-12
 category: docs/solutions/documentation-gaps/
 module: AGENTS.md (project instruction system)
 problem_type: documentation_gap
@@ -163,6 +164,21 @@ Fix shipped with this entry:
 AGENTS.md the moment it is discovered, and any *negation* of it ("X is unreachable") must be traceable
 to an observation, not to a single failed attempt. Wrong facts in per-module docs propagate: each new
 session reads them as ground truth.
+
+## Third instance (2026-11-12): 测试站的站点目录也叫 `erpnext.vilavi.cn`
+
+部署运营需求协同 Page 时差点连错环境。事实是三层同名/不同名：
+
+| 层 | 生产 | 测试 |
+|---|---|---|
+| 浏览器公网域名 | `https://erpnext.vilavi.cn`（DNS → 47.116.128.218） | `https://ensh.vilavi.cn`（DNS → 8.133.254.66） |
+| 服务器 nginx `server_name` | `erpnext.vilavi.cn` | `ensh.vilavi.cn 8.133.254.66` |
+| `bench --site` / 站点目录名 | `erpnext.vilavi.cn` | **也叫 `erpnext.vilavi.cn`**（`site_config.hostname=ensh.vilavi.cn`） |
+
+所以：
+- 在测试服务器上 `sudo -n -u frappe bench --site erpnext.vilavi.cn migrate` 是**正确的**（目录名）。
+- 但浏览器打开 `https://erpnext.vilavi.cn` 会打到**生产**；测试务必用 `https://ensh.vilavi.cn`。
+- 部署前先核三条：`nslookup <域名>`、测试机 `grep server_name /etc/nginx/conf.d/*.conf`、`site_config.json` 的 `hostname`。三者不一致时，以“浏览器域名”为准。
 
 ## Related
 

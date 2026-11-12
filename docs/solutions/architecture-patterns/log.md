@@ -7,6 +7,10 @@ tags: [solutions, architecture-patterns, log]
 
 # architecture-patterns 变更日志
 
+## 2026-11-12
+
+- **新增**: `side-ledger-row-scope-default-deny.md` — 侧台账（SQLite）按 `(product_id, branch)` 默认拒绝；bridge 过滤 rows/proposals/audit；**publication 对象对 scoped 用户整体隐藏**（快照嵌全量行），发布/下载仅 Reviewer/SM；`set_scope` 仅 SM。
+
 ## 2026-10-14
 
 - **新增**: `ustx-cost-caliber-comparison.md` — 美中仓库由 `2CJG-SX` 改走当地 USTX 加工的 A/B1/B2 三口径只读对比方法论：先验「测算表是手填还是公式」再定等价闸门（本例人工测算 B1 与 import 重建 B2 在 57 个共有键上无一相等 → **差异即结论**）；歧义维表键 fail-closed（同键不同重量模板 → 摘除索引、对应行记 `ambiguous_shell_key` 排除，不猜首/末行）；闸门分级（阻断级 vs 告警级）；只读快照 `render_option` 值/公式双冻结。

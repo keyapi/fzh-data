@@ -10,6 +10,7 @@ timestamp: 2026-07-28
 
 | 标题 | 文件 |
 |------|------|
+| 侧台账的行级范围：默认拒绝 + bridge 过滤 + 快照对象不外发 | [side-ledger-row-scope-default-deny.md](side-ledger-row-scope-default-deny.md) |
 | EN 直接采购件用「自套 BOM」出成本的惯例 + 骨架缺口 | [en-direct-purchase-self-bom.md](en-direct-purchase-self-bom.md) |
 | EN 端到端供应链履约可视化蓝图 | [en-end-to-end-supply-chain-fulfillment-visibility.md](en-end-to-end-supply-chain-fulfillment-visibility.md) |
 | 公开代码仓与私有公司知识分层——兼顾 Agent 检索、同事使用与防泄露 | [public-private-agent-knowledge-split.md](public-private-agent-knowledge-split.md) |

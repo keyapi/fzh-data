@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-12 | Frappe Desk Page 嵌本地侧应用：Page 路径、空 payload、iframe allow-forms | [frappe-desk-page-iframe-rpc-bridge.md](frappe-desk-page-iframe-rpc-bridge.md) |
 | 2026-11-06 | 邮件域名到期 → Gmail 550-5.7.26 拒收：续费≠恢复，注册商≠DNS 托管商；含 RDAP → 权威 NS → 真实 zone 三层排查与自定义 DKIM selector | [email-domain-expiry-gmail-550-5-7-26.md](email-domain-expiry-gmail-550-5-7-26.md) |
 | 2026-11-05 | git push 报 `Permission denied (publickey)` —— 密钥没问题，是 GitHub SSH 链路间歇性阻断；含三步判定法与一键 HTTPS 回退 | [github-ssh-intermittent-publickey-denied.md](github-ssh-intermittent-publickey-denied.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [layout-field-in-list-view-breaks-metadata-writes.md](layout-field-in-list-view-breaks-metadata-writes.md) |

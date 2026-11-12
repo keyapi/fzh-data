@@ -7,6 +7,14 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-12（运营需求协同工作台：复核 + EN 测试站）
+
+- **新增**: `integration-issues/frappe-desk-page-iframe-rpc-bridge.md` — Desk Page + iframe srcdoc + `frappe.xcall` 嵌本地侧应用；两个只在真实浏览器出现的坑：空 payload 串、iframe sandbox 缺 `allow-forms`。
+- **新增**: `architecture-patterns/side-ledger-row-scope-default-deny.md` — 侧台账按 `(product_id, branch)` 默认拒绝；publication 对象对 scoped 用户整体隐藏。
+- **新增**: `tooling-decisions/d5-import-out-of-scope-vs-missing-forecast.md` — D5 导入四分法（接受/范围外/缺预测/非法），不把 185 条范围外当拒收，也不把 51 条缺预测填 0。
+- **更新**: `documentation-gaps/agent-system-access-documentation-gap.md` — 第三次实例：测试站站点目录也叫 `erpnext.vilavi.cn`，公网必须用 `ensh.vilavi.cn`。
+- **背景**: 独立复核 Codex 工作台 → 修 P0（行级范围/发布泄露、范围外拒收阻断基准）→ 接 EN 测试站并真实浏览器验收；生产未部署。
+
 ## 2026-11-11（Claude Desktop MCP / npx @latest 装包失败）
 
 - **新增**: `developer-experience/claude-desktop-mcp-server-disconnected-npx.md` —— Claude Desktop 弹 `MCP playwright: Server disconnected`，根因是 `@latest` 在 Windows 更新重启后的首次启动自动升级 0.0.85，解包两个 `.d.ts` 报 `ENOENT`、入口 `cli.js` 缺失，node 立即退出；约 2 分钟后新会话的 npx 把目录补装完整。可排除磁盘满（C 剩 12G）与「重启打断安装」（安装发生在重启之后）。判读口诀：先读 `mcp-server-<name>.log`，找 `will be installed` + `TAR_ENTRY_ERROR` + `MODULE_NOT_FOUND`；npm 对解包错误只 warn 不重试，Claude 也不会在同一会话自动重拉。本次决定保留 `@latest`、不加自愈包装脚本。`docs/mcp-setup.md` 排错表同步加了对应行。
