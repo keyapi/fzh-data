@@ -1294,6 +1294,7 @@ def main(argv=None) -> int:
             ("MOQ", "成品 n/a（自有绍兴工厂）按个取整；原料用 moq_items_21"),
             ("服务分档", "service_policy v1；A q95/B q90/C q85/D q85；D 为 fill-rate 代理；"
                         "未知 class 不补；net_95 保留敏感性"),
+            ("服务预设", f"{args.preset}；overrides={args.service_overrides or '无'}"),
             ("保护窗", "97 天按 service_policy 的 class 分位（A q95/B q90/C q85/D q85）；q95 列保留敏感性；非随机服务承诺；auto_order=false"),
             ("需要日", "C 可发覆盖耗尽日（封顶 97 天）；下单日=需要日−50"),
         ] + [(f"输入 SHA · {k}", v["sha256"]) for k, v in inputs.items()],
@@ -1532,6 +1533,8 @@ def main(argv=None) -> int:
                                            service_promise=False,
                                            service_tiers=dict(
                                                policy=args.service_policy,
+                                               preset=args.preset,
+                                               overrides=args.service_overrides or "",
                                                class_counts=f["service_class"].value_counts().to_dict())),
                     source_snapshots=dict(en_stock=dict(snapshot_date=es_snapshot,
                                                         status=es_snapshot_status,
