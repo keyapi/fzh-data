@@ -344,3 +344,14 @@ updated: 2026-10-27
 - Codex 第二轮 P1：候选资格/模型集只用 `SELECTION_END=202604` 之前的数据（holdout 不参与分类）；
   A/B/C 不再同窗选模，沿用 validation adopted 并统一在 holdout（202604, h=6）评估；
   A/B/C 汇总增加共同样本 WAPE 与差量列，不再只在自检里取交集。
+
+## 2026-11-12 — 服务分档政策（P2a）
+
+- 新增 `supply_netting/service_policy.py`、`scripts/build_service_policy_20261112.py`、
+  `tests/service_policy/test_service_policy.py`：ABC 80/15/5 × XYZ（训练期 sbc_class）→ A/B/C/D。
+- 政策：A q95 / B q90 / C q85 / D q85（D 为 fill-rate 代理）；输出 1749 键的
+  `service_policy_20261112.csv`，A/B/C/D = 148/323/390/888。
+- D6 v6.23：`scripts/d6_top50_sandbox_v6_23_20261112.py` 接 policy，动作/数量用
+  `net_selected`，q95 保留敏感性；自检全部 PASS。
+- 对比 v6.22（全 q95）：1571 共同键，动作变化 250（补→不补），数量 39,834→19,404。
+- 边界：只做 P2a，不改 D5/CNY/生产。
