@@ -153,6 +153,17 @@ resource: sellfox_settlement/docs/research/2026-11-10-v2-settlement-to-order-mat
   - <https://evolvedcommerce.com/resources/blog/amazon-seller-accounting-payouts-vs-pnl>、<https://help.linkmybooks.com/en/articles/12080631-amazon-deferred-transactions-revenue-recognition>、<https://neonpanel.com/blog/amazon-deferred-transactions-dd7-accounting>
 - **若一定要简化**：可用"**结算组净收入（accountNetIncome，不是打款 transferAmount）− 该结算组对应订单成本**"作为**结算期口径**的近似，并标注"结算期≠自然月"；或做 DD+7 月末调整后看自然月。**不建议把"打款−账外成本"当运营业绩**，会随放款节奏忽高忽低。
 
+### 12.1 用"结算期净额 − 订单成本"给运营算业绩：可行（业界有对应做法）
+
+- 业界把它叫**结算期贡献毛利（settlement-period contribution）**：`结算组净收入（accountNetIncome，剔除预留变动） − 订单明细匹配的产品成本/头程/尾程 − 其他费用`。业界 CM 公式即 `净收入 − Amazon 费用 − 落地 COGS`（BrandGrowthIQ/Nova/SellerVine）。
+- **优点**：Amazon 各项费用**已净额扣除**，账号级费用（仓储/订阅）也不用再分摊；与现金一致、难被运营博弈。
+- **必须满足的前提**：
+  1. 用 **accountNetIncome（结算净收入）**，**不用 transferAmount**；预留是资产负债表项，**业绩里剔除**（若只能用打款，就把"本期预留增加"加回、"上期预留释放"扣除）。
+  2. **用该账期的订单明细**按 `orderId+SKU` 去匹配 EN 产品/头程、通途尾程；**退款行可能引用更早月份订单**，需回看原单成本，否则会漏成本。
+  3. 明确标注这是**结算期口径**，不是自然月销售；不要和"通途发货月"业绩混比。
+  4. 其他平台没有统一的账期明细（仅钉钉附件/只有一个数），**这套只能先用 Amazon**。
+- **两套并列**：**运营考核**用结算期口径；**财务/管理**用 posted/履约日经营口径；不要合成一个数。
+
 ## 13. 来源
 
 - Nova 结算指南（六块、账户级费用、预留、off-account 广告）：<https://novadata.io/resources/blog/amazon-settlement-report-guide>
