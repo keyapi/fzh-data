@@ -330,3 +330,11 @@ updated: 2026-10-27
 - 需业务拍板：`KS0340 ↔ KS0342` 两个前缀的客户码在 `en_item_customer_codes.csv` 与 v5 之间**交叉**
   （Curve-Pillow-50-PPCotton 701、TT0031177K0063900-Cover 140、TT0031188K0063922-Cover 46）。
 - 修了两个自查出来的 bug：`-Cover2` 漏判形态（曾致 158 差异）；v5 空单元格 `str(NaN)` 变成字面量 "nan" 混进 SKU 集。
+
+## 2026-11-12 — 预测 ADR（P0）
+
+- 新增 [`FORECAST_ADR_20261112.md`](FORECAST_ADR_20261112.md)：计划窗 `H_key = ceil((L_p90+R+buffer)/7)×7`；
+  标准桶 98/154/161/91/112；A/B/C/D 服务先验；rolling-origin + FVA 选择协议；
+  `4_回测_asof` → `3_分类` 单一事实源；春节供给日历 + bridge 窗；趋势诊断口径。
+- 依据：`D:/Work/fzh-order-store/analysis/FORECAST_RESEARCH_SYNTHESIS_20261112.md` 及两份独立调研。
+- 边界：只定规则，不改 D5/D6/CNY；P1 在 D3b v3.11 落地。

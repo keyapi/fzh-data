@@ -13,6 +13,7 @@ updated: 2026-10-27
 
 | 你需要… | 读这个 |
 |---|---|
+| **预测 ADR（计划窗 H_key / 98-154-161-91-112 / A-B-C-D 服务档 / 模型选择 / 春节 bridge）** | [FORECAST_ADR_20261112.md](FORECAST_ADR_20261112.md) |
 | **11-02 D3-D6返修计划与接手** | [计划](demand-repair-2026-11-02.md) / [结果与限制](demand-repair-handoff-2026-11-02.md) |
 | 引擎口径、两种情景、未知怎么保留 | [reference/netting-engine.md](reference/netting-engine.md) |
 | 阶段余额 / 里程碑 / 可售 tranche 结构 | [reference/supply-facts-contract.md](reference/supply-facts-contract.md) |
