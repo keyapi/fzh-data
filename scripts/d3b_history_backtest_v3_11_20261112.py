@@ -75,6 +75,7 @@ OBS_MONTHS = [m for m in OBS_MONTHS if m <= END_MONTH]     # 202301..202610
 ORIGINS = ("202604", "202605", "202606", "202607")   # A/B/C 仓级回测起点
 VALID_ORIGINS = ("202512", "202601")                  # 选模：test 202601..202604
 HOLDOUT_ORIGINS = ("202604",)                         # 最终 holdout：test 202605..202610
+SELECTION_END = "202604"                              # 候选资格/分类只用 <= 此月的数据
 H = 3
 HOLDOUT_H = 6
 MIN_TRAIN_OBS = 12
@@ -1270,39 +1271,55 @@ def main(argv=None) -> int:
         n_pos = int(len(pos_idx))
         if n_pos == 0:
             usable = np.zeros(len(OBS_MONTHS), dtype=bool)
+        # 候选资格/模型集只用 SELECTION_END 之前的数据；holdout 不参与分类
+        train_mask = np.array(OBS_MONTHS) <= SELECTION_END
+        usable_train = usable & train_mask
+        pos_train = np.where((vals > 0) & train_mask)[0]
+        first_pos_train = int(pos_train[0]) if len(pos_train) else None
         n_censored = int((~obs & active).sum())
         hist_rows.append(dict(key_version=KEY_VERSION, product_id=pid, pool=pool,
                               physical_form=form, canonical_uom=uom,
                               first_positive_month=(OBS_MONTHS[first_pos] if first_pos is not None else ""),
                               last_month=END_MONTH,
                               history_months_effective=n_usable,
+                              history_months_effective_train=int(usable_train.sum()),
                               months_before_2025=int((usable & (np.array(OBS_MONTHS) < "202501")).sum()),
-                              months_positive=n_pos, months_censored=n_censored,
+                              months_positive=n_pos,
+                              months_positive_train=int((vals[usable_train] > 0).sum()),
+                              months_censored=n_censored,
                               qty_total=float(vals[usable].sum()),
+                              qty_total_train=float(vals[usable_train].sum()),
                               evidence_quality=("2025+ 有删失证据" if n_usable else "无可用月")))
         y = np.where(usable, vals, np.nan)
         c = classify(y[usable], hist_rows[-1]["first_positive_month"] or None)
+        c_train = classify(
+            y[usable_train],
+            (OBS_MONTHS[first_pos_train] if first_pos_train is not None else None))
         row = dict(key_version=KEY_VERSION, product_id=pid, pool=pool,
-                   physical_form=form, canonical_uom=uom, n_obs=c["n_obs"], n_pos=c["n_pos"], adi=c["adi"], cv2=c["cv2"],
-                   demand_pattern=c["demand_pattern"], sbc_class=c["sbc_class"],
+                   physical_form=form, canonical_uom=uom,
+                   n_obs=c_train["n_obs"], n_pos=c_train["n_pos"],
+                   adi=c_train["adi"], cv2=c_train["cv2"],
+                   demand_pattern=c_train["demand_pattern"], sbc_class=c_train["sbc_class"],
+                   n_obs_full=c["n_obs"], n_pos_full=c["n_pos"],
+                   demand_pattern_full=c["demand_pattern"], sbc_class_full=c["sbc_class"],
                    is_legacy=pid in legacy_products, new_product=pid in new_products,
                    clearance=pid in clearance, shared_candidate=bool(pid in shared_products))
-        eligible = (c["n_obs"] >= MIN_HIST_CLASS and c["n_pos"] > 0
+        eligible = (c_train["n_obs"] >= MIN_HIST_CLASS and c_train["n_pos"] > 0
                     and pid not in legacy_products)
         row["eligible"] = eligible
         row["backtested"] = False          # 至少 1 个有效 origin 且模型可评估才置 True
         row["adoption_status"] = "not_eligible" if not eligible else ""
         if not eligible:
             why = ("老品" if pid in legacy_products else
-                   "真无历史" if c["n_pos"] == 0 else "短史")
+                   "真无历史" if c_train["n_pos"] == 0 else "短史")
             row["not_backtestable_reason"] = why
             fail_rows.append(dict(层级="series", product_id=pid, pool=pool,
                                   physical_form=form, canonical_uom=uom,
-                                  类型=why, 原因=f"可用月 {c['n_obs']} / 正销月 {c['n_pos']}",
+                                  类型=why, 原因=f"训练期可用月 {c_train['n_obs']} / 正销月 {c_train['n_pos']}",
                                   fallback=("observation_only（不预测）")))
             cls_rows.append(row)
             continue
-        models = models_for(c["demand_pattern"], c["sbc_class"])
+        models = models_for(c_train["demand_pattern"], c_train["sbc_class"])
         # 选模用 validation；最终 6 个月 holdout 只评估，不参与 select()
         rows_val = backtest(y, usable, models, origins=VALID_ORIGINS, h=H)
         rows_hold = backtest(y, usable, models, origins=HOLDOUT_ORIGINS, h=HOLDOUT_H)
@@ -1314,7 +1331,7 @@ def main(argv=None) -> int:
             for split, mm in (("validation", mv), ("holdout", mh)):
                 res_rows.append(dict(key_version=KEY_VERSION, product_id=pid, pool=pool,
                                      physical_form=form,
-                                     canonical_uom=uom, demand_pattern=c["demand_pattern"],
+                                     canonical_uom=uom, demand_pattern=c_train["demand_pattern"],
                                      model=name, family=("baseline" if name in BASELINES else "new"),
                                      split=split, status=mm["status"], n_obs=mm["n"],
                                      wape=mm["wape"], mae=mm["mae"], pinball50=mm["pinball50"],
@@ -1379,8 +1396,9 @@ def main(argv=None) -> int:
     hist_tbl = pd.DataFrame(hist_rows)
 
     # ---------- current-owner 有效历史 + 分类（预测用；不做历史回测，避免 owner 未来信息泄漏）
+    # 多源 tie-break 只用训练期数量，holdout 不参与 source 选择
     hist_qty_by_key = {(r.product_id, r.pool, r.physical_form, r.canonical_uom):
-                       float(r.qty_total)
+                       float(r.qty_total_train)
                        for r in hist_tbl.itertuples(index=False)}
     # ---------- 单一事实源：current-owner 键只 join as-of 的 adopted ----------
     asof_adoption = build_asof_adoption_map(cls_tbl, res_tbl, hist_qty_by_key)
@@ -1419,6 +1437,14 @@ def main(argv=None) -> int:
             evidence_quality=("2025+ 有删失证据" if n_usable else "无可用月")))
         y = np.where(usable, vals, np.nan)
         c = classify(y[usable], hist_cur_rows[-1]["first_positive_month"] or None)
+        # 训练期分类（<=202604）仅作透明展示；模型采用仍只来自 as-of validation
+        train_mask = np.array(OBS_MONTHS) <= SELECTION_END
+        usable_train_cur = usable & train_mask
+        pos_train_cur = np.where((vals > 0) & train_mask)[0]
+        first_pos_train_cur = int(pos_train_cur[0]) if len(pos_train_cur) else None
+        c_train_cur = classify(
+            y[usable_train_cur],
+            (OBS_MONTHS[first_pos_train_cur] if first_pos_train_cur is not None else None))
         join = current_adoption[key]
         trend_rows.append(dict(
             product_id=pid, pool=pool, physical_form=form, canonical_uom=uom,
@@ -1432,6 +1458,9 @@ def main(argv=None) -> int:
             owner_reason=owner_reason.get(pid, ""),
             n_obs=c["n_obs"], n_pos=c["n_pos"], adi=c["adi"], cv2=c["cv2"],
             demand_pattern=c["demand_pattern"], sbc_class=c["sbc_class"],
+            n_obs_train=c_train_cur["n_obs"], n_pos_train=c_train_cur["n_pos"],
+            demand_pattern_train=c_train_cur["demand_pattern"],
+            sbc_class_train=c_train_cur["sbc_class"],
             is_legacy=pid in legacy_products, new_product=pid in new_products,
             clearance=pid in clearance, shared_candidate=bool(pid in shared_products),
             eligible=(c["n_obs"] >= MIN_HIST_CLASS and c["n_pos"] > 0
@@ -1685,7 +1714,8 @@ def main(argv=None) -> int:
                     and min(nj, tx) / total >= 0.10)
 
     def _asof_pool_forecast(pid: str, pool_name: str, form: str, uom: str,
-                            origin: str, fn, usable: np.ndarray, y: np.ndarray):
+                            origin: str, fn, usable: np.ndarray, y: np.ndarray,
+                            horizon: int = H):
         yv = np.array([ser.get(((pid, pool_name, form, uom), mo), 0.0)
                        for mo in OBS_MONTHS], dtype=float)
         if not np.any(yv > 0):
@@ -1697,7 +1727,7 @@ def main(argv=None) -> int:
         first_train = observed[0]
         ytr = np.where(usable[first_train:oi + 1], yv[first_train:oi + 1], np.nan)
         try:
-            fc_p = np.asarray(fn(ytr, H), dtype=float)
+            fc_p = np.asarray(fn(ytr, horizon), dtype=float)
         except Exception:                                      # noqa: BLE001
             return None
         return fc_p if np.all(np.isfinite(fc_p)) else None
@@ -1720,18 +1750,16 @@ def main(argv=None) -> int:
         if int(usable.sum()) < MIN_HIST_CLASS:
             continue
         y = np.where(usable, vals, np.nan)
-        c = classify(y[usable], OBS_MONTHS[first_pos])
-        models = models_for(c["demand_pattern"], c["sbc_class"])
-        rows = backtest(y, usable, models)
-        per = {m: agg([r for r in rows if r.get("model") == m]) for m in models}
-        sel = select(per, c["demand_pattern"], rows=rows)
-        model = sel["adopted"]
-        if model == "none":
+        # 不在此处重选模型：沿用前置 validation 的 current-owner adopted
+        model = current_adoption.get(key, {}).get("model", "none")
+        if model in ("none", ""):
             continue
         fn = BASELINES.get(model) or NEW_MODELS.get(model)
+        if fn is None:
+            continue
         owner_tx = _owner_tx(pid)
         key_records = []
-        for origin in ORIGINS:
+        for origin in HOLDOUT_ORIGINS:
             oi = OBS_MONTHS.index(origin)
             observed = [i for i in range(oi + 1) if usable[i] and np.isfinite(y[i])]
             if len(observed) < MIN_TRAIN_OBS:
@@ -1739,14 +1767,16 @@ def main(argv=None) -> int:
             first_train = observed[0]
             ytr = np.where(usable[first_train:oi + 1], y[first_train:oi + 1], np.nan)
             try:
-                fc = np.asarray(fn(ytr, H), dtype=float)
+                fc = np.asarray(fn(ytr, HOLDOUT_H), dtype=float)
             except Exception:                                  # noqa: BLE001
                 continue
             if not np.all(np.isfinite(fc)):
                 continue
             # A：历史仓池分别预测（只用 origin 前 as-of 序列）
-            a_nj = _asof_pool_forecast(pid, "美东USNJ", form, uom, origin, fn, usable, y)
-            a_tx = _asof_pool_forecast(pid, "美中USTX", form, uom, origin, fn, usable, y)
+            a_nj = _asof_pool_forecast(pid, "美东USNJ", form, uom, origin, fn, usable, y,
+                                       horizon=HOLDOUT_H)
+            a_tx = _asof_pool_forecast(pid, "美中USTX", form, uom, origin, fn, usable, y,
+                                       horizon=HOLDOUT_H)
             # C90/C180：仅当 origin 当时已知的双仓责任成立时使用份额
             c90_tx = (_origin_share(pid, origin, 90)
                       if _origin_dual(pid, origin, 90) else owner_tx)
@@ -1756,7 +1786,7 @@ def main(argv=None) -> int:
                 c90_tx = owner_tx
             if c180_tx is None:
                 c180_tx = owner_tx
-            for step, i in enumerate(range(oi + 1, min(oi + 1 + H, len(OBS_MONTHS)))):
+            for step, i in enumerate(range(oi + 1, min(oi + 1 + HOLDOUT_H, len(OBS_MONTHS)))):
                 if not obs[i] or not np.isfinite(vals[i]):
                     continue
                 moi = OBS_MONTHS[i]
@@ -1810,10 +1840,21 @@ def main(argv=None) -> int:
                     wape=(sum(r["abs_err"] for r in sub) / act if act > 0 else np.nan)))
     alloc_detail = pd.DataFrame(alloc_records)
     alloc_keys = pd.DataFrame(alloc_key_rows)
+    # 共同样本：A 是 as-of 历史仓口径，可能缺 B/C 的 current-owner 键；
+    # 汇总同时给 full 与 common，差量单列，避免 39,736 vs 39,836 只在自检里解释。
+    _akeys = ["product_id", "physical_form", "canonical_uom", "origin", "month"]
+    _asets = ([set(map(tuple, alloc_detail.loc[alloc_detail["scenario"] == s, _akeys].values))
+               for s in ("A", "B", "C90", "C180")]
+              if len(alloc_detail) else [])
+    _acommon = set.intersection(*_asets) if _asets else set()
+    _amask = ([tuple(r) in _acommon for r in alloc_detail[_akeys].values]
+              if len(alloc_detail) else [])
+    _adf = alloc_detail[_amask] if len(alloc_detail) else alloc_detail
     alloc_summary_rows = []
     for scenario in ("A", "B", "C90", "C180"):
         d = (alloc_detail[alloc_detail["scenario"] == scenario]
              if len(alloc_detail) else alloc_detail)
+        dc = (_adf[_adf["scenario"] == scenario] if len(_adf) else _adf)
         for wh, alloc_col, actual_col in (
                 ("美东USNJ", "alloc_nj", "actual_nj"),
                 ("美中USTX", "alloc_tx", "actual_tx"),
@@ -1823,12 +1864,19 @@ def main(argv=None) -> int:
             if wh == "合计":
                 alloc = d["alloc_nj"] + d["alloc_tx"]
                 actual = d["actual_nj"] + d["actual_tx"]
+                alloc_c = dc["alloc_nj"] + dc["alloc_tx"] if len(dc) else alloc.iloc[0:0]
+                actual_c = dc["actual_nj"] + dc["actual_tx"] if len(dc) else actual.iloc[0:0]
             else:
                 alloc = d[alloc_col]
                 actual = d[actual_col]
+                alloc_c = dc[alloc_col] if len(dc) else alloc.iloc[0:0]
+                actual_c = dc[actual_col] if len(dc) else actual.iloc[0:0]
             a_sum, f_sum = float(actual.sum()), float(alloc.sum())
             abs_err = float((alloc - actual).abs().sum())
             short = float((actual - alloc).clip(lower=0).sum())
+            c_a, c_f = float(actual_c.sum()), float(alloc_c.sum())
+            c_abs = float((alloc_c - actual_c).abs().sum())
+            c_short = float((actual_c - alloc_c).clip(lower=0).sum())
             note = {"A": "历史仓池分别预测（as-of，origin 前）",
                     "B": "current owner 1/0（生产候选）",
                     "C90": "近 90 天仓份额，仅 origin 当时已证双仓产品",
@@ -1840,6 +1888,13 @@ def main(argv=None) -> int:
                 wape=(abs_err / a_sum if a_sum > 0 else np.nan),
                 bias=((f_sum - a_sum) / a_sum if a_sum > 0 else np.nan),
                 stockout_rate=(short / a_sum if a_sum > 0 else np.nan),
+                common_keys=int(dc["product_id"].nunique()) if len(dc) else 0,
+                common_months=len(dc),
+                common_actual=c_a, common_allocated=c_f,
+                common_wape=(c_abs / c_a if c_a > 0 else np.nan),
+                common_bias=((c_f - c_a) / c_a if c_a > 0 else np.nan),
+                common_stockout_rate=(c_short / c_a if c_a > 0 else np.nan),
+                excluded_actual=round(a_sum - c_a, 6),
                 production_candidate=("是" if scenario == "B" else "否"),
                 note=note))
     alloc_tbl = pd.DataFrame(alloc_summary_rows)
@@ -2690,15 +2745,20 @@ def main(argv=None) -> int:
          "- **C90/C180**：近 90/180 天仓份额，仅用于 origin 当时已证真实双仓责任产品"
          "（两池均≥20 件且份额≥10%）；非双仓 C=B。",
          "- **A**：历史仓池分别预测（as-of 序列，只用 origin 前数据）；仅作 evidence/备选。",
+         "- **评估窗口**：A/B/C 统一用 holdout origin 202604（h=6，test 202605..202610）；"
+         "模型沿用前置 validation 的 adopted，不在此处重选。",
+         "- **共同样本**：A 可能缺 B/C 的 current-owner 键；表内同时给 full 与共同样本 WAPE，"
+         "差量列即 A 缺键的实际量。",
          "- 历史迁移不进入仓份额训练：A/C 的份额只使用 origin 之前的数据；B 使用当前 owner 结构事实。",
          "- 指标：WAPE=Σ|alloc−actual|/Σactual；偏差=Σ(alloc−actual)/Σactual；"
          "缺货率=Σmax(actual−alloc,0)/Σactual（分配缺口代理，非库存缺货率）。", "",
-         "| 场景 | 仓 | 键 | 月 | actual | allocated | WAPE | 偏差 | 缺货率 |",
-         "|---|---|---:|---:|---:|---:|---:|---:|---:|"]
+         "| 场景 | 仓 | 键 | 月 | actual | allocated | WAPE | 偏差 | 缺货率 | 共同样本 actual | 共同样本 WAPE | 差量 actual |",
+         "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for r in alloc_tbl.itertuples(index=False):
         L.append(f"| {r.scenario} | {r.warehouse} | {r.keys} | {r.months} | "
                  f"{r.actual:.0f} | {r.allocated:.0f} | {r.wape:.4f} | "
-                 f"{r.bias:+.4f} | {r.stockout_rate:.4f} |")
+                 f"{r.bias:+.4f} | {r.stockout_rate:.4f} | "
+                 f"{r.common_actual:.0f} | {r.common_wape:.4f} | {r.excluded_actual:+.0f} |")
     L += ["", f"- 真实双仓责任产品：**{len(dual_products)}**（见 `13_双仓责任与份额`）。", "",
           "### 0.2.1 最近 90 天分母与交叉量核对", "",
           "| 仓 | 仓级总量 | owner-known | same-owner | cross-owner | unknown/NaN |",

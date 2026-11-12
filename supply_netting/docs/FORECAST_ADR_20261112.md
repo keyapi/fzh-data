@@ -73,6 +73,7 @@ buffer  = 安全/季节缓冲，默认 ≥ 7 天
 3. 候选集：
    - 基线族：`naive`、`ma3`、`snaive`、`ets_ann`、`ets_aadn`、`ets_aaa`（加性季节分解 + 阻尼 Holt / STL+ETS）、`theta`（简化 Theta：线性趋势与 SES 各 50%）。
    - 间歇族（挑战者）：`croston`、`sba`；`tsb` 仅 `obsolescent`。
+   - **候选资格/模型集只用 `SELECTION_END=202604` 之前的数据分类**；holdout（202605..202610）不参与 eligibility、分类或模型集。`3_分类` 另存 `*_train` 列供审计。
 4. 采用规则：先在同一条“有正销、共同可评估”的测试窗上取最佳基线；挑战者须 **WAPE/MAE 均不劣 + 至少一项改善 ≥5%（FVA）** 才采用，否则回退最佳基线。并列时按固定顺序取最简模型，保证确定性。
 5. 对“看起来更好”的模型做显著性检验（Diebold–Mariano 或 block bootstrap），避免把噪声当改进。
 6. 区间：经验残差分位或 split/online conformal；不要假设正态，尤其不要用正态外推 Croston/SBA 的 97 天分位。
@@ -123,6 +124,7 @@ buffer  = 安全/季节缓冲，默认 ≥ 7 天
 - D5 的 97/157 与统一 q95 需要 P2 改；本 ADR 只定规则，D5/D6 代码未动。
 - D3b v3.11 已按 D3/D4/D6 落地：新增 3 个模型、单一事实源、趋势诊断；输出 `analysis/D3b-v3_11-20261112/`。
   P1 **未**实现 Diebold–Mariano/block bootstrap 显著性检验（ADR 列为 P2 的选择增强）；P1 的采用门槛仍是 WAPE/MAE 均不劣 + ≥5%。
+- A/B/C 仓级回测统一用 holdout origin `202604`（h=6，202605..202610）；模型沿用前置 validation 的 adopted，不在 ABC 内重选。汇总同时给 full 与共同样本 WAPE，差量单列（A 可能缺 current-owner 键）。
 - 下游 D5 消费 `3_分类` 时，`adopted_model` 的含义变成“as-of 回测采用结果的 join”，不再包含 current-owner 独立选择。
 
 ## 4. 验收

@@ -341,3 +341,6 @@ updated: 2026-10-27
 - P1（Codex 复审返修）：validation/holdout 分离（selection 不看 holdout）；Holt 缺测按日历推进；
   AAA 先还季节再截零；多源含 none 标 `adopted_partial` 不算“一致”；同比按同月配对；
   自检 FAIL 不写工作簿且非零退出；ABC 实际分母改为共同键对账。
+- Codex 第二轮 P1：候选资格/模型集只用 `SELECTION_END=202604` 之前的数据（holdout 不参与分类）；
+  A/B/C 不再同窗选模，沿用 validation adopted 并统一在 holdout（202604, h=6）评估；
+  A/B/C 汇总增加共同样本 WAPE 与差量列，不再只在自检里取交集。
