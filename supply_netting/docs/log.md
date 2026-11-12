@@ -355,3 +355,15 @@ updated: 2026-10-27
   `net_selected`，q95 保留敏感性；自检全部 PASS。
 - 对比 v6.22（全 q95）：1571 共同键，动作变化 250（补→不补），数量 39,834→19,404。
 - 边界：只做 P2a，不改 D5/CNY/生产。
+
+## 2026-11-12 — 服务预设 + USNJ 试点（P2c）
+
+- `service_policy.py` 增加 balance/control/service 三预设 + 例外覆盖 CSV（按 sku×pool，
+  留 preset/override_reason/owner/as_of 审计；未知键/空 reason 直接报错）。
+- 新增 D6 v6.24（`--preset` + `--service-overrides`），保留 v6.23 全量沙盒；输出 `D6v6_24-1112`。
+- 新增 `build_usnj_pilot_20261112.py` / `compare_usnj_pilot_20261112.py`：
+  B USNJ 299 产品 + 待确认 282；补货建议 296 行；特殊 225；三角 173；CNY 优先 173。
+- USNJ：v6.22 151 补/7,945 → v6.23 115/4,180；control 108/3,815；service 130/5,496；
+  250 个补→不补中 USNJ 36（C13/D12/B11）。
+- CNY 日历：2027-01-24 停工 / 02-22 复工 / 05-04 首批到货；97/157 不足，三角优先。
+- 边界：不改 D5/CNY 排产/生产。

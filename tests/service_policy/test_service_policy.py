@@ -10,7 +10,8 @@ import pandas as pd
 import pytest
 
 from supply_netting.service_policy import (
-    CLASS_QUANTILE, assign_abc, assign_service_class, assign_xyz, class_quantile,
+    CLASS_QUANTILE, PRESETS, apply_overrides, assign_abc, assign_service_class,
+    assign_xyz, class_quantile, preset_class_quantile,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -96,3 +97,50 @@ def test_d6_action_uses_net_selected_not_net95():
     assert "r.net_95" not in action_block
     assert "split_actions(r.net_selected" in text
     assert "split_actions(r.net_95" not in text
+
+
+def _policy_two_rows():
+    return pd.DataFrame([
+        {"product_id": "P1", "pool": "波兰", "physical_form": "成品", "canonical_uom": "个", "class": "A"},
+        {"product_id": "P2", "pool": "波兰", "physical_form": "成品", "canonical_uom": "个", "class": "B"},
+    ])
+
+
+def test_presets():
+    assert preset_class_quantile("balance", "B")["quantile"] == 0.90
+    assert preset_class_quantile("control", "B")["quantile"] == 0.85
+    assert preset_class_quantile("service", "B")["quantile"] == 0.95
+    assert preset_class_quantile("service", "C")["quantile"] == 0.90
+    assert set(PRESETS) == {"balance", "control", "service"}
+
+
+def test_apply_overrides_preset_and_audit():
+    ov = pd.DataFrame([dict(sku="P2", pool="波兰", preset_or_quantile="service",
+                            reason="USNJ 试点", owner="ops", as_of="2026-11-12")])
+    out = apply_overrides(_policy_two_rows(), ov, preset="balance")
+    r = out[out["product_id"] == "P2"].iloc[0]
+    assert r["preset"] == "service" and r["quantile"] == 0.95
+    assert r["override_applied"] and r["override_status"] == "applied_preset"
+    assert r["override_reason"] == "USNJ 试点" and r["override_owner"] == "ops"
+    assert out[out["product_id"] == "P1"].iloc[0]["override_applied"] == False  # noqa: E712
+
+
+def test_apply_overrides_quantile():
+    ov = pd.DataFrame([dict(sku="P1", pool="波兰", preset_or_quantile="q85",
+                            reason="降档", owner="ops", as_of="2026-11-12")])
+    out = apply_overrides(_policy_two_rows(), ov, preset="balance")
+    r = out[out["product_id"] == "P1"].iloc[0]
+    assert r["preset"] == "custom" and r["quantile"] == 0.85
+    assert r["quantile_label"] == "q85" and r["override_status"] == "applied_quantile"
+
+
+def test_apply_overrides_rejects_unknown_key_and_blank_reason():
+    pol = _policy_two_rows()
+    with pytest.raises(ValueError):
+        apply_overrides(pol, pd.DataFrame([dict(
+            sku="NO", pool="波兰", preset_or_quantile="control",
+            reason="x", owner="ops", as_of="2026-11-12")]))
+    with pytest.raises(ValueError):
+        apply_overrides(pol, pd.DataFrame([dict(
+            sku="P1", pool="波兰", preset_or_quantile="control",
+            reason="", owner="ops", as_of="2026-11-12")]))

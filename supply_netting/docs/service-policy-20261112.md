@@ -1,16 +1,16 @@
 ---
 okf: v0.1
 type: Design
-title: 服务分档政策（P2a）：ABC×XYZ → A/B/C/D → q95/q90/q85
-description: 用 D3b v3.11 分类 + 2026 销量做 ABC×XYZ，输出 service_policy，并接入 D6 v6.23 按 class 选分位
-tags: [forecast, service-level, abc-xyz, policy, d6]
+title: 服务分档与预设（P2a/P2c）：ABC×XYZ → A/B/C/D → q95/q90/q85
+description: 三预设（balance/control/service）+ 例外覆盖 CSV + D6 v6.24 + USNJ 试点包
+tags: [forecast, service-level, abc-xyz, policy, d6, usnj, cny]
 date: 2026-11-12
 status: accepted
 ---
 
-# 服务分档政策（P2a）
+# 服务分档与预设（P2a/P2c）
 
-> 只做服务分档，不动 D5 窗口、不改 CNY、不写生产。
+> 只做服务分档/预设，不动 D5 窗口、不改 CNY 排产、不写生产。
 
 ## 1. 输入 / 输出
 
@@ -21,10 +21,12 @@ status: accepted
 | 政策 CSV | `analysis/service-policy-20261112/service_policy_20261112.csv` |
 | 政策报告 | `analysis/service-policy-20261112/service_policy_20261112_报告.md` |
 | D6 v6.23 | `scripts/d6_top50_sandbox_v6_23_20261112.py` |
-| D6 输出 | `analysis/D6v6_23-1112/` |
-| 动作对比 | `analysis/D6v6_23-1112/action_diff_vs_v6_22_报告.md` |
+| D6 v6.24 | `scripts/d6_top50_sandbox_v6_24_20261112.py` |
+| D6 v6.24 输出 | `analysis/D6v6_24-1112/`（balance 主包；`control/`、`service/` 子目录） |
+| USNJ 试点包 | `analysis/usnj_replenishment_pilot_20261112.xlsx` + 同名目录 |
 
 生成器：`scripts/build_service_policy_20261112.py`；纯函数：`supply_netting/service_policy.py`；
+USNJ 包：`scripts/build_usnj_pilot_20261112.py`；对比：`scripts/compare_usnj_pilot_20261112.py`；
 测试：`tests/service_policy/test_service_policy.py`。
 
 ## 2. 方法
@@ -35,6 +37,21 @@ status: accepted
 - **A/B/C/D**：A(X/Y)=A；A(Z)/B(X/Y)=B；B(Z)/C(X/Y)=C；C(Z)、零销量、新品、淘汰、短史=D。
 - **分位**：A q95 / B q90 / C q85 / D q85。D 的 q85 是 **fill-rate 代理**，尚未直接算 fill-rate。
 - 未知 class 不自动补：D6 遇到 missing/unknown 时 `net_selected=NaN`，动作转“观察”。
+
+### 2.1 三预设
+
+| preset | A | B | C | D |
+|---|---|---|---|---|
+| `balance`（默认） | q95 | q90 | q85 | q85 |
+| `control` | q95 | q85 | q85 | q85 |
+| `service` | q95 | q95 | q90 | q85 |
+
+- D6 `--preset balance|control|service`；默认 balance。
+- 覆盖 CSV：`sku,pool,preset_or_quantile,reason,owner,as_of`；`preset_or_quantile` 可为
+  preset 名、`q95/q90/q85/fill_rate` 或 0–1 数值。override 按 **sku×pool** 作用到该
+  SKU×池下所有形态/UOM；未知键、重复键、空 reason/owner、非法值直接报错。
+- 审计列：`preset/override_applied/override_value/override_reason/override_owner/override_as_of/override_status`；
+  另出 `service_policy_overrides_audit_*.csv`。
 
 政策 CSV 列：`sku,pool,physical_form,canonical_uom,class,abc_class,xyz_class,
 service_level_prior,quantile,quantile_label,basis,sales_2026,sales_share,cum_share,
@@ -62,7 +79,28 @@ C/X 55、C/Y 291、C/Z 765。
   DM-60 波兰 66→49、KJB-60 波兰 260→192、KJB-90-BEIGE 波兰 456→428、
   KJB-90-DEEPGREY 波兰 124→95。
 
-## 5. 边界
+## 5. D6 v6.24 + USNJ 试点包
+
+- D6 v6.24 读 `--preset` + `--service-overrides`，动作/数量仍用 `net_selected`；
+  `net_95` 保留敏感性；自检增加 preset→quantile、override 审计完整、未知 preset。
+- USNJ 对比（296 键）：
+  - v6.22(q95)：151 补 / 91 不补 / 35 催 / 19 观察；建议量 **7,945**，净需求 **9,716**。
+  - v6.23(balance)：115 / 127 / 35 / 19；**4,180**，净需求 **5,842**。
+  - v6.24(balance)：与 v6.23 相同（设计如此）。
+  - v6.24(control)：108 / 134 / 35 / 19；**3,815**。
+  - v6.24(service)：130 / 112 / 35 / 19；**5,496**。
+- 全公司 250 个「补→不补」中 **USNJ 36 个**；按 v6.23 服务档 C13/D12/B11。
+- USNJ 包：B 归属 **299** 产品；待确认 **282**（229 unassigned + 53 exception）；
+  补货建议 **296** 行；特殊产品 **225**；三角靠枕 **173**；CNY 优先 **173**。
+  B 清单标记：正常 234、`错/多/待确认` 53、`待确认` 12。
+- 30/90 天销量为月度口径（2026-10 / 2026-08..10）；未知 C 供给标“待核”，不当 0。
+- CNY：停工 2027-01-24 → 复工 2027-02-22 → 首批到货 2027-05-04（174 天）；
+  97/157 窗均不足，需 D5 183 天窗/pre-build；三角靠枕优先。
+- 特殊产品：三角按当前 owner（不把已迁走面料算回 USNJ）；麻将沙发/铁架/印花/短历史
+  用相似品/池化/新品法，标低置信。
+- **4 周是上线后的监控期，不是等待期；包已现在出。**
+
+## 6. 边界
 
 - 本层只做 **政策先验**，不是统计最优服务；A/B/C/D 的 CSL 需用 PIT/覆盖率回测校准（P2b）。
 - D 的 fill-rate 尚未实现；当前用 q85 代理，不能对外称“fill-rate 95%”。
