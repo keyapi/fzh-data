@@ -6,6 +6,11 @@ title: supply_chain_visibility 变更日志
 
 # 变更日志
 
+## 2026-11-12
+- **更新**: 「已生产」参考新增 §7 **三层口径**（工序完成 / 完工入库 / 可发）：质检是末道必经工序，`质检 Pending` 不算完工；`jc_done` 跨工序求和不等于件数；可发 = 入库 + 质检放行 + 可用库存。案例 WO-26-03113（缝制全完、质检 0、无 Manufacture，只有耗料单）。→ [reference/en-produced-qty-vs-jobcard.md](reference/en-produced-qty-vs-jobcard.md)
+- **更正**: 线上 E 已返回 `shipment_progress`、`all_process_done`、`qc_*`、`completion_status`、`partial/source_status`，仓库 v4 落后线上；README / AGENT_HANDOFF 的「生产未部署」「只覆盖阶段 0–3」已按实测更新。边界改为：在途可展示，但 `inventory/receipt` 仍 `not_integrated`。
+- **新增经验**: E 用于补货/下单决策的边界（`instock` 是累计入库、超发错抵、Closed 落 stage 3、`partial` 不阻断、性能未压测）→ `docs/solutions/architecture-patterns/en-supply-line-e-replenishment-decision-boundary.md`；SO→DN→货代 job→`ZMT Shipment Snapshot` 查询链（**用 `job` 不是 `tracking`**）→ `docs/solutions/integration-issues/en-so-dn-forwarder-job-status-lookup.md`。
+
 ## 2026-10-13
 - **Stage 1 v35（出库按 DN 归组）**：修「N单」误报 —— 原按 `Delivery Note Item` **明细行**计数，一张 DN 拆多行会显示成「5单」。改为**按出库单归组**（`dns=[{dn,date,status,docstatus,is_return,qty,lines[]}]`），摘要「N单」= **DN 张数**；明细表加「行数」列，`>1` 行时列出 `q1 + q2 + … = 合计`。生产 SO-26-00101 实测：`DM-153-IVORY` 22 行 → **1单·已发200**；真有 2 张 DN 的 `HLR-140-GREY` → **2单**(DN-26-00071+DN-26-00089)。⚠️ 过程踩坑：归组后 `dns` 变 dict，`d.qty` 必须改 `d["qty"]`（否则 `AttributeError`→500），已在**测试机拦下**（未到生产）。
 - **Stage 1 v34（报工/入库 两列 + 列宽）**：把「已生产」**拆成「报工」「入库」**，不一致标黄。`so_chain.py` 每工单加 `last_op_done`（末道必经工序报工，**去重 `max(整批卡[无菲号],逐菲号卡)`**，护栏=取有卡的最大 sequence 必经工序）、每行输出 `reported/instock/report_note`；**成品(KS)行无工序 → 报工取子装配件(皮壳/内胆)齐套(取较慢)**（用户选定）。列宽拖拽改**总宽模型**：拖宽→**整表总宽变、下方出横向滚动条**，**不再压缩首列**（对齐 AG Grid/Excel）；表头右缘**始终可见分隔条** + 悬停主色 + `col-resize` 光标，**双击=自适应内容**。测试 SO-26-00026/00025 验证（列/黄标/拖拽 qty 54→144 且首列 209 不变/双击 115→159）；生产 `6fc2ef7` 部署，SO-25-00169(82 行) 一屏放下、0 报错。详见 [docs/reference/en-produced-qty-vs-jobcard.md](reference/en-produced-qty-vs-jobcard.md)。

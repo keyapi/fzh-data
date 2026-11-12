@@ -63,9 +63,18 @@ uv run python erpnext/scripts/gen_report.py
 - **JC 完成量按工序分开算，不要跨工序求和**：同一批件数会在每道工序各生成一张工序卡，
   跨工序求和会把产量按工序数放大（实测 2 批 × 22 件 = **44 件**，跨 4 道工序求和会算成 176）。
   问"这批做了多少件"，取**第一道工序（裁剪/开料）**的完成量；问"某道工序做了多少"，才取那道工序的。
-- **`Work Order.status` / `produced_qty` 可能没回写**：实测有工单头部仍是 `Not Started`、
-  `produced_qty=0`，但工序卡已显示几十件过完多道工序。判断"是否已开工"要看**工序卡数量**，
-  不能只看工单状态 —— 否则会把在产工单误判成未开工。
+- **`Work Order.status` 不能当完工信号；`produced_qty` 本身可信（= 已提交 Manufacture 入库单回写）**：
+  实测有工单头部仍是 `Not Started`、`produced_qty=0`，但工序卡已显示几十件过完多道工序；
+  也有全工序完成但**末道质检未做**、没有 Manufacture 入库单（只有耗料单）。
+  判断顺序：**工序进度看 Job Card → 完工入库看 Stock Entry / `produced_qty` → 可发看可用库存 + 质检放行**。
+  详见 `supply_chain_visibility/docs/reference/en-produced-qty-vs-jobcard.md` §7。
 - 子表（Sales Order Item / Delivery Note Item 等）**不能直接 list**（403）；按子表字段反查父单
   要用 `[[子表doctype, 字段, 操作符, 值]]` 四元组，且结果"一行一子行"须按父单去重。
   详见 `docs/solutions/workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md`。
+
+## 相关经验
+
+- `docs/solutions/architecture-patterns/en-supply-line-e-replenishment-decision-boundary.md`
+  —— `key_test.so_chain`（供给线 E）用于补货/下单决策的边界与改进清单
+- `docs/solutions/integration-issues/en-so-dn-forwarder-job-status-lookup.md`
+  —— SO→DN→Shipment→货代 job→ZMT Snapshot 的在途查询链

@@ -10,6 +10,7 @@ timestamp: 2026-07-28
 
 | 标题 | 文件 |
 |------|------|
+| EN「供给线 E」用于补货/下单决策的边界——instock 是累计入库，库存与收货未接入 | [en-supply-line-e-replenishment-decision-boundary.md](en-supply-line-e-replenishment-decision-boundary.md) |
 | EN 直接采购件用「自套 BOM」出成本的惯例 + 骨架缺口 | [en-direct-purchase-self-bom.md](en-direct-purchase-self-bom.md) |
 | EN 端到端供应链履约可视化蓝图 | [en-end-to-end-supply-chain-fulfillment-visibility.md](en-end-to-end-supply-chain-fulfillment-visibility.md) |
 | 公开代码仓与私有公司知识分层——兼顾 Agent 检索、同事使用与防泄露 | [public-private-agent-knowledge-split.md](public-private-agent-knowledge-split.md) |

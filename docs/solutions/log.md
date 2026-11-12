@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-12（EN 供给线 E 的补货决策边界 + SO 履约查询链）
+
+- **新增**: `architecture-patterns/en-supply-line-e-replenishment-decision-boundary.md` —— 线上 E（`key_test.so_chain`）两种用途分开：SO 级进度看板可用（加护栏），整链补货/下单的供给事实源不可直接用。`instock` 是累计入库不是可用库存；`inventory/receipt=not_integrated`；超发负 `open_qty` 会错抵需求；质检未放行、Closed 落 stage 3、`partial` 不阻断、千单性能未验证。含 P0/P1 改进清单，并指出仓库 v4 落后线上。
+- **新增**: `integration-issues/en-so-dn-forwarder-job-status-lookup.md` —— SO→DN→Shipment→货代 job→ZMT Snapshot 查询链；Snapshot 用 `job` 不是 `tracking`；`Shipment.status` 长期 Draft；签收为货代回传；ETA 多源冲突。
+- **更正**: `supply_chain_visibility` 的 README / AGENT_HANDOFF 把「生产未部署」「只覆盖阶段 0–3」按实测更新；`en-produced-qty-vs-jobcard.md` 补三层口径（工序完成 / 完工入库 / 可发）。
+
 ## 2026-11-11（Claude Desktop MCP / npx @latest 装包失败）
 
 - **新增**: `developer-experience/claude-desktop-mcp-server-disconnected-npx.md` —— Claude Desktop 弹 `MCP playwright: Server disconnected`，根因是 `@latest` 在 Windows 更新重启后的首次启动自动升级 0.0.85，解包两个 `.d.ts` 报 `ENOENT`、入口 `cli.js` 缺失，node 立即退出；约 2 分钟后新会话的 npx 把目录补装完整。可排除磁盘满（C 剩 12G）与「重启打断安装」（安装发生在重启之后）。判读口诀：先读 `mcp-server-<name>.log`，找 `will be installed` + `TAR_ENTRY_ERROR` + `MODULE_NOT_FOUND`；npm 对解包错误只 warn 不重试，Claude 也不会在同一会话自动重拉。本次决定保留 `@latest`、不加自愈包装脚本。`docs/mcp-setup.md` 排错表同步加了对应行。

@@ -211,6 +211,20 @@ EN 销售订单上的一个**内部自编字段**（`po_no` / 行级 `purchase_o
 批次跟踪页可见 `HPL…`、`1ZB…` 等其他格式）。它是**承运人维度**的单号，
 与批次号（我们自己编的发运批次）不是同一个东西：一批可能对应多个物流号，反之亦然。
 
+在 EN 的 `ZMT Shipment Snapshot` 里，这个号对应字段 **`job`**；**`tracking` 是尾程单号**，
+两者不能混用（按 `tracking` 过滤货代 job 会得到 0 行）。
+
+### 供给线 E (Supply Line E)
+EN 侧 `key_test.so_chain.get_so_chain`：按销售订单返回行级阶段、已发/未发、
+`produced/reported/instock`、DN 明细、`shipment_progress`、`qc_*`、`partial/source_status`。
+**作为 SO 级进度看板可用；作为整条供应链下单/补货决策的供给事实源不可直接使用** ——
+`instock` 是累计入库不是可用库存，`inventory/receipt` 仍 `not_integrated`。
+
+### 可发 (Available to Ship)
+「现在能发出去的量」= **已入库 + 质检放行 + 可用库存**（`Bin.actual_qty − reserved_qty`，按仓库）。
+它既不是「工序完成」，也不是输入 E 的 `instock`（累计入库），更不是
+**预估可发 (Estimated Ship Date)** 里的日期概念。
+
 ### 工厂四件套 (Factory Handoff Columns)
 首程登记表上代表「工厂侧是否已把头程该做的做完」的四列，按顺序为：
 **工厂确认交期 → 包装完成日期 → 实际包装完成量 → 物流发票编号**。

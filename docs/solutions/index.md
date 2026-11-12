@@ -13,6 +13,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-12 | SO → 出库 → 货代 job → 在途快照的查询链 — ZMT Snapshot 用 job 不是 tracking | [integration-issues/en-so-dn-forwarder-job-status-lookup.md](integration-issues/en-so-dn-forwarder-job-status-lookup.md) |
+| 2026-11-12 | EN「供给线 E」用于补货/下单决策的边界 — instock 是累计入库，库存与收货未接入 | [architecture-patterns/en-supply-line-e-replenishment-decision-boundary.md](architecture-patterns/en-supply-line-e-replenishment-decision-boundary.md) |
 | 2026-11-11 | 钉钉考勤表导出操作手册（管理后台） | [workflow-issues/dingtalk-attendance-export-runbook.md](workflow-issues/dingtalk-attendance-export-runbook.md) |
 | 2026-11-11 | 通途特殊规则换表：参考值优先、FBA 列对齐与旧/新 BOM 口径差 | [workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md](workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md) |
 | 2026-11-11 | Claude Desktop 的 MCP「Server disconnected」——先读 mcp-server-<name>.log，多半是 npx @latest 装包被打断 | [developer-experience/claude-desktop-mcp-server-disconnected-npx.md](developer-experience/claude-desktop-mcp-server-disconnected-npx.md) |
