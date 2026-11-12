@@ -1207,6 +1207,32 @@ def _identity_conflicts(rows: Sequence[OrderRow], shape: str, sku: str) -> list[
     return conflicts
 
 
+def _split_by_carrier_orders(
+    rows: Sequence[OrderRow], shape: str, sku: str
+) -> list[list[OrderRow]]:
+    """同一公共单号下，多个子单各自都有载体行 → 按子单拆成多件成品。
+
+    典型：`X_1`（半成品仓 Cover+Foam）与 `X_2`（成品仓 Cover+Foam）是两件货，
+    不能因公共单号相同合成一组。只有每个子单都能独立定载体/身份/件数时才拆；
+    否则返回空，让上层按 `carrier_identity_conflict` 阻断。
+    """
+    carriers = _carrier_rows(rows, shape, sku)
+    order_ids = {r.order_id for r in carriers}
+    if len(order_ids) < 2:
+        return []
+    parts: dict[str, list[OrderRow]] = defaultdict(list)
+    for r in rows:
+        parts[r.order_id].append(r)
+    if any(not _carrier_rows(p, shape, sku) for p in parts.values()):
+        return []
+    for part in parts.values():
+        if _identity_conflicts(part, shape, sku):
+            return []
+        if _count_pieces(part, shape, sku)[0] <= 0:
+            return []
+    return [parts[oid] for oid in sorted(parts)]
+
+
 def _pick_carrier(rows: Sequence) -> tuple[str, str, str, str]:
     """按 EN shipping_method 选唯一载体；返回 `(method, carrier_shape, carrier_sku, reason)`。
 
@@ -1319,6 +1345,35 @@ def find_groups(
             if not reason:
                 pieces, reason = _count_pieces(grow_rows, carrier_shape, carrier_sku)
             if not reason and _identity_conflicts(grow_rows, carrier_shape, carrier_sku):
+                parts = _split_by_carrier_orders(grow_rows, carrier_shape, carrier_sku)
+                part_groups: list[MergeGroup] = []
+                for part in parts:
+                    p_method, p_shape, p_sku, p_reason = _pick_carrier(part)
+                    p_pieces = 0.0
+                    if not p_reason:
+                        p_pieces, p_reason = _count_pieces(part, p_shape, p_sku)
+                    if p_reason or p_pieces <= 0:
+                        part_groups = []
+                        break
+                    part_groups.append(MergeGroup(
+                        order_common=g["common"],
+                        platform_sku=g["platform_sku"],
+                        product_id=product_id,
+                        item_group=part[0].item_group,
+                        rows=part,
+                        skus=sorted({r.sku for r in part}),
+                        method=p_method,
+                        carrier_shape=p_shape,
+                        carrier_sku=p_sku,
+                        pieces=p_pieces,
+                        sub_orders=sorted({r.order_id for r in part}),
+                        aux_used=False,
+                        pieces_source="suborder",
+                        aux_order_ids=[],
+                    ))
+                if part_groups:
+                    groups.extend(part_groups)
+                    continue
                 reason = "carrier_identity_conflict"
             if not reason and pieces <= 0:
                 reason = "pieces_zero"

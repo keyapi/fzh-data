@@ -41,9 +41,9 @@ METRICS_FBA = ["销量", "销售额", "发货数量", "皮壳成本", "绍兴二
                "二次加工成本", "头程运费金额", "产品成本*数量", "订单总成本", "订单利润"]
 
 
-def cfg(month: str) -> dict:
+def cfg(month: str, book: str | None = None) -> dict:
     year, mon = month[:4], str(int(month[4:]))
-    book = f"通途订单{month}"
+    book = book or f"通途订单{month}"
     return {
         "self": dict(book=book, ws=f"写回{year}年{mon}月订单",
                      local=f"out/build_tabs/{month}/self_build_{month}.csv",
@@ -83,8 +83,8 @@ def totals(df: pd.DataFrame, metrics: list[str]) -> dict:
             for m in metrics if m in df.columns}
 
 
-def run(month: str, label: str, apply: bool) -> None:
-    c = cfg(month)[label]
+def run(month: str, label: str, apply: bool, book: str | None = None) -> None:
+    c = cfg(month, book)[label]
     local_path = ROOT / c["local"]
     if not local_path.exists():
         raise SystemExit(f"本地表不存在: {local_path}")
@@ -112,7 +112,9 @@ def run(month: str, label: str, apply: bool) -> None:
         if m in ot or m in nt:
             print(f"   {m:<22} old {ot.get(m, 0):15,.2f} new {nt.get(m, 0):15,.2f} "
                   f"Δ {nt.get(m, 0) - ot.get(m, 0):+15,.2f}")
-    out_dir = ROOT / "out" / f"gs_full_replace_{month}"
+    suffix = "" if c["book"] == f"通途订单{month}" else "_" + "".join(
+        ch if ch.isalnum() else "_" for ch in c["book"])
+    out_dir = ROOT / "out" / f"gs_full_replace_{month}{suffix}"
     out_dir.mkdir(parents=True, exist_ok=True)
     pd.DataFrame([
         {"metric": m, "old": ot.get(m, 0), "new": nt.get(m, 0),
@@ -183,13 +185,15 @@ def run(month: str, label: str, apply: bool) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--month", required=True, choices=["202608", "202609"])
+    ap.add_argument("--month", required=True, help="YYYYMM，如 202607/202608/202609")
     ap.add_argument("--label", default="all", choices=["self", "fba", "merged", "all"])
+    ap.add_argument("--book", default=None,
+                    help="工作簿名覆盖（默认 通途订单<月>；如 通途订单202607-特殊规则）")
     ap.add_argument("--apply", action="store_true")
     args = ap.parse_args()
     labels = ["self", "fba", "merged"] if args.label == "all" else [args.label]
     for label in labels:
-        run(args.month, label, args.apply)
+        run(args.month, label, args.apply, args.book)
     return 0
 
 

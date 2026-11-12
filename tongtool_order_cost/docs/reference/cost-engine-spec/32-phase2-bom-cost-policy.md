@@ -47,6 +47,13 @@ tags: [cost, bom, phase2, disabled-item, curve-pillow, method-diff]
 
 - USNJ/USTX/PL 的 valuation_rate **等于**对应 `USNJBZCP#`/`USTXBZCP#`/`PLBZCP#` BOM 的 `total_cost`；与 `shipping_method` 无关。
 - **分公司发成品：目的地加工成本固定 0**（PL 成品 valuation 有 19 条历史遗留非 0，如 `PLBZCP#KS0230-60=85.05`；BOM 重生后会清 0，引擎先行按 0）。
+  - **例外（2026-11-12，美国本地采购/加工）**：`method=成品` 且 `cost_fg=0`、`cost_sxbzcp=0`、目的地 valuation>0 时，
+    目的地 valuation 就是全部成本（皮壳/绍兴/头程=0）→ 二次加工=valuation。必须同时满足
+    「皮壳=0、绍兴=0、valuation>0」，缺一不改；目前仅棉包（KS0050）符合。
+- **美国本地产品成本三件套**（KS0050 棉包）：产品物料**不建 BOM**（BOM Cost List `cost_fg=0`；
+  ERPNext 禁止空 BOM，不要造零成本占位物料）；`USNJBZCP#KS0050-<尺寸>` / `USTXBZCP#KS0050-<尺寸>`
+  BOM = PP 棉 kg × 美国采购价 + 5 分钟包装工时（16.607 元/h）；物料组 `棉包`
+  `custom_shipment_type_to_branch=成品`，报告按 `custom_model_id + 尺寸` 取 valuation。
 - **FBA 绍兴二次 = `cost_sxbzcp`**（成品包装成本已含半成品包装；`sx_cost_all = cost_fg + cost_sxbzcp` 在 95/113 行实测成立），不再用 `sx_cost_all−cost_fg`。
 - 二次加工规则**对全部 method 生效**；无目的地 BZCP BOM 时 rate=0（本数据中成品 method 均如此）。
 - **method 规则**（2026-11-10 定案）：

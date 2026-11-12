@@ -21,6 +21,7 @@ from tongtool_order_cost.tongtu_cost_engine.domain.build_tabs import (  # noqa: 
     _source_indices,
     _uuid_for,
     _warehouse_source,
+    _merge_alias_overrides,
     filter_special_orders,
     load_special_order_ids,
 )
@@ -293,3 +294,20 @@ def test_load_special_order_ids(tmp_path: Path) -> None:
         assert "通途订单号" in str(exc)
     else:
         raise AssertionError("缺列应报错")
+
+
+def test_merge_alias_overrides_appends_rows(tmp_path: Path) -> None:
+    base = tmp_path / "ref.csv"
+    pd.DataFrame([{"name": "KS0001-X", "customer_code": "OLD-SKU",
+                   "item_group": "三角靠枕", "has_variants": "0", "variant_of": "KS0001"}]
+                 ).to_csv(base, index=False)
+    ov = tmp_path / "ov.csv"
+    pd.DataFrame([{"name": "KS0001-X", "customer_code": "NEW-SKU",
+                   "item_group": "三角靠枕", "has_variants": "0", "variant_of": "KS0001"}]
+                 ).to_csv(ov, index=False)
+    out = tmp_path / "out"
+    out.mkdir()
+    merged = _merge_alias_overrides(base, ov, out)
+    df = pd.read_csv(merged, dtype=str, keep_default_na=False)
+    assert len(df) == 2
+    assert set(df["customer_code"]) == {"OLD-SKU", "NEW-SKU"}

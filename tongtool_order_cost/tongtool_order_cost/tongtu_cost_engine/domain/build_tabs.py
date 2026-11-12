@@ -96,6 +96,19 @@ def _read_csv(path: Path) -> pd.DataFrame:
 
 SPECIAL_ORDER_COL = "通途订单号"
 
+# 第三方/大件云仓：不参与自营成本计算（旧表同样为 0），显式零成本而非阻断。
+THIRD_PARTY_WAREHOUSES = {"大件云仓"}
+
+
+def _merge_alias_overrides(ref_map: Path, overrides: Path, out_dir: Path) -> Path:
+    """把本地别名补丁并入 EN 物料表（尚未在 EN 登记的客户物料号）。"""
+    base = _read_csv(ref_map)
+    extra = _read_csv(overrides).reindex(columns=base.columns)
+    merged = pd.concat([base, extra], ignore_index=True)
+    dest = out_dir / "ref_map_merged.csv"
+    merged.to_csv(dest, index=False, encoding="utf-8-sig")
+    return dest
+
 
 def load_special_order_ids(path: str | Path) -> set[str]:
     """读 `处理特殊订单` 导出清单（fetch_special_orders.py 产出），返回要删除的订单号。"""
@@ -447,7 +460,15 @@ def _build_self_rows(
         # 四列成本
         status = _text(p2.get("status"))
         reason = _text(p2.get("reason"))
-        if status == "non_product_accessory":
+        if status != "ok" and _text(out.get("发货仓库")) in THIRD_PARTY_WAREHOUSES:
+            # 第三方大件云仓：不属自营成本口径，显式零成本（旧表同为 0），不按未登记阻断
+            cells = _fill_cells(
+                shell=0.0, shell_in=0.0, shell_out=0.0, sx2=0.0, proc=0.0, head=0.0,
+                qty=cost_qty, sales=sales_cny_fx, freight=freight, overseas=0.0,
+                kc=kc, k2=k2, ksx=ksx, status="ok", reason="third_party_warehouse",
+            )
+            cells["cost_reason"] = "third_party_warehouse"
+        elif status == "non_product_accessory":
             cells = _fill_cells(
                 shell=0.0, shell_in=0.0, shell_out=0.0, sx2=0.0, proc=0.0, head=0.0,
                 qty=cost_qty, sales=sales_cny_fx, freight=freight, overseas=overseas or 0.0,
@@ -490,6 +511,9 @@ def _build_self_rows(
                 reason=reason or status or "cost_unavailable",
             )
         out.update(cells)
+        if cells.get("cost_status") != "ok":
+            # 成本阻断时四列留空，但真实尾程运费仍要保留（否则运费守恒断言失真）
+            out["运费"] = _fmt(freight)
         rows.append(out)
 
         fails = _check_cells(cells, cost_qty, sales_cny_fx)
@@ -937,6 +961,7 @@ def build_order_tabs(
     raw_path = _pick(
         raw_csv,
         out / "snapshots" / month / f"raw_{month}_filtered.csv",
+        out / "snapshots" / month / f"raw_{month}.csv",
         out / f"raw_{month}.csv",
     )
     if not raw_path.exists():
@@ -968,6 +993,9 @@ def build_order_tabs(
             f"缺少特殊订单清单 {special_path}；先运行 "
             f"scripts/fetch_special_orders.py --book 通途订单{month}")
     ref_map = _pick(ref_map_csv, out / "item_refcode.csv")
+    overrides = root / "config" / "item_alias_overrides.csv"
+    if overrides.exists():
+        ref_map = _merge_alias_overrides(ref_map, overrides, out_dir)
     en_items = _pick(en_items_csv, out / "en_items_all_089.csv",
                      out / "snapshots" / month / "en_items_all_089.csv")
     flags = _pick(flags_csv, out / "snapshots" / month / "order_flags.csv")

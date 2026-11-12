@@ -368,7 +368,8 @@ def test_tt_package_suffix_counts_single_piece(tmp_path):
     assert result.ok
 
 
-def test_carrier_identity_conflict_blocks(tmp_path):
+def test_carrier_identity_conflict_splits_complete_suborders(tmp_path):
+    """同一公共单号下两个子单各自 Cover+Foam（不同仓）→ 拆成两件，不阻断。"""
     items = write_items(tmp_path, ITEMS)
     orders = write_orders(tmp_path, [
         ["ORD-6100001_1", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0, "WH-A"],
@@ -383,10 +384,29 @@ def test_carrier_identity_conflict_blocks(tmp_path):
         ["ORD-6100001_2", "TT001-FIN-Foam", "成品"],
     ])
     result = run_merge_shadow(orders, items, en, month="202608")
+    assert result.stats["merged_groups"] == 2
+    assert result.stats["blocked_groups"] == 0
+    assert result.ok
+    assert sorted(g.pieces for g in result.groups) == [1, 1]
+    assert {g.rows[0].raw["发货仓库"] for g in result.groups} == {"WH-A", "WH-B"}
+
+
+def test_carrier_identity_conflict_blocks_incomplete_suborder(tmp_path):
+    """同一订单内载体行仓库不一致（无子单可拆）→ 仍阻断。"""
+    items = write_items(tmp_path, ITEMS)
+    orders = write_orders(tmp_path, [
+        ["ORD-6200001", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0, "WH-A"],
+        ["ORD-6200001", "PSK", "TT001-FIN-Cover", 1, 10, 50, 0, "WH-B"],
+        ["ORD-6200001", "PSK", "TT001-FIN-Foam", 1, 0, 0, 0, "WH-A"],
+    ])
+    en = write_en_items(tmp_path, [
+        ["ORD-6200001", "TT001-FIN-Cover", "成品"],
+        ["ORD-6200001", "TT001-FIN-Foam", "成品"],
+    ])
+    result = run_merge_shadow(orders, items, en, month="202608")
     assert result.stats["merged_groups"] == 0
     assert result.stats["blocked_groups"] == 1
     assert result.blocked[0].reason == "carrier_identity_conflict"
-    assert result.stats["cost_eligible_rows"] == 0
 
 
 # ── 成品件数 = 皮壳件数 ──

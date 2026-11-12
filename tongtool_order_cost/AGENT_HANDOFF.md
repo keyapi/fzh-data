@@ -229,5 +229,20 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
 - **FBA shadow 缓存**：`fba_shadow_<月>.manifest.json` 记录 BOM/EN/GS 输入 sha256；BOM 变化后 build-order-tabs 自动重建；显式 `--fba-shadow` 不一致直接失败。成本阻断/shadow 缺失已纳入失败门禁。
 - **GS 全量写回入口**：`scripts/gs_full_replace.py`（默认 dry-run，`--apply` 写）。
 - **FBA 绍兴二次 = `cost_sxbzcp`**（含半成品包装）；上游 `sx_cost_all` 在 `cost_fg=0` 时漏计，已提 `work_order_task#6`，消费侧兜底 `tongtool_integration#24`。
-- **尚未切换写回**：GS 写回仍走 `fill-tables` + 旧模板；先财务确认再切。
+- **GS 写回已切换**（2026-11-10 起 8/9 月；2026-11-12 起 7 月）：入口 `scripts/gs_full_replace.py`
+  （默认 dry-run；`--book` 可写 `通途订单YYYYMM-特殊规则`）。
 - 详细说明：`docs/reference/build-order-tabs.md`。
+
+### 202607 重算与美国本地成本（2026-11-12）
+
+- **202607**：self 9,552 / FBA 1,653 / merged 11,205；self 总成本 2,750,957.10、利润 2,707,801.37。
+  已写回 `通途订单202607` 与 `-特殊规则` 三表（特殊规则表被覆盖为基础表，**1.7.0 需重跑**）。
+- **差异主因**：美中二次加工改用目的地 valuation（旧表误用绍兴/半成品）；1104 BOM 皮壳；
+  FBA 绍兴二次=`cost_sxbzcp`、二次=0；2 个包裹尾程手工修正 −586.67。
+- **美国本地产品（棉包 KS0050）架构**：产品不建 BOM（`cost_fg=0`）；
+  `USNJBZCP#/USTXBZCP#KS0050-<尺寸>` BOM = PP 棉 kg × 美国采购价 + 5 分钟 × 16.607 元/h；
+  物料组 `棉包` 发货类型=成品。引擎例外：**成品 + cost_fg=0 + 绍兴=0 + 目的地 valuation>0
+  → 二次加工=valuation**（皮壳/绍兴/头程=0）。规则见 `cost-engine-spec/32`。
+- **别名登记**：FBA 3 个 Rosoon SKU 已写入 EN `customer_items.ref_code`；本地补丁
+  `config/item_alias_overrides.csv`。美国销售尺寸 138 = EN 140。
+- **大件云仓**：第三方大件（金属文件柜）显式零成本 `third_party_warehouse`，不按未登记阻断。

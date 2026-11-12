@@ -5,6 +5,13 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-11-12
+- **202607 全量重算并写回**：主工作簿 `通途订单202607` 三表 + `通途订单202607-特殊规则` 三表（特殊规则表为基础表，1.7.0 需重跑）。self 9,552 / FBA 1,653 / merged 11,205；self 总成本 2,750,957.10（+191,363.05）、利润 2,707,801.37（−190,262.07）；FBA 169,137.97（−26,291.51）/ 439,803.49；merged 2,920,095.07（+165,071.55）/ 3,147,604.86。主要差异：美中二次加工改用目的地 valuation、1104 BOM 皮壳、FBA 绍兴承接、2 个包裹尾程手工修正（−586.67）。
+- **修复**：`WFUS-CS670166400_1/_2` 两个子单各自 Cover+Foam → 按子单拆成两件（不再整组阻断）；成本阻断行保留真实运费（运费守恒）。
+- **美国本地成本架构（棉包 KS0050）**：产品物料不建 BOM（`cost_fg=0`）；`USNJBZCP#/USTXBZCP#KS0050-<尺寸>` BOM = PP 棉 kg × 美国采购价（USNJ 14.8 / USTX 15.0）+ 5 分钟 × 16.607 元/h；物料组 `棉包` 发货类型=成品。引擎新增例外：`成品 + cost_fg=0 + 绍兴=0 + 目的地 valuation>0 → 二次加工=valuation`（皮壳/绍兴/头程=0）。KS0050 取自现有编码空档（0029–0100 全空，无 Item/Group/BOM 引用）。
+- **登记**：RR1155SN1832RS-EU-FBA→`KS0248-MH-60-FLAXGREY`、RR961SN11328RS-USFBA→`KS0001-HLR-140-BLACK`（美国 138 实际=EN 140）、RR961SN11335RS-USFBA→`KS0001-DM-194-GRASSGREEN`；棉包 PP5LB/CEN-PPCotton-5lb→`KS0050-PPM-5LB-WHITE`。`大件云仓` 第三方大件 22 行显式零成本（`third_party_warehouse`）。
+- **工具**：`gs_full_replace.py` 支持 `--month` 任意月份与 `--book` 覆盖（写特殊规则工作簿）；`fetch_month_orders.py` 导出源表；`build-order-tabs` 自动应用特殊订单清单；`config/item_alias_overrides.csv` 记录本地别名补丁。
+
 ## 2026-11-11
 - **新增** `scripts/fetch_month_orders.py`：把 Colab 4.1.0/4.7.1 的源表读取（`YYYY年M月订单` / `FBA订单`）落成本地 `raw_<月>.csv` / `raw_fba_<月>.csv` + manifest（行数/表头/sha256）；新增 4 个单测。补 `docs/reference/tongtool-order-pipeline.md` §0.1「GS 读写触点矩阵」，明确唯一未移植写回是 `检查运营人员-写回…`（依赖 4.9 渠道账号映射）。
 - **自动化** `build-order-tabs` 默认应用 `out/special_orders_<月>.csv`（Colab 4.1.0.1）：命中即删 raw 并写回 `raw_<月>_filtered.csv`；manifest 记录删除行/单数与命中订单号；`--require-special-orders` 缺失即失败。新增 3 个单测。202609 QDY 2 单（`DY-LAPW-25909`/`25883`）删除后 self 6,219 / merged 7,488，GS 两表已同步（readback 0）。

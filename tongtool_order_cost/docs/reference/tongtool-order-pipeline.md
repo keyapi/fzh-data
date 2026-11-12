@@ -101,6 +101,7 @@ EN shipping_method = 仅记录到 en_method，用于审计；不参与任何成�
 | 皮壳成本 | 当前 BOM `cost_fg` |
 | 头程运费 | 按仓库价格表 + shape/method：`-Cover`→cover；`-Foam`→freight−cover；半成品→sfg；成品→freight；FBA→FBA freight |
 | 二次加工成本（目的地加工） | **分公司发成品→0**；皮壳/半成品→USNJ/USTX/PL 对应 `valuation_rate`；美国海外仓按 method；FBA=0 |
+| 美国本地采购/加工（2026-11-12） | `成品 + cost_fg=0 + 绍兴=0 + 目的地 valuation>0` → 皮壳/绍兴/头程=0，二次加工=valuation。棉包 KS0050：`USNJBZCP#/USTXBZCP#KS0050-<尺寸>` BOM = PP棉 kg × 美国采购价 + 5 分钟包装工时 |
 | 绍兴二次加工成本 | 半成品→`cost_sxbzbcp`；成品→`cost_sxbzcp`；皮壳→0；FBA→`cost_sxbzcp`（含半成品包装） |
 
 后缀矩阵（仅非 FBA，shape 由通途SKU 后缀决定）：

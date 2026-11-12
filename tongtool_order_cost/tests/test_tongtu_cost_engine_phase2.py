@@ -176,6 +176,28 @@ def test_pass_row_usnj_finished_cost(tmp_path):
     assert row["绍兴二次加工成本"] == 3
 
 
+def test_us_local_finished_uses_destination_valuation(tmp_path):
+    """美国本地采购/加工：皮壳=0、绍兴=0、头程=0，成本只进目的地 valuation。"""
+    shadow = _shadow(tmp_path, [
+        ["ORD-2110001", "PSK", "TT777", 2, 10, 50, 0, "WH-NJ"],
+    ], [
+        ["ORD-2110001", "TT777", "", 2, "成品"],
+    ])
+    bom = write_bom(tmp_path, [{
+        "item_fg": "KS200-OTHER", "shipping_method": "成品",
+        "cost_fg": 0, "cost_sxbzcp": 0, "sx_cost_all": 0,
+        "usnj_valuation_rate": 35.8839167,
+        "cover_freight_2kk9fsq8ln": 0, "freight_2kk9fsq8ln": 0,
+    }])
+    p2 = compute_phase2(shadow, bom, write_items(tmp_path), write_wh_map(tmp_path))
+    assert p2.ok, [a for a in p2.assertions if a.status == "fail"]
+    row = p2.rows[0]
+    assert row["皮壳成本"] == 0
+    assert row["绍兴二次加工成本"] == 0
+    assert row["头程运费金额"] == 0
+    assert row["二次加工成本"] == 71.767833  # 35.8839167 × 2
+
+
 def test_fba_cost_branch(tmp_path):
     shadow = _shadow(tmp_path, [
         ["ORD-2200001", "PSK", "TT777", 1, 10, 50, 0, "WH-FBA"],

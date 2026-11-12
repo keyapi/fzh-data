@@ -424,9 +424,15 @@ def _unit_costs(
     if bucket in FBA_BUCKETS:
         processing = 0.0
     elif method == METHOD_FINISHED and bucket in ("USNJ", "USTX", "PL"):
-        # 分公司发成品：目的地不再加工，加工成本固定 0（BOM 里 PL 成品 valuation
-        # 是历史遗留，如 PLBZCP#KS0230-60=85.05；等 BOM 表重生后也会清 0）。
-        processing = 0.0
+        # 分公司发成品：国内已含加工 → 目的地二次=0；
+        # 例外：美国本地采购/加工产品（无皮壳、无绍兴包装）成本只体现在目的地 valuation。
+        sx = _num(bom.get("cost_sxbzcp")) or 0.0
+        val = _num(bom.get({
+            "USNJ": "usnj_valuation_rate",
+            "USTX": "ustx_valuation_rate",
+            "PL": "pl_valuation_rate",
+        }[bucket]))
+        processing = (val or 0.0) if (shell == 0 and sx == 0 and (val or 0) > 0) else 0.0
     elif bucket == "USNJ":
         processing = _num(bom.get("usnj_valuation_rate"))
     elif bucket in ("USTX", US_OVERSEAS):
@@ -765,7 +771,9 @@ def compute_phase2(
                                 else (_num(bom.get("pl_valuation_rate")) or 0.0)
                             )
                             if method == METHOD_FINISHED and bucket in ("USNJ", "USTX", "PL"):
-                                en_proc = 0.0
+                                # 美国本地采购/加工（皮壳=0、绍兴=0）成本只在目的地 valuation
+                                if not (en_shell == 0 and en_sx == 0 and en_proc > 0):
+                                    en_proc = 0.0
                             if shape == SHAPE_COVER:
                                 en_sx, en_proc = 0.0, 0.0
                             elif shape == SHAPE_FOAM and method in (METHOD_SEMI, METHOD_FINISHED):

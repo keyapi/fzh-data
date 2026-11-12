@@ -361,10 +361,19 @@ class FbaShadowResult:
     stats: dict
 
 
+def _en_items_path(month: str, root: Path) -> Path:
+    """优先当月 EN 明细快照；老月份回落 08/09 合并导出。"""
+    cand = root / "out" / "snapshots" / month / f"en_items_all_{month}.csv"
+    return cand if cand.exists() else root / "out" / "en_items_all_089.csv"
+
+
 def _load_fba_tables(month: str, root: Path):
     gs = pd.read_csv(root / "out" / f"raw_fba_{month}.csv", dtype=str, low_memory=False, keep_default_na=False)
-    tt = pd.read_csv(root / "out" / f"fba_export_{month}.csv", dtype=str, low_memory=False, keep_default_na=False)
-    en = pd.read_csv(root / "out" / "en_items_all_089.csv", dtype=str, low_memory=False, keep_default_na=False)
+    tt_path = root / "out" / f"fba_export_{month}.csv"
+    # 通途 FBA 导出只用于 GS↔TT 对账，不参与成本取数；缺失时按空表处理（recon 标记 tt_missing）
+    tt = (pd.read_csv(tt_path, dtype=str, low_memory=False, keep_default_na=False)
+          if tt_path.exists() else pd.DataFrame())
+    en = pd.read_csv(_en_items_path(month, root), dtype=str, low_memory=False, keep_default_na=False)
     en = en[en["warehouse_name"].str.contains("FBA", case=False, na=False)].copy()
     en["month"] = en["despatch_complete_time"].map(_month_of)
     # 保留全部月份：同月优先，找不到时用 ±1 月窗口跨月桥接
@@ -420,7 +429,7 @@ def fba_input_paths(
         "kit_report": Path(kit_report_csv or out / "bom_cost_product_with_kits.csv"),
         "raw_fba": out / f"raw_fba_{month}.csv",
         "fba_export": out / f"fba_export_{month}.csv",
-        "en_items": out / "en_items_all_089.csv",
+        "en_items": _en_items_path(month, root),
     }
 
 
