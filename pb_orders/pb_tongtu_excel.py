@@ -31,7 +31,7 @@ import os
 import re
 import sys
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -258,6 +258,37 @@ def build_order_df(path, *, order_suffixes=None):
 
     df = df.drop(columns=COLS_TO_DROP, errors="ignore")
     return drop_extra_empty_columns(df).reset_index(drop=True)
+
+
+# 通途把导入 xlsx 的 `PO Date` 当作订单「付款时间」。实测付款时间超过 3 个月的
+# 订单不会出现在通途「等待配货」列表里：补发旧 PO 时原始 PO Date 往往早已超过
+# 3 个月，必须把导入文件里的 PO Date 改成导入当天，否则仓库同事看不到这单。
+PO_DATE_MAX_AGE_DAYS = 90
+
+
+def clamp_old_po_dates(df, today=None, max_age_days: int = PO_DATE_MAX_AGE_DAYS):
+    """把超过 N 天的 `PO Date` 改成今天，返回 (调整后的 df, 调整明细)。
+
+    只改**通途导入用**的 DataFrame，不动源 CSV / 报告里的原始 PO Date。
+    同一 PO 只报一条明细：`{"po", "old", "new"}`。
+    """
+    if "PO Date" not in df.columns or df.empty:
+        return df, []
+    today = today or datetime.now().date()
+    cutoff = today - timedelta(days=max_age_days)
+    out = df.copy()
+    adjustments: list[dict] = []
+    seen: set[str] = set()
+    for idx, raw in out["PO Date"].items():
+        parsed = pd.to_datetime(raw, errors="coerce")
+        if pd.isna(parsed) or parsed.date() >= cutoff:
+            continue
+        po = str(out.at[idx, COL_PO]).strip() if COL_PO in out.columns else ""
+        out.at[idx, "PO Date"] = f"{today:%Y-%m-%d} 00:00:00"
+        if po not in seen:
+            seen.add(po)
+            adjustments.append({"po": po, "old": str(raw)[:10], "new": today.isoformat()})
+    return out, adjustments
 
 
 def split_no_stock(df, no_stock_skus):

@@ -123,6 +123,10 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
   交付前断言首格是 `Invoice Number`、数据行数 = H+D、文件名 `xN` = H 数、H 行总额 = txt。
   **同额两张票会让「总额对」和「少一张」同时成立** —— 金额校验不够，必须查表头与逐行差异。
   D 行重复整票总额，`H ≠ ΣD` 是正常，别用 D 行求和校验。
+- **通途付款时间 = 导入 xlsx 的 `PO Date`，不是导入时间**：超过 3 个月不会出现在仓库的
+  「等待配货」。补发旧 PO 时 `service.run_job` 会把导入 xlsx 的 PO Date 超过 90 天的自动
+  改成当天（源 CSV/报告保留原值）；手工单行补建时 PO Date 必须写成**文本**
+  `yyyy-MM-dd HH:mm:ss`，写成 Excel 日期单元格会被通途拒收。
 - **绝不把邮件口令 / 账号密码写进仓库**；邮件里不出现 Tracy / 中间人 / 5% 佣金。
 
 ## 相关经验（docs/solutions）

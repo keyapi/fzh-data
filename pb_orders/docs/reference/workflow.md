@@ -458,3 +458,16 @@ uv run python run_pb_orders.py --dir "...\20261030" --reorder 137974027=-3
   `tongtool*` 产物 xlsx 的 `PO Number` 列，`--apply` 后写入登记表；
   未回填的 PO 第一次自动分配可能给出已用过的 `-2`。
 - 判重口径：登记的是**完整订单号**（含 `-N`），`po_base` 只是索引；裸号也算占用一次。
+
+### 付款日期（`PO Date`）超过 3 个月要改成导入日
+
+通途把导入 xlsx 的 **`PO Date`** 当作订单的「付款时间」；实测付款时间超过 **3 个月**
+的订单不会出现在仓库的「等待配货」列表（`PBUS-137682252-2`：PO Date=`2026-08-12`，
+11/16 导入后 WXP 看不到）。所以补发旧 PO 时：
+
+- `service.run_job` 会检查 `PO Date`，**超过 90 天**就把**导入 xlsx 用**的 `PO Date`
+  改成当天（`YYYY-MM-DD 00:00:00`），并写进 `report["po_date_adjustments"]` 与 warning；
+  **源 CSV、报告和标签仍保留原始 PO Date**。
+- 手工补建单行 xlsx 时，`PO Date` 必须是**文本** `yyyy-MM-dd HH:mm:ss`，
+  不能写成 Excel 日期单元格（通途会报「付款日期格式不正确」）。
+- 这与「重复建单后缀」是两件独立的事：后缀解决重号，`PO Date` 解决付款时间窗口。

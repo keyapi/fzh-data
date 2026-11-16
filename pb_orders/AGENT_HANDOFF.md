@@ -579,6 +579,16 @@ uv run pytest tests/ -q
     续出件产物叫 `PB_0_导入_原始_{checked0stock …}_on_{ts}.xlsx`，名字里有
     `checked0stock`，容易被当成库存检查表漏下。下载看 `kind=tongtool`，不要凭文件名猜。
 
+44. **通途的「付款时间」= 导入 xlsx 的 `PO Date`，不是导入时间**（2026-11-16 真实案例）：
+    `PBUS-137682252-2` 从 11/16 导入、`saleTime` 也是 11/16，但 `paidTime=2026-08-12`
+    （来自原 PO Date）。WXP 的「等待配货」只显示付款时间在 3 个月内的订单，所以这一单
+    被过滤掉，同批其余 51 单正常。处理：
+    - 补发旧 PO 时，`service.run_job` 已自动把**导入 xlsx 用**的 `PO Date` 超过 90 天的
+      改成当天，并写 `report["po_date_adjustments"]` + warning；源 CSV/报告保留原始日期。
+    - 手工单行补建 xlsx 时，`PO Date` 必须是**文本** `yyyy-MM-dd HH:mm:ss`；写成 Excel
+      日期单元格会被通途拒收（「付款日期格式不正确」）。
+    - 这与「重复建单后缀」独立：后缀管重号，PO Date 管付款时间窗口。
+
 ## 8. 数量对账口径
 
 ### 8.1 库存预检（步骤 0）

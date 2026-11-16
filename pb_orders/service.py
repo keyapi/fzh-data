@@ -224,6 +224,14 @@ def run_job(
             hint="请用 SPS 导出的完整订单 CSV 重新提交；本批的 checked0stock 文件见「检查 SPS 新订单」任务。",
             code="order_csv_invalid",
         ) from exc
+    # 通途把 xlsx 的 PO Date 当付款日期；补发旧 PO 时它可能早于 3 个月，
+    # 这样的订单不会出现在仓库的「等待配货」列表。只改导入用的 DataFrame。
+    df_order, po_date_adjustments = pb_tongtu_excel.clamp_old_po_dates(df_order)
+    for item in po_date_adjustments:
+        warnings.append(
+            f"PO {item['po']} 的 PO Date {item['old']} 超过 3 个月，"
+            f"通途付款时间已改为 {item['new']}（否则不会出现在等待配货）"
+        )
     no_stock_skus = [s for s in options.no_stock if str(s).strip()]
     importable, no_stock = pb_tongtu_excel.split_no_stock(df_order, no_stock_skus)
     order_numbers = sorted({str(x) for x in df_order[pb_tongtu_excel.COL_PO].dropna().unique()})
@@ -304,6 +312,8 @@ def run_job(
             "applied": dict(sorted(reorder_suffixes.items())),
             "history_files": reorder_files,
         },
+        # 超过 3 个月的 PO Date 已改成导入日（通途付款时间），见 clamp_old_po_dates
+        "po_date_adjustments": po_date_adjustments,
         "one_to_one": {"pdf_pages": len(df_pdf), "order_rows": len(df_order), "ok": True},
         "join": {"unmatched": len(unmatched),
                  "unmatched_sample": [str(u) for u in unmatched[:10]]},
