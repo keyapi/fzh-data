@@ -15,6 +15,7 @@ tags: [openai, api-proxy, changelog]
 - 结论：要给部分人开不走代理的 WiFi，必须走 WAN2（H3C 在 OpenWrt 下游，OpenClash 只看得到单一 NAT 源 IP）。方案含 Tailscale `100.64/10` 的 PBR 例外、静态DNS 指向 `192.168.1.5`、链路探测/回切需实测。详见 [office-lan-access.md](office-lan-access.md#h3c-实机配置与直连-ssid-规划2026-11-17-只读盘点) 与 [仓库解决方案](../../docs/solutions/architecture-patterns/office-dual-wan-direct-ssid.md)。
 - 已导出 H3C 配置备份到受控 `secrets/`（不入库）；只读登录方法记入 [H3C ER G3 只读自动化](../../docs/solutions/developer-experience/h3c-er-g3-readonly-automation.md)。
 - 财务金蝶服务器（H3C LAN `192.168.10.66`，MAC `04-7C-16-93-26-B5`）因 DHCP 把 `.66` 动态分给手机导致 FZH-5G 客户端间歇不通；已在 H3C「静态DHCP」补占位，实测恢复。教训：手工配池内静态 IP 的设备都必须同时占位。
+- **已执行（低风险三项）**：① OpenWrt 加静态 host `80:61:6C:01:7A:1E → 192.168.100.181`（H3C WAN1）；② 光猫加静态绑定 `80:61:6C:01:7A:1F → 192.168.1.13`（H3C WAN2）；③ H3C 静态DNS 加 4 个 NAS 域名 → `192.168.1.5`（用 `nslookup @192.168.10.1` 验证返回 `.1.5`）。多WAN 主备+链路探测、以及 `FZH-Direct-5G` 直连 SSID 暂缓。变更前后各导出一次 H3C 配置到受控 `secrets/`。
 
 ## 2026-10-27
 

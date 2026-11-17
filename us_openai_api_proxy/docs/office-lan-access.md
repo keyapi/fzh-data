@@ -342,8 +342,11 @@ OpenClash 无法按 SSID/设备区分。完整方案（VLAN20 + SSID + 策略路
 静态DNS 指向 `192.168.1.5` + 链路探测/回切）见
 [仓库解决方案：办公室双 WAN 与直连 SSID](../../docs/solutions/architecture-patterns/office-dual-wan-direct-ssid.md)。
 
-地址占位提醒：H3C WAN1 `.181` 落在 OpenWrt DHCP 池 `.100–.249` 内且未被保留；WAN2 `.13` 落在光猫池 `.2–.254` 内。
-两边都应补静态绑定占位。
+地址占位（**2026-11-17 已补齐**）：
+- OpenWrt 静态 host：`80:61:6C:01:7A:1E → 192.168.100.181`（H3C WAN1）
+- 光猫静态绑定：`80:61:6C:01:7A:1F → 192.168.1.13`（H3C WAN2）
+- H3C 静态DNS：`fzh.myds.me` / `nas.daneey.com` / `nas.vilavi.cn` / `nas.mxdeals.com → 192.168.1.5`
+  （指向 NAS 光猫侧地址，OpenWrt 挂掉时仍可解析；未做多WAN主备、未加直连 SSID）
 
 **财务金蝶服务器**：手工静态 `192.168.10.66`（MAC `04-7C-16-93-26-B5`），挂在 H3C LAN。
 2026-11-17 曾因 H3C DHCP 把 `.66` 动态分给一台手机，导致金蝶客户端（FZH-5G）间歇不通；
