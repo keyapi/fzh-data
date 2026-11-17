@@ -4,7 +4,7 @@
 
 桥的 `/authorize` 不校验 `redirect_uri` 时，攻击者可以把授权码引到自己的站点，
 再用该 code 换 new-api 会话（接管员工账号）。这里固定住三条边界：
-默认放行两个真实客户端、环境变量可覆盖、只做精确匹配。
+默认放行三个真实客户端、环境变量可覆盖、只做精确匹配。
 
     uv run pytest new-api-dingtalk-oidc/tests -q
 """
@@ -30,6 +30,22 @@ def test_defaults_cover_the_two_real_clients():
     assert allowed == list(DEFAULT_ALLOWED_REDIRECT_URIS)
     assert "https://api.vilavi.cn/oauth/dingtalk" in allowed
     assert "https://api.vilavi.cn/pb/oidc-callback" in allowed
+    assert "https://api.vilavi.cn/sellfox/admin/oidc-callback" in allowed
+
+
+def test_sellfox_callback_passes_but_lookalikes_do_not():
+    """赛狐代理的回调要放行；把它拼到别处或换协议的近似地址仍拒绝。"""
+    allowed = parse_allowed_redirect_uris(None)
+    assert is_redirect_uri_allowed(
+        "https://api.vilavi.cn/sellfox/admin/oidc-callback", allowed
+    )
+    for candidate in (
+        "https://api.vilavi.cn/sellfox/admin/oidc-callback/",
+        "http://api.vilavi.cn/sellfox/admin/oidc-callback",
+        "https://api.vilavi.cn/sellfox/admin/oidc-callback.evil.example",
+        "https://evil.example/sellfox/admin/oidc-callback",
+    ):
+        assert not is_redirect_uri_allowed(candidate, allowed), candidate
 
 
 def test_env_override_parsing_trims_and_drops_blanks():

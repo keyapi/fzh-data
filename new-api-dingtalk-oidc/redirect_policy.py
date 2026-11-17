@@ -5,12 +5,14 @@
 
 from __future__ import annotations
 
-# 值来自 nginx 访问日志里两个真实客户端：
+# 值来自 nginx 访问日志里的真实客户端：
 #   new-api 自带登录 → /oauth/dingtalk
 #   pb-orders      → /pb/oidc-callback
+#   sellfox 代理   → /sellfox/admin/oidc-callback
 DEFAULT_ALLOWED_REDIRECT_URIS = (
     "https://api.vilavi.cn/oauth/dingtalk",
     "https://api.vilavi.cn/pb/oidc-callback",
+    "https://api.vilavi.cn/sellfox/admin/oidc-callback",
 )
 
 
