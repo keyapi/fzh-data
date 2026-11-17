@@ -13,6 +13,9 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-17 | 浅克隆 worktree 下 update_index.py 会把所有文档日期刷成同一值 | [developer-experience/shallow-clone-update-index-date-drift.md](developer-experience/shallow-clone-update-index-date-drift.md) |
+| 2026-11-17 | 办公室双 WAN 出口与「直连 SSID」设计（H3C ER3208G3-P-E） | [architecture-patterns/office-dual-wan-direct-ssid.md](architecture-patterns/office-dual-wan-direct-ssid.md) |
+| 2026-11-17 | H3C ER G3 后台只读自动化登录（过期证书 / RSA / 验证码 / 不打印密码） | [developer-experience/h3c-er-g3-readonly-automation.md](developer-experience/h3c-er-g3-readonly-automation.md) |
 | 2026-11-06 | 邮件域名到期 → Gmail 550-5.7.26 拒收：续费≠恢复，注册商≠DNS 托管商 | [integration-issues/email-domain-expiry-gmail-550-5-7-26.md](integration-issues/email-domain-expiry-gmail-550-5-7-26.md) |
 | 2026-11-05 | EN 服务器 git push 报 Permission denied (publickey) —— 密钥没问题，是 GitHub SSH 链路间歇性阻断 | [integration-issues/github-ssh-intermittent-publickey-denied.md](integration-issues/github-ssh-intermittent-publickey-denied.md) |
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |

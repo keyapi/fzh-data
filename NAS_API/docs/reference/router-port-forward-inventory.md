@@ -274,4 +274,5 @@ WAN 接入支持 固定 IP / DHCP / **PPPoE**；内置 AC 支持**多 SSID + SSI
 
 - Agent：[../../AGENT_HANDOFF.md](../../AGENT_HANDOFF.md)
 - 访问架构：[nas-multi-domain-access.md](nas-multi-domain-access.md)
+- 办公室双 WAN / 直连 SSID：[office-dual-wan-direct-ssid.md](../../../docs/solutions/architecture-patterns/office-dual-wan-direct-ssid.md)
 - 本地密钥与页面快照：`NAS_API/secrets/router-f4610u.local.md`（gitignore，不入库）

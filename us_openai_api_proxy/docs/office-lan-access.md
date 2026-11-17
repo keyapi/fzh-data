@@ -324,6 +324,30 @@ uci commit && /etc/init.d/firewall restart
 
 完整架构、证书铁律与未决项见 [NAS_API/docs/reference/nas-multi-domain-access.md](../../NAS_API/docs/reference/nas-multi-domain-access.md)。
 
+## H3C 实机配置与「直连 SSID」规划（2026-11-17 只读盘点）
+
+| 项 | 现状 |
+|---|---|
+| WAN1 | 静态 `192.168.100.181` → OpenWrt（默认路由出口），NAT 启用，链路探测未启用 |
+| WAN2 | 静态 `192.168.1.13` → 光猫（备用），NAT 启用，链路探测未启用 |
+| 静态路由 | `0.0.0.0/0 → 192.168.100.1`(WAN1)；`100.64.0.0/10 → 192.168.100.1`(WAN1，Tailscale) |
+| 多WAN策略 | **平均分配负载分担**（不是主备）；实测 5 个公网目标均走 WAN1 |
+| 策略路由 | 1 条 `VLAN1 → 全流量 → WAN2`，**禁用**（绝不能启用，否则全办公室绕过代理） |
+| VLAN | 只有 VLAN1 `192.168.10.0/24` |
+| AP | 在线 1 台 AX71（模板 `default`，38 客户端）；离线 3 台（2 台坏机、1 台待布线） |
+| 多 SSID | 「MiniAP 管理 → 配置模板管理 → default」，每模板最多 8 个（实际看 AP 型号） |
+
+要给部分人开**不走代理**的 WiFi，必须走 **WAN2**——H3C 在 OpenWrt 下游、客户端被 NAT 成单一源 IP，
+OpenClash 无法按 SSID/设备区分。完整方案（VLAN20 + SSID + 策略路由 + Tailscale `100.64/10` 例外 +
+静态DNS 指向 `192.168.1.5` + 链路探测/回切）见
+[仓库解决方案：办公室双 WAN 与直连 SSID](../../docs/solutions/architecture-patterns/office-dual-wan-direct-ssid.md)。
+
+地址占位提醒：H3C WAN1 `.181` 落在 OpenWrt DHCP 池 `.100–.249` 内且未被保留；WAN2 `.13` 落在光猫池 `.2–.254` 内。
+两边都应补静态绑定占位。
+
+只读登录/备份的方法见
+[仓库解决方案：H3C ER G3 只读自动化](../../docs/solutions/developer-experience/h3c-er-g3-readonly-automation.md)。
+
 ## 见也
 
 - [architecture.md](architecture.md) — 整体架构（服务器+API 流）

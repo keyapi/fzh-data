@@ -25,6 +25,8 @@ tags: [openai, api-proxy, handoff, authentication]
 |------|-------------|
 | 服务启动、日志、重启或资源问题 | [docs/operations.md](docs/operations.md) 的“快速登录与服务检查” |
 | WiFi 下单个境外主机/RDP 不通、直连光猫正常 | [docs/solutions/best-practices/openclash-per-target-direct-rule.md](../docs/solutions/best-practices/openclash-per-target-direct-rule.md) |
+| 开/查「不翻墙」WiFi、双 WAN 策略路由、WAN2 出口 | [docs/office-lan-access.md](docs/office-lan-access.md#h3c-实机配置与直连-ssid-规划2026-11-17-只读盘点)、[仓库：双 WAN 与直连 SSID](../docs/solutions/architecture-patterns/office-dual-wan-direct-ssid.md) |
+| 要登录 H3C 后台核对/备份配置 | [仓库：H3C ER G3 只读自动化](../docs/solutions/developer-experience/h3c-er-g3-readonly-automation.md) |
 | `503 auth_unavailable` | [docs/operations.md](docs/operations.md) 的“诊断”和“授权恢复” |
 | ChatGPT/Codex OAuth 需要刷新 | [docs/operations.md](docs/operations.md) 的“授权恢复”（含浏览器 OAuth、隔离失效记录、重启和目标模型验收） |
 | 服务 active 但模型仍失败 | 对**目标模型**运行最小真实请求，不以 health check 为结论 |

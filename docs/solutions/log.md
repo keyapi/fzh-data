@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-17（办公室双 WAN / 直连 SSID / H3C 自动化）
+
+- **新增**: `architecture-patterns/office-dual-wan-direct-ssid.md` — 办公室双 WAN 出口与「直连 SSID」设计。关键结论：H3C 在 OpenWrt **下游**，客户端被 NAT 成 `192.168.100.181` 后 OpenClash 无法按 SSID 区分，**去掉代理只能走 WAN2**；现成的 `VLAN1 → WAN2` 策略路由是禁用的、**绝不能启用**；`100.64.0.0/10`（Tailscale）必须做更高优先级例外；H3C 静态DNS 应指向 `192.168.1.5`（OpenWrt 挂了仍可达）而不是 `.242`；链路探测要端到端、回切手册未写需实测。附 2026-11-17 实机配置（WAN1 `192.168.100.181` / WAN2 `192.168.1.13` / 多WAN 当前"平均分配" / 只有 VLAN1 / 在线 AP 1 台 AX71）。
+- **新增**: `developer-experience/h3c-er-g3-readonly-automation.md` — H3C ER G3 只读自动化登录：过期自签证书、密码前端 RSA（别 `form.submit()`）、验证码由服务端明文下发（`getVertifyCode`）且平时隐藏、凭据用本机一次性接口 + Playwright `page.request` 读取而不打印。
+- **新增**: `developer-experience/shallow-clone-update-index-date-drift.md` — 浅克隆（`rev-list --count` = 1）下 `update_index.py` 会把全库 Updated 日期刷成同一提交日，造成上千行无关 diff；应撤回重生成、只手工补本次行（或到完整克隆重跑）。
+
 ## 2026-11-06（邮件域名到期 / Gmail 550-5.7.26）
 
 - **新增**: `integration-issues/email-domain-expiry-gmail-550-5-7-26.md` —— 域名 2026-11-03 到期后，阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析，腾讯企业邮发出的邮件被 Gmail 以 550-5.7.26 硬拒。11-04 续费成功但邮件未恢复：**续费 ≠ 恢复**，必须回查注册局 NS 并确认记录在服务（直接问权威 NS，不只看控制台）。另一层陷阱是**注册商 ≠ DNS 托管商**（阿里云注册、DNSPod 解析；主域 `vilavi.cn` 在 Cloudflare）。DKIM selector 是腾讯企业邮生成的自定义随机串（`sjnr2306` / `evhe2306`），常见 selector 全 NXDOMAIN 不能证明“没有 DKIM”。恢复后补 DMARC `p=none`、修 MX 优先级 5/10。

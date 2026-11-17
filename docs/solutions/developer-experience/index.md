@@ -9,6 +9,8 @@ tags: [developer-experience, index]
 
 | 你需要... | 读这个 |
 |----------|--------|
+| H3C ER 后台自动化登录（过期证书 / RSA 密码 / 服务端明文验证码 / 不打印凭据） | [h3c-er-g3-readonly-automation.md](h3c-er-g3-readonly-automation.md) |
+| 浅克隆 worktree 里 `update_index.py` 把全库日期刷成同一天 | [shallow-clone-update-index-date-drift.md](shallow-clone-update-index-date-drift.md) |
 | Windows worktree 的 `CLAUDE.md` 是 symlink 还是 stub（开发者模式 / `core.symlinks` / `setup.ps1` 在哪儿跑） | [windows-worktree-claude-md-symlink.md](windows-worktree-claude-md-symlink.md) |
 | 新分支的 upstream 被指成 `main`（裸 `git push` 会往哪推 / `branch.autoSetupMerge`） | [git-worktree-branch-upstream-tracks-main.md](git-worktree-branch-upstream-tracks-main.md) |
 | WorkBuddy 接公司 new-api 自定义模型（useCustomProtocol=false + url 带 /v1） | [workbuddy-custom-model-newapi-config.md](workbuddy-custom-model-newapi-config.md) |
