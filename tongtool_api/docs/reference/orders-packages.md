@@ -11,7 +11,7 @@ timestamp: 2026-08-13
 
 ## Orders
 
-- MCP tool: erp2_orders_ordersquery.
+- 直连 open API：`ordersQuery`（base `https://open.tongtool.com/api-service`）。**不要用 MCP**，用户已明确要求；MCP 的 403/524 不能作为权限结论。
 - Official doc ID: f4371e5d65c242a588ebe05872c8c4f8.
 - Resolve sale accounts first. accountCode is a short business code such as RSUS, not a display identifier such as AMZRosoonUS.
 - Use at least one bounded order/date condition and a small page size while discovering.
@@ -19,7 +19,7 @@ timestamp: 2026-08-13
 
 ## Merchant Packages
 
-- MCP tool: erp2_packages_packagesquery.
+- 直连 open API：`packagesQuery`（同上；不要用 MCP）。
 - Official doc ID: 0412c0185dce4a9d88714a9eef44932b.
 - Live MCP validation required an assign-time or despatch-time range.
 - The EN wrapper also contains updateTimeFrom/To, but the public Go SDK models assign/despatch times only. Treat update-time support as unverified until a live schema/call confirms it.

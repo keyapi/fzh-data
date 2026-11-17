@@ -2,7 +2,7 @@
 okf: v0.1
 type: Guide
 title: Tongtool ERP2.0 Agent Handoff
-description: Operating rules and known facts for agents using Tongtool ERP2.0 MCP and APIs.
+description: Operating rules and known facts for agents using Tongtool ERP2.0 direct open API (MCP not used for business queries).
 tags: [tongtool, erp2, mcp, handoff]
 timestamp: 2026-08-14
 ---
@@ -12,14 +12,14 @@ timestamp: 2026-08-14
 ## Scope
 
 - Current system: Tongtool ERP2.0 only. Do not use ERP3.0 assumptions.
-- Preferred access: official remote MCP at https://mcp.tongtool.com/mcp. Register separately for Codex (`setup_codex_mcp.ps1`) and Cursor (`setup_cursor_mcp.py`). Cursor tools appear as `user-tongtool_erp2_primary`.
+- **Preferred access（用户明确要求）：直连 Tongtool open API**，base `https://open.tongtool.com/api-service`；认证流程见下方 Sources 与 `tongtool_integration/api/client.py`。**Agent 不要用通途 MCP 查订单/库存/包裹**；MCP 仅保留历史安装记录作排错参考，不作为业务取数通道。
 - Current automation interests: orders, merchant packages, inventory, purchasing, and related base data.
 - Out of scope: the separate Logistics Platform permission family. It is not exposed by the observed MCP tool catalog.
 
 ## Before Any Call
 
 1. Read docs/reference/mcp-setup.md and docs/reference/authentication-and-errors.md.
-2. If the host tool catalog has no Tongtool MCP, run the host setup script and stop silent HTTP fallback. CLI/scripts may keep using mcp_http.py.
+2. 业务取数一律走直连 open API（脚本/HTTP）。不要再为了查订单/库存去装或调用 MCP；MCP 403/524 是工具层问题，不能据此判断 App 权限。
 3. Confirm the requested operation is read-only. For create/update/ship/stock-in/out actions, show scope and obtain explicit user confirmation.
 4. Keep page sizes and date windows small during discovery. Do not log full order/package payloads because they contain PII.
 5. Treat official docs as useful but fallible; cross-check tool schema, live validation, the EN private app, and hiscaler/tongtool.

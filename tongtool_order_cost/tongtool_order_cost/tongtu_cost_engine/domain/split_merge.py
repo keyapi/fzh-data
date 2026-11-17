@@ -991,8 +991,28 @@ def _cover_product_precedence(rows: list[OrderRow], resolver: EnResolver) -> int
         products = {rows[i].product_id for i in covers}
         if len(products) != 1:
             continue
-        # 多颜色皮壳（多个不同 Cover SKU）是「多件不同变体」，不是一件成品的拆包
+        # 多颜色皮壳（多个不同 Cover SKU）是「多件不同变体」，不合并；
+        # 但若皮壳都指向同一产品，而填充行挂了另一产品（共享海绵/PP棉的默认登记），
+        # 只把填充行的成本物料改为皮壳同族物料，**不改 product_id、不触发合并**。
         if len({sku_base(rows[i].sku) for i in covers}) != 1:
+            if len(products) == 1:
+                product = next(iter(products))
+                cover_items = [
+                    str(rows[i].raw.get("_en_item") or "").strip() for i in covers
+                ]
+                target_item = next((ci for ci in cover_items if ci), "")
+                for i in idxs:
+                    row = rows[i]
+                    if sku_shape(row.sku_raw) not in (SHAPE_FOAM, SHAPE_PPCOTTON):
+                        continue
+                    if row.product_id == product:
+                        continue
+                    raw = {k: v for k, v in row.raw.items() if k != "_en_item"}
+                    if target_item:
+                        raw["_en_item"] = target_item
+                    raw["_group_cover_override"] = product
+                    rows[i] = replace(row, raw=raw)
+                    changed += 1
             continue
         product = next(iter(products))
         filler_products = {
