@@ -48,12 +48,22 @@ PASSWORD = os.getenv("TONGTU_PASSWORD", "")
 
 SELECTORS = {
     "username": 'input[name="username"]',
-    "password": 'input[name="password"]',
+    "password": 'input[type="password"]',
     "captcha_img": 'img[alt="验证码"]',
     "captcha_input": 'input[name="captcha"]',
     "login_btn": 'button:has-text("立即登录")',
     "auto_login_cb": 'input[type="checkbox"]',
 }
+
+
+def _is_logged_in_url(url: str) -> bool:
+    """会话仍有效时，passport 会直接跳回 erp102，登录页根本不会出现。
+
+    注意 LOGIN_URL 本身含 `erp102`（在 `u=` 参数里），但它同时含 `passport`，
+    所以这个判定对初始登录页返回 False，只有真正跳走后才成立。
+    """
+    url = url or ""
+    return SUCCESS_FRAGMENT in url and EXCLUDE_FRAGMENT not in url
 
 
 def _download_captcha(page) -> bytes | None:
@@ -198,7 +208,17 @@ def login(page) -> bool:
 
     logger.info("导航到通途登录页...")
     page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
-    page.wait_for_selector('input[name="username"]', state='attached', timeout=15000)
+    page.wait_for_timeout(1000)
+    # 会话仍有效：passport 直接跳回 erp102，不再傻等用户名框（2026-11-05 踩过）。
+    if _is_logged_in_url(page.url):
+        logger.info("已处于登录状态，跳过登录流程: %s", page.url)
+        return True
+    try:
+        # 15s 在早高峰机器繁忙时偶发不够；放宽到 30s，超时优雅返回而不是抛异常。
+        page.wait_for_selector('input[name="username"]', state='attached', timeout=30000)
+    except Exception as e:
+        logger.error("登录页未在 30s 内出现：%s", e)
+        return False
     page.wait_for_timeout(1500)
 
     # 勾选"7天内自动登录"

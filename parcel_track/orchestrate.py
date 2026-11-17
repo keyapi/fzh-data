@@ -18,7 +18,15 @@ from ups_track.batch import Record as UpsRecord
 from ups_track.batch import run_batch as run_ups
 
 from .ingest import IngestReport, TongtuRow, ingest_tongtu
-from .normalize import classified_row, fedex_record_to_summaries, gls_record_to_summaries, ups_record_to_summaries
+from .normalize import (
+    OTHER_REGION,
+    REGION_ORDER,
+    classified_row,
+    fedex_record_to_summaries,
+    gls_record_to_summaries,
+    region_of,
+    ups_record_to_summaries,
+)
 from .ops_excel import write_ops_workbook
 
 
@@ -168,6 +176,41 @@ def run_report(
     for row in classified:
         key = str(row.get("_key") or "")
         counts[key] = counts.get(key, 0) + 1
+    # 按发货仓区域再分一份：全量单量 / 已查 / 停放 + 已分类计数。
+    # 现有查询逻辑仍全量、不按仓库筛选；停放（GOFO/TikTok/USPS 等）不查，
+    # 但在区域视图里必须可见——否则「美东 72」会被误读成一周只有 72 单。
+    region_meta: dict[str, dict[str, Any]] = {}
+    for row in report.rows:
+        region = region_of(row.ident.get("发货仓库") or "")
+        meta = region_meta.setdefault(
+            region, {"orders": 0, "queried": 0, "parked": 0, "warehouses": set()}
+        )
+        meta["orders"] += 1
+        if row.route.carrier is None:
+            meta["parked"] += 1
+        else:
+            meta["queried"] += 1
+        warehouse = str(row.ident.get("发货仓库") or "").strip()
+        if warehouse:
+            meta["warehouses"].add(warehouse)
+    region_counts: dict[str, dict[str, int]] = {}
+    for row in classified:
+        region = region_of(row.get("发货仓库") or "")
+        bucket = region_counts.setdefault(region, {})
+        key = str(row.get("_key") or "")
+        bucket[key] = bucket.get(key, 0) + 1
+    by_region = [
+        {
+            "region": region,
+            "orders": region_meta.get(region, {}).get("orders", 0),
+            "queried": region_meta.get(region, {}).get("queried", 0),
+            "parked": region_meta.get(region, {}).get("parked", 0),
+            "counts": dict(region_counts.get(region, {})),
+            "warehouses": sorted(region_meta.get(region, {}).get("warehouses", set())),
+        }
+        for region in (*REGION_ORDER, OTHER_REGION)
+        if region in region_meta or region in region_counts
+    ]
     _write_csv(f"{prefix}-ups.summary.csv", ups_sum)
     _write_csv(f"{prefix}-fedex.summary.csv", fdx_sum)
     _write_csv(f"{prefix}-gls.summary.csv", gls_sum)
@@ -191,6 +234,7 @@ def run_report(
         "parked": len(report.parked),
         "classified": len(classified),
         "counts": counts,
+        "by_region": by_region,
         "called": called,
         "out": out_xlsx,
     }

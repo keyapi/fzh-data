@@ -134,3 +134,44 @@ def test_orchestrate_ups_only_skips_fedex(tmp_path: Path):
     assert stats["called"]["fedex"] is False
     assert stats["called"]["gls"] is False
     assert called["fedex"] is False
+
+
+def test_region_of_maps_warehouse_prefix():
+    from parcel_track.normalize import region_of
+
+    assert region_of("美东-CENTRADE") == "美东"
+    assert region_of("美中-FZH-DANEEY") == "美中"
+    assert region_of("美中-FZH-DANEEY-退货商品仓") == "美中"
+    assert region_of("波兰-FZHPoland-covers") == "波兰"
+    assert region_of("WayfairCG-Cranbury仓") == "其他"
+    assert region_of("") == "其他"
+
+
+def test_orchestrate_groups_counts_by_region(tmp_path: Path):
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["跟踪号", "邮寄方式", "渠道", "订单号", "包裹号", "发货仓库"])
+    ws.append(["1Z999AA10123456784", "UPS", "Amazon US", "A1", "P1", "美东-CENTRADE"])
+    ws.append(["1Z999AA10123456785", "UPS", "Amazon US", "A2", "P2", "美中-FZH-DANEEY"])
+    ws.append(["1Z999AA10123456786", "UPS", "Amazon US", "A3", "P3", "波兰-FZHPoland-covers"])
+    ws.append(["GFUS010188602773264169", "GOFO", "Amazon US", "A4", "P4", "WayfairCG-Cranbury仓"])
+    p = tmp_path / "regions.xlsx"
+    wb.save(p)
+
+    stats = run_report(
+        str(p), str(tmp_path / "ops.xlsx"), prefix=str(tmp_path / "r"),
+        mock=True, ups_query=_mock_query,
+    )
+
+    assert [item["region"] for item in stats["by_region"]] == ["美东", "美中", "波兰", "其他"]
+    got = {
+        item["region"]: (item["orders"], item["queried"], item["parked"])
+        for item in stats["by_region"]
+    }
+    assert got == {
+        "美东": (1, 1, 0), "美中": (1, 1, 0), "波兰": (1, 1, 0), "其他": (1, 0, 1),
+    }
+    # 全停放的仓也要在 by_region 里，且计数为空（不会凭空消失）
+    other = next(item for item in stats["by_region"] if item["region"] == "其他")
+    assert other["warehouses"] == ["WayfairCG-Cranbury仓"]
+    assert other["counts"] == {}

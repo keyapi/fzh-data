@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .normalize import OTHER_REGION, REGION_ORDER
+
 _ROBOT_DIR = Path(__file__).resolve().parent.parent / "dingtalk" / "dingtalk_robot"
 
 # 推文按「待办优先级」排列；同名分类可能来自多个 key（承运延误有 fedex 别名）
@@ -43,9 +45,52 @@ def _robot_path() -> str:
     return path
 
 
+def _headline_rows(counts: dict[str, int]) -> list[tuple[str, str, int]]:
+    rows = [(zh, mark, sum(counts.get(k, 0) for k in keys)) for zh, keys, mark in _HEADLINE]
+    return [(zh, mark, n) for zh, mark, n in rows if n]
+
+
+def _quiet_rows(counts: dict[str, int]) -> list[tuple[str, int]]:
+    rows = [(zh, sum(counts.get(k, 0) for k in keys)) for zh, keys in _QUIET]
+    return [(zh, n) for zh, n in rows if n]
+
+
+def _region_sections(by_region: list[dict[str, Any]]) -> list[str]:
+    """按区域分块：每区显示「总单数（已查/停放）」+ 已分类明细。"""
+    order = {name: i for i, name in enumerate((*REGION_ORDER, OTHER_REGION))}
+    items = sorted(by_region, key=lambda x: order.get(str(x.get("region")), len(order)))
+    lines: list[str] = []
+    for item in items:
+        region = str(item.get("region") or OTHER_REGION)
+        counts = {str(k): int(v or 0) for k, v in (item.get("counts") or {}).items()}
+        orders = int(item.get("orders") or 0)
+        queried = int(item.get("queried") or 0)
+        parked = int(item.get("parked") or 0)
+        lines.append(f"**{region}** · {orders} 单（已查 {queried} · 停放 {parked}）")
+        if not counts:
+            lines.append("- 全部停放，未查询")
+        else:
+            headline = _headline_rows(counts)
+            if headline:
+                lines += [f"- {mark} {zh}：**{n}** 票" for zh, mark, n in headline]
+            else:
+                lines.append("- 无异常")
+            quiet = _quiet_rows(counts)
+            if quiet:
+                lines.append("  其余：" + "　".join(f"{zh} {n}" for zh, n in quiet))
+        if region == OTHER_REGION and item.get("warehouses"):
+            lines.append("  仓：" + "、".join(str(w) for w in item["warehouses"]))
+        lines.append("")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return lines
+
+
 def summarize(stats: dict[str, Any], *, when: _dt.date | None = None) -> str:
     """run_report 的 stats → 钉钉 markdown 正文。
 
+    有 `by_region`（run_report 新产出）时按美东/美中/波兰分块；
+    没有时保持原来的扁平分类视图（向后兼容旧调用与测试）。
     钉钉自定义机器人的 markdown 不渲染表格，所以用列表。
     """
     day = when or _dt.date.today()
@@ -57,17 +102,23 @@ def summarize(stats: dict[str, Any], *, when: _dt.date | None = None) -> str:
         f"FedEx {stats.get('fedex', 0)} / GLS {stats.get('gls', 0)}　·　停放 {stats.get('parked', 0)}",
         "",
     ]
-    headline = [(zh, mark, sum(counts.get(k, 0) for k in keys)) for zh, keys, mark in _HEADLINE]
-    headline = [(zh, mark, n) for zh, mark, n in headline if n]
-    lines.append("**待办分类**")
-    if headline:
-        lines += [f"- {mark} {zh}：**{n}** 票" for zh, mark, n in headline]
+    by_region = stats.get("by_region") or []
+    if by_region:
+        lines += _region_sections(by_region)
+        total_orders = sum(int(i.get("orders") or 0) for i in by_region)
+        total_queried = sum(int(i.get("queried") or 0) for i in by_region)
+        total_parked = sum(int(i.get("parked") or 0) for i in by_region)
+        lines += ["", f"> 合计 {total_orders} 单 · 已查 {total_queried} · 停放 {total_parked}"]
     else:
-        lines.append("- 无异常")
-    quiet = [(zh, sum(counts.get(k, 0) for k in keys)) for zh, keys in _QUIET]
-    quiet = [(zh, n) for zh, n in quiet if n]
-    if quiet:
-        lines += ["", "其余：" + "　".join(f"{zh} {n}" for zh, n in quiet)]
+        lines.append("**待办分类**")
+        headline = _headline_rows(counts)
+        if headline:
+            lines += [f"- {mark} {zh}：**{n}** 票" for zh, mark, n in headline]
+        else:
+            lines.append("- 无异常")
+        quiet = _quiet_rows(counts)
+        if quiet:
+            lines += ["", "其余：" + "　".join(f"{zh} {n}" for zh, n in quiet)]
     lines += ["", f"> 口径：{_CALIBER}"]
     return "\n".join(lines)
 
