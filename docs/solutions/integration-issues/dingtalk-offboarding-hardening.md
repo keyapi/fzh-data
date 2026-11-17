@@ -174,6 +174,27 @@ CREATE TABLE IF NOT EXISTS offboarding_audit (
 - 单测固定行为（见 `tests/new_api_offboarding/`）：60121→封、瞬时错→不封、本地映射命中仍
   封、proxy 不可达时 new-api 先封+重投。
 
+## 2026-11-17 补漏：只在赛狐有 Key 的人
+
+**发现**：主键仍是 new-api 用户。用真实账号核查时发现 `Jeck` 已不在钉钉组织
+（`getbyunionid` → 60121），但他的赛狐 Key 仍启用、已调用 558 次。原因是他没有
+new-api 账号，`fetch_bound_users()` 永远查不到他。
+
+**修复**（`new-api-deployment/offboarding-check.py`）：
+- 新增 `fetch_active_proxy_owners()`：直接读赛狐 proxy DB 里 `is_active=1` 的
+  `dingtalk_union_id`，按 union_id 分组（含一人多 Key）。
+- 新增 `uncovered_proxy_owners()`：去掉已在 new-api 侧检查过的 union_id，避免重复请求钉钉。
+- 主流程对这些「proxy-only」持有者同样 `classify_employment`：DEPARTED → 关 Key；
+  RETRY → skip 留痕；参与全员 60121 熔断计数。审计行 `new_api_user_id=NULL`、
+  `username` 记 Key 上的名字。
+- 单测：`tests/new_api_offboarding/test_proxy_owner_coverage.py`（枚举/去重/缺库报错）。
+
+**仍存在的盲区**：wayfair-api-proxy 只有 `deactivate` 接口、没有列 owner 的接口，
+无法枚举「只在 wayfair 有 Key」的人；新增该能力前，这部分只能靠 new-api 绑定覆盖。
+
+**运维动作**：Jeck 的 Key 已于 2026-11-17 停用（DB 备份
+`/data/sellfox-proxy.db.bak-20261117-174206`）。
+
 ## Related Issues
 
 - 双通道架构原始方案（含现已过时的「查 active」表述，见下条修正提示）：

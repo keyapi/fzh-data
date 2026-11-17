@@ -22,8 +22,10 @@ import sqlite3
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
+from urllib.parse import quote
 
 # 凭证不硬编码：从环境变量或 /opt/new-api/.secrets.env 读取
 SECRETS_FILE = Path("/opt/new-api/.secrets.env")
@@ -55,6 +57,47 @@ def _mysql_pwd() -> str:
 
 def _proxy_db_path() -> str:
     return _secret("PROXY_DB_PATH") or "/data/sellfox-proxy/sellfox-proxy.db"
+
+
+def _wayfair_url() -> str:
+    return _secret("WAYFAIR_OFFBOARDING_URL") or "https://wayfair-api.vilavi.cn"
+
+
+def disable_wayfair_keys(union_id: str) -> int:
+    """Disable all Wayfair proxy keys for a departed user.
+
+    Uses a dedicated key with only `offboarding:deactivate`; URL/key come from
+    /opt/new-api/.secrets.env. Returns 0 when not configured.
+    """
+    key = _secret("WAYFAIR_OFFBOARDING_KEY")
+    if not key:
+        return 0
+    url = (
+        _wayfair_url().rstrip("/")
+        + "/v1/offboarding/owners/"
+        + quote(union_id, safe="")
+        + "/deactivate"
+    )
+    request = urllib.request.Request(
+        url,
+        data=b"{}",
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        raise RuntimeError(f"wayfair offboarding HTTP {error.code}") from error
+    except Exception as error:  # noqa: BLE001 - caller writes proxy_pending
+        raise RuntimeError(
+            f"wayfair offboarding error: {type(error).__name__}"
+        ) from error
+    count = payload.get("deactivated")
+    return int(count) if isinstance(count, int) else 0
 
 
 def run_mysql(query: str) -> str:
@@ -214,24 +257,41 @@ def classify_employment(union_id: str, app_token: str) -> tuple[str, str | None,
 # ── Proxy key 禁用 ────────────────────────────────────────────────────
 
 def disable_proxy_keys(union_id: str) -> int:
-    """Disable all active proxy API keys for a departed DingTalk user.
-    Returns the number of keys disabled. Raises if proxy DB unreachable.
+    """Disable all active keys for a departed user in both proxies.
+
+    Covers sellfox-api-proxy (local SQLite) and wayfair-api-proxy (HTTP,
+    offboarding:deactivate key). Attempts both; raises if either fails so the
+    daily job records proxy_pending and retries tomorrow. Returns total count.
     """
+    total = 0
+    errors: list[str] = []
+
     db_path = _proxy_db_path()
     if not os.path.exists(db_path):
-        raise RuntimeError(f"proxy DB not found: {db_path}")
-    db = sqlite3.connect(db_path)
+        errors.append(f"proxy DB not found: {db_path}")
+    else:
+        db = sqlite3.connect(db_path)
+        try:
+            cur = db.execute(
+                "UPDATE api_keys SET is_active = 0 "
+                "WHERE dingtalk_union_id = ? AND is_active = 1",
+                (union_id,),
+            )
+            total += cur.rowcount
+            db.commit()
+        except Exception as error:  # noqa: BLE001 - still try Wayfair
+            errors.append(f"sellfox proxy: {type(error).__name__}: {error}")
+        finally:
+            db.close()
+
     try:
-        cur = db.execute(
-            "UPDATE api_keys SET is_active = 0 "
-            "WHERE dingtalk_union_id = ? AND is_active = 1",
-            (union_id,),
-        )
-        count = cur.rowcount
-        db.commit()
-        return count
-    finally:
-        db.close()
+        total += disable_wayfair_keys(union_id)
+    except Exception as error:  # noqa: BLE001 - retry via proxy_pending
+        errors.append(str(error))
+
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    return total
 
 
 # ── 主流程 ────────────────────────────────────────────────────────────
@@ -279,6 +339,39 @@ def fetch_bound_users(provider_id: int, union_id_filter: str | None) -> list[dic
             "union_id": parts[3],
         })
     return users
+
+
+def fetch_active_proxy_owners() -> list[tuple[str, list[str]]]:
+    """赛狐 Key 里所有仍启用的 union_id（含没有 new-api 账号的人）。
+
+    离职链路的主键是 new-api 用户，只在赛狐有 Key 的人（外部顾问、只调 API 的同事）
+    不会被上面的查询扫到 —— 2026-11-17 实际漏过一个。这里直接从 proxy DB 反查。
+    """
+    db_path = _proxy_db_path()
+    if not os.path.exists(db_path):
+        raise RuntimeError(f"proxy DB not found: {db_path}")
+    db = sqlite3.connect(db_path)
+    try:
+        rows = db.execute(
+            "SELECT dingtalk_union_id, dingtalk_user_name FROM api_keys "
+            "WHERE is_active = 1 AND dingtalk_union_id IS NOT NULL "
+            "AND dingtalk_union_id <> '' "
+            "ORDER BY dingtalk_union_id"
+        ).fetchall()
+    finally:
+        db.close()
+    grouped: dict[str, list[str]] = {}
+    for union_id, name in rows:
+        grouped.setdefault(union_id, []).append(name or "(unnamed)")
+    return list(grouped.items())
+
+
+def uncovered_proxy_owners(
+    owners: list[tuple[str, list[str]]], checked_union_ids: set[str]
+) -> list[tuple[str, list[str]]]:
+    """去掉已经在 new-api 侧检查过的 union_id，避免重复打钉钉接口。"""
+    return [(union_id, names) for union_id, names in owners
+            if union_id not in checked_union_ids]
 
 
 def _retry_proxy_only(user: dict, channel: str, dry_run: bool) -> str:
@@ -354,13 +447,24 @@ def main():
         sys.exit(2)
 
     users = fetch_bound_users(provider_id, args.union_id)
-    if not users:
+    if not users and args.union_id:
         insert_audit(channel, "ok")
-        suffix = f" unionId={args.union_id}" if args.union_id else ""
-        print(f"[OK] No active DingTalk OAuth users to check{suffix}")
+        print(f"[OK] No active DingTalk OAuth users to check unionId={args.union_id}")
         return
 
-    print(f"Checking {len(users)} DingTalk user(s)...")
+    # 只在赛狐有 Key、没有 new-api 账号的人，必须单独反查
+    proxy_only: list[tuple[str, list[str]]] = []
+    if not args.union_id:
+        try:
+            checked = {u["union_id"] for u in users}
+            proxy_only = uncovered_proxy_owners(fetch_active_proxy_owners(), checked)
+        except Exception as e:
+            print(f"[WARN] 无法枚举赛狐 Key 持有者，本次只查 new-api 用户: {e}")
+
+    print(
+        f"Checking {len(users)} DingTalk user(s)"
+        f" + {len(proxy_only)} proxy-only key owner(s)..."
+    )
 
     to_classify = [u for u in users if u["status"] != 2]
     classified: list[tuple[dict, str, str | None, str]] = []
@@ -371,11 +475,21 @@ def main():
             state, userid, reason = "RETRY", None, f"classify error: {e}"
         classified.append((user, state, userid, reason))
 
+    extra_classified: list[tuple[str, list[str], str, str | None, str]] = []
+    for union_id, names in proxy_only:
+        try:
+            state, userid, reason = classify_employment(union_id, app_token)
+        except Exception as e:
+            state, userid, reason = "RETRY", None, f"classify error: {e}"
+        extra_classified.append((union_id, names, state, userid, reason))
+
     departed_n = sum(1 for _, state, __, ___ in classified if state == "DEPARTED")
+    departed_n += sum(1 for _, __, state, ___, ____ in extra_classified if state == "DEPARTED")
+    classified_n = len(classified) + len(extra_classified)
     if (
         not args.force
         and not args.union_id
-        and should_abort_mass_depart(departed_n, len(classified))
+        and should_abort_mass_depart(departed_n, classified_n)
     ):
         print(
             f"[FATAL] 全员 {departed_n}/{len(classified)} 均为 60121，疑似钉钉权限/token 故障，"
@@ -423,6 +537,35 @@ def main():
             disabled_total += 1
         else:
             disabled_total += 1
+
+    for union_id, names, state, userid, reason in extra_classified:
+        label = "/".join(names)
+        if state == "RETRY":
+            print(f"  [SKIP] {label} (proxy-only) — {reason}")
+            insert_audit(channel, "skip", union_id=union_id, username=label)
+            continue
+        if state == "OK":
+            print(f"  [OK] {label} (proxy-only) — active")
+            continue
+
+        if args.dry_run:
+            insert_audit("dryrun", "departed", union_id=union_id, username=label,
+                         dingtalk_user_id=userid)
+            print(f"  [DRYRUN] {label} (proxy-only) — would disable sellfox keys")
+            continue
+        try:
+            proxy_count = disable_proxy_keys(union_id)
+        except Exception as e:
+            print(f"  [WARN] 禁用 {label} 的 proxy key 失败: {e}")
+            insert_audit(channel, "proxy_pending", union_id=union_id, username=label,
+                         dingtalk_user_id=userid)
+            proxy_failed = True
+            disabled_total += 1
+            continue
+        insert_audit(channel, "disabled", union_id=union_id, username=label,
+                     dingtalk_user_id=userid, proxy_keys_disabled=proxy_count)
+        print(f"  [PROXY-ONLY] {label} — departed, keys disabled={proxy_count}")
+        disabled_total += 1
 
     insert_audit(channel, "ok", proxy_keys_disabled=disabled_total)
     print(f"Done. Disabled: {disabled_total}")
