@@ -23,4 +23,5 @@ timestamp: 2026-08-14
 | EN 行级身份 + 单独卖皮壳/海绵/PP棉 | [reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md](reference/cost-engine-spec/38-en-line-identity-and-single-item-suffix.md) |
 | Colab 退场：重建三张订单表 | [reference/build-order-tabs.md](reference/build-order-tabs.md) |
 | 订单成本端到端管道（raw→GS） | [reference/tongtool-order-pipeline.md](reference/tongtool-order-pipeline.md) |
+| 分公司国外加工系数（202607-202610） | [reference/branch-processing-coefficients-202607-202610.md](reference/branch-processing-coefficients-202607-202610.md) |
 | GS 成本列写回历史 / 29 列用途 / BOM 版本 | [research/2026-11-10-gs-cost-write-history-and-column-map.md](research/2026-11-10-gs-cost-write-history-and-column-map.md) |
