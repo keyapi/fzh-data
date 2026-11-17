@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from stock_alert.client import StockRow
-from stock_alert.scan import scan
+from stock_alert.scan import apply_names, baseline_by_sku, mark_new, scan
 
 
 def _row(wh: str, sku: str, available: float, intransit: float = 0.0) -> StockRow:
@@ -54,3 +54,42 @@ def test_scan_drops_zero_available_and_zero_intransit():
     }
     result = scan(rows, threshold=5)
     assert [s.sku for s in result.warehouses[0].low] == ["incoming", "low"]  # 按可用升序
+
+
+def test_apply_names_sets_product_names():
+    result = scan({"W": [_row("W", "A", 1), _row("W", "B", 2)]}, threshold=5)
+    apply_names(result, {"A": "产品甲"})
+    assert [i.name for i in result.warehouses[0].low] == ["产品甲", ""]
+
+
+def test_baseline_by_sku_takes_max_and_skips_blank():
+    rows = [
+        {"sku": "A", "available": 2},
+        {"sku": "A", "available": 7},
+        {"sku": " ", "available": 9},
+        {"sku": "B", "available": "3"},
+    ]
+    assert baseline_by_sku(rows) == {"A": 7.0, "B": 3.0}
+
+
+def test_mark_new_uses_yesterday_threshold_and_missing_sku():
+    result = scan({"W": [_row("W", "A", 1), _row("W", "B", 2), _row("W", "C", 3)]}, threshold=5)
+    mark_new(result, {"W": {"A": 8, "B": 1}}, threshold=5)
+    flags = {i.sku: i.is_new for i in result.warehouses[0].low}
+    # A: 昨日 8 >= 5 → 新增；B: 昨日 1 < 5 → 不算；C: 昨日无记录 → 新增
+    assert flags == {"A": True, "B": False, "C": True}
+    assert result.warehouses[0].baseline_missing is False
+
+
+def test_mark_new_missing_baseline_marks_all_and_flags():
+    result = scan({"W": [_row("W", "A", 1)]}, threshold=5)
+    mark_new(result, {"W": {}}, threshold=5)
+    assert result.warehouses[0].baseline_missing is True
+    assert result.warehouses[0].low[0].is_new is True
+
+
+def test_mark_new_none_is_noop():
+    result = scan({"W": [_row("W", "A", 1)]}, threshold=5)
+    mark_new(result, None, threshold=5)
+    assert result.warehouses[0].low[0].is_new is False
+    assert result.warehouses[0].baseline_missing is False

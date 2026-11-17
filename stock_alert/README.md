@@ -1,49 +1,57 @@
-# stock_alert —— 通途低库存汇总推送钉钉
+---
+type: Reference
+title: stock_alert 通途库存提醒
+---
+# stock_alert
 
-默认读 **EN 的 `Tongtool Stock Latest`**（通途库存每日同步，带新鲜度门禁；EN 不可达时回退通途 OpenAPI），筛出**可用库存 < 5** 的 SKU，
-按仓汇总后推送钉钉；数量多时附一张**按仓库分 sheet 的 Excel**。
+三仓低库存明细、今日新增 Excel，以及独立的昨日采购入库提醒。
+默认仓库：美中-FZH-DANEEY、美东-CENTRADE、波兰-FZHPoland-covers。
 
-## 口径
+## 低库存
 
-- **计入**：`availableStockQuantity`（可用库存）< 5，**且**排除「可用=0 且 在途=0」的死库存。
-- **仓库**：`美中-FZH-DANEEY`、`美东-CENTRADE`、`波兰-FZHPoland-covers`。
-- **范围**：整仓全量（按仓库分页拉取，不是固定清单）。
+每日 09:23，默认读 EN `Tongtool Stock Latest`，要求今日快照同步成功；
+EN 不可达时回退通途 OpenAPI。可用库存 < 5，排除可用=0 且在途=0。
+按仓逐条列 `• SKU 产品名称：库存N个`，长消息按 UTF-8 字节拆分，保留全部明细。
 
-## 投递
+Excel 仅包含今日新增低库存：昨日可用 >= 阈值，或昨日无此 SKU。
+某仓昨日基线整体缺失时，该仓按全量低库存导出，并明确提示，不能视作已证新增。
+未获取基线（`--no-baseline` 或缺 EN 凭证）时不生成新增 Excel。
+三仓各一个 sheet，列为 SKU、产品名称、可用库存、在途库存；无新增不发文件。
 
-- **正文**：每仓「N 个 SKU 可用<5（在途合计 M 件）」。
-- **总数 ≤ 10**：明细直接写进正文；**> 10**：生成 Excel（每仓一 sheet：`SKU / 可用库存 / 在途库存`）
-  上传 ERPNext，发 ActionCard 下载卡片。
+## 采购入库
 
-## 运行
+每日 09:47 独立任务，统计昨日全天：`get_stock_change` 的采购单 `voucher_type=02`，
+仅汇总每条 `available_increase > 0` 的事件，按仓、SKU 合并。
+零增量是创建/无变化事件，负增量也不计入；它们不能证明真实入库。
+昨日没有采购入库也会发消息。此提醒描述已同步的库存事件，不代表采购单全部到货。
 
-```bash
-uv run python -m stock_alert.cli run --mock --dry-run     # 离线
-uv run python -m stock_alert.cli run --dry-run            # 真查（默认 EN，不可达回退 OpenAPI）
-uv run python -m stock_alert.cli run --notify             # 真查 + 真推
-uv run python -m stock_alert.cli run --source openapi --dry-run   # 强制走 OpenAPI
+## 运行（仓库根目录）
+
+```powershell
+uv run python -m stock_alert.cli run --mock --dry-run
+uv run python -m stock_alert.cli run --dry-run
+uv run python -m stock_alert.cli inbound --dry-run --date 2026-11-16
+uv run python -m stock_alert.cli run --notify
+uv run python -m stock_alert.cli inbound --notify
 uv run pytest stock_alert/tests -q
 ```
 
-## 配置（敏感值只放 `.env`，已 gitignore）
+`--dry-run` 只读 API、更新本地名称缓存并生成本地 Excel，不发群、不上传文件。
+名称取通途 `goodsQuery.productName`；缓存每周全量重建、日常补缺，失败用已有缓存/SKU。
+首次刷新实测约30分钟（13504个商品），通途商户共享 5 次/分钟限流，名称刷新带非阻塞缓存锁，任务重叠时另一任务直接用缓存/SKU，不争抢名称查询额度。
 
-| 用途 | 位置 | 键 |
-|---|---|---|
-| EN 库存读取（**主**） | 仓库根 `.env` | `ERP_API_KEY` / `ERP_API_SECRET`（`ERP_URL` 默认生产） |
-| 通途 OpenAPI（**回退**） | `tongtool_api/.env` | `TONGTOOL_ERP2_PRIMARY_KEY` / `TONGTOOL_ERP2_PRIMARY_SECRET` |
-| 钉钉（默认复用原群） | 仓库根 `.env` | `DINGTALK_WEBHOOK` / `DINGTALK_SECRET` |
-| 钉钉专用群（可选覆盖） | 仓库根 `.env` | `DINGTALK_WEBHOOK_STOCK` / `DINGTALK_SECRET_STOCK` |
-| 发 Excel（上传 ERPNext） | 仓库根 `.env` | `ERP_API_KEY` / `ERP_API_SECRET` |
+## 配置与定时
 
-## 定时（Windows）
-
-任务 `FZH-StockAlert-daily`，每日 **09:23**（避开尾程 `FZH-ParcelTrack-daily` 的 09:07）。
+生产 EN 凭证在根 `.env`：`ERP_API_KEY` / `ERP_API_SECRET`，`ERP_URL` 默认生产。
+通途凭证在 `tongtool_api/.env`：`TONGTOOL_ERP2_PRIMARY_KEY` / `TONGTOOL_ERP2_PRIMARY_SECRET`。
+钉钉默认复用 `DINGTALK_WEBHOOK` / `DINGTALK_SECRET`；可用 `*_STOCK` 覆盖。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1 -AtTime "09:23"
-powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1 -Remove
+powershell -ExecutionPolicy Bypass -File stock_alert/scripts/install_stock_alert_schedule.ps1 -AtTime "09:23" -InboundAtTime "09:47"
 ```
 
-日志：`stock_alert_output/logs/stock_alert-daily.log`（不入库）。
+注册 `FZH-StockAlert-daily` / `FZH-StockInbound-daily`；脚本支持 `-SkipInbound`、`-Remove`。
+日志分别为 `stock_alert_output/logs/stock_alert-daily.log`、`stock_inbound-daily.log`。
+注册不会立即发送消息，任务到点会自动推送；首次发群前先审阅 dry-run。
 
-完整说明见 [docs/index.md](docs/index.md)、[docs/reference/low-stock-alert.md](docs/reference/low-stock-alert.md)。
+详细接口边界与排障见 [参考](docs/reference/low-stock-alert.md)。

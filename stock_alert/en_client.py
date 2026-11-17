@@ -39,8 +39,7 @@ class StockSyncIncomplete(Exception):
 class EnStockClient:
     def __init__(self, base_url: str, api_key: str, api_secret: str, *, timeout: int = 30):
         self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
-        self.api_secret = api_secret
+        self.api_key, self.api_secret = api_key, api_secret
         self.timeout = timeout
 
     def _get(self, path: str, params: dict | None = None) -> dict:
@@ -100,11 +99,20 @@ class EnStockClient:
                 "limit_start": str(start),
                 "limit_page_length": str(page_size),
             })
-            items = data.get("data") or []
+            items = self._rows(data, "data")
             rows.extend(self._to_row(it) for it in items)
             if len(items) < page_size:
-                break
+                return rows
             start += page_size
+        raise RuntimeError(f"{warehouse}: 库存达到分页上限，拒绝使用不完整数据")
+
+    @staticmethod
+    def _rows(data: dict, key: str, limit: int | None = None) -> list[dict]:
+        rows = data.get(key)
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise RuntimeError(f"EN 响应 {key} 必须为记录列表")
+        if limit is not None and len(rows) >= min(limit, 5000):
+            raise RuntimeError("EN 历史接口达到返回上限，数据可能截断；请缩小查询范围")
         return rows
 
     def stock_history(self, warehouse: str, start_date: str, end_date: str | None = None,
@@ -116,12 +124,12 @@ class EnStockClient:
         if sku:
             params["sku"] = sku
         data = self._get("/api/method/tongtool_integration.sync.stock_sync.get_stock_history", params)
-        return data.get("message") or []
+        return self._rows(data, "message", limit)
 
     def stock_changes(self, warehouse: str, start: str, end: str | None = None,
                       *, voucher_type: str | None = None, sku: str | None = None,
                       limit: int = 5000) -> list[dict]:
-        """EN 库存操作记录（stock_change.parquet，19 列）。voucher_type='02' 为采购入库。"""
+        """EN 库存操作记录。02 为采购单；真实入库还需 available_increase > 0。"""
         params = {"warehouse": warehouse, "start": start, "limit": str(limit)}
         if end:
             params["end"] = end
@@ -130,7 +138,7 @@ class EnStockClient:
         if sku:
             params["sku"] = sku
         data = self._get("/api/method/tongtool_integration.sync.stock_change_sync.get_stock_change", params)
-        return data.get("message") or []
+        return self._rows(data, "message", limit)
 
     @staticmethod
     def _to_row(item: dict) -> StockRow:

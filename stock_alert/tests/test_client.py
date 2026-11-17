@@ -69,6 +69,17 @@ def test_list_stocks_respects_explicit_total():
     assert len(api.calls) == 1
 
 
+def test_large_page_request_respects_server_cap_and_no_silent_page_limit():
+    import pytest
+    full = [{"goodsSku": f"S{i}"} for i in range(100)]
+    api = _FakeApi([_page(full), _page([{"goodsSku": "LAST"}])])
+    assert len(TongtoolStockClient(api).list_stocks("W", page_size=500)) == 101
+    assert all(call[2] == 100 for call in api.calls)
+    api = _FakeApi([_page([{"goodsSku": "A"}])])
+    with pytest.raises(RuntimeError):
+        TongtoolStockClient(api).list_stocks("W", page_size=1, max_pages=1)
+
+
 def test_stock_client_no_longer_uses_mcp():
     """回归：MCP 停用后，库存客户端不再依赖 McpClient。"""
     assert not hasattr(client_mod, "McpClient")

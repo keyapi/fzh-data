@@ -1,152 +1,78 @@
 ---
 okf: v0.1
 type: Reference
-title: stock_alert 低库存汇总推送 —— 取数、限流、凭证与排障
-description: 通途 ERP2 库存接口取数口径、5 次/分钟限流处理、钉钉新群机器人凭证与定时任务
-tags: [stock-alert, tongtool, erp2, rate-limit, dingtalk, scheduling]
+title: stock_alert 库存接口、统计口径与排障
+description: 低库存新增基线、采购入库正增量、名称缓存与独立任务的边界。
 ---
+# 库存提醒参考
 
-# stock_alert 参考
+## 库存与新增
 
-## 投递方式（正文 + Excel，按数量分档）
+主源为生产 EN `Tongtool Stock Latest`。最近 `Tongtool Stock Run` 的 `job=stock_snapshot`
+必须 `Success` 且 `complete=1`，运行和 Latest 最新 `snapshot_at` 都必须为当日；
+失败时仅发“库存同步未完成”，不生成低库存明细。EN 访问异常时才回退通途 `stocksQuery`。
 
-正文（两种都会给）：每仓「**N** 个 SKU 可用<5（在途合计 M 件）」。
+低库存：可用 < 阈值（默认 5），排除可用=0 且在途=0。
+全部明细按仓发送，名称过长压缩空白并截至 60 字符；单条正文上限 20000 UTF-8 字节。
+Excel 只输出今日新增，列 `SKU | 产品名称 | 可用库存 | 在途库存`。
 
-**计入规则**：`availableStockQuantity < 阈值` **且** 不是「可用=0 且 在途=0」的死库存
-（后者既没货也无在途，多为历史/停用 SKU，过滤掉不统计）。即 `可用=0 + 在途>0` 仍计入。
+新增基线由 `get_stock_history` 精确查询昨日，各仓独立处理；重复 SKU 取最大可用值。
+昨日 >= 阈值或不存在此 SKU 则标记新增；昨日 < 阈值不算新增。
+整仓基线缺失/读取失败，明确标注“昨日基线缺失”，该仓全量低库存进入 Excel。
+未启用基线或无法建立 EN 客户端时不标记新增，stderr 说明原因。
 
-按**低库存 SKU 总数**自动分档（`--small-threshold`，默认 10）：
+## 接口边界
 
-| 总数 | 投递 |
+| 问题 | 来源与限制 |
 |---|---|
-| ≤ 阈值（或 0） | markdown 正文里**直接列明细**（每仓逐条 `SKU：可用 X　在途 Y`），**不发文件** |
-| > 阈值 | 生成 **Excel**（`stock_alert_output/通途低库存_<日期>.xlsx`）→ 上传 ERPNext → 发 **ActionCard 下载卡片**（正文=汇总） |
+| 某 SKU 某天库存 | `get_stock_history`：sku、warehouse/warehouse_id、start_date、end_date、limit；无单据号/单据类型过滤 |
+| 昨日采购入库 | `get_stock_change`：warehouse、start、end、voucher_type=02；客户端只汇总每条 available_increase > 0 |
+| 采购单创建清单 | 零增量只能称为创建/无变化事件；修改也可能为零，不能据此无条件认定创建全集 |
+| 给定 PO 是否到仓 | 通途 `purchaseOrderQuery`；用人读的 purchaseOrderCode 查询，结合每行 quantity/in_quantity/status |
+| EN 自己的 PO | EN Purchase Order / Purchase Receipt，属于另一套采购单体系 |
 
-Excel：**每个仓库一个 sheet**，表头 `SKU | 可用库存 | 在途库存`，每行一个「可用<5」的 SKU（按可用升序）。
+库存变动的 `voucher_number` 是通途内部 `purchaseOrderId`，不是 `PO021745` 这种人读 PO 号。
+本模块不把两者混用，也不新增 PO 查询 API；采购状态查询不是本轮提醒所需依赖。
+同事报告本地库存事件从 2026-10-21 起可用，该时间前的创建覆盖不能保证。
+13/13 覆盖仅证明所检查窗口，不能推广为所有历史和未来都完整。
 
-复用尾程那套文件推送：`dingtalk/dingtalk_robot/send_file_card.send_file_to_dingtalk()`
-（内部先 `upload_to_erpnext` 再 `send_action_card`）。所以**发 Excel 需要 `ERP_API_KEY/SECRET`**
-（根 `.env`，指向 `erpnext.vilavi.cn`）——这几项尾程推送也已在用。
+历史/变动 API 最大返回 5000 行且无分页；达到上限时拒绝视为完整结果。
+基线查询失败会标为缺失；入库查询异常/格式异常/截断则整次任务失败，避免误报零入库。
+入库统计只代表已同步事件，当前不提供独立的库存变动同步完成水位校验。
 
-## 数据来源（默认读 EN；OpenAPI 回退）
+入库日志报告 input_rows / accepted_rows / skipped（非采购、空 SKU、零增量、负增量）/
+output_skus / total_qty；相同 SKU 多事件合并，正向件数相加。
+必需列缺失或数量非法直接失败，不把坏数据当零。
 
-**默认**读 EN 的 `Tongtool Stock Latest`（EN 每天把通途 14 仓库存同步到 MariaDB，字段一致）：
+## 名称与限流
 
-- 认证：`Authorization: token <ERP_API_KEY>:<ERP_API_SECRET>`（根 `.env`；base `ERP_URL` 默认 `https://erpnext.vilavi.cn`）。
-- 查询：`GET /api/resource/Tongtool Stock Latest?filters=[["warehouse","=",<仓>]]&fields=[...]&limit_start&limit_page_length`（1000/页）。
-- 三主仓约 4,471 行；`in` 精确名可排除 `美中-FZH-DANEEY-退货产品仓`。
-- 优点：**不占通途 5 次/分钟、不受 MCP 524 影响、无需维护通途 Key**。
+名称用 `goodsQuery.productName`，映射 `goodsDetail.goodsSku`。
+`stock_alert_output/sku_names.json` 周更全量纠正改名，平日批量补缺（每次最多 10 SKU）。
+任何名称查询失败只降级为已有缓存或 SKU；查不到的空名称每日重查一次；名称请求最多重试一次，异常信息不输出可能含凭证的 URL。
 
-⚠️ **新鲜度门禁（必须）**：
+通途商户所有 App 合计 5 次/分钟；客户端间隔 13 秒，526 退避，524 为未授权。
+EN 历史/库存读取不占通途 OpenAPI 配额。名称缓存使用非阻塞 OS 文件锁：已有任务刷新时，其他提醒使用缓存/SKU，不等待、不再发名称请求。
+锁由系统在进程退出时释放；`.lock` 文件留存不表示仍被占用。锁只协调本模块，其他应用仍共享通途额度。
 
-- `GET /api/resource/Tongtool Stock Run?filters=[["job","=","stock_snapshot"]]&order_by=creation desc&limit_page_length=1`
-  最近一次必须 `status=Success` 且 `complete=1`；
-- 且 `Tongtool Stock Latest` 的 `max(snapshot_at)` 必须是**今天**；
-- 不过门禁 → 只发「库存同步未完成」，**不发低库存明细**（避免把同步失败误报为断货）。
+凭证只在根 `.env`（EN/钉钉）和 `tongtool_api/.env`（通途）。
+worktree 不带这些 gitignored 文件；定时任务跑主检出，主检出必须有完整代码和凭证。
 
-### 回退：OpenAPI 直连
+## 消息与定时
 
-> ⚠️ 2026-11-03 起通途 **MCP 网关**对全部 app_key 返回 `524 unknown不在白名单列表里`；
-> 同一凭证的 **OpenAPI 正常**。EN 不可达/缺凭证时才回退到 OpenAPI，**不使用 MCP**。
-
-| 项 | 值 |
-|---|---|
-| 接口 | `POST https://open.tongtool.com/api-service/openapi/tongtool/stocksQuery` |
-| 认证 | `GET .../devApp/appToken` → `GET .../partnerOpenInfo/getAppBuyerList`；`sign=md5("app_token{token}timestamp{ts}{secret}")`，`merchantId=partnerOpenId` |
-| 必填参数 | query: `app_token/sign/timestamp`；body: `{merchantId, warehouseName, pageNo, pageSize}` |
-| 分页 | `pageNo`/`pageSize`（**服务端上限 100**）；`datas.array` 无 total 时靠「本页 < pageSize 即末页」 |
-| 返回字段 | `goodsSku` / `availableStockQuantity` / `intransitStockQuantity` / `defectsStockQuantity` / `waitingShipmentStockQuantity` / `goodsAvgCost` |
-| 客户端封装 | `tongtool_api/openapi_client.py`（认证/签名/限流/526 重试）+ `stock_alert/client.py`（分页/归一化） |
-| 仓库列表 | `POST /openapi/tongtool/warehouseQuery`（过滤 `status=1`） |
-
-### 探测
-
-```bash
-uv run python -m stock_alert.cli probe --warehouse "美中-FZH-DANEEY"
-```
-
-产出（UTF-8 文件，避免控制台中文乱码）：
-
-- `stock_alert_output/probe_warehouses.json` —— 仓库列表（可核对 `status=1`）；
-- `stock_alert_output/probe_sample.json` —— 1 页库存真实响应样本。
-
-## 限流（关键约束）
-
-通途 ERP2 **商户级 5 次/分钟**，多 App 共享，OpenAPI 也一样。见
-`tongtool_api/docs/reference/authentication-and-errors.md`、
-`tongtool_api/docs/research/2026-08-13-rate-limit-experiment.md`。
-
-- `tongtool_api/openapi_client.py` 用 `min_interval`（默认 13 秒）在两次调用间节流；
-- 业务码 **526**（超频）→ 60s 起指数退避，`max_retries` 次后仍失败则抛错；
-- `cli.py` 的 `--min-interval` 可覆盖。**不要调小**——整仓翻页本就要按分钟级节奏跑。
-
-其它业务码：`524` 未授权、`525` 参数错、`519` 签名错、`523` token 过期 —— 直接抛错，不重试。
-
-## 容错（瞬时错误）
-
-- **业务码 526（超频）/ HTTP 5xx / 网络错误**：`openapi_client.py` 指数退避重试
-  （60s → 120s → 240s，`max_retries=3`）。
-- **524（未授权）/ 525（参数错）等确定性错误**：直接抛 `TongToolApiError`，**不重试**；
-  524 的失败告警会附带当前出口 IP 与排查提示。
-- 最终仍失败时，包装脚本推一条**失败告警**到钉钉（含异常摘要）。
-
-## 凭证
-
-| 用途 | 位置 | 键 |
-|---|---|---|
-| 通途 ERP2 | `tongtool_api/.env` | `TONGTOOL_ERP2_PRIMARY_KEY` / `TONGTOOL_ERP2_PRIMARY_SECRET` |
-| 钉钉群机器人（**默认复用原群**） | 仓库根 `.env` | `DINGTALK_WEBHOOK` / `DINGTALK_SECRET` |
-| 钉钉专用群（可选覆盖） | 仓库根 `.env` | `DINGTALK_WEBHOOK_STOCK` / `DINGTALK_SECRET_STOCK` |
-
-- **通途凭证来源**：EN 测试系统（`ssh 8.133.254.66`，站点 `erpnext.vilavi.cn`）的
-  `Tongtool Settings` 单例（`tabSingles`）里 `app_key` / `app_secret`（Password 字段需解密读：
-  `bench --site erpnext.vilavi.cn execute frappe.utils.password.get_decrypted_password --kwargs
-  '{"doctype":"Tongtool Settings","name":"Tongtool Settings","fieldname":"app_secret"}'`）。
-  生产 ERP 未装 `tongtool_integration`，没有这个单例。
-- **钉钉**默认复用尾程推送那台机器人（原群）。未设 `*_STOCK` 键时自动回退到
-  `DINGTALK_WEBHOOK` / `DINGTALK_SECRET`；要另开专用群再设 `*_STOCK` 覆盖。
-  `send_dingtalk.send_markdown(text, title, webhook=..., secret=...)` 已支持显式传入。
-- ⚠️ **worktree 不带 gitignored 的 `.env`**：从 `.claude/worktrees/...` 运行时要该 worktree 里
-  有 `tongtool_api/.env` 与根 `.env`，或从主检出运行。
-- 真值**只放 `.env`**（已 gitignore），不进代码、文档、日志或 commit。
-
-## 口径注意
-
-通途「可用库存」**不可信**：通途为标记发货会先「报溢」把库存加上，可用 0 不等于断货
-（见 `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` §5.1）。
-本功能是**登记层提醒**，非断货判定；正文已注明口径。
-
-## 定时任务（Windows）
-
-```powershell
-# 每天 09:23（分钟错开整点，避开其它任务）
-powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1 -AtTime "09:23"
-
-# 指定仓库 / 阈值
-powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1 -Warehouses "美中-FZH-DANEEY" -Threshold 5
-
-# 取消
-powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1 -Remove
-```
-
-任务名 `FZH-StockAlert-daily`；包装脚本 `stock_alert/scripts/run_stock_alert_scheduled.cmd`（gitignore）；
-日志 `stock_alert_output/logs/stock_alert-daily.log`。
+- `FZH-StockAlert-daily`：09:23，低库存分片 + 有新增时 Excel 卡片。
+- `FZH-StockInbound-daily`：09:47，昨日采购入库，无入库也提醒。
+- 两条任务的包装、日志和异常独立；Windows 注册设置 StartWhenAvailable / WakeToRun，仍需电脑开机、用户登录。
+- 文字先发；Excel 写入或上传失败保留文字结果，同时返回非零状态。
+- `--dry-run` 不发群、不上传；真实调用用 `--notify`。包装脚本默认带 `--notify`，预览请直接用 CLI。
 
 ## 排障
 
-- **没收到钉钉**：看日志末尾；跑挂时包装脚本会先推一条失败告警（告警失败只打 stderr，不盖原异常）。
-- **业务码 526**：限流。确认只有一个跑批在打，且 `--min-interval` 没被调小。
-- **业务码 524**：调用方/应用未授权（如 `unknown不在白名单列表里`）。
-  ⚠️ 2026-11-03 起通途 **MCP 网关对全部 app_key 返回 524**，本模块已改用 **OpenAPI**；
-  若 OpenAPI 仍 524，核对通途应用状态、AppSecret 是否被重置、ERP2 接口权限与 MCP/接口白名单。
-- **HTTP 5xx**：网关/网络抖动。程序已指数退避重试；持续失败则稍后补跑
-  （`Start-ScheduledTask -TaskName FZH-StockAlert-daily`）或联系通途。
-- **中文乱码**：日志里设了 `PYTHONIOENCODING=utf-8`；手工跑时同样 `export PYTHONIOENCODING=utf-8`。
-- **凭证 `KeyError`**：`.env` 不全（根 `.env` 缺钉钉键，或 `tongtool_api/.env` 缺通途键）。
-- **电脑睡眠/错过触发**：任务已设 `StartWhenAvailable` + `WakeToRun`，会自动补跑/唤醒；关机则开机后补跑。
-
-## 相关
-
-- 同类骨架：`parcel_track/`（尾程报表 → 钉钉）、`parcel_track/docs/reference/scheduled-dingtalk-push.md`
-- 通途基础：`tongtool_api/`（OpenAPI 与限流）
-- 钉钉发送器：`dingtalk/dingtalk_robot/send_dingtalk.py`
+| 表现 | 检查 |
+|---|---|
+| 库存同步未完成 | 最近快照运行 status/complete、snapshot_at 日期 |
+| 无新增 Excel | 是否没有新增、--no-baseline、EN 基线连接是否失败 |
+| 基线缺失全量导出 | stderr 单仓异常、历史接口行数是否触顶 |
+| 采购入库为零 | 日期/仓库、源是否同步、02 事件是否存在正增量；不等于采购单未到货 |
+| 名称是 SKU | 缓存、goodsQuery 权限、526；名称失败不阻断提醒 |
+| 钉钉失败 | 对应任务日志、机器人凭证；分片或卡片失败返回非零 |
+| 524 / 526 | 前者应用未授权；后者商户共享限流，停止密集并发 |

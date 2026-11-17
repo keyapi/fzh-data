@@ -1,29 +1,27 @@
 # -*- coding: utf-8 -*-
-"""stock_alert CLI。
+"""stock_alert CLI：低库存逐条明细 + 今日新增 Excel + 采购入库。
 
-投递按「低库存 SKU 总数」自动分档（`--small-threshold`，默认 10）：
-* ≤ 阈值 → 正文直接列明细，不发文件；
-* > 阈值 → 生成**按仓库分 sheet 的 Excel**，上传 ERPNext 后发 ActionCard 下载卡片。
-
-    # 离线全链路（不调 API、不发群，只看正文；需要时也落 Excel）
+    # 离线全链路（不调 API、不发群）
     uv run python -m stock_alert.cli run --mock --dry-run
 
-    # 真查单仓（只出正文）
-    uv run python -m stock_alert.cli run --warehouses "美中-FZH-DANEEY"
+    # 真查三仓低库存（不推）
+    uv run python -m stock_alert.cli run --dry-run
 
-    # 三仓全量 → 真推（>10 → 发 Excel 卡片）
+    # 三仓全量 → 真推（分片消息 + 今日新增 Excel 卡片）
     uv run python -m stock_alert.cli run --notify
 
-    # 指定 Excel 路径 / 调整分档阈值
-    uv run python -m stock_alert.cli run --notify --out out/低库存.xlsx --small-threshold 10
+    # 采购入库（统计昨日，不推 / 真推）
+    uv run python -m stock_alert.cli inbound --dry-run --date 2026-11-16
+    uv run python -m stock_alert.cli inbound --notify
 
-    # 探测 OpenAPI（认证 / 仓库列表 / 1 页库存）
+    # 探测 OpenAPI
     uv run python -m stock_alert.cli probe --warehouse "美中-FZH-DANEEY"
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime as _dt
 import json
 import os
 import sys
@@ -32,15 +30,25 @@ from pathlib import Path
 from .client import StockRow
 from .en_client import EnStockClient, StockSyncIncomplete
 from .excel import write_low_stock_workbook
+from .inbound import aggregate as aggregate_inbound
+from .names import NameCache
 from .notify import (
-    DEFAULT_SMALL_THRESHOLD,
-    build_body,
-    default_out_path,
-    notify,
+    build_inbound_messages,
+    build_low_stock_messages,
+    default_new_out_path,
+    notify_inbound,
+    notify_low_stock,
     notify_sync_incomplete,
     sync_incomplete_body,
 )
-from .scan import DEFAULT_THRESHOLD, DEFAULT_WAREHOUSES, scan
+from .scan import (
+    DEFAULT_THRESHOLD,
+    DEFAULT_WAREHOUSES,
+    apply_names,
+    baseline_by_sku,
+    mark_new,
+    scan,
+)
 
 OUT_DIR = Path(__file__).resolve().parents[1] / "stock_alert_output"
 
@@ -78,6 +86,15 @@ def _parse_warehouses(value: str | None) -> list[str]:
     return [w.strip() for w in value.split(",") if w.strip()]
 
 
+def _make_en(args) -> EnStockClient:
+    base = os.environ.get("ERP_URL", "https://erpnext.vilavi.cn")
+    key = os.environ.get("ERP_API_KEY", "").strip()
+    secret = os.environ.get("ERP_API_SECRET", "").strip()
+    if not key or not secret:
+        raise RuntimeError("缺少 ERP_API_KEY/ERP_API_SECRET（读 EN）")
+    return EnStockClient(base, key, secret)
+
+
 def _synthetic_rows(warehouses: list[str], threshold: float) -> dict[str, list[StockRow]]:
     """离线样例：每仓给几行，含低于阈值与高于阈值各若干。"""
     out: dict[str, list[StockRow]] = {}
@@ -98,12 +115,7 @@ def _collect_rows(args) -> dict[str, list[StockRow]]:
     source = getattr(args, "source", "en")
     if source == "en":
         try:
-            base = os.environ.get("ERP_URL", "https://erpnext.vilavi.cn")
-            key = os.environ.get("ERP_API_KEY", "").strip()
-            secret = os.environ.get("ERP_API_SECRET", "").strip()
-            if not key or not secret:
-                raise RuntimeError("缺少 ERP_API_KEY/ERP_API_SECRET（读 EN 库存）")
-            en = EnStockClient(base, key, secret)
+            en = _make_en(args)
             ok, detail = en.check_freshness(args.when)
             if not ok:
                 raise StockSyncIncomplete(detail)
@@ -119,6 +131,48 @@ def _collect_rows(args) -> dict[str, list[StockRow]]:
     return {wh: client.list_stocks(wh, page_size=args.page_size) for wh in warehouses}
 
 
+def _cached_names(path: Path, skus: list[str]) -> dict[str, str]:
+    """名称 API 不可用时，退回本地缓存（仍缺失的留空，调用方用 SKU 兜底）。"""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        names = data.get("names") or {}
+        return {sku: (names.get(sku) or {}).get("name") or "" for sku in skus}
+    except Exception:  # noqa: BLE001 - 缓存损坏/不存在都降级
+        return {}
+
+
+def _resolve_names(skus, args) -> dict[str, str]:
+    """SKU → 产品名称；任何失败都降级（绝不阻断推送）。"""
+    wanted = [s for s in dict.fromkeys(str(s).strip() for s in (skus or [])) if s]
+    if not wanted:
+        return {}
+    path = OUT_DIR / "sku_names.json"
+    try:
+        from tongtool_api.mcp_http import primary_credentials
+        from tongtool_api.openapi_client import TongtoolOpenApiClient
+
+        # Names are optional: keep retries bounded so an outage cannot hold the report for many minutes.
+        api = TongtoolOpenApiClient(*primary_credentials(), min_interval=args.min_interval, max_retries=1)
+        print(f"[names] 查询 {len(wanted)} 个 SKU 的名称（可降级）", file=sys.stderr, flush=True)
+        return NameCache(api, path).resolve(wanted)
+    except Exception as exc:  # noqa: BLE001 - 名称只是锦上添花
+        # Authentication URLs can contain credentials; do not log exception URLs.
+        print(f"[warn] 产品名称查询失败，降级为缓存/SKU：{type(exc).__name__}", file=sys.stderr)
+        return _cached_names(path, wanted)
+
+
+def _load_baseline(en: EnStockClient, warehouses: list[str], day: _dt.date) -> dict[str, dict[str, float]]:
+    """昨日各仓 {sku: available}；单仓失败返回空映射（触发「基线缺失」兜底）。"""
+    out: dict[str, dict[str, float]] = {}
+    for wh in warehouses:
+        try:
+            out[wh] = baseline_by_sku(en.stock_history(wh, day.isoformat(), day.isoformat()))
+        except Exception as exc:  # noqa: BLE001 - 基线失败不影响低库存主流程
+            print(f"[warn] 昨日基线读取失败（{wh}）：{type(exc).__name__}: {exc}", file=sys.stderr)
+            out[wh] = {}
+    return out
+
+
 def cmd_run(args) -> int:
     _load_env()
     try:
@@ -130,15 +184,82 @@ def cmd_run(args) -> int:
         resp = notify_sync_incomplete(str(exc), when=args.when)
         print(json.dumps(resp, ensure_ascii=False))
         return 0 if resp.get("errcode") == 0 else 1
+
     result = scan(rows_by_wh, threshold=args.threshold)
-    text, need_file = build_body(result, when=args.when, small_threshold=args.small_threshold)
+    skus = [item.sku for wh in result.warehouses for item in wh.low]
+    names = {} if args.mock else _resolve_names(skus, args)
+    apply_names(result, names)
+
+    day = args.when or _dt.date.today()
+    baseline = None
+    if not args.no_baseline and not args.mock:
+        try:
+            en = _make_en(args)
+            baseline = _load_baseline(en, [w.warehouse for w in result.warehouses], day - _dt.timedelta(days=1))
+        except Exception as exc:  # noqa: BLE001 - 拿不到 EN 就不标记新增
+            print(f"[warn] 无法读取昨日基线，跳过今日新增：{type(exc).__name__}: {exc}", file=sys.stderr)
+    mark_new(result, baseline, threshold=args.threshold)
+
+    new_count = sum(1 for wh in result.warehouses for item in wh.low if item.is_new)
+    print(json.dumps({"mode": "low_stock", "input_rows": sum(len(rows) for rows in rows_by_wh.values()),
+                      "low_rows": result.total_low, "new_rows": new_count,
+                      "skipped": {
+                          "at_or_above_threshold": sum(row.available >= args.threshold for rows in rows_by_wh.values() for row in rows),
+                          "zero_stock_without_transit": sum(row.available < args.threshold and row.available == 0 and row.intransit == 0
+                                                            for rows in rows_by_wh.values() for row in rows),
+                      },
+                      "baseline_available": baseline is not None,
+                      "names_missing": sum(not names.get(sku) for sku in skus)}, ensure_ascii=False), file=sys.stderr)
+
     if args.dry_run or not args.notify:
-        print(text)
-        if need_file:
-            path = write_low_stock_workbook(result, args.out or default_out_path(args.when))
-            print(f"\n[Excel 明细（按仓库分 sheet）] {path}")
+        for message in build_low_stock_messages(result, when=day, new_count=new_count):
+            print(message)
+            print("\n---\n")
+        if new_count:
+            path = write_low_stock_workbook(result, args.out or default_new_out_path(day), newly_only=True)
+            print(f"[Excel 今日新增（按仓分 sheet）] {path}")
         return 0
-    resp = notify(result, out_xlsx=args.out, small_threshold=args.small_threshold, when=args.when)
+
+    resp = notify_low_stock(result, when=day, out_xlsx=args.out)
+    print(json.dumps(resp, ensure_ascii=False))
+    return 0 if resp.get("errcode") == 0 else 1
+
+
+def cmd_inbound(args) -> int:
+    _load_env()
+    day = args.date or (_dt.date.today() - _dt.timedelta(days=1))
+    warehouses = _parse_warehouses(args.warehouses)
+
+    if args.mock:
+        rows_by_wh = {
+            wh: [{"sku": f"DEMO-IN-{i}", "voucher_type": "02", "available_increase": 10 + i}]
+            for i, wh in enumerate(warehouses)
+        }
+    else:
+        en = _make_en(args)
+        rows_by_wh = {
+            wh: en.stock_changes(wh, day.isoformat(), day.isoformat(), voucher_type="02", limit=5000)
+            for wh in warehouses
+        }
+
+    result = aggregate_inbound(rows_by_wh, day=day)
+    skus = [item.sku for wh in result.warehouses for item in wh.items]
+    names = {} if args.mock else _resolve_names(skus, args)
+    for wh in result.warehouses:
+        for item in wh.items:
+            item.name = names.get(item.sku, "")
+    print(json.dumps({"mode": "inbound", "input_rows": result.input_rows,
+                      "accepted_rows": result.accepted_rows, "skipped": result.skipped,
+                      "output_skus": result.total_skus, "total_qty": result.total_qty},
+                     ensure_ascii=False), file=sys.stderr)
+
+    if args.dry_run or not args.notify:
+        for message in build_inbound_messages(result):
+            print(message)
+            print("\n---\n")
+        return 0
+
+    resp = notify_inbound(result)
     print(json.dumps(resp, ensure_ascii=False))
     return 0 if resp.get("errcode") == 0 else 1
 
@@ -172,14 +293,14 @@ def cmd_probe(args) -> int:
 
 
 def _make_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="stock_alert", description="通途低库存汇总 → 钉钉推送")
+    p = argparse.ArgumentParser(prog="stock_alert", description="通途库存汇总 → 钉钉推送")
     sub = p.add_subparsers(dest="command", required=True)
 
     def _common(sp):
         sp.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD, help="可用库存阈值，默认 5")
         sp.add_argument("--min-interval", type=float, default=13.0, help="两次 API 调用最小间隔秒（限流 5/分钟）")
         sp.add_argument("--page-size", type=int, default=100, help="分页大小，默认 100")
-        sp.add_argument("--when", type=lambda s: __import__("datetime").date.fromisoformat(s), help="标题日期 YYYY-MM-DD")
+        sp.add_argument("--when", type=lambda s: _dt.date.fromisoformat(s), help="标题日期 YYYY-MM-DD")
 
     r = sub.add_parser("run", help="扫描低库存并（可选）推送")
     r.add_argument("--warehouses", help="逗号分隔仓库名；默认三仓")
@@ -188,11 +309,20 @@ def _make_parser() -> argparse.ArgumentParser:
     r.add_argument("--notify", action="store_true", help="推送钉钉（否则只打印）")
     r.add_argument("--source", choices=["en", "openapi"], default="en",
                    help="取数来源：en=Tongtool Stock Latest（默认，含新鲜度门禁）；openapi=直连通途")
-    r.add_argument("--out", help="Excel 明细输出路径，默认 stock_alert_output/通途低库存_<日期>.xlsx")
-    r.add_argument("--small-threshold", type=int, default=DEFAULT_SMALL_THRESHOLD,
-                   help="低库存总数 ≤ 此值时正文直接列明细、不生成 Excel（默认 10）")
+    r.add_argument("--out", help="Excel 输出路径，默认 stock_alert_output/通途新增低库存_<日期>.xlsx")
+    r.add_argument("--no-baseline", action="store_true", help="不拉昨日基线（不生成今日新增 Excel）")
     _common(r)
     r.set_defaults(func=cmd_run)
+
+    i = sub.add_parser("inbound", help="汇总昨日采购入库并（可选）推送")
+    i.add_argument("--warehouses", help="逗号分隔仓库名；默认三仓")
+    i.add_argument("--mock", action="store_true", help="离线样例，不调 API")
+    i.add_argument("--dry-run", action="store_true", help="只打印正文，不发群")
+    i.add_argument("--notify", action="store_true", help="推送钉钉（否则只打印）")
+    i.add_argument("--date", type=lambda s: _dt.date.fromisoformat(s),
+                   help="统计日期 YYYY-MM-DD，默认昨天")
+    i.add_argument("--min-interval", type=float, default=13.0, help="两次 API 调用最小间隔秒（限流 5/分钟）")
+    i.set_defaults(func=cmd_inbound, page_size=100, when=None, threshold=DEFAULT_THRESHOLD)
 
     pr = sub.add_parser("probe", help="探测 stocksquery schema 与 1 页响应")
     pr.add_argument("--warehouse", default=DEFAULT_WAREHOUSES[0])

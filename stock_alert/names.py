@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
+import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 BATCH = 10
@@ -20,6 +23,34 @@ DEFAULT_FULL_REFRESH_DAYS = 7
 
 def _now_iso() -> str:
     return _dt.datetime.now().isoformat(timespec="seconds")
+
+
+@contextmanager
+def _cache_lock(path: Path):
+    """Nonblocking OS lock; process exit releases it without stale-lock cleanup.
+
+    Windows semantics: https://docs.python.org/3/library/msvcrt.html#msvcrt.locking
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.with_suffix(".lock").open("a+b") as handle:
+        if os.name == "nt":
+            import msvcrt
+            handle.seek(0)
+            acquire = lambda: msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            release = lambda: msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            acquire = lambda: fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            release = lambda: fcntl.flock(handle, fcntl.LOCK_UN)
+        try:
+            acquire()
+        except OSError:
+            yield False
+            return
+        try:
+            yield True
+        finally:
+            release()
 
 
 class NameCache:
@@ -60,6 +91,7 @@ class NameCache:
 
     def _full_refresh(self) -> None:
         names: dict[str, str] = {}
+        seen_pages: set[tuple[str, ...]] = set()
         page = 1
         while page <= 500:
             payload = self.api.request(
@@ -67,10 +99,18 @@ class NameCache:
                 {"productType": "0", "pageNo": page, "pageSize": 100},
             )
             rows = (payload.get("datas") or {}).get("array") or []
-            names.update(self._extract(rows))
+            print(f"[names] 全量刷新第 {page} 页：{len(rows)} 个商品", file=sys.stderr, flush=True)
+            mapping = self._extract(rows)
+            signature = tuple(sorted(mapping))
+            if rows and signature in seen_pages:
+                raise RuntimeError("名称查询分页重复，拒绝覆盖已有缓存")
+            seen_pages.add(signature)
+            names.update(mapping)
             if len(rows) < 100:
                 break
             page += 1
+        else:
+            raise RuntimeError("名称查询达到分页上限，拒绝覆盖已有缓存")
         now = _now_iso()
         self.data["names"] = {k: {"name": v, "fetched_at": now} for k, v in names.items()}
         self.data["last_full_refresh"] = self._today.isoformat()
@@ -90,10 +130,22 @@ class NameCache:
         skus = list(dict.fromkeys(s for s in (skus or []) if s))
         if not skus:
             return {}
+        with _cache_lock(self.path) as acquired:
+            self.data = self._load()
+            if not acquired:
+                print("[names] 另一任务正在刷新名称，使用缓存/SKU兜底", file=sys.stderr)
+                cache = self.data["names"]
+                return {s: (cache.get(s, {}).get("name") or "") for s in skus}
+            return self._resolve_locked(skus)
+
+    def _resolve_locked(self, skus: list[str]) -> dict[str, str]:
         if self._full_refresh_due():
             self._full_refresh()
         cache = self.data["names"]
-        missing = [s for s in skus if s not in cache]
+        missing = [s for s in skus if s not in cache or (
+            not cache[s].get("name") and
+            str(cache[s].get("fetched_at", ""))[:10] != self._today.isoformat()
+        )]
         changed = False
         for i in range(0, len(missing), BATCH):
             batch = missing[i:i + BATCH]

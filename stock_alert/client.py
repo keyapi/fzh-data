@@ -111,6 +111,7 @@ class TongtoolStockClient:
         OpenAPI 的 `datas.array` 未必带 total：优先用 total 判断；没有 total 时靠
         「本页不足 page_size 即末页」。
         """
+        page_size = max(1, min(page_size, 100))
         rows: list[StockRow] = []
         page = 1
         while page <= max_pages:
@@ -118,10 +119,10 @@ class TongtoolStockClient:
             items, total = rows_and_total(payload)
             rows.extend(normalize_row(warehouse, it) for it in items)
             if not items:
-                break
+                return rows
             if total is not None and page * page_size >= total:
-                break
+                return rows
             if len(items) < page_size:
-                break
+                return rows
             page += 1
-        return rows
+        raise RuntimeError(f"{warehouse}: 通途库存达到分页上限，拒绝使用不完整数据")

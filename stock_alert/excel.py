@@ -20,8 +20,8 @@ def _num(value: float):
     return int(value) if float(value).is_integer() else value
 
 
-def write_low_stock_workbook(result: ScanResult, path: str | Path) -> Path:
-    """写明细 Excel；返回落盘路径。"""
+def write_low_stock_workbook(result: ScanResult, path: str | Path, *, newly_only: bool = True) -> Path:
+    """写明细 Excel；`newly_only=True` 时只写「今日新增」低库存。"""
     from openpyxl import Workbook
     from openpyxl.styles import Font
 
@@ -30,14 +30,17 @@ def write_low_stock_workbook(result: ScanResult, path: str | Path) -> Path:
 
     for wh in result.warehouses:
         ws = wb.create_sheet(_sheet_name(wh.warehouse))
-        ws.append(["SKU", "可用库存", "在途库存"])
+        ws.append(["SKU", "产品名称", "可用库存", "在途库存"])
         for cell in ws[1]:
             cell.font = Font(bold=True)
         for item in wh.low:
-            ws.append([item.sku, _num(item.available), _num(item.intransit)])
+            if newly_only and not item.is_new:
+                continue
+            ws.append([item.sku, item.name or item.sku, _num(item.available), _num(item.intransit)])
         ws.column_dimensions["A"].width = 42
-        ws.column_dimensions["B"].width = 12
+        ws.column_dimensions["B"].width = 32
         ws.column_dimensions["C"].width = 12
+        ws.column_dimensions["D"].width = 12
 
     if not wb.sheetnames:
         wb.create_sheet("空")

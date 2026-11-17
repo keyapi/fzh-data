@@ -165,3 +165,4 @@ qms/training/_libs/
 /gpt-response.png
 /playground.png
 qms/training/report_p1.png
+stock_alert/scripts/run_stock_inbound_scheduled.cmd

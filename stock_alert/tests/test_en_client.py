@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+import pytest
 
 from stock_alert.en_client import EnStockClient
 
@@ -95,3 +96,17 @@ def test_stock_changes_filters_voucher_type():
     assert rows and rows[0]["available_increase"] == 5
     assert en.calls[0][0].endswith("get_stock_change")
     assert en.calls[0][1]["voucher_type"] == "02"
+
+
+@pytest.mark.parametrize("method", ["stock_history", "stock_changes"])
+def test_history_apis_reject_truncation_and_malformed_response(method):
+    for payload in ({"message": [{"sku": "A"}, {"sku": "B"}]}, {}, {"message": {"error": "bad"}}):
+        en = _FakeEn([payload])
+        with pytest.raises(RuntimeError):
+            getattr(en, method)("W", "2026-11-16", limit=2)
+
+
+def test_latest_page_limit_is_not_silent_partial_success():
+    en = _FakeEn([{"data": [{"warehouse": "W", "sku": "A", "available": 2}]}])
+    with pytest.raises(RuntimeError):
+        en.list_stocks("W", page_size=1, max_pages=1)
