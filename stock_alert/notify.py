@@ -46,7 +46,7 @@ def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None
     day = when or _dt.date.today()
     threshold = _fmt_num(result.threshold)
     parts = [f"## 通途低库存提醒 · {day.isoformat()}",
-             f"共 **{result.total_low}** 个 SKU 可用库存 < {threshold}",
+             f"**库存概览**  ·  共 **{result.total_low}** 个 SKU 可用库存 < {threshold}",
              f"今日新增：**{new_count}** 个"]
     if not result.total_low:
         parts.append("无 SKU 可用库存低于阈值。")
@@ -66,7 +66,7 @@ def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None
 def _inbound_body(result: InboundResult) -> tuple[str, bool]:
     day = result.day.isoformat()
     intro = [f"## 通途采购入库提醒 · {day}",
-             f"共 **{result.total_skus}** 个 SKU · 入库 **{_fmt_num(result.total_qty)}** 件"]
+             f"**入库概览**  ·  共 **{result.total_skus}** 个 SKU · 入库 **{_fmt_num(result.total_qty)}** 件"]
     if not result.total_skus:
         return "\n\n".join(intro + [f"昨日（{day}）无采购入库。"]), False
     summary = list(intro)
@@ -166,9 +166,9 @@ def notify_low_stock(result: ScanResult, *, when: _dt.date | None = None,
 
 
 def notify_inbound(result: InboundResult, *, dry_run: bool = False) -> dict:
-    body, needs_file = _inbound_body(result)
+    body, _ = _inbound_body(result)
     files, errors = [], []
-    if needs_file:
+    if result.total_skus:
         try:
             from .excel import write_inbound_workbook
             path = write_inbound_workbook(result, _OUT_DIR / f"通途采购入库明细_{result.day:%Y%m%d}.xlsx")

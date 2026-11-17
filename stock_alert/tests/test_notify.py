@@ -134,10 +134,15 @@ def test_large_inbound_is_one_card_with_full_download(monkeypatch, tmp_path):
     assert sum((ws.max_row - 1 for ws in wb)) == 1000
     wb.close()
 
-def test_small_inbound_is_one_formatted_message(monkeypatch):
+def test_small_inbound_is_one_formatted_message(monkeypatch, tmp_path):
+    import stock_alert.notify as mod
+    monkeypatch.setattr(mod, '_OUT_DIR', tmp_path)
     posts, uploads = fake_senders(monkeypatch)
     assert notify_inbound(inbound())['errcode'] == 0
-    assert len(posts) == 1 and (not uploads)
+    assert len(posts) == 1 and posts[0][0] == 'card' and len(uploads) == 1
+    wb = load_workbook(uploads[0], read_only=True)
+    assert sum(ws.max_row - 1 for ws in wb) == 1
+    wb.close()
 
 def test_empty_inbound_still_one_clear_message():
     text = build_inbound_messages(aggregate({'W': []}, day=dt.date(2026, 11, 16)))
