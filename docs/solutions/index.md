@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-17 | OIDC 回调白名单漏项导致赛狐 API 代理钉钉登录全 400 | [integration-issues/oidc-redirect-allowlist-missing-client.md](integration-issues/oidc-redirect-allowlist-missing-client.md) |
 | 2026-11-11 | 钉钉考勤表导出操作手册（管理后台） | [workflow-issues/dingtalk-attendance-export-runbook.md](workflow-issues/dingtalk-attendance-export-runbook.md) |
 | 2026-11-11 | 通途特殊规则换表：参考值优先、FBA 列对齐与旧/新 BOM 口径差 | [workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md](workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md) |
 | 2026-11-11 | Claude Desktop 的 MCP「Server disconnected」——先读 mcp-server-<name>.log，多半是 npx @latest 装包被打断 | [developer-experience/claude-desktop-mcp-server-disconnected-npx.md](developer-experience/claude-desktop-mcp-server-disconnected-npx.md) |
@@ -28,6 +29,7 @@ tags: [solutions, index]
 | 2026-11-03 | 钉钉群文件与聊天归档 — 用 DWS 个人身份，不用群机器人 | [tooling-decisions/dingtalk-group-harvest-dws-user-identity.md](tooling-decisions/dingtalk-group-harvest-dws-user-identity.md) |
 | 2026-11-03 | Windows 计划任务在 worktree 里注册会指向临时目录 | [developer-experience/windows-schtasks-worktree-path-trap.md](developer-experience/windows-schtasks-worktree-path-trap.md) |
 | 2026-11-03 | Windows 下 claude -p 长提示词必须走 stdin，不能塞进 argv | [developer-experience/claude-headless-long-prompt-stdin.md](developer-experience/claude-headless-long-prompt-stdin.md) |
+| 2026-10-29 | new-api 公网端口暴露导致陌生账号密码注册 | [integration-issues/new-api-open-registration-exposure.md](integration-issues/new-api-open-registration-exposure.md) |
 | 2026-10-27 | 办公室 OpenClash 单目标直连（境外 RDP/远程访问） | [best-practices/openclash-per-target-direct-rule.md](best-practices/openclash-per-target-direct-rule.md) |
 | 2026-10-27 | 供应分型与断货证据 — 先排费用/组件，再按角色分型；PJ 检查点不是每周 | [workflow-issues/supply-sku-segmentation-and-stockout-evidence.md](workflow-issues/supply-sku-segmentation-and-stockout-evidence.md) |
 | 2026-10-27 | frePPLe 评估 — 社区 MIT、企业闭源；借求解逻辑，不部署 | [tooling-decisions/frepple-evaluation-and-borrow-logic.md](tooling-decisions/frepple-evaluation-and-borrow-logic.md) |
