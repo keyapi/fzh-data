@@ -55,14 +55,13 @@ METHODS: tuple[str, ...] = (METHOD_COVER, METHOD_SEMI, METHOD_FINISHED)
 
 # 非商品配件/耗材（显式零成本，不进待审成本）
 ACCESSORY_EXACT: frozenset[str] = frozenset({
-    "BUTTONKIT", "BUTTONKIT-PL", "DLZYFX001", "COTTON-EU",
+    "BUTTONKIT", "BUTTONKIT-PL", "DLZYFX001", "COTTON-EU", "TTPARTS001",
 })
-_ACCESSORY_PP_RE = re.compile(r"^PP\d+(?:\.\d+)?LB$")
 
 
 def is_non_product_accessory(sku: object) -> bool:
     s = normalize_sku(sku)
-    return bool(s) and (s in ACCESSORY_EXACT or bool(_ACCESSORY_PP_RE.match(s)))
+    return bool(s) and s in ACCESSORY_EXACT
 
 _STATUS_RESOLVED = "resolved"
 _STATUS_UNRESOLVED = "unresolved"
