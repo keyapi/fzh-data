@@ -25,6 +25,9 @@ def send_file_to_dingtalk(
     file_path: str | Path,
     title: str | None = None,
     text: str | None = None,
+    *,
+    webhook: str | None = None,
+    secret: str | None = None,
 ) -> dict:
     """上传文件到 ERPNext 并通过钉钉 ActionCard 发送下载链接。
 
@@ -32,6 +35,8 @@ def send_file_to_dingtalk(
         file_path: 本地文件路径
         title:     卡片标题，默认使用文件名
         text:      卡片正文 (markdown)，默认生成时间戳信息
+        webhook:   机器人 webhook，默认读 DINGTALK_WEBHOOK
+        secret:    机器人加签 secret，默认读 DINGTALK_SECRET
 
     Returns:
         钉钉 API 响应 dict
@@ -62,6 +67,8 @@ def send_file_to_dingtalk(
         title=title,
         text=text,
         buttons=[{"title": "📥 下载文件", "actionURL": file_url}],
+        webhook=webhook,
+        secret=secret,
     )
 
 
