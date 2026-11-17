@@ -112,6 +112,29 @@ PB 的 0 库存导出 + 美中仓人工回话；「真发」只认 UPS 取件。
 所有日期按 `事实 / 推导 / 估算 / 人工判断` 标注来源，别把估算写成事实
 （参见 `docs/solutions/architecture-patterns/en-end-to-end-supply-chain-fulfillment-visibility.md`）。
 
+### 8. WSI/Cancel 回信必须带 **HTML 表格**，纯文本会把表格压扁
+
+2026-11-16 实测：Diane 的 `WSI WISMO/Cancel Request/CHAD` 邮件后面是**一整张 HTML 表格**
+（`<table class="MsoNormalTable">`，最后一列 `Vendor Comment`）。回信时：
+
+- 主题：`PO <PO> Cancel accepted Re:WSI WISMO/Cancel Request/CHAD - 5806 Centrade Inc <日期>`
+- 正文：`Hi Diane` / `PO <PO> Cancel accepted` / `Best` / `Key`，下面引用原邮件
+- **必须发 multipart/alternative：纯文本 + HTML**；HTML 部分嵌入原邮件 HTML，并把该行最后一个
+  `<td>` 填成 `Cancel accepted`。只发纯文本时，客户端会把整张表压成一行。
+- 发完 IMAP `APPEND` 到 `Sent Messages`；可以先用 `[TEST]` 主题发给自己检查表格。
+
+### 9. 通途「付款日期」= 导入 xlsx 的 `PO Date`；超过 3 个月会从等待配货消失
+
+`PBUS-137682252-2`：11/16 导入、`saleTime=11/16`，但 `paidTime=2026-08-12`（原 PO Date），
+WXP 的「等待配货」只显示付款时间在 3 个月内的订单 → 这单看不到。处理：
+
+- 补发旧 PO 时，服务层会把**导入 xlsx 用**的 `PO Date` 超过 90 天的改成当天（源 CSV/报告保留原值），
+  并写 `report["po_date_adjustments"]` + warning。
+- 手工单行补建 xlsx 时，`PO Date` 必须是**文本** `yyyy-MM-dd HH:mm:ss`；Excel 日期单元格会被通途
+  拒收（付款日期格式不正确）。
+- 相关：EN `Shipment.custom_zmt_appt`（预约送仓日）会被 ZMT 同步在源快照缺失时覆盖成 null；
+  已提 issue `keyapi/delivery_plan#5`，读 ETA 时以最新非空快照为准。
+
 ## Why This Matters
 
 - **invoice 提交到钉钉后无法撤销**。月底固化之后再发现无货、或顾客取消，就会挂着一笔收不回的账。

@@ -127,6 +127,12 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
   「等待配货」。补发旧 PO 时 `service.run_job` 会把导入 xlsx 的 PO Date 超过 90 天的自动
   改成当天（源 CSV/报告保留原值）；手工单行补建时 PO Date 必须写成**文本**
   `yyyy-MM-dd HH:mm:ss`，写成 Excel 日期单元格会被通途拒收。
+- **SPS IA 模板取值**：有货 SKU = Stock **100**、On Order 数量/日期**留空**；无货 SKU = Stock **0**、
+  On Order **50** + 到货日。不要给有货 SKU 填 On Order；取值没写死先问用户。
+  覆盖模板会**生成新的 Template 文档**（旧链接变 `UNDEFINED`，看到旧值正常）；
+  同一 advice date 重发会**多一份 IA**，交易列表以最新时间为准。
+- **WSI/Cancel 回信要带 HTML 表格**：multipart/alternative（纯文本 + HTML），HTML 里嵌入原邮件表格
+  并把 `Vendor Comment` 单元格填 `Cancel accepted`；只发纯文本会把表格压成一行。
 - **绝不把邮件口令 / 账号密码写进仓库**；邮件里不出现 Tracy / 中间人 / 5% 佣金。
 
 ## 相关经验（docs/solutions）
@@ -136,6 +142,7 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
 - `docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md` —— 网页与 JSON API 共用服务层：双鉴权 / 幂等 / 补发号登记；现网判定与 compose 服务名
 - `docs/solutions/workflow-issues/pb-replenishment-sizing-from-sales.md` —— 补货量估算：美中 Daneey 口径、通途订单表读法、剔除断货月、交付用 Excel
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— 断货判据 / PO→Tongtool Order 映射 / UPS 才算真发
+- `docs/solutions/workflow-issues/sps-portal-ia-akn-operations.md` —— IA/AKN 操作 + **IA 模板取值口径**（有货 100/无 On Order；无货 0/50/到货日）与覆盖模板行为
 
 ## 相关 skill
 

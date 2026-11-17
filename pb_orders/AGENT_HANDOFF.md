@@ -589,6 +589,15 @@ uv run pytest tests/ -q
       日期单元格会被通途拒收（「付款日期格式不正确」）。
     - 这与「重复建单后缀」独立：后缀管重号，PO Date 管付款时间窗口。
 
+45. **SPS IA 模板取值 / Diane 回信格式**（2026-11-16 用户纠正，别再猜）：
+    - IA 模板：**有货 SKU → Stock 100、On Order 数量/日期留空**；**无货 SKU → Stock 0、
+      On Order 50、On Order date = 到货日**。有货不要填 On Order。
+    - 覆盖模板会**新建一个 Template 文档**，旧文档变 `UNDEFINED`；打开旧链接看到旧值属正常，
+      要看最新模板必须按 Status=Template 筛选。
+    - 同一 advice date 重发会**多一份 IA**（不会覆盖），交易列表以最新时间为准。
+    - WSI/Cancel 回信必须是 **multipart/alternative（纯文本 + HTML）**，HTML 里嵌入原邮件表格并把
+      `Vendor Comment` 单元格填 `Cancel accepted`；只发纯文本会把表格压成一行。
+
 ## 8. 数量对账口径
 
 ### 8.1 库存预检（步骤 0）

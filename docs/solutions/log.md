@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-17（SPS IA 模板取值 / 回信 HTML 表格 / 通途付款日期）
+
+- **更新**: `workflow-issues/sps-portal-ia-akn-operations.md` 新增 §2.1：IA 模板按库存状态二选一 —— **有货 Stock=100，On Order 数量/日期留空；无货 Stock=0，On Order=50，日期=到货日**。补清空单元格手法（On Order 用 Delete；日期用 Ctrl+A/Backspace/Enter）、加新 SKU 的重复行处理；§4 补“同一 advice date 重发会多一份 IA，不覆盖，以最新为准”；覆盖模板会新建 Template 文档，旧链接是 `UNDEFINED` 旧值。
+- **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` 新增 §8/§9：① WSI/Cancel 回信必须 multipart/alternative + HTML 内嵌原表格并填 `Vendor Comment`，纯文本会压扁表格；② 通途「付款日期」= 导入 xlsx 的 `PO Date`，超过 3 个月不出现在等待配货（`service.run_job` 已自动把 >90 天的改成导入日）；③ EN `Shipment.custom_zmt_appt` 会被 ZMT 同步在源快照缺失时清空（issue `keyapi/delivery_plan#5`）。
+- **更新**: `pb_orders/AGENT_HANDOFF.md` 坑 45、`pb-orders` skill 铁律同步 IA 取值/覆盖行为/回信格式；此前已提交通途 PO Date 自动 clamp 代码与测试（`6bbc4233`）。
+
 ## 2026-11-02（JSON API 上到 api.vilavi.cn/pb）
 
 - **更新**: `architecture-patterns/pb-orders-json-api-human-agent.md`（`last_updated: 2026-11-02`）—— PR #297 的 `/api/v1` 已 `git archive` 部署到 `/opt/pb-orders`（`PB_ORDERS_PIPELINE_VERSION=pb-web-60e30ff1`），PR 仍未合并。部署前公网 healthz 被闸门 303 成钉钉页，不能把分支上有代码当成现网有路由。现网：healthz JSON 200、缺 Bearer 的 job 查询 JSON 401、网页首页仍 303 登录。建 Key 用容器名 `pb-orders-web`（不是 compose 示例里的 `web`）。首次上线 `backfill_order_numbers --apply` 写入 338 个历史号。API 未上镜像时的出件兜底：签 `pb_orders_session` + 公网 `POST /pb/jobs/{id}/fulfill`（CSRF `Path=/pb/`，直连 8412 会 403）。
