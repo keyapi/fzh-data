@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""stock_alert CLI：低库存逐条明细 + 今日新增 Excel + 采购入库。
+"""stock_alert CLI：低库存单卡汇总/下载 + 分段采购入库。
 
     # 离线全链路（不调 API、不发群）
     uv run python -m stock_alert.cli run --mock --dry-run
@@ -7,7 +7,7 @@
     # 真查三仓低库存（不推）
     uv run python -m stock_alert.cli run --dry-run
 
-    # 三仓全量 → 真推（分片消息 + 今日新增 Excel 卡片）
+    # 三仓全量 → 真推（一张汇总卡片，含新增/全部下载）
     uv run python -m stock_alert.cli run --notify
 
     # 采购入库（统计昨日，不推 / 真推）
@@ -29,13 +29,9 @@ from pathlib import Path
 
 from .client import StockRow
 from .en_client import EnStockClient, StockSyncIncomplete
-from .excel import write_low_stock_workbook
 from .inbound import aggregate as aggregate_inbound
 from .names import NameCache
 from .notify import (
-    build_inbound_messages,
-    build_low_stock_messages,
-    default_new_out_path,
     notify_inbound,
     notify_low_stock,
     notify_sync_incomplete,
@@ -211,17 +207,21 @@ def cmd_run(args) -> int:
                       "baseline_available": baseline is not None,
                       "names_missing": sum(not names.get(sku) for sku in skus)}, ensure_ascii=False), file=sys.stderr)
 
-    if args.dry_run or not args.notify:
-        for message in build_low_stock_messages(result, when=day, new_count=new_count):
-            print(message)
-            print("\n---\n")
-        if new_count:
-            path = write_low_stock_workbook(result, args.out or default_new_out_path(day), newly_only=True)
-            print(f"[Excel 今日新增（按仓分 sheet）] {path}")
-        return 0
+    preview = args.dry_run or not args.notify
+    resp = notify_low_stock(result, when=day, out_xlsx=args.out, dry_run=preview)
+    return _show_notification(resp, preview=preview)
 
-    resp = notify_low_stock(result, when=day, out_xlsx=args.out)
-    print(json.dumps(resp, ensure_ascii=False))
+
+def _show_notification(resp: dict, *, preview: bool) -> int:
+    if preview:
+        for message in resp["messages"]:
+            print(message)
+        for item in resp["files"]:
+            print(f"[{item['title']}] {item['path']}")
+        for error in resp["file_errors"]:
+            print(error, file=sys.stderr)
+    else:
+        print(json.dumps(resp, ensure_ascii=False))
     return 0 if resp.get("errcode") == 0 else 1
 
 
@@ -253,15 +253,9 @@ def cmd_inbound(args) -> int:
                       "output_skus": result.total_skus, "total_qty": result.total_qty},
                      ensure_ascii=False), file=sys.stderr)
 
-    if args.dry_run or not args.notify:
-        for message in build_inbound_messages(result):
-            print(message)
-            print("\n---\n")
-        return 0
-
-    resp = notify_inbound(result)
-    print(json.dumps(resp, ensure_ascii=False))
-    return 0 if resp.get("errcode") == 0 else 1
+    preview = args.dry_run or not args.notify
+    resp = notify_inbound(result, dry_run=preview)
+    return _show_notification(resp, preview=preview)
 
 
 def cmd_probe(args) -> int:

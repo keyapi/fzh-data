@@ -7,22 +7,24 @@ import stock_alert.cli as cli
 from stock_alert.cli import main
 
 
-def test_run_mock_dry_run_lists_details(capsys):
+def test_run_mock_dry_run_shows_single_warehouse_summary(capsys):
     rc = main(["run", "--mock", "--dry-run", "--warehouses", "美中-FZH-DANEEY,美东-CENTRADE"])
     assert rc == 0
     out = capsys.readouterr().out
     assert "通途低库存提醒" in out
-    assert "美中-FZH-DANEEY（1 个）" in out
-    assert "美东-CENTRADE（1 个）" in out
-    assert "• DEMO-0-A：库存4个" in out
+    assert "### 美中-FZH-DANEEY" in out
+    assert "### 美东-CENTRADE" in out
+    assert "低库存：**1**" in out
+    assert out.count("## 通途低库存提醒") == 1
     assert "波兰-FZHPoland-covers" not in out  # 只传了两仓
 
 
 def test_run_mock_without_notify_does_not_push(capsys, monkeypatch):
-    def _boom(*a, **k):
-        raise AssertionError("未加 --notify 不应推送")
+    def _preview(*a, **k):
+        assert k["dry_run"] is True
+        return {"errcode": 0, "messages": ["通途低库存提醒"], "files": [], "file_errors": []}
 
-    monkeypatch.setattr(cli, "notify_low_stock", _boom)
+    monkeypatch.setattr(cli, "notify_low_stock", _preview)
     rc = cli.main(["run", "--mock", "--warehouses", "美中-FZH-DANEEY"])
     assert rc == 0
     assert "通途低库存提醒" in capsys.readouterr().out
@@ -43,7 +45,7 @@ def test_inbound_mock_dry_run_defaults_to_yesterday(capsys):
     out = capsys.readouterr().out
     yesterday = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
     assert f"通途采购入库提醒 · {yesterday}" in out
-    assert "• DEMO-IN-0：入库10个" in out
+    assert "SKU：DEMO-IN-0\n\n入库：**10 件**" in out
 
 
 def test_inbound_mock_respects_date(capsys):
@@ -80,5 +82,5 @@ def test_inbound_only_resolves_names_for_real_receipts(monkeypatch, capsys):
     assert main(["inbound", "--dry-run", "--warehouses", "W"]) == 0
     assert wanted == ["ARRIVED"]
     out = capsys.readouterr()
-    assert "ARRIVED 产品甲：入库45个" in out.out
+    assert "**产品甲**\n\nSKU：ARRIVED\n\n入库：**45 件**" in out.out
     assert '"zero_change": 1' in out.err

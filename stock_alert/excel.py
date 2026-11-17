@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-"""低库存明细 Excel：**按仓库分 sheet**，每行一个「可用库存 < 阈值」的 SKU。"""
+"""库存提醒明细 Excel：低库存与采购入库均按仓库分 sheet。"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 from .scan import ScanResult
+from .inbound import InboundResult
 
 # Excel sheet 名限制：≤31 字符，禁用 : \ / ? * [ ]
 _INVALID = set(':\\/?*[]')
@@ -45,6 +46,31 @@ def write_low_stock_workbook(result: ScanResult, path: str | Path, *, newly_only
     if not wb.sheetnames:
         wb.create_sheet("空")
 
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    wb.save(out)
+    return out
+
+
+def write_inbound_workbook(result: InboundResult, path: str | Path) -> Path:
+    """入库正文过长时，完整明细通过同一张卡片下载。"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    wb = Workbook()
+    wb.remove(wb.active)
+    for wh in result.warehouses:
+        ws = wb.create_sheet(_sheet_name(wh.warehouse))
+        ws.append(["SKU", "产品名称", "入库数量"])
+        for cell in ws[1]:
+            cell.font = Font(bold=True)
+        for item in wh.items:
+            ws.append([item.sku, item.name or item.sku, _num(item.qty)])
+        ws.column_dimensions["A"].width = 42
+        ws.column_dimensions["B"].width = 40
+        ws.column_dimensions["C"].width = 14
+    if not wb.sheetnames:
+        wb.create_sheet("空")
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     wb.save(out)
