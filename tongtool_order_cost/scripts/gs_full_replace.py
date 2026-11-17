@@ -83,8 +83,11 @@ def totals(df: pd.DataFrame, metrics: list[str]) -> dict:
             for m in metrics if m in df.columns}
 
 
-def run(month: str, label: str, apply: bool, book: str | None = None) -> None:
+def run(month: str, label: str, apply: bool, book: str | None = None,
+        local_override: str | None = None) -> None:
     c = cfg(month, book)[label]
+    if local_override:
+        c = {**c, "local": local_override}
     local_path = ROOT / c["local"]
     if not local_path.exists():
         raise SystemExit(f"本地表不存在: {local_path}")
@@ -190,10 +193,11 @@ def main() -> int:
     ap.add_argument("--book", default=None,
                     help="工作簿名覆盖（默认 通途订单<月>；如 通途订单202607-特殊规则）")
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--local", default=None, help="本地 CSV 覆盖（用于带额外列的月份）")
     args = ap.parse_args()
     labels = ["self", "fba", "merged"] if args.label == "all" else [args.label]
     for label in labels:
-        run(args.month, label, args.apply, args.book)
+        run(args.month, label, args.apply, args.book, args.local)
     return 0
 
 
