@@ -41,6 +41,11 @@ def _check_body(body: str) -> str:
     return body
 
 
+def _card_mode() -> str:
+    """STOCK_ALERT_CARD_MODE：image（默认，渲染图片卡片）/ text / interactive / auto。"""
+    return os.environ.get("STOCK_ALERT_CARD_MODE", "image").strip().lower()
+
+
 def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None,
                              new_count: int = 0) -> list[str]:
     day = when or _dt.date.today()
@@ -66,21 +71,21 @@ def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None
 def _inbound_body(result: InboundResult) -> tuple[str, bool]:
     day = result.day.isoformat()
     intro = [f"## 通途采购入库提醒 · {day}",
-             f"**入库概览**  ·  共 **{result.total_skus}** 个 SKU · 入库 **{_fmt_num(result.total_qty)}** 件"]
+             f"**入库概览**  ·  共 **{result.total_skus}** 个 SKU · 入库 **{_fmt_num(result.total_qty)}** 个"]
     if not result.total_skus:
         return "\n\n".join(intro + [f"昨日（{day}）无采购入库。"]), False
     summary = list(intro)
     detailed = list(intro)
     for wh in result.warehouses:
         section = [f"### {_clean(wh.warehouse)}",
-                   f"入库：**{_fmt_num(wh.total_qty)}** 件 · **{wh.count}** 个 SKU"]
+                   f"入库：**{_fmt_num(wh.total_qty)}** 个 · **{wh.count}** 个 SKU"]
         if not wh.items:
             section.append("昨日无采购入库。")
         summary.extend(section)
         detailed.extend(section)
         for item in wh.items:
             name = _clean(item.name) or _clean(item.sku)
-            detailed.append(f"**{name}**\n\nSKU：{_clean(item.sku)}\n\n入库：**{_fmt_num(item.qty)} 件**")
+            detailed.append(f"**{name}**\n\nSKU：{_clean(item.sku)}\n\n入库：**{_fmt_num(item.qty)} 个**")
     body = "\n\n".join(detailed)
     if len(body.encode("utf-8")) <= CARD_BUDGET_BYTES:
         return body, False
@@ -109,11 +114,23 @@ def _resolve_creds() -> tuple[str, str]:
 
 
 def _notify_one(title: str, body: str, files: list[dict], errors: list[str],
-                *, dry_run: bool) -> dict:
-    """先上传文件，最后仅发一次；失败也只发一条带说明的汇总。"""
+                *, dry_run: bool, interactive=None, preview=None, image_path=None) -> dict:
+    """先上传文件，最后仅发一次；失败也只发一条带说明的汇总。
+
+    `interactive` 为可选的互动卡片发送器；`image_path` 为可选 PNG 卡片。
+    优先级：互动卡片 → 图片卡片 → 文本 ActionCard，逐级回退。
+    """
     if dry_run:
-        return {"errcode": 1 if errors else 0, "dry_run": True,
+        resp = {"errcode": 1 if errors else 0, "dry_run": True,
                 "messages": [body], "files": files, "file_errors": errors}
+        if image_path:
+            resp["card_image"] = str(image_path)
+        if preview:
+            try:
+                resp["card_preview"] = preview()
+            except Exception as exc:  # noqa: BLE001 - 预览失败不影响结果
+                resp["card_preview_error"] = type(exc).__name__
+        return resp
     webhook, secret = _resolve_creds()
     _robot_path()
     buttons = []
@@ -127,6 +144,40 @@ def _notify_one(title: str, body: str, files: list[dict], errors: list[str],
     if errors:
         body += "\n\n> ⚠️ " + "；".join(errors)
     _check_body(body)
+    if interactive and buttons and not errors:
+        try:
+            card_response = interactive(buttons)
+            if card_response.get("errcode") == 0:
+                return {"errcode": 0, "sent": 1, "total": 1, "mode": "interactive",
+                        "messages": [card_response], "buttons": buttons, "files": files,
+                        "file_errors": errors}
+            print(f"[warn] 互动卡片发送失败，回退下一档：{card_response}", file=sys.stderr)
+        except Exception as exc:  # noqa: BLE001 - 回退
+            print(f"[warn] 互动卡片发送失败，回退下一档：{type(exc).__name__}: {exc}",
+                  file=sys.stderr)
+    image_url = None
+    if image_path and not errors:
+        try:
+            from upload_to_erpnext import upload_file_to_erpnext
+            image_url = upload_file_to_erpnext(Path(image_path))
+        except Exception as exc:  # noqa: BLE001 - 回退文本
+            print(f"[warn] 卡片图片上传失败，回退文本：{type(exc).__name__}: {exc}", file=sys.stderr)
+    if image_url:
+        try:
+            from send_dingtalk import send_action_card, send_markdown
+            image_body = f"![卡片]({image_url})"
+            if buttons:
+                response = send_action_card(title, image_body, buttons, webhook=webhook,
+                                            secret=secret, single_jump=False)
+            else:
+                response = send_markdown(image_body, title=title, webhook=webhook, secret=secret)
+            if response.get("errcode") == 0:
+                return {"errcode": 0, "sent": 1, "total": 1, "mode": "image",
+                        "messages": [response], "buttons": buttons, "files": files,
+                        "file_errors": errors, "image": str(image_path)}
+            print(f"[warn] 图片卡片发送失败，回退文本：{response}", file=sys.stderr)
+        except Exception as exc:  # noqa: BLE001 - 回退文本
+            print(f"[warn] 图片卡片发送失败，回退文本：{type(exc).__name__}: {exc}", file=sys.stderr)
     try:
         from send_dingtalk import send_action_card, send_markdown
         if buttons:
@@ -138,6 +189,44 @@ def _notify_one(title: str, body: str, files: list[dict], errors: list[str],
     ok = response.get("errcode") == 0
     return {"errcode": 0 if ok and not errors else 1, "sent": int(ok), "total": 1,
             "messages": [response], "buttons": buttons, "files": files, "file_errors": errors}
+
+
+def _interactive_sender(kind: str, result, *, when: _dt.date | None = None, new_count: int = 0):
+    """返回 (发送器, 预览器)；未配置或初始化失败返回 (None, None)。"""
+    try:
+        from . import card as card_mod
+        if not card_mod.interactive_available(kind):
+            return None, None
+        if kind == "low":
+            preview_buttons = []
+            if new_count:
+                preview_buttons.append((f"下载今日新增（{new_count}）", "https://example.invalid/new.xlsx"))
+            if result.total_low:
+                preview_buttons.append((f"下载全部低库存（{result.total_low}）", "https://example.invalid/all.xlsx"))
+
+            def preview():
+                return card_mod.low_stock_params(result, when=when, new_count=new_count,
+                                                 buttons=preview_buttons)
+
+            def send(btns):
+                return card_mod.send_low_stock(
+                    result, when=when, new_count=new_count,
+                    buttons=[(b["title"], b["actionURL"]) for b in btns])
+        else:
+            preview_buttons = []
+            if result.total_skus:
+                preview_buttons.append(("下载全部采购入库明细", "https://example.invalid/inbound.xlsx"))
+
+            def preview():
+                return card_mod.inbound_params(result, buttons=preview_buttons)
+
+            def send(btns):
+                return card_mod.send_inbound(
+                    result, buttons=[(b["title"], b["actionURL"]) for b in btns])
+        return send, preview
+    except Exception as exc:  # noqa: BLE001 - 互动卡片只是增强，失败不阻断
+        print(f"[warn] 互动卡片初始化失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+        return None, None
 
 
 def notify_low_stock(result: ScanResult, *, when: _dt.date | None = None,
@@ -162,7 +251,21 @@ def notify_low_stock(result: ScanResult, *, when: _dt.date | None = None,
             files.append({"title": title, "path": str(path)})
         except Exception as exc:
             errors.append(f"{title}生成失败（{type(exc).__name__}）")
-    return _notify_one(f"通途低库存提醒 · {day.isoformat()}", body, files, errors, dry_run=dry_run)
+    mode = _card_mode()
+    send = preview = None
+    if mode in ("interactive", "auto"):
+        send, preview = _interactive_sender("low", result, when=day, new_count=new_count)
+    image_path = None
+    if mode != "text":
+        try:
+            from .card_image import render_low_stock
+            image_path = render_low_stock(result, _OUT_DIR / f"通途低库存卡片_{day:%Y%m%d}.png",
+                                          when=day, new_count=new_count)
+        except Exception as exc:  # noqa: BLE001 - 图片失败回退文本
+            print(f"[warn] 低库存卡片图片生成失败，回退文本：{type(exc).__name__}: {exc}",
+                  file=sys.stderr)
+    return _notify_one(f"通途低库存提醒 · {day.isoformat()}", body, files, errors,
+                       dry_run=dry_run, interactive=send, preview=preview, image_path=image_path)
 
 
 def notify_inbound(result: InboundResult, *, dry_run: bool = False) -> dict:
@@ -175,7 +278,20 @@ def notify_inbound(result: InboundResult, *, dry_run: bool = False) -> dict:
             files.append({"title": "下载全部采购入库明细", "path": str(path)})
         except Exception as exc:
             errors.append(f"采购入库明细生成失败（{type(exc).__name__}）")
-    return _notify_one(f"通途采购入库提醒 · {result.day.isoformat()}", body, files, errors, dry_run=dry_run)
+    mode = _card_mode()
+    send = preview = None
+    if mode in ("interactive", "auto"):
+        send, preview = _interactive_sender("inbound", result)
+    image_path = None
+    if mode != "text":
+        try:
+            from .card_image import render_inbound
+            image_path = render_inbound(result, _OUT_DIR / f"通途采购入库卡片_{result.day:%Y%m%d}.png")
+        except Exception as exc:  # noqa: BLE001 - 图片失败回退文本
+            print(f"[warn] 采购入库卡片图片生成失败，回退文本：{type(exc).__name__}: {exc}",
+                  file=sys.stderr)
+    return _notify_one(f"通途采购入库提醒 · {result.day.isoformat()}", body, files, errors,
+                       dry_run=dry_run, interactive=send, preview=preview, image_path=image_path)
 
 
 def _egress_ip(timeout: float = 5.0) -> str | None:

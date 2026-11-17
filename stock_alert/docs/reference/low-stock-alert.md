@@ -44,7 +44,7 @@ description: 低库存新增基线、采购入库正增量、名称缓存与独�
 入库统计只代表已同步事件，当前不提供独立的库存变动同步完成水位校验。
 
 入库日志报告 input_rows / accepted_rows / skipped（非采购、空 SKU、零增量、负增量）/
-output_skus / total_qty；相同 SKU 多事件合并，正向件数相加。
+output_skus / total_qty；相同 SKU 多事件合并，正向数量相加。
 必需列缺失或数量非法直接失败，不把坏数据当零。
 
 ## 名称与限流
@@ -64,6 +64,9 @@ worktree 不带这些 gitignored 文件；定时任务跑主检出，主检出�
 
 - `FZH-StockAlert-daily`：09:23，一张低库存汇总卡片，下载按钮与正文同卡。
 - `FZH-StockInbound-daily`：09:47，昨日采购入库，无入库也提醒。
+- 卡片默认渲染为 PNG 图片（`STOCK_ALERT_CARD_MODE=image`）：蓝底居中标题、统计框、分仓明细；
+  图片上传失败回退文本 ActionCard。单按钮卡片使用 `btns` 独立跳转，点图片不会触发下载。
+  入库数量单位为「个」，低库存在途合计仍为「件」。
 - 两条任务的包装、日志和异常独立；Windows 注册设置 StartWhenAvailable / WakeToRun，仍需电脑开机、用户登录。
 - 文件先生成/上传，再发送一次卡片；文件失败仍只发一次汇总并注明失败，返回非零状态。
 - 低库存文件：新增与全量分别导出，均按仓分sheet。入库有记录时始终生成完整明细Excel；无入库不生成文件。

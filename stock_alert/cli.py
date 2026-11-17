@@ -218,6 +218,11 @@ def _show_notification(resp: dict, *, preview: bool) -> int:
             print(message)
         for item in resp["files"]:
             print(f"[{item['title']}] {item['path']}")
+        if resp.get("card_image"):
+            print(f"[卡片图片] {resp['card_image']}")
+        if resp.get("card_preview"):
+            print("\n[互动卡片变量 cardParamMap]")
+            print(json.dumps(resp["card_preview"], ensure_ascii=False, indent=2))
         for error in resp["file_errors"]:
             print(error, file=sys.stderr)
     else:

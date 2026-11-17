@@ -59,22 +59,25 @@ def send_markdown(text: str, title: str = "通知", *, webhook: str | None = Non
     })
 
 
-def send_action_card(title: str, text: str, buttons: list[dict], *, webhook: str | None = None, secret: str | None = None) -> dict:
+def send_action_card(title: str, text: str, buttons: list[dict], *, webhook: str | None = None,
+                     secret: str | None = None, single_jump: bool = True) -> dict:
     """发送 ActionCard 卡片消息（支持下载按钮）。
 
     Args:
         title:  卡片标题
         text:   markdown 格式的卡片正文
         buttons: 按钮列表，每个按钮 {"title": "下载", "actionURL": "https://..."}
+        single_jump: 只有一个按钮时是否使用整体跳转（singleTitle/singleURL）。
+            整体跳转会让整张卡片（包括图片）都可点击；只想让按钮可点时传 False。
 
-    若只有一个按钮，使用 singleTitle/singleURL 模式（更简洁）。
+    若只有一个按钮且 single_jump=True，使用 singleTitle/singleURL 模式（更简洁）。
     """
     card = {
         "title": title,
         "text": text,
         "btnOrientation": "1",  # 横向排列
     }
-    if len(buttons) == 1:
+    if len(buttons) == 1 and single_jump:
         card["singleTitle"] = buttons[0]["title"]
         card["singleURL"] = buttons[0]["actionURL"]
     else:
