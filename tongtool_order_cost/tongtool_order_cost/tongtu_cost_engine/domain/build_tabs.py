@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -98,6 +98,22 @@ SPECIAL_ORDER_COL = "通途订单号"
 
 # 第三方/大件云仓：不参与自营成本计算（旧表同样为 0），显式零成本而非阻断。
 THIRD_PARTY_WAREHOUSES = {"大件云仓"}
+
+
+def _load_whole_relations(path: Path) -> dict[str, str]:
+    """整套/组件关系：component_sku -> whole_sku（仅同 order_common 同时出现时生效）。"""
+    if not path.exists():
+        return {}
+    df = _read_csv(path)
+    if not {"whole_sku", "component_sku"}.issubset(df.columns):
+        raise ValueError(f"整套关系表缺列 whole_sku/component_sku: {path}")
+    out: dict[str, str] = {}
+    for rec in df.to_dict("records"):
+        comp = normalize_sku(rec.get("component_sku"))
+        whole = normalize_sku(rec.get("whole_sku"))
+        if comp and whole:
+            out[comp] = whole
+    return out
 
 
 def _merge_alias_overrides(ref_map: Path, overrides: Path, out_dir: Path) -> Path:
@@ -300,6 +316,7 @@ def _build_self_rows(
     bom_index: Mapping[str, list[dict]],
     old: Mapping[str, dict],
     attr_master: Mapping[tuple[str, str], dict],
+    whole_relations: Mapping[str, str] | None = None,
 ) -> tuple[list[dict], list[dict], dict]:
     if len(shadow.detail_rows) != len(phase2.rows):
         raise ValueError(
@@ -308,6 +325,11 @@ def _build_self_rows(
     records = raw.to_dict("records")
     rows: list[dict] = []
     checks: list[dict] = []
+    skus_by_common: dict[str, set[str]] = defaultdict(set)
+    for d in shadow.detail_rows:
+        common = _text(d.get("order_common")) or re.sub(r"_\d+$", "", _text(d.get("订单号")))
+        skus_by_common[common].add(normalize_sku(d.get("通途SKU")))
+
     unmapped_wh: Counter = Counter()
     attr_misses: Counter = Counter()
     fx_misses: Counter = Counter()
@@ -460,7 +482,18 @@ def _build_self_rows(
         # 四列成本
         status = _text(p2.get("status"))
         reason = _text(p2.get("reason"))
-        if status != "ok" and _text(out.get("发货仓库")) in THIRD_PARTY_WAREHOUSES:
+        whole_sku = (whole_relations or {}).get(normalize_sku(detail.get("通途SKU")))
+        common_key = _text(detail.get("order_common")) or re.sub(r"_\d+$", "", _text(detail.get("订单号")))
+        is_whole_component = bool(whole_sku and whole_sku in skus_by_common.get(common_key, set()))
+        if is_whole_component:
+            # 整套 BOM 已含该组件（如 KS0405 含脚凳）：组件行不再单独计四列/头程，仅保留尾程
+            cells = _fill_cells(
+                shell=0.0, shell_in=0.0, shell_out=0.0, sx2=0.0, proc=0.0, head=0.0,
+                qty=cost_qty, sales=sales_cny_fx, freight=freight, overseas=0.0,
+                kc=kc, k2=k2, ksx=ksx, status="ok", reason="whole_set_component",
+            )
+            cells["cost_reason"] = "whole_set_component"
+        elif status != "ok" and _text(out.get("发货仓库")) in THIRD_PARTY_WAREHOUSES:
             # 第三方大件云仓：不属自营成本口径，显式零成本（旧表同为 0），不按未登记阻断
             cells = _fill_cells(
                 shell=0.0, shell_in=0.0, shell_out=0.0, sx2=0.0, proc=0.0, head=0.0,
@@ -1032,6 +1065,7 @@ def build_order_tabs(
     raw = _read_csv(raw_path)
     self_rows, self_checks, self_stats = _build_self_rows(
         shadow, phase2, raw, fx, sources, resolver, bom_index, old, master,
+        whole_relations=_load_whole_relations(root / "config" / "whole_component_relations.csv"),
     )
     self_df = pd.DataFrame(self_rows, columns=list(SELF166_COLUMNS))
     self_csv = out_dir / f"self_build_{month}.csv"
