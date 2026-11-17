@@ -116,6 +116,20 @@ def _load_whole_relations(path: Path) -> dict[str, str]:
     return out
 
 
+def _load_branch_coeffs(path: Path) -> dict[str, float]:
+    """现行分公司国外加工系数（二次加工成本系数），按发货仓销售汇总分类。"""
+    if not path.exists():
+        return {}
+    df = _read_csv(path)
+    out: dict[str, float] = {}
+    for rec in df.to_dict("records"):
+        branch = _text(rec.get("branch"))
+        val = _num(rec.get("coefficient"))
+        if branch and val is not None:
+            out[branch] = val
+    return out
+
+
 def _merge_alias_overrides(ref_map: Path, overrides: Path, out_dir: Path) -> Path:
     """把本地别名补丁并入 EN 物料表（尚未在 EN 登记的客户物料号）。"""
     base = _read_csv(ref_map)
@@ -317,6 +331,7 @@ def _build_self_rows(
     old: Mapping[str, dict],
     attr_master: Mapping[tuple[str, str], dict],
     whole_relations: Mapping[str, str] | None = None,
+    branch_coeffs: Mapping[str, float] | None = None,
 ) -> tuple[list[dict], list[dict], dict]:
     if len(shadow.detail_rows) != len(phase2.rows):
         raise ValueError(
@@ -474,6 +489,9 @@ def _build_self_rows(
         # 系数 / 海外仓单位成本：旧表继承
         kc = _text((old_row or {}).get("绍兴成本系数")) or "1"
         k2 = _text((old_row or {}).get("二次加工成本系数")) or "1"
+        _branch = _text(out.get("发货仓按销售汇总分类"))
+        if branch_coeffs and _branch in branch_coeffs:
+            k2 = str(branch_coeffs[_branch])
         ksx = _text((old_row or {}).get("绍兴二次加工成本系数")) or "1"
         overseas = _num((old_row or {}).get("海外仓成本"))
         if overseas is None:
@@ -625,7 +643,7 @@ def _build_fba_rows(
                 miss.append({"站点": site, "MSKU": msku, "SKU": sku,
                              "原因": f"shadow_{s.get('bridge_status')}"})
         kc = _text((s or {}).get("绍兴成本系数")) or "1"
-        k2 = _text((s or {}).get("二次加工成本系数")) or "1"
+        k2 = "1"  # FBA 不套分公司国外加工系数（FBA 二次=0）
         ksx = _text((s or {}).get("绍兴二次加工成本系数")) or "1"
 
         # 产品属性富化：EN 物料组 / BOM / 仓库映射 / 旧 FBA 表兜底
@@ -1066,6 +1084,7 @@ def build_order_tabs(
     self_rows, self_checks, self_stats = _build_self_rows(
         shadow, phase2, raw, fx, sources, resolver, bom_index, old, master,
         whole_relations=_load_whole_relations(root / "config" / "whole_component_relations.csv"),
+        branch_coeffs=_load_branch_coeffs(root / "config" / "branch_processing_coefficient_policy.csv"),
     )
     self_df = pd.DataFrame(self_rows, columns=list(SELF166_COLUMNS))
     self_csv = out_dir / f"self_build_{month}.csv"
