@@ -79,3 +79,19 @@ def test_list_stocks_filters_by_warehouse():
     en.list_stocks("美中-FZH-DANEEY")
     params = en.calls[0][1]
     assert "美中-FZH-DANEEY" in params["filters"]
+
+
+def test_stock_history_calls_endpoint():
+    en = _FakeEn([{"message": [{"sku": "A", "available": 1}]}])
+    rows = en.stock_history("W", "2026-11-16")
+    assert rows == [{"sku": "A", "available": 1}]
+    assert en.calls[0][0].endswith("get_stock_history")
+    assert en.calls[0][1]["start_date"] == "2026-11-16"
+
+
+def test_stock_changes_filters_voucher_type():
+    en = _FakeEn([{"message": [{"sku": "B", "available_increase": 5}]}])
+    rows = en.stock_changes("W", "2026-11-16", "2026-11-16", voucher_type="02")
+    assert rows and rows[0]["available_increase"] == 5
+    assert en.calls[0][0].endswith("get_stock_change")
+    assert en.calls[0][1]["voucher_type"] == "02"

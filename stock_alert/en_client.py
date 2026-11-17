@@ -107,6 +107,31 @@ class EnStockClient:
             start += page_size
         return rows
 
+    def stock_history(self, warehouse: str, start_date: str, end_date: str | None = None,
+                      *, sku: str | None = None, limit: int = 5000) -> list[dict]:
+        """EN 历史每日库存（stock.parquet，13 列）。"""
+        params = {"warehouse": warehouse, "start_date": start_date, "limit": str(limit)}
+        if end_date:
+            params["end_date"] = end_date
+        if sku:
+            params["sku"] = sku
+        data = self._get("/api/method/tongtool_integration.sync.stock_sync.get_stock_history", params)
+        return data.get("message") or []
+
+    def stock_changes(self, warehouse: str, start: str, end: str | None = None,
+                      *, voucher_type: str | None = None, sku: str | None = None,
+                      limit: int = 5000) -> list[dict]:
+        """EN 库存操作记录（stock_change.parquet，19 列）。voucher_type='02' 为采购入库。"""
+        params = {"warehouse": warehouse, "start": start, "limit": str(limit)}
+        if end:
+            params["end"] = end
+        if voucher_type:
+            params["voucher_type"] = voucher_type
+        if sku:
+            params["sku"] = sku
+        data = self._get("/api/method/tongtool_integration.sync.stock_change_sync.get_stock_change", params)
+        return data.get("message") or []
+
     @staticmethod
     def _to_row(item: dict) -> StockRow:
         return StockRow(
