@@ -20,6 +20,14 @@ description: 低库存新增基线、采购入库正增量、名称缓存与独�
 采购入库图片按仓列出全部产品（不限条数）；文本回退超过18000 UTF-8字节时退为单卡汇总，
 完整明细仍通过同卡 Excel 下载，不拆条。
 
+白天 10:00 / 14:00 / 17:00 的采购入库**直连通途 OpenAPI**
+`/openapi/tongtool/stocksChangeDetailQuery`（`warehouseName`、`updatedDateFrom`、`pageNo`、`pageSize`），
+因为 EN 的 `stock_change` 每天约 05:53 才同步一次，无法支撑实时检查。
+每次窗口从上次成功检查时间到本次运行时间，当天首次从 00:00 开始；
+只保留 `relatedVoucherType=02` 且 `availableStockIncrease>0` 的事件。
+窗口状态保存在 `stock_alert_output/inbound_state.json`，dry-run 不推进；发送失败也不推进。
+手动历史查询仍可用 `--date YYYY-MM-DD --source tongtool`，或 `--source en` 走 EN 日更数据。
+
 新增基线由 `get_stock_history` 精确查询昨日，各仓独立处理；重复 SKU 取最大可用值。
 昨日 >= 阈值或不存在此 SKU 则标记新增；昨日 < 阈值不算新增。
 整仓基线缺失/读取失败，明确标注“昨日基线缺失，无法判断今日新增”；
@@ -31,7 +39,8 @@ description: 低库存新增基线、采购入库正增量、名称缓存与独�
 | 问题 | 来源与限制 |
 |---|---|
 | 某 SKU 某天库存 | `get_stock_history`：sku、warehouse/warehouse_id、start_date、end_date、limit；无单据号/单据类型过滤 |
-| 昨日采购入库 | `get_stock_change`：warehouse、start、end、voucher_type=02；客户端只汇总每条 available_increase > 0 |
+| 白天采购入库（实时） | 通途 `stocksChangeDetailQuery`：warehouseName、updatedDateFrom、pageNo、pageSize；客户端只汇总 relatedVoucherType=02 且 availableStockIncrease>0，按 operateTime 窗口过滤 |
+| 历史采购入库（EN 日更） | `get_stock_change`：warehouse、start、end、voucher_type=02；作为回退/历史查询，客户端只汇总每条 available_increase > 0 |
 | 采购单创建清单 | 零增量只能称为创建/无变化事件；修改也可能为零，不能据此无条件认定创建全集 |
 | 给定 PO 是否到仓 | 通途 `purchaseOrderQuery`；用人读的 purchaseOrderCode 查询，结合每行 quantity/in_quantity/status |
 | EN 自己的 PO | EN Purchase Order / Purchase Receipt，属于另一套采购单体系 |
@@ -65,8 +74,9 @@ worktree 不带这些 gitignored 文件；定时任务跑主检出，主检出�
 ## 消息与定时
 
 - `FZH-StockAlert-daily`：09:23，一张低库存汇总卡片，下载按钮与正文同卡。
-- `FZH-StockInbound-daily`：09:47，昨日采购入库，无入库也提醒。
-- 卡片默认渲染为 PNG 图片（`STOCK_ALERT_CARD_MODE=image`）：蓝底居中标题、统计框、分仓明细；
+- `FZH-StockInbound-daily`：10:00 / 14:00 / 17:00，直连通途查当天增量（首次 00:00 起），无入库也提醒。
+- 卡片默认渲染为 PNG 图片（`STOCK_ALERT_CARD_MODE=image`）：蓝底居中标题、统计框、
+  低库存各仓今日新增 SKU / 入库分仓明细；
   图片上传失败回退文本 ActionCard。单按钮卡片使用 `btns` 独立跳转，点图片不会触发下载。
   入库数量单位为「个」，低库存在途合计仍为「件」。
 - 两条任务的包装、日志和异常独立；Windows 注册设置 StartWhenAvailable / WakeToRun，仍需电脑开机、用户登录。
@@ -81,7 +91,7 @@ worktree 不带这些 gitignored 文件；定时任务跑主检出，主检出�
 | 库存同步未完成 | 最近快照运行 status/complete、snapshot_at 日期 |
 | 无新增 Excel | 是否没有新增、--no-baseline、EN 基线连接是否失败 |
 | 基线缺失全量导出 | stderr 单仓异常、历史接口行数是否触顶 |
-| 采购入库为零 | 日期/仓库、源是否同步、02 事件是否存在正增量；不等于采购单未到货 |
+| 采购入库为零 | 检查窗口（上次检查时间、当天首次 00:00）、日期/仓库、02 事件是否存在正增量；不等于采购单未到货 |
 | 名称是 SKU | 缓存、goodsQuery 权限、526；名称失败不阻断提醒 |
 | 钉钉失败 | 对应任务日志、机器人凭证；卡片发送或文件处理失败返回非零 |
 | 524 / 526 | 前者应用未授权；后者商户共享限流，停止密集并发 |

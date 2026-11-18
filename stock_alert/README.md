@@ -23,15 +23,20 @@ Excel 仍可导出该仓全量低库存。
 两份Excel都按仓分sheet，列为SKU、产品名称、可用库存、在途库存。
 无新增时只保留“全部低库存”按钮；没有低库存时不生成文件。
 
-## 采购入库
+## 采购入库（白天实时检查）
 
-每日 09:47 独立任务，统计昨日全天：`get_stock_change` 的采购单 `voucher_type=02`，
-仅汇总每条 `available_increase > 0` 的事件，按仓、SKU 合并。
+每日 **10:00 / 14:00 / 17:00** 三次，默认直连通途 OpenAPI
+`/openapi/tongtool/stocksChangeDetailQuery` 查当天增量：
+EN 的 `stock_change` 每天约 05:53 才同步一次，白天会滞后，所以实时检查不走 EN。
+每次从上次成功检查时间开始，到本次运行时间；当天首次为 00:00。
+只保留采购单 `relatedVoucherType=02` 且 `availableStockIncrease > 0` 的事件，按仓、SKU 合并。
 零增量是创建/无变化事件，负增量也不计入；它们不能证明真实入库。
-每次只发一条，按仓标题分段；每个产品的名称、SKU、入库个数分别成段，零入库仓明确显示。
-图片卡片显示**全部**入库 SKU，不限条数；文本回退受 20000 字节限制时只展示分仓汇总并附 Excel。
+卡片副标题显示窗口（如 `10:00–14:00 新增`）；图片列出**全部**入库 SKU，不限条数；
+文本回退受 20000 字节限制时只展示分仓汇总并附 Excel。
 有入库记录时始终在同一卡片提供完整入库Excel下载；始终不拆条。
-昨日没有采购入库也会发消息。此提醒描述已同步的库存事件，不代表采购单全部到货。
+本次没有采购入库也会发消息。此提醒描述已同步的库存事件，不代表采购单全部到货。
+上次检查时间保存在 `stock_alert_output/inbound_state.json`，dry-run 不推进。
+手动查历史某天：`inbound --date YYYY-MM-DD --source tongtool`；沿用 EN：`--source en`。
 
 ## 运行（仓库根目录）
 
@@ -39,6 +44,7 @@ Excel 仍可导出该仓全量低库存。
 uv run python -m stock_alert.cli run --mock --dry-run
 uv run python -m stock_alert.cli run --dry-run
 uv run python -m stock_alert.cli inbound --dry-run --date 2026-11-16
+uv run python -m stock_alert.cli inbound --dry-run --today --source tongtool
 uv run python -m stock_alert.cli run --notify
 uv run python -m stock_alert.cli inbound --notify
 uv run pytest stock_alert/tests -q
@@ -67,10 +73,11 @@ uv run pytest stock_alert/tests -q
 钉钉默认复用 `DINGTALK_WEBHOOK` / `DINGTALK_SECRET`；可用 `*_STOCK` 覆盖。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File stock_alert/scripts/install_stock_alert_schedule.ps1 -AtTime "09:23" -InboundAtTime "09:47"
+powershell -ExecutionPolicy Bypass -File stock_alert/scripts/install_stock_alert_schedule.ps1 -AtTime "09:23" -InboundTimes "10:00,14:00,17:00"
 ```
 
-注册 `FZH-StockAlert-daily` / `FZH-StockInbound-daily`；脚本支持 `-SkipInbound`、`-Remove`。
+注册 `FZH-StockAlert-daily`（09:23）/ `FZH-StockInbound-daily`（10:00、14:00、17:00）；
+脚本支持 `-SkipInbound`、`-Remove`。
 日志分别为 `stock_alert_output/logs/stock_alert-daily.log`、`stock_inbound-daily.log`。
 注册不会立即发送消息，任务到点会自动推送；首次发群前先审阅 dry-run。
 

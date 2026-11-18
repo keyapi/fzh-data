@@ -10,6 +10,11 @@ tags: [stock-alert, changelog, dingtalk, tongtool]
 
 ## 2026-11-18
 
+- 采购入库改为白天 **10:00 / 14:00 / 17:00** 三次实时检查：EN `stock_change` 每天约 05:53 才同步一次，
+  改为直连通途 `/openapi/tongtool/stocksChangeDetailQuery`；按「上次成功检查 → 本次运行」的增量窗口查询，
+  只取采购单 `relatedVoucherType=02` 且 `availableStockIncrease > 0`；窗口状态存
+  `stock_alert_output/inbound_state.json`，dry-run/发送失败不推进。当前 89 项测试通过。
+
 - 低库存图片卡片改为按仓列出**今日新增 SKU**（SKU、产品名称、当前库存），
   去掉「分仓明细」标题和在途合计；新增条数不设上限。某仓昨日基线缺失时提示
   「无法判断今日新增」，不把该仓全量低库存当成新增。

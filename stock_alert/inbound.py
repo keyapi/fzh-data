@@ -42,6 +42,8 @@ class InboundResult:
     input_rows: int = 0
     accepted_rows: int = 0
     skipped: dict[str, int] = field(default_factory=dict)
+    label: str = ""
+    as_of: str = ""
 
     @property
     def total_skus(self) -> int:
@@ -57,6 +59,8 @@ def aggregate(
     *,
     names: dict[str, str] | None = None,
     day: _dt.date | None = None,
+    label: str = "",
+    as_of: str = "",
 ) -> InboundResult:
     """库存变动行 → 各仓采购入库汇总。"""
     names = names or {}
@@ -98,4 +102,5 @@ def aggregate(
         items.sort(key=lambda item: (-item.qty, item.sku))
         summaries.append(InboundWarehouse(warehouse=warehouse, items=items))
     return InboundResult(day=day or _dt.date.today(), warehouses=summaries,
-                         input_rows=input_rows, accepted_rows=accepted_rows, skipped=skipped)
+                         input_rows=input_rows, accepted_rows=accepted_rows, skipped=skipped,
+                         label=label, as_of=as_of)

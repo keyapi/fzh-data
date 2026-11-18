@@ -14,7 +14,10 @@ title: stock_alert Agent 交接
 昨日基线缺失的仓提示「无法判断今日新增」，不把全量低库存当新增。
 图片生成/上传失败自动回退文本 ActionCard。
 可选 `interactive` / `auto` 走钉钉原生互动卡片（见 `docs/reference/interactive-card.md`）。
-当前 82 项测试通过；图片卡片已实推，errcode=0。
+采购入库改为 **10:00 / 14:00 / 17:00** 三次直连通途 `/openapi/tongtool/stocksChangeDetailQuery`
+（EN `stock_change` 每天约 05:53 才同步一次，白天滞后）；按「上次成功检查 → 本次」增量窗口查询，
+窗口状态存 `stock_alert_output/inbound_state.json`，dry-run/发送失败不推进。
+当前 89 项测试通过；图片卡片已实推，errcode=0。
 
 以下阶段2首版/单卡样式为历史记录，不是当前发送样式。
 

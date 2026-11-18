@@ -252,6 +252,25 @@ def test_image_mode_inbound(monkeypatch, tmp_path):
     assert posts[0][3].get('single_jump') is False  # 单按钮也不让整卡可点
     assert any(str(p).lower().endswith('.png') for p in uploads)
 
+
+def test_inbound_label_and_empty_message():
+    r = aggregate({'W': []}, day=dt.date(2026, 11, 18),
+                  label='10:00–14:00 新增', as_of='14:00')
+    text = build_inbound_messages(r)[0]
+    assert '10:00–14:00 新增' in text
+    assert '本次无采购入库' in text
+
+
+def test_inbound_filename_includes_window_time(monkeypatch, tmp_path):
+    import stock_alert.notify as mod
+    monkeypatch.setattr(mod, '_OUT_DIR', tmp_path)
+    posts, uploads = fake_senders(monkeypatch)
+    r = aggregate({'美中-FZH-DANEEY': [{'sku': 'A', 'voucher_type': '02', 'available_increase': 45}]},
+                  names={'A': '产品甲'}, day=dt.date(2026, 11, 18),
+                  label='10:00–14:00 新增', as_of='14:00')
+    assert notify_inbound(r)['errcode'] == 0
+    assert any('_1400' in str(p) for p in uploads)
+
 def test_failure_diagnostic_kept():
     from stock_alert.notify import failure_body
     assert '1.2.3.4' in failure_body('524', egress_ip='1.2.3.4')

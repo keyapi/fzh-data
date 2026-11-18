@@ -70,17 +70,20 @@ def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None
 
 def _inbound_body(result: InboundResult) -> tuple[str, bool]:
     day = result.day.isoformat()
-    intro = [f"## 通途采购入库提醒 · {day}",
+    title = f"## 通途采购入库提醒 · {day}" + (f" · {result.label}" if result.label else "")
+    intro = [title,
              f"**入库概览**  ·  共 **{result.total_skus}** 个 SKU · 入库 **{_fmt_num(result.total_qty)}** 个"]
     if not result.total_skus:
-        return "\n\n".join(intro + [f"昨日（{day}）无采购入库。"]), False
+        empty = (f"本次无采购入库（{result.label}）。" if result.label
+                 else f"昨日（{day}）无采购入库。")
+        return "\n\n".join(intro + [empty]), False
     summary = list(intro)
     detailed = list(intro)
     for wh in result.warehouses:
         section = [f"### {_clean(wh.warehouse)}",
                    f"入库：**{_fmt_num(wh.total_qty)}** 个 · **{wh.count}** 个 SKU"]
         if not wh.items:
-            section.append("昨日无采购入库。")
+            section.append("本次无采购入库。" if result.label else "昨日无采购入库。")
         summary.extend(section)
         detailed.extend(section)
         for item in wh.items:
@@ -270,11 +273,13 @@ def notify_low_stock(result: ScanResult, *, when: _dt.date | None = None,
 
 def notify_inbound(result: InboundResult, *, dry_run: bool = False) -> dict:
     body, _ = _inbound_body(result)
+    suffix = f"_{result.as_of.replace(':', '')}" if result.as_of else ""
     files, errors = [], []
     if result.total_skus:
         try:
             from .excel import write_inbound_workbook
-            path = write_inbound_workbook(result, _OUT_DIR / f"通途采购入库明细_{result.day:%Y%m%d}.xlsx")
+            path = write_inbound_workbook(
+                result, _OUT_DIR / f"通途采购入库明细_{result.day:%Y%m%d}{suffix}.xlsx")
             files.append({"title": "下载全部采购入库明细", "path": str(path)})
         except Exception as exc:
             errors.append(f"采购入库明细生成失败（{type(exc).__name__}）")
@@ -286,11 +291,13 @@ def notify_inbound(result: InboundResult, *, dry_run: bool = False) -> dict:
     if mode != "text":
         try:
             from .card_image import render_inbound
-            image_path = render_inbound(result, _OUT_DIR / f"通途采购入库卡片_{result.day:%Y%m%d}.png")
+            image_path = render_inbound(
+                result, _OUT_DIR / f"通途采购入库卡片_{result.day:%Y%m%d}{suffix}.png")
         except Exception as exc:  # noqa: BLE001 - 图片失败回退文本
             print(f"[warn] 采购入库卡片图片生成失败，回退文本：{type(exc).__name__}: {exc}",
                   file=sys.stderr)
-    return _notify_one(f"通途采购入库提醒 · {result.day.isoformat()}", body, files, errors,
+    title = f"通途采购入库提醒 · {result.day.isoformat()}" + (f" · {result.label}" if result.label else "")
+    return _notify_one(title, body, files, errors,
                        dry_run=dry_run, interactive=send, preview=preview, image_path=image_path)
 
 

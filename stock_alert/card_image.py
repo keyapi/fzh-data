@@ -196,7 +196,9 @@ def render_inbound(result, path: str | Path) -> Path:
     img = Image.new("RGB", (WIDTH, height), BG)
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle([MARGIN, MARGIN, WIDTH - MARGIN, height - MARGIN], radius=28, fill=CARD)
-    _header(draw, 160, "通途采购入库提醒", f"{result.day.isoformat()} · 昨日入库")
+    subtitle = (f"{result.day.isoformat()} · {result.label}" if result.label
+                else f"{result.day.isoformat()} · 昨日入库")
+    _header(draw, 160, "通途采购入库提醒", subtitle)
     y = MARGIN + 160 + GAP
     _stats(draw, y, 116,
            ("入库商品", f"{result.total_skus} 个 SKU"),
@@ -215,7 +217,8 @@ def render_inbound(result, path: str | Path) -> Path:
                TEAL if wh.count else MUTED)
         y += 44
         if not wh.items:
-            draw.text((MARGIN + PAD, y), "昨日无采购入库", font=_font(19), fill=MUTED)
+            draw.text((MARGIN + PAD, y), "本次无采购入库" if result.label else "昨日无采购入库",
+                      font=_font(19), fill=MUTED)
             y += 40
         for item in wh.items:
             name = item.name or item.sku

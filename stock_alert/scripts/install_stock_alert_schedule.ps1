@@ -2,19 +2,22 @@
 # Register Windows Task Scheduler jobs that run the Tongtool stock jobs unattended
 # and push summaries to a DingTalk group robot:
 #   - FZH-StockAlert-daily  : low stock detail + "newly low" Excel  (default 09:23)
-#   - FZH-StockInbound-daily: yesterday's purchase inbound          (default 09:47)
+#   - FZH-StockInbound-daily: intraday purchase inbound, direct Tongtool API
+#                             (default 10:00, 14:00, 17:00)
 #
 # ASCII-only on purpose (PS 5.1 reads files without BOM as ANSI; avoid mojibake).
 #
 # Usage (run from the fzh-data repo root, in PowerShell):
 #   powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1
-#   powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1 -AtTime "09:23" -InboundAtTime "09:47"
+#   powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1 -AtTime "09:23" -InboundTimes "10:00,14:00,17:00"
 #   powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1 -SkipInbound
 #   powershell -ExecutionPolicy Bypass -File stock_alert\scripts\install_stock_alert_schedule.ps1 -Remove
 #
 # Notes:
 #   - Needs TONGTOOL_ERP2_PRIMARY_KEY/SECRET in tongtool_api\.env and
 #     DINGTALK_WEBHOOK_STOCK / DINGTALK_SECRET_STOCK in the repo-root .env.
+#   - Intraday inbound calls /openapi/tongtool/stocksChangeDetailQuery directly
+#     (EN stock_change only syncs once daily ~05:53, too stale for 10/14/17).
 #   - Tongtool ERP2 is rate limited to 5 calls/minute merchant-wide; the jobs
 #     throttle product-name lookups (13s). Do not shorten the interval.
 #   - Uses the ScheduledTasks cmdlets, NOT `schtasks /TR`: the repo path usually
@@ -25,7 +28,7 @@
 
 param(
   [string]$AtTime = "09:23",
-  [string]$InboundAtTime = "09:47",
+  [string]$InboundTimes = "10:00,14:00,17:00",
   [string]$Warehouses = "",
   [double]$Threshold = 5,
   [switch]$SkipInbound,
@@ -73,15 +76,18 @@ function Write-InboundWrapper($repo, $warehouses) {
     'cd /d "%~dp0..\.."'
     'set "LOGDIR=%~dp0..\..\stock_alert_output\logs"'
     'if not exist "%LOGDIR%" mkdir "%LOGDIR%"'
-    "uv run python stock_alert\scripts\run_stock_inbound.py$whFlag >> `"%LOGDIR%\stock_inbound-daily.log`" 2>&1"
+    "uv run python stock_alert\scripts\run_stock_inbound.py --today --source tongtool$whFlag >> `"%LOGDIR%\stock_inbound-daily.log`" 2>&1"
   ) -join "`r`n"
   [System.IO.File]::WriteAllText($wrapper, $content + "`r`n")
   return $wrapper
 }
 
-function Register-RepoTask($taskName, $wrapper, $atTime) {
+function Register-RepoTask($taskName, $wrapper, $times) {
   $action = New-ScheduledTaskAction -Execute $wrapper
-  $trigger = New-ScheduledTaskTrigger -Daily -At $atTime
+  $triggers = @()
+  foreach ($time in $times) {
+    $triggers += New-ScheduledTaskTrigger -Daily -At $time.Trim()
+  }
   $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive
   # Robustness: the PC may be asleep / not ready at the trigger time. Run ASAP after a
   # missed start (StartWhenAvailable), allow a wake timer (WakeToRun), and do not skip on
@@ -89,7 +95,7 @@ function Register-RepoTask($taskName, $wrapper, $atTime) {
   # run silently loses that day's report.
   $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
 
-  Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
+  Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $triggers `
     -Principal $principal -Settings $settings -Force | Out-Null
 
   $registered = (Get-ScheduledTask -TaskName $taskName).Actions[0].Execute
@@ -104,7 +110,7 @@ if (-not (Test-Path (Join-Path $repo "stock_alert"))) {
 }
 
 $wrapper = Write-ScheduleWrapper $repo $Warehouses $Threshold
-Register-RepoTask $taskNameFull $wrapper $AtTime
+Register-RepoTask $taskNameFull $wrapper @($AtTime)
 Write-Host "Registered: $taskNameFull"
 Write-Host "Schedule : daily at $AtTime"
 Write-Host "Wrapper  : $wrapper"
@@ -112,9 +118,10 @@ Write-Host "Logs     : stock_alert_output\logs\stock_alert-daily.log"
 
 if (-not $SkipInbound) {
   $inboundWrapper = Write-InboundWrapper $repo $Warehouses
-  Register-RepoTask $inboundTaskFull $inboundWrapper $InboundAtTime
+  $inboundTimesList = $InboundTimes.Split(",")
+  Register-RepoTask $inboundTaskFull $inboundWrapper $inboundTimesList
   Write-Host "Registered: $inboundTaskFull"
-  Write-Host "Schedule : daily at $InboundAtTime"
+  Write-Host "Schedule : daily at $InboundTimes (direct Tongtool API)"
   Write-Host "Wrapper  : $inboundWrapper"
   Write-Host "Logs     : stock_alert_output\logs\stock_inbound-daily.log"
 }

@@ -66,6 +66,39 @@ def test_inbound_mock_respects_date(capsys):
     assert "通途采购入库提醒 · 2026-11-16" in out
 
 
+def test_inbound_mock_today_labels_window(capsys):
+    rc = main(["inbound", "--mock", "--dry-run", "--today", "--source", "tongtool",
+               "--warehouses", "W"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert _dt.date.today().isoformat() in out
+    assert "截至" in out
+
+
+def test_tongtool_intraday_uses_last_checked_state(monkeypatch, tmp_path, capsys):
+    state_path = tmp_path / "inbound_state.json"
+    state_path.write_text(
+        '{"day": "%s", "last_checked_at": "%sT10:00:00"}' %
+        (_dt.date.today().isoformat(), _dt.date.today().isoformat()),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(cli, "INBOUND_STATE", state_path)
+    captured = {}
+
+    def fake_collect(warehouses, since, until, **kwargs):
+        captured["since"] = since
+        captured["until"] = until
+        return {}
+
+    monkeypatch.setattr(cli, "collect_tongtool_inbound", fake_collect)
+    rc = main(["inbound", "--dry-run", "--today", "--source", "tongtool", "--warehouses", "W"])
+    assert rc == 0
+    assert captured["since"] == _dt.datetime.combine(_dt.date.today(), _dt.time(10, 0))
+    capsys.readouterr()
+    # dry-run 不推进状态
+    assert "T10:00:00" in state_path.read_text(encoding="utf-8")
+
+
 def test_resolve_names_degrades_without_raising(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "OUT_DIR", tmp_path)
 

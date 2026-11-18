@@ -30,6 +30,7 @@ from pathlib import Path
 from .client import StockRow
 from .en_client import EnStockClient, StockSyncIncomplete
 from .inbound import aggregate as aggregate_inbound
+from .tongtool_inbound import collect_inbound as collect_tongtool_inbound
 from .names import NameCache
 from .notify import (
     notify_inbound,
@@ -169,6 +170,25 @@ def _load_baseline(en: EnStockClient, warehouses: list[str], day: _dt.date) -> d
     return out
 
 
+INBOUND_STATE = OUT_DIR / "inbound_state.json"
+
+
+def _load_inbound_state() -> dict:
+    try:
+        return json.loads(INBOUND_STATE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 - 状态损坏/不存在按首次检查处理
+        return {}
+
+
+def _save_inbound_state(day: _dt.date, at: _dt.datetime) -> None:
+    INBOUND_STATE.parent.mkdir(parents=True, exist_ok=True)
+    INBOUND_STATE.write_text(
+        json.dumps({"day": day.isoformat(), "last_checked_at": at.isoformat()},
+                   ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+
 def cmd_run(args) -> int:
     _load_env()
     try:
@@ -232,34 +252,72 @@ def _show_notification(resp: dict, *, preview: bool) -> int:
 
 def cmd_inbound(args) -> int:
     _load_env()
-    day = args.date or (_dt.date.today() - _dt.timedelta(days=1))
+    today = _dt.date.today()
+    day = args.date or (today if args.today else today - _dt.timedelta(days=1))
     warehouses = _parse_warehouses(args.warehouses)
+    source = getattr(args, "source", "en")
+    label = ""
+    as_of = ""
+    state_update = None
 
     if args.mock:
         rows_by_wh = {
             wh: [{"sku": f"DEMO-IN-{i}", "voucher_type": "02", "available_increase": 10 + i}]
             for i, wh in enumerate(warehouses)
         }
+        if args.today:
+            now = _dt.datetime.now()
+            label = f"截至 {now:%H:%M}"
+            as_of = f"{now:%H:%M}"
+    elif source == "tongtool":
+        now = _dt.datetime.now()
+        if args.today:
+            since = _dt.datetime.combine(day, _dt.time.min)
+            state = _load_inbound_state()
+            if state.get("day") == day.isoformat():
+                try:
+                    last = _dt.datetime.fromisoformat(str(state.get("last_checked_at") or ""))
+                    if last.date() == day and last > since:
+                        since = last
+                except ValueError:
+                    pass
+            until = now
+            label = f"{since:%H:%M}–{until:%H:%M} 新增"
+            as_of = f"{until:%H:%M}"
+            state_update = (day, until)
+        else:
+            since = _dt.datetime.combine(day, _dt.time.min)
+            until = _dt.datetime.combine(day, _dt.time.max)
+            label = "全日"
+        rows_by_wh = collect_tongtool_inbound(warehouses, since, until,
+                                              min_interval=args.min_interval)
     else:
         en = _make_en(args)
         rows_by_wh = {
             wh: en.stock_changes(wh, day.isoformat(), day.isoformat(), voucher_type="02", limit=5000)
             for wh in warehouses
         }
+        if args.today:
+            now = _dt.datetime.now()
+            label = f"截至 {now:%H:%M}"
+            as_of = f"{now:%H:%M}"
 
-    result = aggregate_inbound(rows_by_wh, day=day)
+    result = aggregate_inbound(rows_by_wh, day=day, label=label, as_of=as_of)
     skus = [item.sku for wh in result.warehouses for item in wh.items]
     names = {} if args.mock else _resolve_names(skus, args)
     for wh in result.warehouses:
         for item in wh.items:
             item.name = names.get(item.sku, "")
-    print(json.dumps({"mode": "inbound", "input_rows": result.input_rows,
+    print(json.dumps({"mode": "inbound", "source": source, "window": label,
+                      "input_rows": result.input_rows,
                       "accepted_rows": result.accepted_rows, "skipped": result.skipped,
                       "output_skus": result.total_skus, "total_qty": result.total_qty},
                      ensure_ascii=False), file=sys.stderr)
 
     preview = args.dry_run or not args.notify
     resp = notify_inbound(result, dry_run=preview)
+    if not preview and resp.get("errcode") == 0 and state_update:
+        _save_inbound_state(*state_update)
     return _show_notification(resp, preview=preview)
 
 
@@ -313,13 +371,16 @@ def _make_parser() -> argparse.ArgumentParser:
     _common(r)
     r.set_defaults(func=cmd_run)
 
-    i = sub.add_parser("inbound", help="汇总昨日采购入库并（可选）推送")
+    i = sub.add_parser("inbound", help="汇总采购入库（支持白天实时检查）")
     i.add_argument("--warehouses", help="逗号分隔仓库名；默认三仓")
     i.add_argument("--mock", action="store_true", help="离线样例，不调 API")
     i.add_argument("--dry-run", action="store_true", help="只打印正文，不发群")
     i.add_argument("--notify", action="store_true", help="推送钉钉（否则只打印）")
     i.add_argument("--date", type=lambda s: _dt.date.fromisoformat(s),
                    help="统计日期 YYYY-MM-DD，默认昨天")
+    i.add_argument("--today", action="store_true", help="统计今天（增量窗口从上次成功检查开始）")
+    i.add_argument("--source", choices=["en", "tongtool"], default="en",
+                   help="en=EN stock_change（日更，默认）；tongtool=直连通途（实时）")
     i.add_argument("--min-interval", type=float, default=13.0, help="两次 API 调用最小间隔秒（限流 5/分钟）")
     i.set_defaults(func=cmd_inbound, page_size=100, when=None, threshold=DEFAULT_THRESHOLD)
 
