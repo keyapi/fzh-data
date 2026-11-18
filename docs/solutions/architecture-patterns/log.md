@@ -7,6 +7,9 @@ tags: [solutions, architecture-patterns, log]
 
 # architecture-patterns 变更日志
 
+## 2026-11-18
+- **新增**: `tongtu-branch-processing-cost-and-coefficients.md` —— 1104 BOM 的分公司国外加工理论值、财务 1.0/1.2/1.6 系数、GS 基础列 vs `*系数` 列、美国本地产品与整套/组件规则。
+
 ## 2026-10-14
 
 - **新增**: `ustx-cost-caliber-comparison.md` — 美中仓库由 `2CJG-SX` 改走当地 USTX 加工的 A/B1/B2 三口径只读对比方法论：先验「测算表是手填还是公式」再定等价闸门（本例人工测算 B1 与 import 重建 B2 在 57 个共有键上无一相等 → **差异即结论**）；歧义维表键 fail-closed（同键不同重量模板 → 摘除索引、对应行记 `ambiguous_shell_key` 排除，不猜首/末行）；闸门分级（阻断级 vs 告警级）；只读快照 `render_option` 值/公式双冻结。

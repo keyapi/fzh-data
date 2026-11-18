@@ -80,9 +80,8 @@ uv sync
 #      Tavily（AI 优化搜索，1000 次/月免费，推荐）：uv pip install mcp-tavily
 #        注册 → https://app.tavily.com/home → 取 Key → 写进你宿主配置的 TAVILY_API_KEY
 #      free-web-tools（免费无需 Key）：uv pip install git+https://github.com/changcheng967/free-web-tools.git
-#    通途 ERP2 MCP：填 tongtool_api/.env 后按宿主分别注册（clone 不会自动出现）
-#      Codex:  powershell -File tongtool_api/setup_codex_mcp.ps1
-#      Cursor: uv run python tongtool_api/setup_cursor_mcp.py
+#    通途 ERP2：业务取数用直连 open API（tongtool_api/.env），**不要用 MCP**
+#      （MCP 安装脚本仅保留历史排错，不作为 Agent 取数路径）
 #    （不要用全局 pip——包必须装到项目 .venv 里）
 
 # 4.5 安装 Compound Engineering 插件（可选，但强烈建议）—— 只为 Claude Code
@@ -106,7 +105,7 @@ uv sync
 
 # ⚠️ MCP 装完必须让宿主**完全退出**再开：Claude Desktop 托盘右键 → Quit；Codex 完全退出；Cursor 重载窗口。
 #    Claude Desktop 的 3P 模式与普通模式是**两个独立配置文件**，改错会静默无效 —— 路径见 docs/mcp-setup.md。
-#    通途 MCP：Codex 与 Cursor 要分别注册。仓库 `.cursor/` gitignore，没有可点的 Cursor 安装提示。
+#    通途业务查询走直连 open API；MCP 不作为取数方案。
 ```
 
 
@@ -264,13 +263,13 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 
 ### 经验库路由（`docs/solutions/`）
 
-**动手前先查这里有没有现成结论**——踩过的坑基本都在。130 篇按 category 分 8 类，每类一份 `index.md`：
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。132 篇按 category 分 8 类，每类一份 `index.md`：
 
 | 类别 | 篇数 | 什么时候读 |
 |------|-----|-----------|
-| `workflow-issues/` | 34 | 账期对账、迟交/错位、跨期结算、批处理流程 |
+| `workflow-issues/` | 35 | 账期对账、迟交/错位、跨期结算、批处理流程 |
 | `integration-issues/` | 25 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
-| `architecture-patterns/` | 21 | 「这个管道/系统为什么这样设计」 |
+| `architecture-patterns/` | 22 | 「这个管道/系统为什么这样设计」 |
 | `tooling-decisions/` | 15 | 脚本、工具选型、产出校验 |
 | `developer-experience/` | 13 | Windows / worktree / MCP / Colab 等本机环境坑 |
 | `conventions/` | 10 | 团队约定（配对、命名、SOP） |

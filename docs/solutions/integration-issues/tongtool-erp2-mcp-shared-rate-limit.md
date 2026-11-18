@@ -21,6 +21,8 @@ related_components: [tongtool_api, codex-mcp, erpnext]
 
 # Tongtool ERP2 MCP 接入与双 App 共享限流验证
 
+> **2026-11-18 更正（用户明确要求）**：通途订单/包裹/库存/采购等**业务取数一律走直连 open API**（`https://open.tongtool.com/api-service`），**不要用 MCP**。MCP 403/524 不能作为 App 未授权结论。本文只保留 MCP 接入与共享限流的**历史证据**，不再作为取数方案；操作规范见 `tongtool_api/AGENT_HANDOFF.md` 和 `.agents/skills/tongtool-api/SKILL.md`。
+
 ## Problem
 
 通途 ERP2.0 的两个 AI Agent App 已配置到 Codex，但“配置存在”无法证明 MCP 实际可调用、具体 ERP2 子接口已授权，或 MCP 是否拥有独立于通途 API 的限流额度。若错误地按“每 App 五次/分钟”设计自动化，会在同一商户的并发任务中触发 526 并造成不必要的重试。

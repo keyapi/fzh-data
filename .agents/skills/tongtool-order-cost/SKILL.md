@@ -47,7 +47,7 @@ metadata:
 - `BNFBAvelvetgray60` 是 60CM 独立货，不是 gray-100 笔误。
 - `FoamFBAKZ159410287-BLACK-97` 是规则笔误，订单侧是 `...-BLACK-100`。`CENKZ159410287-BLACK-97` 是自发货 CEN，不要改。
 - 只改 SKU 列（`通途SKU` 优先，否则 `SKU`）。不改 MSKU / 平台 SKU / 成本列。
-- Cursor Agent 查主档：用 MCP `user-tongtool_erp2_primary` / `erp2_product_goodsquery`。工具目录没有通途 MCP 时先跑 `uv run python tongtool_api/setup_cursor_mcp.py`，不要静默 HTTP。CLI `lookup_tongtool_sku.py` 仍走 `mcp_http.py`。
+- 查主档 **一律用通途直连 open API `goodsQuery`**（base `https://open.tongtool.com/api-service`），不要用 MCP；Agent 也不要因为工具目录没有 MCP 就停住。
 
 ## 不要做
 
@@ -61,6 +61,8 @@ metadata:
 
 踩过的坑与设计取舍，动手前先读：
 
+- `docs/solutions/architecture-patterns/tongtu-branch-processing-cost-and-coefficients.md` —— 分公司国外加工理论值、财务系数 1.0/1.2/1.6、GS 基础列 vs `*系数` 列、美国本地/整套组件口径
+- `docs/solutions/workflow-issues/tongtu-multicolor-cover-shared-foam-attribution.md` —— 多色 Cover + 共享 Foam 的产品归属修复
 - `docs/solutions/workflow-issues/tongtool-sku-rename-gsheet-remap.md` —— 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet
 - `docs/solutions/workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则换表：参考值优先、FBA 列对齐、旧/新 BOM 口径差
 - `docs/solutions/architecture-patterns/ustx-cost-caliber-comparison.md` —— 美中 USTX 三方案成本对比：**先验测算表是手填还是公式再定等价闸门**（人工测算与 import 重建不等 ⇒ 差异即结论）、歧义维表键 fail-closed、闸门分级

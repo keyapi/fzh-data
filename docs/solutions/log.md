@@ -7,6 +7,13 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-18
+
+- **新增**: `architecture-patterns/tongtu-branch-processing-cost-and-coefficients.md` —— 分公司国外加工理论值（1104 BOM）、财务系数 1.0/1.2/1.6、GS 基础列/*系数列、美国本地成本与整套/组件关系。
+- **新增**: `workflow-issues/tongtu-multicolor-cover-shared-foam-attribution.md` —— 多色 Cover + 共享 Foam 的产品归属修复。
+- **更正**: `integration-issues/tongtool-erp2-mcp-shared-rate-limit.md` —— 业务取数改直连 open API，MCP 仅作历史/限流证据。
+
+
 ## 2026-11-11（通途特殊规则换表 / 参考值优先）
 
 - **新增**: `workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则表换维护人/换 ws 后：同一行系数与参考值同时存在时按老板口径**参考值优先**（引擎打印提醒并计 `n_mixed_ref_priority`）；FBA 28 条规则的 `二次加工`/`绍兴二次` 按新成本口径对调（二次=0、绍兴承接），数值和总净额不变；旧 9/3 BOM 制定的参考值遇到最新 BOM 会把扣减翻成增加（阅读枕 776–777 由 −77.8 变 +20.2 元/件），必须先逐条对拍再决定是否重填；老板 2026-11-10 确认按现有参考值执行。
