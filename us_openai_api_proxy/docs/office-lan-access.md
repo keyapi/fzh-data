@@ -245,6 +245,7 @@ Tailscale v1.32.3 的 ts-forward MARK 规则匹配条件是 `in=tailscale0`，�
 - 改前备份、改后重启 OpenClash；复查 `grep "<TARGET_IP>" /tmp/openclash.log` 应出现 `using DIRECT`。
 - 多级 NAT 下无法按单台客户端隔离，该规则对全办公室目标生效；变更前取得授权。
 - 详细排查与验证记录见 [仓库解决方案：OpenClash 单目标直连](../../docs/solutions/best-practices/openclash-per-target-direct-rule.md)。
+- **反过来**：若该目标「能用但严重丢包」（换光猫/WiFi 无改善），应改为**走代理**；注意由 `openclash_custom_overwrite.sh` 动态创建的策略组（如 `Emergency`）不能直接写进自定义规则文件，会被合并阶段丢弃。见 [OpenClash 单目标改走代理](../../docs/solutions/best-practices/openclash-target-via-proxy-when-direct-degrades.md)。
 
 ## 维护命令
 

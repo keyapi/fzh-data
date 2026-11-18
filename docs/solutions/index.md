@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-18 | 办公室 OpenClash 单目标改走代理（直连丢包 / 规则注入顺序） | [best-practices/openclash-target-via-proxy-when-direct-degrades.md](best-practices/openclash-target-via-proxy-when-direct-degrades.md) |
 | 2026-11-11 | 钉钉考勤表导出操作手册（管理后台） | [workflow-issues/dingtalk-attendance-export-runbook.md](workflow-issues/dingtalk-attendance-export-runbook.md) |
 | 2026-11-11 | 通途特殊规则换表：参考值优先、FBA 列对齐与旧/新 BOM 口径差 | [workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md](workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md) |
 | 2026-11-11 | Claude Desktop 的 MCP「Server disconnected」——先读 mcp-server-<name>.log，多半是 npx @latest 装包被打断 | [developer-experience/claude-desktop-mcp-server-disconnected-npx.md](developer-experience/claude-desktop-mcp-server-disconnected-npx.md) |

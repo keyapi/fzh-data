@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-18（OpenClash 单目标改走代理）
+
+- **新增**: `best-practices/openclash-target-via-proxy-when-direct-degrades.md` —— 境外目标「能用但严重丢包」的处置方法论。要点：tproxy 的 TCP connect 是本地假握手、不能当可达性判据；用 ICMP 丢包 + 应用层握手 + 三方（办公室/两处境外）对照定界；订阅节点可能不放行目标协议（日本/美国节点连 3389 返回 0 字节）；自定义规则引用 overwrite 脚本动态创建的策略组会在合并阶段被丢弃，须在脚本里幂等注入；保留 DIRECT 兜底；目标规则不挂 url-test。
+
 ## 2026-11-11（Claude Desktop MCP / npx @latest 装包失败）
 
 - **新增**: `developer-experience/claude-desktop-mcp-server-disconnected-npx.md` —— Claude Desktop 弹 `MCP playwright: Server disconnected`，根因是 `@latest` 在 Windows 更新重启后的首次启动自动升级 0.0.85，解包两个 `.d.ts` 报 `ENOENT`、入口 `cli.js` 缺失，node 立即退出；约 2 分钟后新会话的 npx 把目录补装完整。可排除磁盘满（C 剩 12G）与「重启打断安装」（安装发生在重启之后）。判读口诀：先读 `mcp-server-<name>.log`，找 `will be installed` + `TAR_ENTRY_ERROR` + `MODULE_NOT_FOUND`；npm 对解包错误只 warn 不重试，Claude 也不会在同一会话自动重拉。本次决定保留 `@latest`、不加自愈包装脚本。`docs/mcp-setup.md` 排错表同步加了对应行。
