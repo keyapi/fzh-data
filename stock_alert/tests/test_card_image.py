@@ -42,3 +42,20 @@ def test_render_inbound_card(tmp_path):
     with Image.open(path) as image:
         assert image.width == 1000
         assert image.height > 400
+
+
+def test_inbound_card_has_no_item_cap():
+    items = [{"sku": f"S{i}", "voucher_type": "02", "available_increase": 1} for i in range(20)]
+    many = aggregate({"W": items}, day=dt.date(2026, 11, 16))
+    one = aggregate({"W": items[:1]}, day=dt.date(2026, 11, 16))
+    assert card_image._inbound_height(many) - card_image._inbound_height(one) == 19 * 66
+
+
+def test_low_stock_card_has_no_new_item_cap():
+    rows = {"W": [StockRow("W", f"S{i}", 1, 0) for i in range(20)]}
+    many = scan(rows)
+    # 基线里没有这些 SKU → 全部算今日新增
+    mark_new(many, {"W": {"OTHER": 10}})
+    one = scan({"W": [StockRow("W", "S0", 1, 0)]})
+    mark_new(one, {"W": {"OTHER": 10}})
+    assert card_image._low_height(many) - card_image._low_height(one) == 19 * card_image.NEW_ROW_H

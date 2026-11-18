@@ -28,8 +28,7 @@ LINE = "#E3E8EF"
 
 _FONT_REG = "C:/Windows/Fonts/msyh.ttc"
 _FONT_BOLD = "C:/Windows/Fonts/msyhbd.ttc"
-MAX_PRODUCTS_PER_WH = 6
-MAX_PRODUCTS = 18
+NEW_ROW_H = 38
 
 
 def _font(size: int, *, bold: bool = False):
@@ -109,13 +108,28 @@ def _footer(draw, y: int, note: str) -> None:
     _center(draw, y, note, _font(17), MUTED)
 
 
+def _num(value) -> str:
+    return str(int(value)) if float(value).is_integer() else f"{value:g}"
+
+
+def _new_items(wh) -> list:
+    return [item for item in wh.low if item.is_new]
+
+
 def _low_height(result) -> int:
-    return (MARGIN * 2 + 160 + GAP + 116 + GAP + 44 + len(result.warehouses) * 66 + 52)
+    height = MARGIN * 2 + 160 + GAP + 116 + GAP + 8 + 52
+    for wh in result.warehouses:
+        height += 52 + 24 + 10 + 8
+        if wh.baseline_missing:
+            height += NEW_ROW_H
+        else:
+            height += NEW_ROW_H * (len(_new_items(wh)) or 1)
+    return height
 
 
 def render_low_stock(result, path: str | Path, *, when: _dt.date | None = None,
                      new_count: int = 0) -> Path:
-    """低库存汇总卡片：标题居中、统计框、分仓明细。"""
+    """低库存汇总卡片：标题居中、统计框、各仓今日新增 SKU（不限条数）。"""
     from PIL import Image, ImageDraw
 
     day = when or _dt.date.today()
@@ -128,21 +142,36 @@ def render_low_stock(result, path: str | Path, *, when: _dt.date | None = None,
     _stats(draw, y, 116,
            ("低库存商品", f"{result.total_low} 个 SKU"),
            ("今日新增", f"{new_count} 个"))
-    y += 116 + GAP + 12
-    draw.text((MARGIN + PAD, y), "分仓明细", font=_font(28, bold=True), fill=NAVY)
-    y += 46
-    _divider(draw, y, MARGIN + PAD, WIDTH - MARGIN - PAD)
-    y += 6
+    y += 116 + GAP + 8
     for wh in result.warehouses:
-        new_wh = sum(item.is_new for item in wh.low)
-        draw.text((MARGIN + PAD, y + 10), _fit(draw, wh.warehouse, _font(26, bold=True),
-                                               WIDTH - 2 * MARGIN - 2 * PAD - 220),
+        draw.text((MARGIN + PAD, y + 4), _fit(draw, wh.warehouse, _font(26, bold=True),
+                                              WIDTH - 2 * MARGIN - 2 * PAD - 230),
                   font=_font(26, bold=True), fill=TEXT)
-        sub = f"新增 {new_wh} 个 · 在途 {int(wh.intransit_total)} 件"
-        draw.text((MARGIN + PAD, y + 42), sub, font=_font(17), fill=MUTED)
-        _right(draw, WIDTH - MARGIN - PAD, y + 10, f"{wh.count} 个", _font(26, bold=True), TEAL)
-        y += 66
-        _divider(draw, y - 6, MARGIN + PAD, WIDTH - MARGIN - PAD)
+        _right(draw, WIDTH - MARGIN - PAD, y + 4, f"{wh.count} 个 SKU", _font(26, bold=True), TEAL)
+        if wh.baseline_missing:
+            draw.text((MARGIN + PAD, y + 38), "昨日基线缺失，无法判断今日新增", font=_font(17), fill=MUTED)
+            y += 62
+            draw.text((MARGIN + PAD, y + 6), "该仓低库存明细请见下载 Excel", font=_font(18), fill=MUTED)
+            y += NEW_ROW_H
+        else:
+            new_items = _new_items(wh)
+            draw.text((MARGIN + PAD, y + 38), f"今日新增 {len(new_items)} 个", font=_font(17), fill=MUTED)
+            y += 62
+            if not new_items:
+                draw.text((MARGIN + PAD, y + 6), "今日无新增", font=_font(18), fill=MUTED)
+                y += NEW_ROW_H
+            for item in new_items:
+                label = f"• {item.sku}"
+                if item.name:
+                    label += f"  {item.name}"
+                label = _fit(draw, label, _font(18), WIDTH - 2 * MARGIN - 2 * PAD - 130)
+                draw.text((MARGIN + PAD, y + 4), label, font=_font(18), fill=TEXT)
+                _right(draw, WIDTH - MARGIN - PAD, y + 4, f"库存{_num(item.available)}个",
+                       _font(18, bold=True), TEAL)
+                y += NEW_ROW_H
+        y += 8
+        _divider(draw, y, MARGIN + PAD, WIDTH - MARGIN - PAD)
+        y += 6
     _footer(draw, height - MARGIN - 30, "完整明细见下载按钮 · 数据生成于 " +
             _dt.datetime.now().strftime("%Y-%m-%d %H:%M"))
     out = Path(path)
@@ -151,27 +180,11 @@ def render_low_stock(result, path: str | Path, *, when: _dt.date | None = None,
     return out
 
 
-def _inbound_rows(result) -> list[tuple[str, list, int]]:
-    """返回 [(warehouse, 展示的 items, 被省略数)]。"""
-    rows = []
-    shown_total = 0
-    for wh in result.warehouses:
-        remaining = max(0, MAX_PRODUCTS - shown_total)
-        take = min(len(wh.items), MAX_PRODUCTS_PER_WH, remaining)
-        items = wh.items[:take]
-        shown_total += take
-        rows.append((wh, items, wh.count - take))
-    return rows
-
-
 def _inbound_height(result) -> int:
     height = MARGIN * 2 + 160 + GAP + 116 + GAP + 44 + 52
     for wh in result.warehouses:
         height += 54
-        take = min(wh.count, MAX_PRODUCTS_PER_WH)
-        height += take * 66 if wh.items else 40
-        if wh.count > take:
-            height += 34
+        height += len(wh.items) * 66 if wh.items else 40
     return height
 
 
@@ -193,7 +206,7 @@ def render_inbound(result, path: str | Path) -> Path:
     y += 46
     _divider(draw, y, MARGIN + PAD, WIDTH - MARGIN - PAD)
     y += 6
-    for wh, items, omitted in _inbound_rows(result):
+    for wh in result.warehouses:
         draw.text((MARGIN + PAD, y + 8), _fit(draw, wh.warehouse, _font(26, bold=True),
                                               WIDTH - 2 * MARGIN - 2 * PAD - 180),
                   font=_font(26, bold=True), fill=TEXT)
@@ -201,21 +214,17 @@ def render_inbound(result, path: str | Path) -> Path:
         _right(draw, WIDTH - MARGIN - PAD, y + 8, total, _font(24, bold=True),
                TEAL if wh.count else MUTED)
         y += 44
-        if not items:
+        if not wh.items:
             draw.text((MARGIN + PAD, y), "昨日无采购入库", font=_font(19), fill=MUTED)
             y += 40
-        for item in items:
+        for item in wh.items:
             name = item.name or item.sku
             lines = _wrap(draw, name, _font(21), WIDTH - 2 * MARGIN - 2 * PAD - 120, max_lines=2)
-            for index, line in enumerate(lines):
+            for line in lines:
                 draw.text((MARGIN + PAD, y), line, font=_font(21), fill=TEXT)
             _right(draw, WIDTH - MARGIN - PAD, y, f"{int(item.qty)} 个", _font(21), TEXT)
             y += 26 * len(lines)
             draw.text((MARGIN + PAD, y), f"SKU：{item.sku}", font=_font(16), fill=MUTED)
-            y += 34
-        if omitted > 0:
-            draw.text((MARGIN + PAD, y), f"另有 {omitted} 个 SKU，完整见 Excel",
-                      font=_font(17), fill=MUTED)
             y += 34
         _divider(draw, y, MARGIN + PAD, WIDTH - MARGIN - PAD)
         y += 8
