@@ -19,7 +19,6 @@ GAP = 22
 BG = "#F2F5F9"
 CARD = "#FFFFFF"
 NAVY = "#123A5A"
-LIGHT = "#EAF3FA"
 TEAL = "#0F8B8D"
 TEXT = "#1F2933"
 MUTED = "#6B7785"
@@ -91,15 +90,6 @@ def _header(draw, height: int, title: str, subtitle: str) -> None:
     _center(draw, MARGIN + 96, subtitle, _font(22), SUBTLE)
 
 
-def _stats(draw, y: int, height: int, left: tuple[str, str], right: tuple[str, str]) -> None:
-    x0, x1 = MARGIN + PAD, WIDTH - MARGIN - PAD
-    draw.rounded_rectangle([x0, y, x1, y + height], radius=18, fill=LIGHT)
-    mid = (x0 + x1) // 2
-    for base_x, (label, value) in ((x0 + 36, left), (mid + 12, right)):
-        draw.text((base_x, y + 22), label, font=_font(20), fill=MUTED)
-        draw.text((base_x, y + 52), value, font=_font(38, bold=True), fill=NAVY)
-
-
 def _divider(draw, y: int, x0: int, x1: int) -> None:
     draw.line([x0, y, x1, y], fill=LINE, width=1)
 
@@ -117,7 +107,7 @@ def _new_items(wh) -> list:
 
 
 def _low_height(result) -> int:
-    height = MARGIN * 2 + 160 + GAP + 116 + GAP + 8 + 52
+    height = MARGIN * 2 + 200 + GAP + 8 + 52
     for wh in result.warehouses:
         height += 52 + 24 + 10 + 8
         if wh.baseline_missing:
@@ -137,12 +127,11 @@ def render_low_stock(result, path: str | Path, *, when: _dt.date | None = None,
     img = Image.new("RGB", (WIDTH, height), BG)
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle([MARGIN, MARGIN, WIDTH - MARGIN, height - MARGIN], radius=28, fill=CARD)
-    _header(draw, 160, "通途低库存提醒", day.isoformat())
-    y = MARGIN + 160 + GAP
-    _stats(draw, y, 116,
-           ("低库存商品", f"{result.total_low} 个 SKU"),
-           ("今日新增", f"{new_count} 个"))
-    y += 116 + GAP + 8
+    _header(draw, 200, "通途低库存提醒", day.isoformat())
+    _center(draw, MARGIN + 134,
+            f"低库存商品 {result.total_low} 个 SKU  ·  今日新增 {new_count} 个",
+            _font(20), "#E6EEF6")
+    y = MARGIN + 200 + GAP + 8
     for wh in result.warehouses:
         draw.text((MARGIN + PAD, y + 4), _fit(draw, wh.warehouse, _font(26, bold=True),
                                               WIDTH - 2 * MARGIN - 2 * PAD - 230),
@@ -181,7 +170,7 @@ def render_low_stock(result, path: str | Path, *, when: _dt.date | None = None,
 
 
 def _inbound_height(result) -> int:
-    height = MARGIN * 2 + 160 + GAP + 116 + GAP + 44 + 52
+    height = MARGIN * 2 + 160 + GAP + 52
     for wh in result.warehouses:
         height += 54
         height += len(wh.items) * 66 if wh.items else 40
@@ -189,7 +178,7 @@ def _inbound_height(result) -> int:
 
 
 def render_inbound(result, path: str | Path) -> Path:
-    """采购入库卡片：标题居中、统计框、分仓/产品明细。"""
+    """采购入库卡片：标题居中、分仓/产品明细（不显示顶部统计框）。"""
     from PIL import Image, ImageDraw
 
     height = _inbound_height(result)
@@ -200,13 +189,6 @@ def render_inbound(result, path: str | Path) -> Path:
                 else f"{result.day.isoformat()} · 昨日入库")
     _header(draw, 160, "通途采购入库提醒", subtitle)
     y = MARGIN + 160 + GAP
-    _stats(draw, y, 116,
-           ("入库商品", f"{result.total_skus} 个 SKU"),
-           ("入库总数", f"{int(result.total_qty)} 个"))
-    y += 116 + GAP + 12
-    draw.text((MARGIN + PAD, y), "分仓明细", font=_font(28, bold=True), fill=NAVY)
-    y += 46
-    _divider(draw, y, MARGIN + PAD, WIDTH - MARGIN - PAD)
     y += 6
     for wh in result.warehouses:
         draw.text((MARGIN + PAD, y + 8), _fit(draw, wh.warehouse, _font(26, bold=True),

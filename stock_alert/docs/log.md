@@ -10,6 +10,9 @@ tags: [stock-alert, changelog, dingtalk, tongtool]
 
 ## 2026-11-18
 
+- 卡片布局微调：低库存总数/今日新增移入标题下方并去掉统计框；入库去掉顶部统计框和
+  「分仓明细」标题，直接进入各仓明细。
+
 - 采购入库改为白天 **10:00 / 14:00 / 17:00** 三次实时检查：EN `stock_change` 每天约 05:53 才同步一次，
   改为直连通途 `/openapi/tongtool/stocksChangeDetailQuery`；按「上次成功检查 → 本次运行」的增量窗口查询，
   只取采购单 `relatedVoucherType=02` 且 `availableStockIncrease > 0`；窗口状态存
