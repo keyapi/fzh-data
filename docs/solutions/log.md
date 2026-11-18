@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-13（Wayfair 官方确认）
+
+- **更新**: `integration-issues/wayfair-cg-inbound-in-transit-visibility.md` —— Wayfair 官方（ticket GSCIEXE-103969）明确：GraphQL **不提供 SKU 级入仓收货/在途/ETA**，也没有对应 operation/permission；`inboundOrderList` 属 CGF Container Milestones 且无 SKU 级收货明细；推荐 **Partner Home CastleGate 入仓报表/导出**；`getCastleGatePurchaseOrders` 仅用于出库客户订单。API 侧 `ΔCG on_hand + WSA 出库` 降为 fallback。
+
 ## 2026-11-06（Wayfair CG 入仓/在途）
 
 - **新增**: `integration-issues/wayfair-cg-inbound-in-transit-visibility.md` —— Wayfair Castlegate 的 WSA 是 **CG→客户出库**（`shipFrom=CG`、`shipTo=客户`、单量 1–2 件），不是供应商入仓单；`getCastleGatePurchaseOrders` 的 `CS...` 也是客户订单。入仓入口 `inboundOrder` 三状态全 null、`inboundOrderList`/`consolidatedBolDocument` 权限 102、`castlegatePurchaseOrders` 上游 null、`inventoryAdjustmentList` 本 SKU 0 条。可行口径：`当日入仓收货 ≈ ΔCG on_hand + 当日 WSA 出库`，再与通途发往 CG 的发出量比较得到在途估计；10-29→11-06 实测无 91/102 级别入仓。通途 CG 账 133 不是 Wayfair 在库，不能用于补货净额。

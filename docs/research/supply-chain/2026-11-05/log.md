@@ -7,6 +7,10 @@ date: 2026-11-06
 
 # 变更记录
 
+## 2026-11-13
+
+- **官方答复**：Wayfair ticket GSCIEXE-103969 确认 GraphQL **不提供 SKU 级入仓/在途/ETA**，也没有对应权限；`inboundOrderList` 属 CGF Container Milestones 且无 SKU 级收货明细；推荐 **Partner Home CastleGate 入仓报表/导出**；`getCastleGatePurchaseOrders` 仅用于出库客户订单。API 侧 Δ 公式降为 fallback。
+
 ## 2026-11-06
 
 - **新增**：`TT0031038K0062927` 节点核对（数据 as_of 11-05，11-06 09:06 复核）。

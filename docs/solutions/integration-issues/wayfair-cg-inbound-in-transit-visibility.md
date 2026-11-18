@@ -5,7 +5,7 @@ title: Wayfair CG 在途不可直接查 —— WSA 是出库，用「Δ在库 + 
 description: Wayfair Castlegate 的 WSA 是 CG 发往客户的出库建议（EDI 945），不是供应商入仓单；入仓/在途没有可用的 SKU 级 API。用每日 CG 在库快照 + WSA 出库量反推收货，再与通途发往 CG 的发出量比较，得到可复核的在途估计。
 module: platform_account_reconciliation
 date: 2026-11-06
-last_updated: 2026-11-06
+last_updated: 2026-11-13
 category: integration-issues
 problem_type: integration_issue
 component: api-gateway
@@ -54,7 +54,17 @@ related_components: [wayfair-api-proxy, tongtool_integration]
 
 结论：**当前没有可直接使用的 SKU 级入仓在途 API**。
 
+## Upstream official position（2026-11-13，ticket GSCIEXE-103969）
+
+Wayfair Supplier Integration 明确回复：
+
+- GraphQL API **不提供 SKU 级入仓收货历史、在途数量、补货 ETA**；没有对应 operation/permission。
+- `inboundOrderList` / `consolidatedBolDocument` **不是正确入口**；`inboundOrderList` 属于 CGF Container Milestones API（国际海运 + 国内入仓），且不提供 SKU 级收货明细。
+- **推荐 Partner Home 的 CastleGate 入仓报表/导出**；`getCastleGatePurchaseOrders` 只用于出库客户订单，不用于补货入仓 PO。
+
 ## Solution
+
+官方推荐优先用 **Partner Home → CastleGate 入仓报表/导出**（SKU 级收货/在途）；下面的公式是 API-only fallback。
 
 用三本账做可复核的推断：
 
@@ -90,7 +100,7 @@ related_components: [wayfair-api-proxy, tongtool_integration]
 - 不要把通途 `WayfairCG-Cranbury仓` 的余额当 Wayfair 在库；它只能标 `source=tongtool_cg_ledger`。
 - 补货系统按 part 分开记：base 无 CG 仓位标 unknown；`-2PCS` / `-3PCS` 按套数记，折件要乘 2/3。
 - 在途未知不要写 0；写 `inferred` 或 `unknown`，并保留每日快照 / WSA 的 run id。
-- 向 Wayfair 申请 `inboundOrderList` 与 `consolidatedBolDocument` 只读权限并复测；同时让运营/仓库提供 CG 收货凭证、WSA 或 ASN。
+- 不用再申请 `inboundOrderList`/BOL（官方确认不适合 SKU 级入仓）；改为自动化 **Partner Home CastleGate 入仓报表**导出，并向 Wayfair 索取报表名称/路径/字段。
 
 ## Related
 

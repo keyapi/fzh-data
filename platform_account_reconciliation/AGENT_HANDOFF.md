@@ -164,8 +164,9 @@ EN   platform_fee          =  商品价 × 15%      →  差额 = 沃尔玛补�
 3. 对 4 个跨期退单做“销售期 + 退货期”合并核对。
 4. 扩展 Wayfair `WFUS` 账期：`Invoice #/PO #` 为 `CS.../CA...`，需要对应 Wayfair 订单导出与 EN 侧命名规则。
 
-## 12. Wayfair CG 在途（2026-11-06）
+## 12. Wayfair CG 在途（2026-11-06 / 11-13 更新）
 
+- 官方答复（2026-11-13，ticket GSCIEXE-103969）：GraphQL **不提供 SKU 级入仓/在途/ETA**；`inboundOrderList` 属 CGF 且无 SKU 明细；推荐 **Partner Home CastleGate 入仓报表导出**；`getCastleGatePurchaseOrders` 仅出库客户订单。
 - CG API 只有在库；WSA（`getCastleGateWarehouseShippingAdvice`）是 **CG→客户出库**，不是入仓；`getCastleGatePurchaseOrders` 的 `CS...` 是客户订单。
 - 入仓入口不可用：`inboundOrder` 三状态全 null；`inboundOrderList`/`consolidatedBolDocument` 权限 102；`castlegatePurchaseOrders` 上游 null。
 - 可行口径：`当日入仓收货 ≈ ΔCG on_hand + 当日 WSA 出库`；`cg_in_transit_est = 累计通途发往 CG − 累计反推收货`，标 `inferred`。

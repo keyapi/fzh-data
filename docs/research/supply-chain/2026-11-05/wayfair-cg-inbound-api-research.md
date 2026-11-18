@@ -4,6 +4,7 @@ type: Research-Notes
 title: Wayfair CG 入仓/在途 API 调研（2026-11-06）
 description: 逐个验证 Castlegate 入仓与在途 operation；WSA 实为 CG 出库；给出可落地的间接在途口径与实测校验
 date: 2026-11-06
+last_updated: 2026-11-13
 tags: [wayfair, castlegate, inbound, in-transit, api, research, inventory]
 ---
 
@@ -15,13 +16,13 @@ tags: [wayfair, castlegate, inbound, in-transit, api, research, inventory]
 
 ## 0. 结论（TL;DR）
 
-1. **当前没有可直接使用的 SKU 级“入仓在途”API。** 逐个实测：`inboundOrder`（CGF）三状态全 null；`inboundOrderList` 与 `consolidatedBolDocument` 权限 102；`castlegatePurchaseOrders` 上游返回 null 错误；`findSpoMovementsEvents` null；`inboundStockPurchaseOrderStats` 不在生产 schema。
+1. **当前没有可直接使用的 SKU 级“入仓在途”API。** Wayfair 官方（2026-11-13，ticket GSCIEXE-103969）已确认：GraphQL API **不提供 SKU 级入仓收货历史、在途数量、补货 ETA**，也没有对应 operation 或权限；唯一 SKU 级来源是 **Partner Home 的 CastleGate 入仓报表/导出**。我们逐项实测也一致：`inboundOrder`（CGF）三状态全 null；`inboundOrderList` 与 `consolidatedBolDocument` 权限 102；`castlegatePurchaseOrders` 上游返回 null 错误；`findSpoMovementsEvents` null；`inboundStockPurchaseOrderStats` 不在生产 schema。
 2. **WSA 不是入仓，是 CG→客户的出库。** `getCastleGateWarehouseShippingAdvice` 实际有 SKU 级 `products{sku, partNumber, quantityOrdered, quantityShipped}`；实测 `shipFrom=CG 仓`、`shipTo=客户`，单量都是 1–2 件，属于客户发货（EDI 945），不是补货入仓。
 3. **`getCastleGatePurchaseOrders` 也不是入仓 PO。** 它的 `CS...` 单号是 CG 履约的客户订单：`shipFrom=CG`、`shipTo=客户`，`products` 是客户订单行；不是供应商补货 PO。
 4. **`inventoryAdjustmentList` 看不到这批货的入仓。** 2026 全年 17 条调整（Cycle Count / Transfer），本 SKU 家族 0 条；不能用它证明 102/91 已收货。
 5. **可行的替代口径**：`入仓收货 ≈ ΔCG 在库 + WSA 出库量`。用每日 CG 在库快照 + WSA 日发货量反推；再和通途“发往 CG”的发出量比较，得到**在途估计**（不是 API 直接值）。
 6. **实测校验（10-29 → 11-06）**：CG 在库 12 → 5（Δ=-7）；同期 WSA 出库 6；反推收货 ≈ -1（无大额入仓）。**91/102 没有在 CG Castlegate 形成库存**；通途 CG 账的 133 不能当 Wayfair 在库。
-7. **建议**：补货系统用“CG API 在库 + WSA 出库 + 通途发出量”三本账；向 Wayfair 申请 `inboundOrderList` / BOL 权限并复测；同时让仓库同事提供 CG 收货凭证 / WSA / ASN。不要把“在途未知”写成 0。
+7. **建议**：补货系统用“CG API 在库 + WSA 出库 + 通途发出量”三本账；官方已确认 API 不提供 SKU 级入仓/在途，不用再申请 `inboundOrderList`/BOL；改用 **Partner Home 的 CastleGate 入仓报表/导出**。同时让仓库同事提供 CG 收货凭证 / WSA / ASN。不要把“在途未知”写成 0。
 
 ## 1. Operation 实测矩阵
 
@@ -130,7 +131,7 @@ tags: [wayfair, castlegate, inbound, in-transit, api, research, inventory]
 3. **CG 入仓收货**：用 `Δon_hand + WSA出库` 反推；标 `inferred`，并保留每日快照与 WSA 原始 run id。
 4. **CG 在途**：`累计通途发往 CG − 累计反推收货`；当前对 102 件应标 `in_transit_to_cg≈102, evidence=pending`，不要记为 CG 在库。
 5. **不要用通途 CG 账 133** 作为 Wayfair 在库；它只能作为“通途侧履约池”参考。
-6. **权限/人工兜底**：向 Wayfair 申请 `inboundOrderList` 与 `consolidatedBolDocument` 权限并复测；同时让运营/仓库同事提供 CG 收货凭证、WSA 或 ASN。若 Wayfair 仍不开放，Partner Home 的入仓/收货报表需人工定期导出。
+6. **Partner Home 报表是官方唯一来源**：Wayfair 已确认 API 不提供 SKU 级入仓/在途/ETA，也没有对应权限；在 Partner Home → CastleGate 入仓报表/导出拿 SKU 级收货/在途，做定期导出与解析。API 侧只能保留 Δ公式作为 fallback。
 
 ## 5. 复现与数据点
 
@@ -142,11 +143,22 @@ tags: [wayfair, castlegate, inbound, in-transit, api, research, inventory]
 - CG 在库快照：`Wayfair CG Stock Latest` / `wayfair_cg_stock_total.parquet`（10-29 起）。
 - 本 SKU WSA 聚合：2026-09-01 至 11-06，265 个唯一 WSA；2PCS 7 件、3PCS 18 件。
 
-## 6. 来源
+## 6. Wayfair 官方答复（2026-11-13，ticket GSCIEXE-103969）
+
+Wayfair Supplier Integration team 明确回复（要点转述，未附原文/个人姓名）：
+
+1. GraphQL API **不暴露 SKU 级入仓收货历史、在途数量、补货 ETA**；没有对应 operation 或权限。
+2. `inboundOrderList` / `consolidatedBolDocument` **不是正确入口**。`inboundOrderList` 属于 CGF Container Milestones API（国际海运 + 国内入仓），但不提供 SKU 级收货明细；接入 CGF 需另开 ticket。
+3. 推荐使用 **Partner Home 的 CastleGate 报表/导出**跟踪入仓与 90 天仓储窗口；这些数据暂不通过 API 暴露。
+4. `getCastleGatePurchaseOrders` **只用于 CG 出库客户订单**，不用于补货入仓 PO；null 可能是过滤条件或没有对应出库订单数据。
+5. Workaround：用 Partner Home 的入仓报表拿 SKU 级收货/在途；报表需人工或浏览器自动化定期导出。
+
+## 7. 来源
 
 - [Truto — Connect Wayfair to ChatGPT: Sync Catalog, Orders, and Inventory](https://www.truto.one/blog/connect-wayfair-to-chatgpt-sync-catalog-orders-and-inventory/)（WSA 含 ordered vs shipped；CastleGate 用 WSA 代替 dropship ASN）
 - [Truto — Handle Multi-Channel Fulfillment and WSAs](https://www.truto.one/blog/connect-wayfair-to-claude-handle-multi-channel-fulfillment-and-wsas/)（WSA 的 fulfillment item / tracking）
 - [Endless Commerce — Wayfair EDI Requirements (2026)](https://endlesscommerce.com/edi/requirements/wayfair/)（945 Warehouse Shipping Advice；CastleGate 出库口径）
 - [Wayfair API 开发集成（微信公众号）](http://mp.weixin.qq.com/s?__biz=MzY4NTMwODYyNA==&mid=2247483809&idx=1&sn=3285f92016da6f2f962b39f3ee78b305)（`getCastleGateWarehouseShippingAdvice` 用于确认 CG 订单发货）
 - [Odoo wayfair_store_management](https://apps.odoo.com/apps/modules/17.0/wayfair_store_management)（Wayfair operation 列表）
+- Wayfair ticket GSCIEXE-103969 官方答复（2026-11-13；私有工单，未附原文/个人姓名）
 - 本地契约：`wayfair-api-proxy/docs/contract.md`（CGF inbound / PO / WSA 的早期探测记录；其中“WSA 只有总量”已被本次实测修正为 SKU 级出库）
