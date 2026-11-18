@@ -112,7 +112,10 @@ def retry(fn: Callable[[], Any], label: str, tries: int = 6, base_sleep: float =
             last = exc
             if i == tries - 1:
                 break
-            time.sleep(base_sleep * (i + 1))
+            delay = base_sleep * (i + 1)
+            if "429" in str(exc) or "Quota exceeded" in str(exc):
+                delay = max(delay, 15.0)  # Sheets 每分钟读配额，短退避无效
+            time.sleep(delay)
     raise RuntimeError(f"{label} 读取失败（已重试 {tries} 次）: {last!r}") from last
 
 
@@ -170,6 +173,7 @@ def pct(numerator: float, denominator: float) -> float | None:
 class SheetReader:
     sa_json: Path
     ids_cache: Path
+    cache_enabled: bool = True
 
     def __post_init__(self) -> None:
         info = json.loads(self.sa_json.read_text(encoding="utf-8"))
@@ -220,10 +224,11 @@ class SheetReader:
             return os.environ[env_key]
         if name not in self.ids:
             self.ids[name] = self._drive_lookup(name)
-            self.ids_cache.parent.mkdir(parents=True, exist_ok=True)
-            self.ids_cache.write_text(
-                json.dumps(self.ids, ensure_ascii=False, indent=1), encoding="utf-8"
-            )
+            if self.cache_enabled:
+                self.ids_cache.parent.mkdir(parents=True, exist_ok=True)
+                self.ids_cache.write_text(
+                    json.dumps(self.ids, ensure_ascii=False, indent=1), encoding="utf-8"
+                )
         return self.ids[name]
 
     def worksheet(self, sheet_name: str, ws_name: str) -> pd.DataFrame:
@@ -447,10 +452,14 @@ def aggregate_order_costs(
     fba_full = agg(df[is_fba], "_FBA整月")
 
     out = natural.join(window_non_fba, how="outer").join(fba_full, how="outer").join(next_month_part, how="outer")
+    out = out.loc[:, ~out.columns.duplicated()]
 
     def col(name: str) -> pd.Series:
         if name in out.columns:
-            return out[name].fillna(0)
+            series = out[name]
+            if isinstance(series, pd.DataFrame):
+                series = series.iloc[:, 0]
+            return series.fillna(0)
         return pd.Series(0.0, index=out.index)
 
     for bucket in COST_BUCKETS:
@@ -564,7 +573,6 @@ def build_main_table(
         | set(pipeline_agg.get("渠道账号", pd.Series(dtype=str)).dropna().astype(str))
     )
     universe.discard("")
-    universe.discard("UNMATCHED")
 
     main = pd.DataFrame({"渠道账号": sorted(universe)})
     main = main.merge(master, on="渠道账号", how="left")
@@ -606,11 +614,13 @@ def build_main_table(
     main["订单_平台"] = main["订单_平台"].fillna("").astype(str)
 
     main["有OA"] = main["OA_行数"].fillna(0).gt(0)
-    main["有订单"] = main["订单_自然月_行数"].fillna(0).gt(0)
+    main["有订单"] = main["订单_自然月_行数"].fillna(0).gt(0) | main["订单_窗口_行数"].fillna(0).gt(0)
     main["有管道输出"] = main["账号ws_行数"].fillna(0).gt(0)
     main["在主表"] = main["主表_运营人员"].notna()
 
     def status(row: pd.Series) -> str:
+        if str(row["渠道账号"]).strip() == "UNMATCHED":
+            return "未匹配别名（不得并入真实账号）"
         has_oa, has_order, has_pipe, in_master = row["有OA"], row["有订单"], row["有管道输出"], row["在主表"]
         if has_oa and has_order:
             return "双边"
@@ -805,6 +815,13 @@ def build_checks(
         round(float(df["校验_成本合计"].sum()), 2),
         "差异 >0.02 说明列映射或空值有问题",
     )
+    row_diff = (df["校验_成本合计"] - df[COST_TOTAL_COL].fillna(0)).abs()
+    add(
+        "逐行：五桶之和 = 订单总成本*系数",
+        0,
+        round(float(row_diff.max()), 4),
+        f"违例>0.01 的行数: {int((row_diff > 0.01).sum())}",
+    )
     add(
         "写回：产品成本*系数*数量 = 绍兴产品 + 国外二次加工",
         round(float(df["产品成本*系数*数量"].fillna(0).sum()), 2),
@@ -834,10 +851,34 @@ def build_checks(
     add("主表：账号数", len(main), main["渠道账号"].nunique())
     add("主表：订单成本合计（去重后）", round(float(df["校验_成本合计"].sum()), 2), round(float(main["订单_自然月_成本合计"].sum()), 2))
     add("主表：OA应收合计", round(float(base["应收金额_人民币"].sum()), 2), round(float(main["OA_应收_人民币"].sum()), 2))
+
+    # 逐账号恒等式（防止账号间正负抵消掩盖单账号错误）
+    oa_rows = main[main["OA_行数"].fillna(0).gt(0)]
+    if len(oa_rows):
+        d_identity = (
+            oa_rows["OA_销售减费用_人民币"]
+            - (oa_rows["OA_应收_人民币"] + oa_rows["OA_应收账款_人民币"])
+        ).abs()
+        add(
+            "逐账号：销售减费用 = 应收 + 应收账款",
+            0,
+            round(float(d_identity.max()), 4),
+            f"违例>0.01 的账号数: {int((d_identity > 0.01).sum())}",
+        )
+    d_bucket = (
+        main["成本_合计"]
+        - sum(main[f"成本_{b}"].fillna(0) for b in COST_BUCKETS)
+    ).abs()
+    add(
+        "逐账号：成本合计 = 五桶之和",
+        0,
+        round(float(d_bucket.max()), 4),
+        f"违例>0.01 的账号数: {int((d_bucket > 0.01).sum())}",
+    )
     return pd.DataFrame(rows)
 
 
-def build_exceptions(main: pd.DataFrame, order_agg: pd.DataFrame, mapping: dict[str, str], duplicates: pd.DataFrame) -> pd.DataFrame:
+def build_exceptions(main: pd.DataFrame, duplicates: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for _, row in main[main["账号状态"] != "双边"].iterrows():
         rows.append(
@@ -847,19 +888,7 @@ def build_exceptions(main: pd.DataFrame, order_agg: pd.DataFrame, mapping: dict[
                 "运营人员": row["运营人员"],
                 "OA应收_人民币": row.get("OA_应收_人民币", 0),
                 "订单成本_人民币": row.get("订单_自然月_成本合计", 0),
-                "说明": "单边账号：收入或成本只有一侧，业绩不可直接当真实经营结果",
-            }
-        )
-    unmatched = order_agg[order_agg["渠道账号"].astype(str) == "UNMATCHED"]
-    if len(unmatched):
-        rows.append(
-            {
-                "类型": "订单账号未匹配别名",
-                "渠道账号": "UNMATCHED",
-                "运营人员": "",
-                "OA应收_人民币": 0,
-                "订单成本_人民币": float(unmatched["订单_自然月_成本合计"].sum()),
-                "说明": f"{int(unmatched['订单_自然月_行数'].sum())} 行；不得并入真实账号",
+                "说明": "单边/未匹配账号：收入或成本只有一侧，业绩不可直接当真实经营结果",
             }
         )
     for _, row in duplicates.head(20).iterrows():
@@ -1042,7 +1071,7 @@ def main() -> int:
     sa_json = Path(args.sa_json)
     if not sa_json.exists():
         raise SystemExit(f"凭证不存在: {sa_json}")
-    reader = SheetReader(sa_json=sa_json, ids_cache=Path(args.ids_cache))
+    reader = SheetReader(sa_json=sa_json, ids_cache=Path(args.ids_cache), cache_enabled=not args.dry_run)
 
     print(f"[1/6] 读取渠道账号主表 + 解析别名 … ({month})")
     acc = reader.worksheet(SHEET_ACCOUNT, WS_ACCOUNT)
@@ -1065,7 +1094,7 @@ def main() -> int:
     if args.active_only:
         main_df = main_df[main_df["账号状态"] != "仅主表（本月无OA无发货）"].copy()
     checks = build_checks(oa, surcharge_tax, main_df, orders["orders"], mapping, start, end)
-    exceptions = build_exceptions(main_df, order_agg, mapping, duplicates)
+    exceptions = build_exceptions(main_df, duplicates)
     readiness = build_readiness(month, oa, surcharge_tax, orders, orders["pipeline"], start, end, next_note)
 
     print("[5/6] 生成说明页 …")
@@ -1160,6 +1189,7 @@ def main() -> int:
             "oa_only": int((main_df["账号状态"] == "仅OA（无通途成本）").sum()),
             "order_only": int((main_df["账号状态"] == "仅订单（无可收/应收）").sum()),
             "master_only": master_only_count,
+            "unmatched": int((main_df["账号状态"] == "未匹配别名（不得并入真实账号）").sum()),
         },
         "oa": {
             "sales_rmb": float(main_df["OA_销售额_人民币"].fillna(0).sum()),
