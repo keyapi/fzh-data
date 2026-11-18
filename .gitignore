@@ -168,3 +168,7 @@ qms/training/_libs/
 /gpt-response.png
 /playground.png
 qms/training/report_p1.png
+
+# ===== 账期业绩只读核对产物（含账号明细，默认不入仓）=====
+sellfox_settlement/out/*
+!sellfox_settlement/out/storeName_to_account_candidates.csv

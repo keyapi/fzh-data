@@ -7,6 +7,11 @@ tags: [sellfox, amazon, settlement, okf, log]
 
 # 变更日志
 
+## 2026-11-18
+- **新增账期业绩设计**：`docs/research/2026-11-18-account-period-performance-report-design.md`——OA 应收/销售额两套基准、通途四段成本、Tax/附加费双列、04–03 期间对齐、边界矩阵、202608–202610 只读核对、Colab 上线 diff。
+- **新增只读脚本**：`scripts/build_account_period_performance.py`——读 OA 外币层/人民币层/原始、渠道账号主表、通途写回（含次月 1–3 日）、`账号` ws 对照；输出本地 xlsx/json，不写 GS。
+- **核对结论**：202609 与并行 A/B 双算对齐到 0.03 元；主成本改用 `写回`（`账号` ws 为旧快照，差约 −55.6 万）；四段成本用各自系数列；附加费只单列；Tax 含税未证实；FBA 无发货日期、窗口按整月计入。
+
 ## 2026-09-09
 - **补齐发现链与 OKF**：调研文加 YAML `type: Research`；新建 `docs/lessons/`（踩坑 Lesson）；`docs/reference/how-we-tested-2026-09.md`（可复跑测试方法+断言）；AGENT_HANDOFF §9 更正钉钉跨月导出已落地事实；AGENTS.md 模块索引 + skill 触发词（迟交/错位/钉钉账期等）；CONCEPTS 钉清两套「账期月」归属；根 `index.md` 经 `scripts/update_index.py` 同步。
 - **初始化 OKF bundle**: 建 `docs/`（index.md/log.md）`docs/research/` `docs/reference/`；`AGENT_HANDOFF.md`；`docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`（从 `docs/research/` 移入）。
