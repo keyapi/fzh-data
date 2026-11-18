@@ -410,6 +410,7 @@ def aggregate_order_costs(
     mapping: dict[str, str],
     start: pd.Timestamp,
     end: pd.Timestamp,
+    include_window: bool = False,
 ) -> pd.DataFrame:
     df = orders.copy()
     df["_canon"] = df["渠道账号"].apply(lambda x: map_account(x, mapping))
@@ -434,25 +435,26 @@ def aggregate_order_costs(
         return g
 
     natural = agg(df, "_自然月")
-    in_window = (df["发货日期"] >= start) & (df["发货日期"] <= end)
-    # FBA 写回是按 MSKU/SKU 的月度汇总，没有发货日期；窗口成本只能整月计入并标记。
-    next_df = next_orders.copy() if next_orders is not None and not next_orders.empty else pd.DataFrame()
-    if not next_df.empty:
-        next_df["_canon"] = next_df["渠道账号"].apply(lambda x: map_account(x, mapping))
-        next_df["发货日期"] = pd.to_datetime(next_df.get("发货日期"), errors="coerce")
-        next_df = add_cost_buckets(next_df, "自然月_")
-        next_in_window = next_df[(next_df["发货日期"] >= start) & (next_df["发货日期"] <= end)]
-    else:
-        next_in_window = pd.DataFrame()
-    window_non_fba = agg(
-        pd.concat([df[(~is_fba) & in_window], next_in_window], ignore_index=True),
-        "_窗口非FBA",
-    )
-    next_month_part = agg(next_in_window, "_下月1-3天")
-    fba_full = agg(df[is_fba], "_FBA整月")
-
-    out = natural.join(window_non_fba, how="outer").join(fba_full, how="outer").join(next_month_part, how="outer")
-    out = out.loc[:, ~out.columns.duplicated()]
+    out = natural.copy()
+    if include_window:
+        in_window = (df["发货日期"] >= start) & (df["发货日期"] <= end)
+        # FBA 按付款/销售日期归月；合并表无日期，窗口成本只能整月计入并标记。
+        next_df = next_orders.copy() if next_orders is not None and not next_orders.empty else pd.DataFrame()
+        if not next_df.empty:
+            next_df["_canon"] = next_df["渠道账号"].apply(lambda x: map_account(x, mapping))
+            next_df["发货日期"] = pd.to_datetime(next_df.get("发货日期"), errors="coerce")
+            next_df = add_cost_buckets(next_df, "自然月_")
+            next_in_window = next_df[(next_df["发货日期"] >= start) & (next_df["发货日期"] <= end)]
+        else:
+            next_in_window = pd.DataFrame()
+        window_non_fba = agg(
+            pd.concat([df[(~is_fba) & in_window], next_in_window], ignore_index=True),
+            "_窗口非FBA",
+        )
+        next_month_part = agg(next_in_window, "_下月1-3天")
+        fba_full = agg(df[is_fba], "_FBA整月")
+        out = natural.join(window_non_fba, how="outer").join(fba_full, how="outer").join(next_month_part, how="outer")
+        out = out.loc[:, ~out.columns.duplicated()]
 
     def col(name: str) -> pd.Series:
         if name in out.columns:
@@ -462,15 +464,27 @@ def aggregate_order_costs(
             return series.fillna(0)
         return pd.Series(0.0, index=out.index)
 
-    for bucket in COST_BUCKETS:
-        out[f"订单_窗口_{bucket}"] = col(f"订单_{bucket}_窗口非FBA") + col(f"订单_{bucket}_FBA整月")
-    out["订单_窗口_成本合计"] = col("订单_成本合计_窗口非FBA") + col("订单_成本合计_FBA整月")
-    out["订单_窗口_售价"] = col("订单_售价_窗口非FBA") + col("订单_售价_FBA整月")
-    out["订单_窗口_尾程"] = col("订单_尾程_窗口非FBA") + col("订单_尾程_FBA整月")
-    out["订单_窗口_行数"] = col("订单_行数_窗口非FBA") + col("订单_行数_FBA整月")
-    out["订单_窗口_非FBA成本"] = col("订单_成本合计_窗口非FBA")
-    out["订单_窗口_下月1-3天成本"] = col("订单_成本合计_下月1-3天")
-    out["订单_FBA整月成本"] = col("订单_成本合计_FBA整月")
+    if include_window:
+        for bucket in COST_BUCKETS:
+            out[f"订单_窗口_{bucket}"] = col(f"订单_{bucket}_窗口非FBA") + col(f"订单_{bucket}_FBA整月")
+        out["订单_窗口_成本合计"] = col("订单_成本合计_窗口非FBA") + col("订单_成本合计_FBA整月")
+        out["订单_窗口_售价"] = col("订单_售价_窗口非FBA") + col("订单_售价_FBA整月")
+        out["订单_窗口_尾程"] = col("订单_尾程_窗口非FBA") + col("订单_尾程_FBA整月")
+        out["订单_窗口_行数"] = col("订单_行数_窗口非FBA") + col("订单_行数_FBA整月")
+        out["订单_窗口_非FBA成本"] = col("订单_成本合计_窗口非FBA")
+        out["订单_窗口_下月1-3天成本"] = col("订单_成本合计_下月1-3天")
+        out["订单_FBA整月成本"] = col("订单_成本合计_FBA整月")
+    else:
+        # 本轮口径：成本按整月，不单独算 04–03 窗口；窗口列与自然月相同，避免误读。
+        for bucket in COST_BUCKETS:
+            out[f"订单_窗口_{bucket}"] = out[f"订单_{bucket}_自然月"]
+        out["订单_窗口_成本合计"] = out["订单_成本合计_自然月"]
+        out["订单_窗口_售价"] = out["订单_售价_自然月"]
+        out["订单_窗口_尾程"] = out["订单_尾程_自然月"]
+        out["订单_窗口_行数"] = out["订单_行数_自然月"]
+        out["订单_窗口_非FBA成本"] = 0.0
+        out["订单_窗口_下月1-3天成本"] = 0.0
+        out["订单_FBA整月成本"] = 0.0
     fba_flag = df.groupby("_canon", dropna=False)["_is_fba"].any().rename("订单_含FBA")
     platform = (
         df.groupby("_canon", dropna=False)["渠道"]
@@ -981,7 +995,7 @@ def build_readiness(
     rows.append(
         {
             "输入": "次月 1–3 日非FBA发货（补齐 04–03 窗口）",
-            "状态": "就绪" if "已读取" in next_note else "缺失（窗口成本不含次月1–3日）",
+            "状态": "不适用（本轮按整月）" if "不适用" in next_note else ("就绪" if "已读取" in next_note else "缺失（窗口成本不含次月1–3日）"),
             "行数": "",
             "说明": next_note,
         }
@@ -1044,6 +1058,11 @@ def main() -> int:
         help="只读计算并打印概要，不落本地 xlsx/json（Google Sheet 始终不写）",
     )
     parser.add_argument(
+        "--include-window",
+        action="store_true",
+        help="额外计算 04–03 窗口成本（默认不算；本轮口径是成本按整月）",
+    )
+    parser.add_argument(
         "--active-only",
         action="store_true",
         help="主表只保留有 OA 或有发货的账号（默认保留主表 0 行，便于核对账号全集）",
@@ -1083,13 +1102,21 @@ def main() -> int:
 
     print(f"[3/6] 读取通途订单 {month} 写回 + 账号 ws …")
     orders = load_orders(reader, month)
-    next_orders, next_note = load_next_month_non_fba(reader, month)
+    if args.include_window:
+        next_orders, next_note = load_next_month_non_fba(reader, month)
+    else:
+        next_orders, next_note = pd.DataFrame(), "不适用（本轮按整月）"
 
     print("[4/6] 聚合 …")
     oa_agg = aggregate_oa(oa, mapping)
-    order_agg = aggregate_order_costs(orders["orders"], next_orders, mapping, start, end)
+    order_agg = aggregate_order_costs(
+        orders["orders"], next_orders, mapping, start, end, include_window=args.include_window
+    )
     pipeline_agg = aggregate_pipeline(orders["pipeline"], mapping)
     main_df, master = build_main_table(acc_clean, month, oa_agg, order_agg, pipeline_agg)
+    if not args.include_window:
+        main_df["窗口成本口径"] = "未单独计算（本轮按整月）"
+        main_df["窗口成本构成"] = "与自然月相同（本轮不做 04–03 二次过滤）"
     master_only_count = int((main_df["账号状态"] == "仅主表（本月无OA无发货）").sum())
     if args.active_only:
         main_df = main_df[main_df["账号状态"] != "仅主表（本月无OA无发货）"].copy()
@@ -1212,7 +1239,7 @@ def main() -> int:
         "checks_passed": int(checks["通过"].sum()),
         "checks_total": int(len(checks)),
         "readiness_issues": readiness[
-            ~readiness["状态"].isin(["就绪", "存在（仅对照）"])
+            ~readiness["状态"].isin(["就绪", "存在（仅对照）", "不适用（本轮按整月）"])
         ][["输入", "状态"]].to_dict("records"),
     }
     summary_path = out_dir / f"account_period_performance_{month}.json"
