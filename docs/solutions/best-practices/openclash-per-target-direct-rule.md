@@ -104,6 +104,7 @@ grep "<TARGET_IP>" /tmp/openclash.log | tail
 ## Related Issues
 
 - [adobe-genuine-prompts-office-openclash.md](adobe-genuine-prompts-office-openclash.md) — 同一自定义规则文件的 REJECT 用法；多级 NAT 无法按设备隔离的实测。
+- [openclash-target-via-proxy-when-direct-degrades.md](openclash-target-via-proxy-when-direct-degrades.md) — 反向场景：直连「能用但严重丢包」时把目标改走代理，以及规则注入顺序的坑。
 - [../architecture-patterns/office-egress-fallback-chain.md](../architecture-patterns/office-egress-fallback-chain.md) — 办公室出口链路与「现在走哪条线」的定界方法。
 - `us_openai_api_proxy/docs/office-lan-access.md` — 办公室拓扑与 OpenClash 共存说明。
 - `us_openai_api_proxy/docs/lessons/lessons-learned.md` Lesson 12 — 路由例外必须最小化且经授权。

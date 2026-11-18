@@ -9,6 +9,12 @@ tags: [openai, api-proxy, changelog]
 
 > 此日志只记录可公开复用的结论。服务器、账号、授权材料、私有地址、订阅与访问凭据均不入库。
 
+## 2026-11-18
+
+- 办公室访问某境外 Windows Server 的 RDP：直连能用但丢包 45%（光猫与 WiFi 同一条出口），服务器重启无效。三方对照（办公室 / 两处境外中转）确认服务器健康、问题在本地出境链路；订阅的日本/美国节点不放行 3389（TCP 通但返回 0 字节）。
+- 处置：在 `openclash_custom_overwrite.sh` 里幂等注入 `IP-CIDR,<TARGET_IP>/32,Emergency`（出口为受控应急线路），自定义规则文件保留 `DIRECT` 作兜底。实测 10/10 成功、约 370ms/RTT；通用出口与其他业务不受影响。
+- 排查与验证方法见 [仓库解决方案](../../docs/solutions/best-practices/openclash-target-via-proxy-when-direct-degrades.md)。实际目标 IP 与中转地址只保留在受控配置。
+
 ## 2026-10-27
 
 - 处理办公室 WiFi 访问某境外 Windows Server RDP 不通：OpenClash 将目标匹配到默认代理出口，远端仅放行办公室直连 IP。按 Lesson 12 在自定义规则中加入目标 `IP-CIDR /32 → DIRECT`，备份后重启 OpenClash；RDP 协商恢复、HTTP 200、普通代理出口不变。
