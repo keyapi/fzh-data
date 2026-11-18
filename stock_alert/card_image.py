@@ -185,18 +185,28 @@ def render_inbound(result, path: str | Path) -> Path:
     img = Image.new("RGB", (WIDTH, height), BG)
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle([MARGIN, MARGIN, WIDTH - MARGIN, height - MARGIN], radius=28, fill=CARD)
-    subtitle = (f"{result.day.isoformat()} · {result.label}" if result.label
-                else f"{result.day.isoformat()} · 昨日入库")
+    single = result.warehouses[0] if len(result.warehouses) == 1 else None
+    if single is not None:
+        subtitle = (f"{single.warehouse} · {result.day.isoformat()}"
+                    + (f" · {result.label}" if result.label else " · 昨日入库"))
+    else:
+        subtitle = (f"{result.day.isoformat()} · {result.label}" if result.label
+                    else f"{result.day.isoformat()} · 昨日入库")
     _header(draw, 160, "通途采购入库提醒", subtitle)
     y = MARGIN + 160 + GAP
     y += 6
     for wh in result.warehouses:
-        draw.text((MARGIN + PAD, y + 8), _fit(draw, wh.warehouse, _font(26, bold=True),
-                                              WIDTH - 2 * MARGIN - 2 * PAD - 180),
-                  font=_font(26, bold=True), fill=TEXT)
-        total = f"{int(wh.total_qty)} 个" if wh.count else "无入库"
-        _right(draw, WIDTH - MARGIN - PAD, y + 8, total, _font(24, bold=True),
-               TEAL if wh.count else MUTED)
+        if single is not None:
+            draw.text((MARGIN + PAD, y + 8),
+                      f"入库：{int(wh.total_qty)} 个 · {wh.count} 个 SKU",
+                      font=_font(24, bold=True), fill=TEAL if wh.count else MUTED)
+        else:
+            draw.text((MARGIN + PAD, y + 8), _fit(draw, wh.warehouse, _font(26, bold=True),
+                                                  WIDTH - 2 * MARGIN - 2 * PAD - 180),
+                      font=_font(26, bold=True), fill=TEXT)
+            total = f"{int(wh.total_qty)} 个" if wh.count else "无入库"
+            _right(draw, WIDTH - MARGIN - PAD, y + 8, total, _font(24, bold=True),
+                   TEAL if wh.count else MUTED)
         y += 44
         if not wh.items:
             draw.text((MARGIN + PAD, y), "本次无采购入库" if result.label else "昨日无采购入库",

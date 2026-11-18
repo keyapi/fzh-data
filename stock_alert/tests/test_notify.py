@@ -74,7 +74,7 @@ def fake_senders(monkeypatch, *, upload_fails=False, image_upload_fails=False):
         return 'https://files.example/' + path.name
 
     def card(title, text, buttons, **kwargs):
-        posts.append(('card', text, buttons, kwargs))
+        posts.append(('card', text, buttons, kwargs, title))
         return {'errcode': 0}
 
     def markdown(text, **kwargs):
@@ -270,6 +270,17 @@ def test_inbound_filename_includes_window_time(monkeypatch, tmp_path):
                   label='10:00–14:00 新增', as_of='14:00')
     assert notify_inbound(r)['errcode'] == 0
     assert any('_1400' in str(p) for p in uploads)
+
+
+def test_single_warehouse_inbound_title_and_filename(monkeypatch, tmp_path):
+    _set_card_env(monkeypatch, mode='image', tmp_path=tmp_path)
+    posts, uploads = fake_senders(monkeypatch)
+    r = aggregate({'美中-FZH-DANEEY': [{'sku': 'A', 'voucher_type': '02', 'available_increase': 45}]},
+                  names={'A': '产品甲'}, day=dt.date(2026, 11, 18),
+                  label='10:00–14:00 新增', as_of='14:00')
+    assert notify_inbound(r)['errcode'] == 0
+    assert '美中-FZH-DANEEY' in posts[0][4]
+    assert any('美中-FZH-DANEEY' in str(p) for p in uploads)
 
 def test_failure_diagnostic_kept():
     from stock_alert.notify import failure_body

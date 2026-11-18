@@ -54,7 +54,7 @@ def test_inbound_mock_dry_run_defaults_to_yesterday(capsys):
     assert rc == 0
     out = capsys.readouterr().out
     yesterday = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
-    assert f"通途采购入库提醒 · {yesterday}" in out
+    assert "通途采购入库提醒" in out and "美中-FZH-DANEEY" in out and yesterday in out
     assert "SKU：DEMO-IN-0\n\n入库：**10 个**" in out
 
 
@@ -63,7 +63,7 @@ def test_inbound_mock_respects_date(capsys):
                "--warehouses", "美中-FZH-DANEEY"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "通途采购入库提醒 · 2026-11-16" in out
+    assert "2026-11-16" in out and "美中-FZH-DANEEY" in out
 
 
 def test_inbound_mock_today_labels_window(capsys):
@@ -127,3 +127,17 @@ def test_inbound_only_resolves_names_for_real_receipts(monkeypatch, capsys):
     out = capsys.readouterr()
     assert "**产品甲**\n\nSKU：ARRIVED\n\n入库：**45 个**" in out.out
     assert '"zero_change": 1' in out.err
+
+
+def test_inbound_sends_one_card_per_warehouse(monkeypatch, capsys):
+    calls = []
+
+    def fake(result, dry_run=False):
+        calls.append(result.warehouses[0].warehouse)
+        return {"errcode": 0, "messages": [], "files": [], "file_errors": [], "dry_run": True}
+
+    monkeypatch.setattr(cli, "notify_inbound", fake)
+    rc = main(["inbound", "--mock", "--dry-run", "--warehouses", "W1,W2,W3"])
+    assert rc == 0
+    assert calls == ["W1", "W2", "W3"]
+    capsys.readouterr()

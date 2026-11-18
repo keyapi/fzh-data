@@ -18,7 +18,8 @@ title: stock_alert Agent 交接
 采购入库改为 **10:00 / 14:00 / 17:00** 三次直连通途 `/openapi/tongtool/stocksChangeDetailQuery`
 （EN `stock_change` 每天约 05:53 才同步一次，白天滞后）；按「上次成功检查 → 本次」增量窗口查询，
 窗口状态存 `stock_alert_output/inbound_state.json`，dry-run/发送失败不推进。
-当前 89 项测试通过；图片卡片已实推，errcode=0。
+每次执行**按仓拆成 3 张卡片**（美中/美东/波兰各一张，空仓也发），每张卡只含该仓明细与该仓 Excel。
+当前 91 项测试通过；图片卡片已实推，errcode=0。
 
 以下阶段2首版/单卡样式为历史记录，不是当前发送样式。
 

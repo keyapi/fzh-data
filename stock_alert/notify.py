@@ -35,6 +35,11 @@ def _clean(value: str) -> str:
     return " ".join(str(value or "").split())
 
 
+def _safe_name(value: str) -> str:
+    cleaned = "".join(c for c in str(value or "") if c not in '\\/:*?"<>|').strip()
+    return cleaned or "warehouse"
+
+
 def _check_body(body: str) -> str:
     if len(body.encode("utf-8")) > CARD_BUDGET_BYTES:
         raise ValueError("卡片汇总超过字节上限，请减少单次仓库范围")
@@ -70,18 +75,21 @@ def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None
 
 def _inbound_body(result: InboundResult) -> tuple[str, bool]:
     day = result.day.isoformat()
-    title = f"## 通途采购入库提醒 · {day}" + (f" · {result.label}" if result.label else "")
-    intro = [title,
-             f"**入库概览**  ·  共 **{result.total_skus}** 个 SKU · 入库 **{_fmt_num(result.total_qty)}** 个"]
+    single = result.warehouses[0] if len(result.warehouses) == 1 else None
+    title = "## 通途采购入库提醒"
+    if single is not None:
+        title += f" · {_clean(single.warehouse)}"
+    title += f" · {day}" + (f" · {result.label}" if result.label else "")
     if not result.total_skus:
         empty = (f"本次无采购入库（{result.label}）。" if result.label
                  else f"昨日（{day}）无采购入库。")
-        return "\n\n".join(intro + [empty]), False
-    summary = list(intro)
-    detailed = list(intro)
+        return "\n\n".join([title, empty]), False
+    summary = [title]
+    detailed = [title]
     for wh in result.warehouses:
-        section = [f"### {_clean(wh.warehouse)}",
-                   f"入库：**{_fmt_num(wh.total_qty)}** 个 · **{wh.count}** 个 SKU"]
+        section = [f"入库：**{_fmt_num(wh.total_qty)}** 个 · **{wh.count}** 个 SKU"]
+        if single is None:
+            section.insert(0, f"### {_clean(wh.warehouse)}")
         if not wh.items:
             section.append("本次无采购入库。" if result.label else "昨日无采购入库。")
         summary.extend(section)
@@ -273,7 +281,10 @@ def notify_low_stock(result: ScanResult, *, when: _dt.date | None = None,
 
 def notify_inbound(result: InboundResult, *, dry_run: bool = False) -> dict:
     body, _ = _inbound_body(result)
-    suffix = f"_{result.as_of.replace(':', '')}" if result.as_of else ""
+    single = result.warehouses[0] if len(result.warehouses) == 1 else None
+    suffix = f"_{_safe_name(single.warehouse)}" if single else ""
+    if result.as_of:
+        suffix += f"_{result.as_of.replace(':', '')}"
     files, errors = [], []
     if result.total_skus:
         try:
@@ -296,7 +307,10 @@ def notify_inbound(result: InboundResult, *, dry_run: bool = False) -> dict:
         except Exception as exc:  # noqa: BLE001 - 图片失败回退文本
             print(f"[warn] 采购入库卡片图片生成失败，回退文本：{type(exc).__name__}: {exc}",
                   file=sys.stderr)
-    title = f"通途采购入库提醒 · {result.day.isoformat()}" + (f" · {result.label}" if result.label else "")
+    title = "通途采购入库提醒"
+    if single is not None:
+        title += f" · {single.warehouse}"
+    title += f" · {result.day.isoformat()}" + (f" · {result.label}" if result.label else "")
     return _notify_one(title, body, files, errors,
                        dry_run=dry_run, interactive=send, preview=preview, image_path=image_path)
 
