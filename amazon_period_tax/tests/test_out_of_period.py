@@ -130,3 +130,33 @@ def test_dmy_settlement_dates_parsed(tmp_path):
     assert stats["files_no_period_date"] == 0
     assert stats["files_out_of_period"] == 0
     assert len(df) == 2
+
+
+def test_settlement_end_month_boundary_is_kept(tmp_path):
+    """结算 8/1、打款 8/3 → 仍是 8 月账期（账期日期 8/1，自然月），不能按 4 号窗口误杀。"""
+    bucket = tmp_path / "账期20260804-20260903"
+    (bucket / "甲").mkdir(parents=True)
+    (bucket / "甲" / "AMZRosoonSE-2026-08-01.txt").write_text(
+        _txt_with_deposit("27200000001", "2026-08-01 09:00:00 UTC", "2026-08-03 09:00:00 UTC"),
+        encoding="utf-8",
+    )
+    stats: dict = {}
+    df, reports = read_bucket_amz_txts(bucket, stats_out=stats)
+    assert stats["files_out_of_period"] == 0
+    assert len(df) == 2
+    assert not any(r.startswith("OUT-OF-PERIOD") for r in reports)
+
+
+def test_settlement_end_previous_month_excluded(tmp_path):
+    """结算 7/31、打款 8/5 放进 8 月桶 → 仍按结算结束日的自然月排除。"""
+    bucket = tmp_path / "账期20260804-20260903"
+    (bucket / "甲").mkdir(parents=True)
+    (bucket / "甲" / "AMZWrongUS-8.05.txt").write_text(
+        _txt_with_deposit("27200000002", "2026-07-31 09:00:00 UTC", "2026-08-05 09:00:00 UTC"),
+        encoding="utf-8",
+    )
+    stats: dict = {}
+    df, reports = read_bucket_amz_txts(bucket, stats_out=stats)
+    assert stats["files_out_of_period"] == 1
+    assert df.empty
+    assert any("month=202608" in r for r in reports)

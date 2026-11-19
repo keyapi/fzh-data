@@ -52,8 +52,11 @@ tags: [amazon-period, tax, attachment, dedupe, settlement-id, nas, audit]
 ## Solution
 
 1. `read_amz_txt` 解析每个 txt 的 `settlement-id`、`settlement-end-date`、`deposit-date`，
-   与桶名（`账期YYYYMMDD-YYYYMMDD`）窗口比对；不在窗口内的记 `OUT-OF-PERIOD <rel>`，
+   取桶名（`账期YYYYMMDD-YYYYMMDD`）前 6 位作为**账期自然月**，要求内部 `settlement-end-date`
+   的月份等于它（缺失退回 `deposit-date`）；不等记 `OUT-OF-PERIOD <rel> month=...`，
    **默认排除**（`--allow-out-of-period` 才纳入）。
+   注意不能用「4 号→次月 3 号」窗口套打款日：`AMZRosoonSE-2026-08-01`（结算 8/1、打款 8/3）
+   是正常的 8 月账期，曾被误杀。
 2. 新增 `settlement_ledger`：扫描全部账期桶，按 `settlement-id`/内容找跨桶重复，输出
    「同一结算出现在 A桶/B桶」清单；只报告、不自动删。
 3. `run_period_tax --strict`：`OUT-OF-PERIOD` / `SKIP-DUP` / `FAIL` 任一 > 0 即非 0 退出。
@@ -70,6 +73,18 @@ tags: [amazon-period, tax, attachment, dedupe, settlement-id, nas, audit]
 - 附件命名统一为 `{渠道账号}-{结算结束日 YYYY-MM-DD}.txt`，命名只作展示，身份仍以内部字段为准。
 - 归档时先按结算号台账查重，再落桶；DRM/人工整理环节发现的同名同内容只保留一份。
 - 已清理：8 月两组同内容副本、跨桶 JohnaUS 副本、7 月 RosoonIT 副本（按 OA 发起人保留主人文件夹）。
+
+### 官方附件确实拿不到时：赛狐明细只能做「待核验补录」，不能冒充原件
+
+赛狐 V2 `settlementSummary/detailPage.json` 有逐笔明细，可映射成 Amazon flat-file
+（`amazon_period_tax/scripts/sellfox_synth_txt.py`）。用有官方 txt 的 7 月结算验证：
+171 行、2034.72、Tax 273.10，与官方逐行多重集完全一致。8/11 据此得到 214 行、752.64、
+Tax 259.53 USD。
+
+但 Codex 复核结论是 **CONDITIONAL**：合成列缺 `shipment-id/order-item-code/adjustment-id`，
+`posted-date` 时区与 `deposit-date` 与官方不同；**不能放进官方附件扫描路径**（否则官方原件
+到达后会两份都计 Tax）。正确做法是作为「赛狐来源、待官方核验」的 Tax 调整凭据，
+由财务确认后再补录；文件名/目录必须隔离，不进正常桶。
 
 ## Related
 

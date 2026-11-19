@@ -215,10 +215,12 @@ def read_bucket_amz_txts(
 
     - 同一内容（md5 相同）的 txt 只读第一份，其余记 ``SKIP-DUP``（同一文件被多人上传是常态，
       不去重会把 Tax 多算一遍）。
-    - 按 txt 内部 **deposit-date**（打款日；缺失退回 settlement-end-date）与桶名
-      ``账期YYYYMMDD-YYYYMMDD`` 窗口比对：不在窗口内的记
-      ``OUT-OF-PERIOD <rel> window=... end=... deposit=...`` 并**默认排除**（错放到别的账期桶的
-      副本，会把 Tax 跨月重复计入）。``allow_out_of_period=True`` 可强制纳入。
+    - 按 txt 内部 **settlement-end-date**（缺失退回 deposit-date）判断所属**自然月**：
+      桶名 ``账期YYYYMMDD-YYYYMMDD`` 前 6 位 = 账期月（如 20260804-20260903 → 202608）。
+      结算结束日的月份不等于账期月的记
+      ``OUT-OF-PERIOD <rel> month=... end=... deposit=...`` 并**默认排除**
+      （错放到别的账期桶的副本，会把 Tax 跨月重复计入）。``allow_out_of_period=True`` 可强制纳入。
+      注意：不能用「4 号→次月 3 号」窗口套打款日——8/1 结算、8/3 打款的 8 月账期会被误杀。
     - 取不到内部日期的记 ``NO-PERIOD-DATE``，仍然纳入（宁可算上也不静默丢）。
     - repair_dir：tab 修复缓存目录，默认 ``{桶的父目录}/.repair_cache_{桶名}``，
       不写在桶内 —— 桶内任何目录都会被当成「人名文件夹」扫描。
@@ -282,21 +284,23 @@ def read_bucket_amz_txts(
                 continue
 
             window_date, end_date, deposit_date = settlement_window_date(text)
-            if start is not None and window_date is not None:
-                if not (start <= window_date <= end):
+            bucket_month = start.strftime("%Y%m") if start is not None else None
+            if bucket_month is not None:
+                check_date = end_date or deposit_date
+                if check_date is None:
+                    stats["files_no_period_date"] += 1
+                    reports.append(
+                        f"NO-PERIOD-DATE {rel}（内部 settlement-end-date / deposit-date 缺失，无法校验账期月）"
+                    )
+                elif check_date.strftime("%Y%m") != bucket_month:
                     stats["files_out_of_period"] += 1
                     reports.append(
-                        f"OUT-OF-PERIOD {rel} window={window_date.isoformat()} "
+                        f"OUT-OF-PERIOD {rel} month={bucket_month} "
                         f"end={end_date.isoformat() if end_date else '-'} "
                         f"deposit={deposit_date.isoformat() if deposit_date else '-'}"
                     )
                     if not allow_out_of_period:
                         continue
-            elif start is not None and window_date is None:
-                stats["files_no_period_date"] += 1
-                reports.append(
-                    f"NO-PERIOD-DATE {rel}（内部 settlement-end-date / deposit-date 缺失，无法校验账期窗口）"
-                )
 
             md5 = hashlib.md5(raw).hexdigest()
             if md5 in seen_md5:
