@@ -73,6 +73,9 @@ tags: [amazon-period, tax, attachment, dedupe, settlement-id, nas, audit]
 - 附件命名统一为 `{渠道账号}-{结算结束日 YYYY-MM-DD}.txt`，命名只作展示，身份仍以内部字段为准。
 - 归档时先按结算号台账查重，再落桶；DRM/人工整理环节发现的同名同内容只保留一份。
 - 已清理：8 月两组同内容副本、跨桶 JohnaUS 副本、7 月 RosoonIT 副本（按 OA 发起人保留主人文件夹）。
+- 历史例外（如 7 月桶里 3 个 6 月已核算的「木已成舟」）走**显式白名单**
+  `{桶父目录}/_period_exceptions/{桶名}.txt`（每行 `人名夹/文件名`），不全局放开跨期；
+  命中记 `OUT-OF-PERIOD-ALLOWED`，仍保留在报告里可审计。
 
 ### 官方附件确实拿不到时：赛狐明细只能做「待核验补录」，不能冒充原件
 

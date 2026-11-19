@@ -102,6 +102,23 @@ def settlement_window_date(text: str) -> tuple[date | None, date | None, date | 
     return (dep or end), end, dep
 
 
+def _load_out_of_period_allowlist(bucket_dir: Path) -> set[str]:
+    """读取显式跨期白名单：``{桶父目录}/_period_exceptions/{桶名}.txt``。
+
+    每行一个 ``人名夹/文件名``，``#`` 开头为注释。用于「6 月已核算、木已成舟」这类
+    经业务确认的历史例外；不做全局放开。
+    """
+    p = bucket_dir.parent / "_period_exceptions" / f"{bucket_dir.name}.txt"
+    if not p.is_file():
+        return set()
+    out: set[str] = set()
+    for raw in p.read_text(encoding="utf-8").splitlines():
+        s = raw.strip()
+        if s and not s.startswith("#"):
+            out.add(s.replace("\\", "/").lstrip("./"))
+    return out
+
+
 def check_for_issues(lines: list[str]) -> bool:
     if not lines:
         return False
@@ -259,6 +276,7 @@ def read_bucket_amz_txts(
         subfolders = [p for p in subfolders if p.name in include_folders]
 
     seen_md5: dict[str, str] = {}
+    out_of_period_allowed = _load_out_of_period_allowlist(bucket_dir)
     for sub in sorted(subfolders):
         for f in sorted(sub.iterdir()):
             if not f.is_file() or not f.name.lower().endswith(".txt"):
@@ -293,14 +311,20 @@ def read_bucket_amz_txts(
                         f"NO-PERIOD-DATE {rel}（内部 settlement-end-date / deposit-date 缺失，无法校验账期月）"
                     )
                 elif check_date.strftime("%Y%m") != bucket_month:
-                    stats["files_out_of_period"] += 1
-                    reports.append(
-                        f"OUT-OF-PERIOD {rel} month={bucket_month} "
-                        f"end={end_date.isoformat() if end_date else '-'} "
-                        f"deposit={deposit_date.isoformat() if deposit_date else '-'}"
-                    )
-                    if not allow_out_of_period:
-                        continue
+                    if rel.replace("\\", "/").lstrip("./") in out_of_period_allowed:
+                        reports.append(
+                            f"OUT-OF-PERIOD-ALLOWED {rel} month={bucket_month} "
+                            f"end={end_date.isoformat() if end_date else '-'}（显式白名单）"
+                        )
+                    else:
+                        stats["files_out_of_period"] += 1
+                        reports.append(
+                            f"OUT-OF-PERIOD {rel} month={bucket_month} "
+                            f"end={end_date.isoformat() if end_date else '-'} "
+                            f"deposit={deposit_date.isoformat() if deposit_date else '-'}"
+                        )
+                        if not allow_out_of_period:
+                            continue
 
             md5 = hashlib.md5(raw).hexdigest()
             if md5 in seen_md5:

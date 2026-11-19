@@ -160,3 +160,22 @@ def test_settlement_end_previous_month_excluded(tmp_path):
     assert stats["files_out_of_period"] == 1
     assert df.empty
     assert any("month=202608" in r for r in reports)
+
+
+def test_explicit_allowlist_keeps_historical_exception(tmp_path):
+    """业务确认的 6 月历史例外：走显式白名单，既纳入又不放开全局跨期。"""
+    bucket = tmp_path / "账期20260704-20260803"
+    (bucket / "甲").mkdir(parents=True)
+    (bucket / "甲" / "AMZOldUS-6.12.txt").write_text(
+        _txt("27000000001", "2026-06-12 09:00:00 UTC"), encoding="utf-8"
+    )
+    exc = tmp_path / "_period_exceptions"
+    exc.mkdir()
+    (exc / "账期20260704-20260803.txt").write_text(
+        "# 6月已核算、木已成舟\n甲/AMZOldUS-6.12.txt\n", encoding="utf-8"
+    )
+    stats: dict = {}
+    df, reports = read_bucket_amz_txts(bucket, stats_out=stats)
+    assert stats["files_out_of_period"] == 0
+    assert len(df) == 2
+    assert any(r.startswith("OUT-OF-PERIOD-ALLOWED") for r in reports)
