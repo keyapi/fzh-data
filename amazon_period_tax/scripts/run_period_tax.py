@@ -61,6 +61,33 @@ def write_excel_sheets(path: Path, sheets: dict[str, pd.DataFrame]) -> None:
             frame.to_excel(w, sheet_name=safe, index=True)
 
 
+def collect_strict_failures(
+    read_stats: dict,
+    *,
+    n_skip_dup: int,
+    n_out_of_period: int,
+    missing_fx,
+    gsheet_rows: int,
+    n_accounts: int,
+) -> list[str]:
+    """`--strict` 的失败清单：SKIP-DUP / OUT-OF-PERIOD / FAIL 任一 >0 即非空。"""
+    failures: list[str] = []
+    if n_skip_dup:
+        failures.append(f"SKIP-DUP={n_skip_dup}")
+    if n_out_of_period:
+        failures.append(f"OUT-OF-PERIOD={n_out_of_period}")
+    if read_stats.get("files_failed"):
+        failures.append(f"FAIL={read_stats['files_failed']}")
+    if read_stats.get("rows_mismatch"):
+        failures.append(f"rows_mismatch={read_stats['rows_mismatch']}")
+    missing = [str(x) for x in (missing_fx if missing_fx is not None else [])]
+    if missing:
+        failures.append(f"missing_fx={missing[:5]}")
+    if gsheet_rows != n_accounts:
+        failures.append(f"gsheet_rows={gsheet_rows}!=accounts={n_accounts}")
+    return failures
+
+
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
@@ -196,19 +223,14 @@ def main() -> None:
         "excel_sheets": list(sheets.keys()),
     }
 
-    strict_failures = []
-    if n_skip_dup:
-        strict_failures.append(f"SKIP-DUP={n_skip_dup}")
-    if n_out_of_period:
-        strict_failures.append(f"OUT-OF-PERIOD={n_out_of_period}")
-    if read_stats.get("files_failed"):
-        strict_failures.append(f"FAIL={read_stats['files_failed']}")
-    if read_stats.get("rows_mismatch"):
-        strict_failures.append(f"rows_mismatch={read_stats['rows_mismatch']}")
-    if len(missing_fx):
-        strict_failures.append(f"missing_fx={list(missing_fx)[:5]}")
-    if len(df6_gsheet) != n_acct_files:
-        strict_failures.append(f"gsheet_rows={len(df6_gsheet)}!=accounts={n_acct_files}")
+    strict_failures = collect_strict_failures(
+        read_stats,
+        n_skip_dup=n_skip_dup,
+        n_out_of_period=n_out_of_period,
+        missing_fx=missing_fx,
+        gsheet_rows=len(df6_gsheet),
+        n_accounts=n_acct_files,
+    )
     report["strict_failures"] = strict_failures
     if strict_failures:
         print("STRICT 检查未通过:", "; ".join(strict_failures))
