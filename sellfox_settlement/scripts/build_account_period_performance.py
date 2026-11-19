@@ -68,6 +68,12 @@ SHEET_SURCHARGE_TAX = "附加费&Tax"
 
 WS_ACCOUNT = "渠道账号（20260521起在此维护）"
 
+# 主表尚未登记、但用户已确认归属的别名（2026-11-19）。
+# 主表补登记后，master 映射优先；这里用 setdefault 不会覆盖。
+ALIAS_OVERRIDES = {
+    "wfus-daneey": "WFDANEEYUS",
+}
+
 # 通途写回里的成本列（单位：人民币；均为“行合计 × 系数”后的金额）
 COST_PAIRS = {
     "绍兴产品": ["皮壳成本*系数*数量", "绍兴二次加工成本*系数*数量"],
@@ -283,6 +289,8 @@ def build_alias_map(acc: pd.DataFrame) -> tuple[dict[str, str], pd.DataFrame, pd
         for _, r in exploded.iterrows()
         if str(r["别名"]).strip()
     }
+    for alias, canon in ALIAS_OVERRIDES.items():
+        mapping.setdefault(alias, canon)
     # 重复别名的原始行（去重前）用于异常清单
     raw = pd.DataFrame(records, columns=["渠道账号", "别名"])
     dups = raw[raw["别名"].duplicated(keep=False)].sort_values("别名")
