@@ -163,6 +163,112 @@ def convert_amz_last2letter_upper(x: str) -> str:
     return x
 
 
+_V1_FAMILIES = (
+    ("price-type", "price-amount", "ItemPrice"),
+    ("item-related-fee-type", "item-related-fee-amount", "ItemFees"),
+    ("shipment-fee-type", "shipment-fee-amount", "ItemFees"),
+    ("order-fee-type", "order-fee-amount", "ItemFees"),
+    ("promotion-type", "promotion-amount", "Promotion"),
+    ("direct-payment-type", "direct-payment-amount", "ItemFees"),
+)
+
+
+def _normalize_v1_schema(df: pd.DataFrame) -> pd.DataFrame:
+    """旧版 V1 结算表（price-type/price-amount 族）→ V2 长表。
+
+    V1 没有 amount-type/amount-description/amount；直接按 V2 读会把金额变成 NaN，
+    Tax/FBA 静默少算。按 Amazon 的 V1→V2 语义把各金额族展开成一行一条:
+    ``MarketplaceFacilitator*`` 是代扣税，归 ItemWithheldTax，不得混入 ItemPrice。
+    """
+    if "amount-type" in df.columns or "price-type" not in df.columns:
+        return df
+    # 汇总行在展开时会被丢掉；先把只有汇总行才有的币种/结算号前向填充到每条明细。
+    df = df.copy()
+    for carry in ("currency", "settlement-id"):
+        if carry in df.columns:
+            df[carry] = df[carry].ffill()
+    rows: list[dict] = []
+    for _, src in df.iterrows():
+        base = src.to_dict()
+
+        def emit(amount_type: str, description: str, amount) -> None:
+            if amount is None or (isinstance(amount, str) and amount.strip() == ""):
+                return
+            try:
+                if pd.isna(amount):
+                    return
+            except (TypeError, ValueError):
+                pass
+            row = dict(base)
+            row["amount-type"] = amount_type
+            row["amount-description"] = description
+            row["amount"] = amount
+            rows.append(row)
+
+        for type_col, amt_col, amount_type in _V1_FAMILIES:
+            if type_col not in df.columns or amt_col not in df.columns:
+                continue
+            label = src.get(type_col)
+            if label is None or (isinstance(label, str) and label.strip() == ""):
+                continue
+            try:
+                if pd.isna(label):
+                    continue
+            except (TypeError, ValueError):
+                pass
+            desc = str(label).strip()
+            at = "ItemWithheldTax" if amount_type == "ItemPrice" and desc.startswith("MarketplaceFacilitator") else amount_type
+            emit(at, desc, src.get(amt_col))
+        for amt_col, desc in (
+            ("misc-fee-amount", "MiscFee"),
+            ("other-fee-amount", "OtherFee"),
+            ("other-amount", "Other"),
+        ):
+            if amt_col in df.columns:
+                emit("ItemFees", desc, src.get(amt_col))
+    return pd.DataFrame(rows) if rows else df
+
+
+_V1_AMOUNT_COLS = (
+    ("price-type", "price-amount"),
+    ("item-related-fee-type", "item-related-fee-amount"),
+    ("shipment-fee-type", "shipment-fee-amount"),
+    ("order-fee-type", "order-fee-amount"),
+    ("promotion-type", "promotion-amount"),
+    ("direct-payment-type", "direct-payment-amount"),
+)
+_V1_BARE_AMOUNT_COLS = ("misc-fee-amount", "other-fee-amount", "other-amount")
+
+
+def expected_parsed_rows(text: str) -> int:
+    """读取前的行数对账基准。
+
+    V2：非空行数 − 1（首行表头；其余每行一条）。
+    V1：一行会展开成多条金额行，按「非空金额单元格」计数，不能用源行数。
+    """
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return 0
+    hdr = [h.strip() for h in lines[0].split("\t")]
+    if "amount-type" in hdr or "price-type" not in hdr:
+        return max(len(lines) - 1, 0)
+    n = 0
+    for line in lines[1:]:
+        cols = line.split("\t")
+        for type_col, amt_col in _V1_AMOUNT_COLS:
+            if type_col not in hdr or amt_col not in hdr:
+                continue
+            ti, ai = hdr.index(type_col), hdr.index(amt_col)
+            if ti < len(cols) and ai < len(cols) and cols[ti].strip() and cols[ai].strip():
+                n += 1
+        for amt_col in _V1_BARE_AMOUNT_COLS:
+            if amt_col in hdr:
+                ai = hdr.index(amt_col)
+                if ai < len(cols) and cols[ai].strip():
+                    n += 1
+    return n
+
+
 def read_amz_txt_file(
     file_path: Path, *, repair_dir: Path | None = None, text: str | None = None
 ) -> pd.DataFrame | None:
@@ -191,6 +297,7 @@ def read_amz_txt_file(
         file_name = fixed_name
 
     df = pd.read_csv(file_path, sep="\t")
+    df = _normalize_v1_schema(df)
     for col in ("total-amount", "amount"):
         if col in df.columns:
             df[col] = df[col].map(
@@ -339,7 +446,7 @@ def read_bucket_amz_txts(
                 reports.append(f"FAIL {rel}: {e}")
                 continue
             if df is not None and not df.empty:
-                expected_rows = max(len([ln for ln in text.splitlines() if ln.strip()]) - 1, 0)
+                expected_rows = expected_parsed_rows(text)
                 if expected_rows != len(df):
                     stats["rows_mismatch"] += 1
                     reports.append(
