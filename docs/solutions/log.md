@@ -13,6 +13,7 @@ tags: [solutions, log]
 - **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— §4 补「EN Bin 一律不看，尤其 `美中USTX到货仓` 未执行收货」；§6 补「通途『已发货 / despatched』是 WXP 正常顺序（先标发 → 发美中 → 没货才回话），不是状态异常；在 GS『处理特殊订单』登记、核算时删除」；§7 补 restock date 遇周末/节假日顺延到下一个工作日（12/12 周六 → 12/14 周一）。
 - **更新**: `pb_orders/docs/reference/stockout-closed-loop.md` —— 新增 §0（通途标发是正常流程 + GS 登记）、§1.2 增加「EN Bin 一律不看」、§1.2 判定规则补工作日顺延。
 - **更新**: `pb-orders` skill 铁律补「通途标发不是异常 / GS 登记」「EN Bin 尤其 USTX 未收货不看」「shipment 看 `Pack Level Carrier Tracking ID`」；`pb_orders/AGENT_HANDOFF.md` 补坑 46/47，相关经验加新文档链接。
+- **口径**: Packslip 文件名 `xN` 的 N = **真实标签页数（包裹数），不是 shipment 数**。2026-11-19：37 个 shipment → 40 页 → `x40`；合并 137770200 旧标签 1 页 → 41 页 → `x41`。
 
 ## 2026-11-17（SPS IA 模板取值 / 回信 HTML 表格 / 通途付款日期）
 

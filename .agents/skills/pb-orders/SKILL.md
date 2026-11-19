@@ -117,6 +117,8 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
   建新 Key：`docker exec pb-orders-web python -m web.api_keys create --name agent --scopes check,fulfill,read`。
 - 通途导入 xlsx 的下载名带 `checked0stock` 词干，是 `kind=tongtool` 那一份，不要漏下。
   1:1 按 Packslip **页数 = 件数**（数量 2 的一行占 2 页）。
+  文件名 `xN` 的 **N = 真实标签页数（包裹数），不是 shipment 数**：
+  2026-11-19 实例 37 个 shipment → 40 个包裹标签，再加 137770200 旧标签 1 页 → `x41`。
 
 ## 铁律
 

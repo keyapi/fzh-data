@@ -613,6 +613,12 @@ uv run pytest tests/ -q
     `Carrier Tracking = 1ZC0019E0314807245`，`Pack Level = 1ZC0019E0314807245 1ZC0019E0315985060`；
     只看前者会误判「只发了一个包裹」。
 
+48. **Packslip 文件名 `xN` 的 N = 真实标签页数（包裹数），不是 shipment 数**
+    （2026-11-19 用户纠正）：SPS 的 Print Shipping Documents → Packing Slip 下载后，
+    一个 shipment 可能多包裹/多页。实例：37 个 shipment 的 PDF 是 **40 页 = x40**；
+    把 137770200 的旧标签 1 页合并到第 1 页后是 **41 页 = x41**。
+    命名时数 PDF 页数/实际标签数，不要按「今天 37 个 shipment」写成 x37/x38。
+
 ## 8. 数量对账口径
 
 ### 8.1 库存预检（步骤 0）
