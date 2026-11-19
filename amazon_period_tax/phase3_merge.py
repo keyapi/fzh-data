@@ -2,9 +2,13 @@
 """Colab「钉钉OA收款费用…」Phase3：OA 定稿 + 汇率 + 渠道账号 + 附加费/Tax → GSheet。"""
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -355,7 +359,10 @@ def build_group_account_cost(
 
 def build_rmb_by_account(df_group: pd.DataFrame) -> pd.DataFrame:
     cost_rmb = [f"{x}_人民币" for x in LS_COL_COST if f"{x}_人民币" in df_group.columns]
-    insert_cols = [COL_TOTAL_COST_RMB] + [c for c in cost_rmb if c != COL_TOTAL_COST_RMB]
+    lead_cols = [c for c in ("应收金额_人民币", "销售额_人民币") if c in df_group.columns]
+    insert_cols = lead_cols + [COL_TOTAL_COST_RMB] + [
+        c for c in cost_rmb if c not in (COL_TOTAL_COST_RMB, *lead_cols)
+    ]
     return (
         df_group.groupby(by=["渠道", "渠道账号", "运营人员"], dropna=False)[insert_cols]
         .sum()
@@ -536,7 +543,9 @@ def merge_rmb_tax_additional(
     for a, b in [
         ("渠道", "渠道账号"),
         ("渠道账号", "运营人员"),
-        ("运营人员", COL_TOTAL_COST_RMB),
+        ("运营人员", "应收金额_人民币"),
+        ("应收金额_人民币", "销售额_人民币"),
+        ("销售额_人民币", COL_TOTAL_COST_RMB),
         (COL_TOTAL_COST_RMB, "Tax amount人民币"),
     ]:
         if a in cols and b in cols:
@@ -749,6 +758,7 @@ class Phase3Report:
     fba_source: str = ""
     warnings: list[str] = field(default_factory=list)
     worksheets_written: list[str] = field(default_factory=list)
+    manifest_path: str | None = None
 
 
 def run_phase3(
@@ -887,6 +897,38 @@ def run_phase3(
         rep.fba_staff_rows = int(len(frames["fba_staff"]))
         rep.fba_source = "existing-sheet" if not existing.empty else ""
 
+    def _md5(path) -> str | None:
+        p = Path(path)
+        return hashlib.md5(p.read_bytes()).hexdigest() if p.is_file() else None
+
+    # 写前硬门禁：任何一项不过都必须在此之前抛错，不能先写后报。
+    if write_gsheet or write_gsheet_fba:
+        problems: list[str] = []
+        fx_missing = find_unmatched_currency(df)
+        if not fx_missing.empty:
+            problems.append(f"币种未匹配汇率 {len(fx_missing)} 行")
+        if (df["渠道账号"].astype(str).str.strip() == "").any():
+            problems.append("渠道账号未匹配")
+        raw_ok = df.loc[approval_filter]
+        for c in ("应收金额_人民币", "销售额_人民币", COL_TOTAL_COST_RMB):
+            if c in df_group.columns and c in raw_ok.columns:
+                if abs(float(df_group[c].fillna(0).sum()) - float(raw_ok[c].fillna(0).sum())) > 0.01:
+                    problems.append(f"分组合计 {c} 不平")
+        if not df_tax.empty and "Tax amount人民币" in df_merged.columns:
+            if abs(
+                float(df_merged["Tax amount人民币"].fillna(0).sum())
+                - float(df_tax["Tax amount人民币"].sum())
+            ) > 0.01:
+                problems.append("Tax 合计不平")
+        if not df_sep.empty and "附加费累加人民币" in df_merged.columns:
+            if abs(
+                float(df_merged["附加费累加人民币"].fillna(0).sum())
+                - float(df_sep["附加费累加人民币"].sum())
+            ) > 0.01:
+                problems.append("附加费合计不平")
+        if problems:
+            raise RuntimeError("写前门禁失败，已拒绝写入: " + "; ".join(problems))
+
     if write_gsheet:
         if not phase3_spreadsheet_available(gc):
             raise PermissionError(
@@ -922,5 +964,47 @@ def run_phase3(
         from phase3_gsheet import sort_phase3_tabs
 
         sort_phase3_tabs(gc, pin_worksheet=period_range)
+
+    if write_gsheet or write_gsheet_fba:
+        manifest_dir = Path(
+            os.environ.get("PERIOD_WRITE_MANIFEST_DIR", str(Path.cwd() / "reports" / "_write_runs"))
+        )
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + period_range
+        alias_snap = Path("channel_account_sync/out/channel_account_gsheet.json")
+        nas_root_raw = os.environ.get("LOCAL_NAS_PERIOD_ROOT", "").strip()
+        whitelist = (
+            Path(nas_root_raw) / "_period_exceptions" / f"账期{period_range}.txt"
+            if nas_root_raw
+            else None
+        )
+
+        def _sum(df_, col) -> float | None:
+            return round(float(df_[col].fillna(0).sum()), 6) if col in df_.columns else None
+
+        manifest = {
+            "run_id": run_id,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "period": period_range,
+            "bucket": bucket,
+            "exchange_month": yyyymm,
+            "input_xlsx": str(input_xlsx),
+            "input_md5": _md5(input_xlsx),
+            "alias_snapshot_md5": _md5(alias_snap),
+            "out_of_period_whitelist_md5": _md5(whitelist) if whitelist else None,
+            "rows": {"row_level": len(df), "group": len(df_group), "merged": len(df_merged)},
+            "totals": {
+                "应收金额_人民币": _sum(df_group, "应收金额_人民币"),
+                "销售额_人民币": _sum(df_group, "销售额_人民币"),
+                "收款费用累加人民币": _sum(df_group, COL_TOTAL_COST_RMB),
+                "Tax amount人民币": _sum(df_merged, "Tax amount人民币"),
+                "附加费累加人民币": _sum(df_merged, "附加费累加人民币"),
+            },
+            "worksheets_written": rep.worksheets_written,
+            "warnings": rep.warnings,
+        }
+        mp = manifest_dir / f"{run_id}.json"
+        mp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        rep.manifest_path = str(mp)
 
     return rep, frames
