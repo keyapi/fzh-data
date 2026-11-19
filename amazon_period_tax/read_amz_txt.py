@@ -64,16 +64,19 @@ def convert_amz_last2letter_upper(x: str) -> str:
     return x
 
 
-def read_amz_txt_file(file_path: Path, *, repair_dir: Path | None = None) -> pd.DataFrame | None:
+def read_amz_txt_file(
+    file_path: Path, *, repair_dir: Path | None = None, text: str | None = None
+) -> pd.DataFrame | None:
     file_name = file_path.name
     if not (file_name.upper().startswith("AMZ") and file_name.lower().endswith(".txt")):
         return None
     orig_path = file_path
     if_file_with_issue = False
-    try:
-        text = file_path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        text = file_path.read_text(encoding="latin-1")
+    if text is None:
+        try:
+            text = file_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            text = file_path.read_text(encoding="latin-1")
     lines = text.splitlines(keepends=True)
     if not lines:
         return None
@@ -122,36 +125,88 @@ def read_bucket_amz_txts(
     exclude_folders: tuple[str, ...] = DEFAULT_EXCLUDE_FOLDERS,
     include_folders: tuple[str, ...] | None = None,
     repair_dir: Path | None = None,
+    stats_out: dict | None = None,
 ) -> tuple[pd.DataFrame, list[str]]:
     """扫描桶下一级人名文件夹。返回 (合并 df, 报告行)。
 
-    repair_dir：tab 修复缓存目录，默认 ``{bucket_dir}/.repair_cache``（不写人名文件夹/自动修复sku）。
+    - 同一内容（md5 相同）的 txt 只读第一份，其余记 ``SKIP-DUP``（同一文件被多人上传是常态，
+      不去重会把 Tax 多算一遍）。
+    - repair_dir：tab 修复缓存目录，默认 ``{桶的父目录}/.repair_cache_{桶名}``，
+      不写在桶内 —— 桶内任何目录都会被当成「人名文件夹」扫描。
+    - 跳过 ``.`` 开头的目录（缓存/隐藏目录不是人名夹）。
+    - ``stats_out``：若传入 dict，会被填入文件/行数对账数字。
     """
+    import hashlib
+
     reports: list[str] = []
     dfs: list[pd.DataFrame] = []
+    stats = {
+        "bucket": bucket_dir.name,
+        "files_total": 0,
+        "files_used": 0,
+        "files_dup": 0,
+        "files_failed": 0,
+        "rows_total": 0,
+        "rows_mismatch": 0,
+    }
     if not bucket_dir.is_dir():
         raise FileNotFoundError(bucket_dir)
-    cache = repair_dir if repair_dir is not None else (bucket_dir / ".repair_cache")
-    subfolders = [p for p in bucket_dir.iterdir() if p.is_dir()]
+    cache = repair_dir if repair_dir is not None else (bucket_dir.parent / f".repair_cache_{bucket_dir.name}")
+    subfolders = [p for p in bucket_dir.iterdir() if p.is_dir() and not p.name.startswith(".")]
     if exclude_folders:
         subfolders = [p for p in subfolders if p.name not in exclude_folders]
     if include_folders:
         subfolders = [p for p in subfolders if p.name in include_folders]
 
+    seen_md5: dict[str, str] = {}
     for sub in sorted(subfolders):
         for f in sorted(sub.iterdir()):
             if not f.is_file() or not f.name.lower().endswith(".txt"):
                 continue
             if not f.name.upper().startswith("AMZ"):
                 continue
+            stats["files_total"] += 1
+            rel = f"{sub.name}/{f.name}"
             try:
-                df = read_amz_txt_file(f, repair_dir=cache)
+                raw = f.read_bytes()
+            except OSError as e:
+                stats["files_failed"] += 1
+                reports.append(f"FAIL {rel}: {e}")
+                continue
+            md5 = hashlib.md5(raw).hexdigest()
+            if md5 in seen_md5:
+                stats["files_dup"] += 1
+                reports.append(f"SKIP-DUP {rel} == {seen_md5[md5]}")
+                continue
+            seen_md5[md5] = rel
+            try:
+                try:
+                    text = raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    text = raw.decode("latin-1")
+                df = read_amz_txt_file(f, repair_dir=cache, text=text)
             except Exception as e:
-                reports.append(f"FAIL {sub.name}/{f.name}: {e}")
+                stats["files_failed"] += 1
+                reports.append(f"FAIL {rel}: {e}")
                 continue
             if df is not None and not df.empty:
+                expected_rows = max(len([ln for ln in text.splitlines() if ln.strip()]) - 1, 0)
+                if expected_rows != len(df):
+                    stats["rows_mismatch"] += 1
+                    reports.append(
+                        f"FAIL {rel} rows-mismatch file={expected_rows} parsed={len(df)}"
+                    )
                 dfs.append(df)
-                reports.append(f"OK {sub.name}/{f.name} rows={len(df)} acct={df['渠道账号'].iloc[0]}")
+                stats["files_used"] += 1
+                stats["rows_total"] += len(df)
+                reports.append(f"OK {rel} rows={len(df)} acct={df['渠道账号'].iloc[0]}")
+
+    reports.append(
+        "SUMMARY files={files_total} used={files_used} dup={files_dup} failed={files_failed} "
+        "rows_mismatch={rows_mismatch} rows={rows_total}".format(**stats)
+    )
+    if stats_out is not None:
+        stats_out.update(stats)
 
     if not dfs:
         return pd.DataFrame(), reports

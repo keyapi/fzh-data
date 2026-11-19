@@ -10,12 +10,15 @@ import argparse
 import sys
 from pathlib import Path
 
+import pandas as pd
+
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
 from ding_xlsx import enrich, exclude_keys, id_text, read_dingtalk_xlsx
 from export_period_excels import drop_helper, write_xlsx
+from parse import keep_approval
 
 
 def load_exclude_keys(path: Path) -> set[str]:
@@ -28,6 +31,42 @@ def load_exclude_keys(path: Path) -> set[str]:
             continue
         keys.add(line)
     return keys
+
+
+def _cell_text(v) -> str:
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    return str(v)
+
+
+def filter_period_rows(
+    df, period: str, keys: set[str] | None = None
+) -> tuple[object, dict[str, int]]:
+    """账期月 + 审批状态（完成/审批中且非拒绝）+ 迟交唯一键 三重过滤。
+
+    返回 (保留行, 计数)。计数用于核对 N 进 M 出：period 是账期月命中的行数，
+    excluded_status 是其中被审批状态剔掉的，excluded_late 是被迟交登记剔掉的。
+    """
+    period_rows = df[df["账期月"] == period].copy()
+    n_period = len(period_rows)
+    keep_mask = period_rows.apply(
+        lambda r: keep_approval(_cell_text(r.get("审批状态")), _cell_text(r.get("审批结果"))),
+        axis=1,
+    )
+    kept = period_rows[keep_mask].copy()
+    excluded_status = n_period - len(kept)
+    excluded_late = 0
+    if keys:
+        before = len(kept)
+        kept = exclude_keys(kept, keys)
+        excluded_late = before - len(kept)
+    counts = {
+        "period": n_period,
+        "excluded_status": excluded_status,
+        "excluded_late": excluded_late,
+        "kept": len(kept),
+    }
+    return kept, counts
 
 
 def main() -> None:
@@ -48,22 +87,17 @@ def main() -> None:
         raise SystemExit(f"读不到含「账期日期」的行: {src}")
     n_in = len(df)
     en = enrich(df)
-    kept = en[en["账期月"] == args.period].copy()
-    n_period = len(kept)
-    excluded = 0
-    if args.exclude_keys:
-        keys = load_exclude_keys(Path(args.exclude_keys))
-        before = len(kept)
-        kept = exclude_keys(kept, keys)
-        excluded = before - len(kept)
+    keys = load_exclude_keys(Path(args.exclude_keys)) if args.exclude_keys else set()
+    kept, counts = filter_period_rows(en, args.period, keys)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if "审批编号" in kept.columns:
         kept["审批编号"] = kept["审批编号"].map(id_text)
     write_xlsx(out, {"核算行": drop_helper(kept)})
     print(
-        f"in={n_in} period={args.period} kept={n_period} "
-        f"excluded_late={excluded} wrote={out} rows={len(kept)}"
+        f"in={n_in} period_rows={counts['period']} kept={counts['kept']} "
+        f"excluded_late={counts['excluded_late']} excluded_status={counts['excluded_status']} "
+        f"wrote={out}"
     )
 
 

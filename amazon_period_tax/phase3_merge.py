@@ -28,6 +28,10 @@ from phase3_constants import (
 )
 from phase3_gsheet import phase3_spreadsheet_available, read_worksheet_df, write_worksheet_df
 
+_DING = Path(__file__).resolve().parents[1] / "dingtalk" / "dingtalk_oa_approval"
+if str(_DING) not in sys.path:
+    sys.path.insert(0, str(_DING))
+
 
 def set2after1(ls_cols: list, first_element: str, second_element: str) -> None:
     index_1 = ls_cols.index(first_element)
@@ -242,6 +246,12 @@ def build_row_level_df(
             ),
         )
     approval_filter = (df["审批状态"].isin(["完成", "审批中"])) & (df["审批结果"] != "拒绝")
+    # Colab cell 8：只统计「完成/审批中且非拒绝」的单据，按渠道账号计数；未通过的行留空
+    df["渠道账号正确提交次数"] = np.nan
+    approved = df.loc[approval_filter]
+    if not approved.empty and "渠道账号" in approved.columns:
+        counts = approved.groupby("渠道账号")["渠道账号"].transform("count")
+        df.loc[approval_filter, "渠道账号正确提交次数"] = counts
     return df, approval_filter
 
 
@@ -350,18 +360,44 @@ def load_additional_fee_grouped(gc, exchange_month: str, df_explode: pd.DataFram
     return raw.groupby("渠道账号")[sum_cols].sum().reset_index()
 
 
-def load_tax_grouped(gc, bucket: str) -> pd.DataFrame:
+def load_tax_grouped(gc, bucket: str, df_explode: pd.DataFrame | None = None) -> tuple[pd.DataFrame, list[str]]:
+    """读 Tax{YYYYMM} 并按别名归一化渠道账号后求和。
+
+    与 Colab cell 31-32 一致：Tax 表的「渠道账号」可能是别名，先按（大写化后的）别名映射回
+    规范渠道账号；映射不到的再用 ``channel_canonical`` 静态快照兜底。返回 (df, 未匹配别名列表)。
+    旧实现直接按原样 groupby，别名会变成独立一行，在 Phase3 外连接时静默丢数。
+    """
+    from channel_canonical import canonical_account
+
     ws_name = tax_worksheet_name(bucket)
     sh = open_additional_fee_tax_spreadsheet(gc)
     rows = sh.worksheet(ws_name).get_all_values()
     raw = pd.DataFrame(rows[1:], columns=rows[0]).replace("", pd.NA)
     if "渠道账号" not in raw.columns or "Tax amount人民币" not in raw.columns:
-        return pd.DataFrame(columns=["渠道账号", "Tax amount人民币"])
+        return pd.DataFrame(columns=["渠道账号", "Tax amount人民币"]), []
     raw["Tax amount人民币"] = pd.to_numeric(
         raw["Tax amount人民币"].astype(str).str.replace(",", "", regex=False),
         errors="coerce",
     ).fillna(0)
-    return raw.groupby("渠道账号")["Tax amount人民币"].sum().reset_index()
+    raw["渠道账号"] = raw["渠道账号"].astype(str).str.strip()
+
+    alias_map: dict[str, str] = {}
+    if df_explode is not None and not df_explode.empty:
+        for canon, alias in zip(df_explode["渠道账号"], df_explode["渠道账号别名"]):
+            alias_map[str(alias).strip().upper()] = str(canon).strip()
+
+    def resolve(value: str) -> str:
+        key = value.strip()
+        hit = alias_map.get(key.upper())
+        if hit:
+            return hit
+        canon = canonical_account(key)
+        return canon or key
+
+    raw["渠道账号"] = raw["渠道账号"].map(resolve)
+    known = {str(a).strip() for a in (df_explode["渠道账号"] if df_explode is not None else [])}
+    unmatched = sorted({a for a in raw["渠道账号"] if known and a not in known})
+    return raw.groupby("渠道账号")["Tax amount人民币"].sum().reset_index(), unmatched
 
 
 def merge_rmb_tax_additional(
@@ -397,17 +433,126 @@ def collection_rate_by_receipt(df_group: pd.DataFrame) -> pd.DataFrame:
 
 
 def collection_rate_by_staff(df_group: pd.DataFrame) -> pd.DataFrame:
-    rmb_cols = [c for c in df_group.columns if c.endswith("_人民币")]
+    """Colab cell 17：按运营人员汇总人民币列，比例列插在其源列右侧。
+
+    列序（202608 实表）：运营人员, 销售额_人民币, 应收金额_人民币, 应收金额_比例,
+    客户退货至平台运费_人民币, … 每个 ``_人民币`` 后面紧跟 ``_比例``；最后把
+    销售额_人民币 挪到运营人员右侧。旧实现把比例列全追加到末尾，与 notebook 不一致。
+    """
+    rmb_cols = [f"{c}_人民币" for c in LS_COL_NEED_NUMERIC if f"{c}_人民币" in df_group.columns]
     g = df_group.groupby("运营人员")[rmb_cols].sum()
-    out = g.copy()
-    if "销售额_人民币" in out.columns:
+    if "销售额_人民币" in g.columns:
         for col in rmb_cols:
-            if col != "销售额_人民币":
-                new_name = col.replace("_人民币", "_比例")
-                ratio = out[col] / out["销售额_人民币"]
-                ratio = ratio.replace([np.inf, -np.inf], np.nan).fillna(1.0)
-                out[new_name] = ratio
-    return out.reset_index()
+            if col == "销售额_人民币":
+                continue
+            new_name = col.replace("_人民币", "_比例")
+            ratio = (g[col] / g["销售额_人民币"]).replace([np.inf, -np.inf], np.nan).fillna(1.0)
+            g.insert(g.columns.get_loc(col) + 1, new_name, ratio)
+    g = g.reset_index()
+    if "销售额_人民币" in g.columns:
+        sales_rmb = g.pop("销售额_人民币")
+        g.insert(g.columns.get_loc("运营人员") + 1, "销售额_人民币", sales_rmb)
+    return g
+
+
+FBA_COL = "FBA费用_人民币"
+FBA_ADD_RECEIVE = "加上FBA费用_应收金额_人民币"
+FBA_MINUS_COMMISSION = "扣减FBA费用_佣金_人民币"
+FBA_SUMMARY_SUFFIX = "FBA费用扣减后分类汇总"
+FBA_STAFF_SUFFIX = "FBA费用扣减后收款比例运营人员"
+
+
+def build_fba_summary(
+    gc,
+    *,
+    bucket: str,
+    bucket_dir: Path,
+    df_exchange_rate: pd.DataFrame,
+    repair_dir: Path | None = None,
+) -> tuple[pd.DataFrame, dict]:
+    """用本地 FBA 管道生成 ``{期}FBA费用扣减后分类汇总``（只算不写）。
+
+    与 Colab 分类汇总同口径：结算 txt 中的 FBA 费用行 → 特例规则 → 扣减后按
+    父文件夹/子文件夹/渠道账号/币种/汇率汇总。返回 (summary, 统计信息)。
+    """
+    from fba_adjust import FBA_DESCRIPTIONS, fba_summary_df12, load_fba_rules, process_fba_orders
+    from read_amz_txt import read_bucket_amz_txts
+    from tax_aggregate import enrich_with_fx
+
+    info: dict = {"bucket_dir": str(bucket_dir), "read_stats": {}, "rule_rows": 0, "fba_rows": 0}
+    df_raw, reports = read_bucket_amz_txts(bucket_dir, repair_dir=repair_dir, stats_out=info["read_stats"])
+    info["read_reports"] = reports
+    if df_raw.empty:
+        return pd.DataFrame(), info
+    df = enrich_with_fx(df_raw, df_exchange_rate)
+    df_fba = df[df["amount-description"].isin(FBA_DESCRIPTIONS)].copy()
+    info["fba_rows"] = int(len(df_fba))
+    if df_fba.empty:
+        return pd.DataFrame(), info
+    rules = load_fba_rules(gc, bucket_name=bucket)
+    rules_exec = rules.loc[rules["当月是否执行"] == "是"].copy()
+    info["rule_rows"] = int(len(rules_exec))
+    if rules_exec.empty:
+        return pd.DataFrame(), info
+    processed = process_fba_orders(rules_exec, df_fba)
+    summary = fba_summary_df12(processed)
+    info["summary_rows"] = int(len(summary))
+    return summary, info
+
+
+def build_fba_staff(
+    df_group: pd.DataFrame,
+    fba_summary: pd.DataFrame,
+) -> pd.DataFrame:
+    """Colab cell 45-47：``{期}FBA费用扣减后收款比例运营人员``（只算不写）。"""
+    if df_group.empty:
+        return pd.DataFrame()
+    if fba_summary is None or fba_summary.empty:
+        fb = pd.DataFrame({"渠道账号": [], "调整前-后amount人民币": []})
+    else:
+        df_fba = fba_summary.copy()
+        for c in ("amount", "amount人民币", "调整前-后amount", "调整前-后amount人民币"):
+            if c in df_fba.columns:
+                df_fba[c] = pd.to_numeric(
+                    df_fba[c].astype(str).str.replace(",", "", regex=False), errors="coerce"
+                ).fillna(0)
+        fb = df_fba.groupby("渠道账号")["调整前-后amount人民币"].sum().reset_index()
+
+    merged = df_group.merge(fb, how="left", on="渠道账号")
+    merged["调整前-后amount人民币"] = merged["调整前-后amount人民币"].fillna(0.0)
+    merged = merged.rename(columns={"调整前-后amount人民币": FBA_COL})
+    merged[FBA_COL] = merged[FBA_COL] * -1
+    merged[FBA_ADD_RECEIVE] = merged["应收金额_人民币"] + merged[FBA_COL]
+    merged[FBA_MINUS_COMMISSION] = merged["佣金_人民币"] - merged[FBA_COL]
+
+    cols = [f"{c}_人民币" for c in LS_COL_NEED_NUMERIC if f"{c}_人民币" in merged.columns]
+    cols += [FBA_COL, FBA_ADD_RECEIVE, FBA_MINUS_COMMISSION]
+    g = merged.groupby("运营人员")[cols].sum()
+    for col in cols:
+        if col == "销售额_人民币":
+            continue
+        new_name = col.replace("_人民币", "_比例")
+        ratio = (g[col] / g["销售额_人民币"]).replace([np.inf, -np.inf], np.nan).fillna(1.0)
+        g.insert(g.columns.get_loc(col) + 1, new_name, ratio)
+
+    g = g.reset_index()
+    if "销售额_人民币" in g.columns:
+        sales_rmb = g.pop("销售额_人民币")
+        g.insert(g.columns.get_loc("运营人员") + 1, "销售额_人民币", sales_rmb)
+    move = [
+        FBA_COL,
+        FBA_COL.replace("_人民币", "_比例"),
+        FBA_ADD_RECEIVE,
+        FBA_ADD_RECEIVE.replace("_人民币", "_比例"),
+    ]
+    move = [c for c in move if c in g.columns]
+    anchor = "应收金额_比例"
+    if anchor in g.columns and move:
+        order = [c for c in g.columns if c not in move]
+        pos = order.index(anchor) + 1
+        order[pos:pos] = move
+        g = g[order]
+    return g
 
 
 def apply_fba_to_group(
@@ -446,6 +591,10 @@ class Phase3Report:
     unmatched_sales_account_rows: int = 0
     april_dropped: int = 0
     tax_sum_rmb: float | None = None
+    tax_unmatched_accounts: list[str] = field(default_factory=list)
+    fba_summary_rows: int | None = None
+    fba_staff_rows: int | None = None
+    fba_source: str = ""
     warnings: list[str] = field(default_factory=list)
     worksheets_written: list[str] = field(default_factory=list)
 
@@ -456,7 +605,10 @@ def run_phase3(
     input_xlsx: Path,
     bucket: str,
     exchange_month: str,
+    bucket_dir: Path | None = None,
+    repair_dir: Path | None = None,
     write_gsheet: bool = False,
+    write_gsheet_fba: bool = False,
 ) -> tuple[Phase3Report, dict[str, pd.DataFrame]]:
     period_range = period_range_from_bucket(bucket)
     yyyymm = exchange_month.strip()
@@ -478,7 +630,7 @@ def run_phase3(
     )
     df_rmb = build_rmb_by_account(df_group)
     df_sep = load_additional_fee_grouped(gc, yyyymm, df_explode)
-    df_tax = load_tax_grouped(gc, bucket)
+    df_tax, tax_unmatched = load_tax_grouped(gc, bucket, df_explode)
     df_merged = merge_rmb_tax_additional(df_rmb, df_sep=df_sep, df_tax=df_tax, df_account=df_account)
 
     rep = Phase3Report(
@@ -493,9 +645,12 @@ def run_phase3(
         unmatched_sales_account_rows=unmatched,
         april_dropped=april_n,
         tax_sum_rmb=float(df_tax["Tax amount人民币"].sum()) if not df_tax.empty else None,
+        tax_unmatched_accounts=tax_unmatched,
     )
     if unmatched:
         rep.warnings.append(f"渠道账号未匹配 {unmatched} 行（销售账户→别名表）")
+    if tax_unmatched:
+        rep.warnings.append(f"Tax 有 {len(tax_unmatched)} 个渠道账号未在别名表/快照中: {tax_unmatched[:5]}")
     if not fx_missing.empty:
         labels = sorted({str(x) for x in fx_missing["货币中文名"].dropna().unique()})
         rep.warnings.append(
@@ -523,6 +678,38 @@ def run_phase3(
     if has_fba:
         frames["group_account_fba"] = df_group_fba
 
+    # Colab 39-47：FBA 分类汇总 + FBA 扣减后收款比例运营人员（本地生成，只算不写）
+    fba_summary = pd.DataFrame()
+    if bucket_dir is not None:
+        try:
+            fba_summary, fba_info = build_fba_summary(
+                gc,
+                bucket=bucket,
+                bucket_dir=Path(bucket_dir),
+                df_exchange_rate=df_rate,
+                repair_dir=repair_dir,
+            )
+            frames["fba_summary"] = fba_summary
+            frames["fba_staff"] = build_fba_staff(df_group, fba_summary)
+            rep.fba_summary_rows = int(len(fba_summary))
+            rep.fba_staff_rows = int(len(frames["fba_staff"]))
+            rep.fba_source = "local-txt"
+            bad = int(fba_info["read_stats"].get("files_failed", 0)) + int(
+                fba_info["read_stats"].get("rows_mismatch", 0)
+            )
+            if bad:
+                rep.warnings.append(f"FBA 源 txt 读取异常 {bad} 处（见 fba read_reports）")
+        except Exception as e:  # 生成失败不能影响五张主表
+            rep.warnings.append(f"FBA 表生成失败: {e}")
+    else:
+        # 不给桶目录时退回读现有分类汇总（Colab 手工复制的场景）
+        existing = read_worksheet_df(gc, f"{period_range}{FBA_SUMMARY_SUFFIX}")
+        frames["fba_summary"] = existing
+        frames["fba_staff"] = build_fba_staff(df_group, existing)
+        rep.fba_summary_rows = int(len(existing))
+        rep.fba_staff_rows = int(len(frames["fba_staff"]))
+        rep.fba_source = "existing-sheet" if not existing.empty else ""
+
     if write_gsheet:
         if not phase3_spreadsheet_available(gc):
             raise PermissionError(
@@ -543,5 +730,20 @@ def run_phase3(
         from phase3_gsheet import sort_phase3_tabs
 
         sort_phase3_tabs(gc, pin_worksheet=ws_main)
+
+    if write_gsheet_fba:
+        if not phase3_spreadsheet_available(gc):
+            raise PermissionError("Phase3 表不可读，无法写 FBA 工作表")
+        if frames.get("fba_summary") is not None and not frames["fba_summary"].empty:
+            ws_fba_summary = f"{period_range}{FBA_SUMMARY_SUFFIX}"
+            write_worksheet_df(gc, frames["fba_summary"], worksheet=ws_fba_summary)
+            rep.worksheets_written.append(ws_fba_summary)
+        if frames.get("fba_staff") is not None and not frames["fba_staff"].empty:
+            ws_fba_staff = f"{period_range}{FBA_STAFF_SUFFIX}"
+            write_worksheet_df(gc, frames["fba_staff"], worksheet=ws_fba_staff)
+            rep.worksheets_written.append(ws_fba_staff)
+        from phase3_gsheet import sort_phase3_tabs
+
+        sort_phase3_tabs(gc, pin_worksheet=period_range)
 
     return rep, frames

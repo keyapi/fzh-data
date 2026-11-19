@@ -22,7 +22,7 @@ timestamp: 2026-11-04
 ## 产出路径
 
 - **定稿 xlsx**：`{LOCAL_NAS_PERIOD_ROOT}/账期YYYYMMDD-YYYYMMDD/合并Amazon_{桶}_{ts}.xlsx`（桶根目录，**不**用 `_tax_pipeline/`）
-- **tab 修复缓存**：`{桶}/.repair_cache/`（不写人名子目录 `自动修复sku/`）
+- **tab 修复缓存**：`{桶的父目录}/.repair_cache_{桶名}`（**不写在桶内**；桶内目录会被当人名夹扫描。可用 `--repair-dir` 覆盖）
 - **可选镜像**：`--out-dir`（如 `dingtalk_oa_approval_data/reports/tax_txt`）
 - **NAS 上传**：`{NAS_FINANCE_PERIOD_ROOT}/{桶}/{同名 xlsx}`（`--upload-nas`）
 
@@ -92,6 +92,34 @@ Phase3 写 **Google 表** [`钉钉OA收款费用Amazon多平台&附加费&Tax`](
 
 输入：**核算定稿 xlsx**（`export_colab_period.py` 的 `核算行` sheet）。运营渠道表 20260521 布局第 3 列即账号（表头可能不是「渠道账号」字面）。
 
+### FBA 两张表与写表开关（2026-11-19）
+
+`run_phase3` 现在用本地 FBA 管道（结算 txt + `账期FBA费用特例` 规则）生成
+`{期}FBA费用扣减后分类汇总` 与 `{期}FBA费用扣减后收款比例运营人员`，**默认只算不写**：
+
+```powershell
+# 只算：报告里看 fba_summary_rows / fba_staff_rows / fba_source
+uv run python amazon_period_tax/scripts/run_period_phase3.py --in <定稿.xlsx> --bucket 账期... --exchange-month 202610 --dry-run
+# 确认后才写这两张表
+uv run python amazon_period_tax/scripts/run_period_phase3.py --in <定稿.xlsx> --bucket 账期... --exchange-month 202610 --write-gsheet-fba
+```
+
+不给 `--bucket-dir` 时默认 `LOCAL_NAS_PERIOD_ROOT/<bucket>`；目录不存在则退回读表内现有分类汇总。
+
+### 硬关卡与 strict
+
+```powershell
+uv run python amazon_period_tax/scripts/verify_period.py --bucket 账期20261004-20261103
+uv run python amazon_period_tax/scripts/run_period_tax.py --bucket ... --exchange-month 202610 --dry-run --strict
+uv run python amazon_period_tax/scripts/run_period_phase3.py ... --dry-run --strict
+```
+
+`verify_period.py` 只读核对 Tax{YYYYMM} 与 Phase3 五张表（合计、账号集合、缺汇率、未匹配、
+行级 vs 分组合计），任一项 FAIL 非 0 退出。`--strict` 让 Tax/Phase3 在
+`SKIP-DUP` / 读失败 / 行数对不上 / 未匹配渠道账号 / 币种未匹配汇率时非 0。
+写表用 `RAW`：`审批编号` 等 ID 列强制文本，数字保留原生类型。
+
+
 ## 相关
 
 - Colab 调研：`sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md` §1
@@ -101,4 +129,5 @@ Phase3 写 **Google 表** [`钉钉OA收款费用Amazon多平台&附加费&Tax`](
 - Tax 汇率别名：`docs/solutions/integration-issues/amazon-period-tax-fx-alias-multiplies.md`
 - 币种全角/零宽字符：`docs/solutions/integration-issues/amazon-period-fx-currency-label-invisible-chars.md`
 - 自己重跑 Tax：`docs/solutions/workflow-issues/amazon-period-tax-rerun-without-agent.md`
+- 管道审计修复（去重/FBA 过滤/Tax 别名/RAW/verify）：`docs/solutions/workflow-issues/amazon-period-pipeline-audit-fixes.md`
 - 下游 Phase3 Colab：`钉钉OA收款费用Amazon多平台&附加费&Tax 20250704.ipynb`

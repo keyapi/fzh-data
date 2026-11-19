@@ -25,6 +25,22 @@ def main() -> None:
     ap.add_argument("--exchange-month", required=True, help="汇率/运营人员/附加费/Tax 的 YYYYMM")
     ap.add_argument("--write-gsheet", action="store_true", help="写 Phase3 目标 GSheet")
     ap.add_argument(
+        "--write-gsheet-fba",
+        action="store_true",
+        help="额外写 {期}FBA费用扣减后分类汇总 / FBA费用扣减后收款比例运营人员（只算不写的反向开关）",
+    )
+    ap.add_argument(
+        "--bucket-dir",
+        default="",
+        help="账期桶目录（生成 FBA 两张表用；默认 LOCAL_NAS_PERIOD_ROOT/<bucket>）",
+    )
+    ap.add_argument("--repair-dir", default="", help="FBA 源 txt tab 修复缓存目录")
+    ap.add_argument(
+        "--strict",
+        action="store_true",
+        help="有未匹配渠道账号 / 币种未匹配汇率 / Tax 别名未匹配 / 合并重复等 warning 时非 0 退出",
+    )
+    ap.add_argument(
         "--gspread-auth",
         choices=("sa", "user"),
         default="sa",
@@ -56,12 +72,26 @@ def main() -> None:
 
     gc = _gspread_client()
     write = args.write_gsheet and not args.dry_run
+    bucket_dir = None
+    if args.bucket_dir:
+        bucket_dir = Path(args.bucket_dir)
+    else:
+        try:
+            from paths import local_nas_period  # noqa: E402
+
+            candidate = local_nas_period() / args.bucket
+            bucket_dir = candidate if candidate.is_dir() else None
+        except Exception:
+            bucket_dir = None
     rep, _frames = run_phase3(
         gc=gc,
         input_xlsx=Path(args.src),
         bucket=args.bucket,
         exchange_month=args.exchange_month,
+        bucket_dir=bucket_dir,
+        repair_dir=Path(args.repair_dir) if args.repair_dir else None,
         write_gsheet=write,
+        write_gsheet_fba=args.write_gsheet_fba and not args.dry_run,
     )
     payload = rep.__dict__
     print(json.dumps(payload, ensure_ascii=False, indent=2))
@@ -72,6 +102,9 @@ def main() -> None:
         path = out_dir / f"phase3_{args.exchange_month}_{ts}.json"
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"report: {path}")
+    if args.strict and rep.warnings:
+        print("STRICT 检查未通过:", rep.warnings, file=sys.stderr)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -76,14 +76,35 @@ def main() -> None:
     ap.add_argument("--upload-nas", action="store_true")
     ap.add_argument("--phase1-only", action="store_true", help="只出 Tax 相关 sheet（跳过探索/FBA 多 sheet）")
     ap.add_argument("--dry-run", action="store_true", help="只读 txt+汇率，不写 xlsx/gsheet/NAS")
+    ap.add_argument("--repair-dir", default="", help="tab 修复缓存目录（默认桶的父目录/.repair_cache_<桶名>）")
+    ap.add_argument(
+        "--strict",
+        action="store_true",
+        help="有重复文件/读失败/行数对不上/币种未匹配/账号行数不符时非 0 退出（默认只打印）",
+    )
     args = ap.parse_args()
 
     bucket_dir = resolve_bucket_dir(args)
     bucket_name = bucket_dir.name
     mirror_dir = Path(args.out_dir) if args.out_dir else None
 
-    df, read_report = read_bucket_amz_txts(bucket_dir)
-    print(f"bucket={bucket_dir} txt_rows={len(df)} files_ok={sum(1 for r in read_report if r.startswith('OK'))}")
+    read_stats: dict = {}
+    df, read_report = read_bucket_amz_txts(
+        bucket_dir,
+        repair_dir=Path(args.repair_dir) if args.repair_dir else None,
+        stats_out=read_stats,
+    )
+    print(
+        f"bucket={bucket_dir} txt_rows={len(df)} files_ok={sum(1 for r in read_report if r.startswith('OK'))} "
+        f"dup={read_stats.get('files_dup')} failed={read_stats.get('files_failed')} "
+        f"rows_mismatch={read_stats.get('rows_mismatch')}"
+    )
+    for line in read_report:
+        if line.startswith("SKIP-DUP") or line.startswith("FAIL"):
+            print(line)
+    n_skip_dup = int(read_stats.get("files_dup", 0))
+    if n_skip_dup:
+        print(f"SKIP-DUP {n_skip_dup} 份同内容 txt 已忽略（只读第一份，避免 Tax 双算）")
 
     from tongtool_order_cost.gsheets import client as gs_client  # noqa: E402
 
@@ -133,6 +154,7 @@ def main() -> None:
         "bucket_dir": str(bucket_dir),
         "exchange_month": args.exchange_month,
         "txt_rows": int(len(df)),
+        "read_stats": read_stats,
         "files": read_report,
         "df6_detail_rows": int(len(df6_detail)),
         "df6_gsheet_rows": int(len(df6_gsheet)),
@@ -143,8 +165,25 @@ def main() -> None:
         "excel_sheets": list(sheets.keys()),
     }
 
+    strict_failures = []
+    if n_skip_dup:
+        strict_failures.append(f"SKIP-DUP={n_skip_dup}")
+    if read_stats.get("files_failed"):
+        strict_failures.append(f"FAIL={read_stats['files_failed']}")
+    if read_stats.get("rows_mismatch"):
+        strict_failures.append(f"rows_mismatch={read_stats['rows_mismatch']}")
+    if len(missing_fx):
+        strict_failures.append(f"missing_fx={list(missing_fx)[:5]}")
+    if len(df6_gsheet) != n_acct_files:
+        strict_failures.append(f"gsheet_rows={len(df6_gsheet)}!=accounts={n_acct_files}")
+    report["strict_failures"] = strict_failures
+    if strict_failures:
+        print("STRICT 检查未通过:", "; ".join(strict_failures))
+
     if args.dry_run:
         print(json.dumps({k: report[k] for k in report if k != "files"}, ensure_ascii=False, indent=2))
+        if args.strict and strict_failures:
+            raise SystemExit(1)
         return
 
     write_excel_sheets(xlsx_path, sheets)
@@ -174,6 +213,8 @@ def main() -> None:
     rep_path = rep_dir / f"run_{bucket_name}_{ts}.json"
     rep_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print("report", rep_path)
+    if args.strict and strict_failures:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

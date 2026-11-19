@@ -2,6 +2,7 @@
 """FBA 费用特例：读 gsheet 规则 + Colab process_fba_orders。"""
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 import pandas as pd
@@ -60,15 +61,22 @@ def load_fba_rules(gc, *, bucket_name: str, sheet: str = "和财务部共享", w
 
 
 def filter_fba_order(df_rule: pd.DataFrame, df_fba: pd.DataFrame, filter_columns: list[str]) -> pd.DataFrame:
+    """规则行命中明细行：规则里的列值在明细里等值匹配。
+
+    ``df_rule`` 必须已被 ``process_fba_orders`` 改名（``平台SKU`` → ``sku``），
+    所以这里按列名原样取值。空值/NaN 表示该列不做限制（账号级规则）。
+    早期版本对 ``sku`` 特判回 ``平台SKU``，改名后取空 → 规则退化成整账号匹配。
+    """
     filter_condition = pd.Series([False] * len(df_fba), index=df_fba.index)
     for _, rule in df_rule.iterrows():
         single = pd.Series([True] * len(df_fba), index=df_fba.index)
         for column in filter_columns:
             if column not in df_fba.columns:
                 continue
-            rule_value = str(rule.get(column if column != "sku" else "平台SKU", "") or "").strip()
+            raw = rule.get(column, "")
+            rule_value = "" if raw is None or pd.isna(raw) else re.sub(r"\s+", "", str(raw))
             if rule_value:
-                single &= df_fba[column].astype(str) == rule_value
+                single &= df_fba[column].astype(str).str.replace(r"\s+", "", regex=True) == rule_value
         filter_condition |= single
     return df_fba.loc[filter_condition].copy()
 

@@ -4,16 +4,23 @@ from __future__ import annotations
 
 import pandas as pd
 
+from exchange_rate import normalize_currency_label
+
 
 def enrich_with_fx(df: pd.DataFrame, df_exchange_rate: pd.DataFrame) -> pd.DataFrame:
+    """按收款币种补汇率。两侧都先走 normalize_currency_label 再 join。
+
+    结算 txt 里的 currency 与汇率表的「收款币种」都是 3 位代码，但可能带零宽字符/全角字符
+    （见 docs/solutions/integration-issues/amazon-period-fx-currency-label-invisible-chars.md），
+    不归一化会出现静默的无汇率 → amount人民币 全 0。
+    """
     out = df.copy()
-    rates = df_exchange_rate[["收款币种", "汇率"]].drop_duplicates(subset=["收款币种"], keep="first")
-    out = out.merge(
-        rates,
-        how="left",
-        left_on="currency",
-        right_on="收款币种",
-    )
+    out["currency"] = out["currency"].map(normalize_currency_label)
+
+    rates = df_exchange_rate[["收款币种", "汇率"]].copy()
+    rates["currency"] = rates["收款币种"].map(normalize_currency_label)
+    rates = rates.drop_duplicates(subset=["currency"], keep="first")
+    out = out.merge(rates, how="left", on="currency")
     out["amount"] = pd.to_numeric(out["amount"], errors="coerce")
     out["amount人民币"] = out["amount"] * out["汇率"]
     return out
