@@ -50,6 +50,8 @@ uv run python amazon_period_tax/scripts/ensure_additional_fee_worksheet.py --exc
 
 > 币种是**精确字符串 join**：OA 表单里 `匈牙利福林（HUF）` 曾带 U+200C 与全角括号，导致币种/汇率为空、人民币全 0。新增币种写法先过 `normalize_currency_label`；跑完看 `warnings` 里有没有「币种未匹配汇率」。
 > 重跑历史期前先比对「输入定稿 vs 现有原始表」的审批编号多集，后补单据（如 202610 的 11-05 WM 行）不在旧定稿里。
+> **附件 schema**：Amazon 结算有 V2（`amount-type/amount-description`）、V1（`price-type/price-amount` 族）和 XML。V1 由 `_normalize_v1_schema` 展开；XML 不直接入口，请提交人改下 **Flat File**。补交 V2 时必须把旧 V1 移出桶，否则双算。
+> **源定稿可能有错数/错账号**：生产用 `remediation/20261119/corrected/*.corrected.v1.xlsx`（凭据 `corrections.v1.json`，原件保留）；写表前门禁与 run manifest 在 `phase3_merge.run_phase3`。人民币表已含 `应收金额_人民币/销售额_人民币`。
 
 ## 命令
 
@@ -131,5 +133,7 @@ uv run python amazon_period_tax/scripts/run_period_phase3.py ... --dry-run --str
 - 自己重跑 Tax：`docs/solutions/workflow-issues/amazon-period-tax-rerun-without-agent.md`
 - 管道审计修复（去重/FBA 过滤/Tax 别名/RAW/verify）：`docs/solutions/workflow-issues/amazon-period-pipeline-audit-fixes.md`
 - 跨桶错放/结算号台账：`docs/solutions/workflow-issues/amazon-period-cross-bucket-attachment-misfile.md`
+- 源定稿修正与写前门禁：`docs/solutions/workflow-issues/amazon-period-source-corrections-and-e2e-gate.md`
+- 结算报告 V1/V2 与 XML：`docs/solutions/integration-issues/amazon-settlement-v1-v2-flatfile.md`
 - 钉钉 aflow 导出 UI 漂移：`docs/solutions/developer-experience/dingtalk-aflow-export-ui-drift.md`
 - 下游 Phase3 Colab：`钉钉OA收款费用Amazon多平台&附加费&Tax 20250704.ipynb`

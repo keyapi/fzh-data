@@ -9,6 +9,9 @@ tags: [solutions, log]
 
 ## 2026-11-19（账期 7–10 月端到端审计与第二轮修复）
 
+- **新增**: `workflow-issues/amazon-period-source-corrections-and-e2e-gate.md` —— E2E 独立复核查出源定稿错数（7 月 JohnaSE 100 倍）与 4 条账号错归属；修正凭据 + corrected 副本、写前硬门禁、run manifest、人民币补列。
+- **新增**: `integration-issues/amazon-settlement-v1-v2-flatfile.md` —— 10 月 3 份 V1 附件被按 V2 读导致 Tax/FBA 静默少算；V1→V2 展开 + 行数对账 + Flat File/XML 识别。
+
 - **新增**: `workflow-issues/amazon-period-cross-bucket-attachment-misfile.md` —— 同一结算 txt 被放进另一账期桶（JohnaUS 7 月副本混入 8 月，导致 Tax 多算 1,854.29 且真实 8/11 报告缺失）。按 `settlement-id` + 内部结算区间拦截 `OUT-OF-PERIOD`，新增跨桶 `settlement_ledger`。
 - **新增**: `developer-experience/dingtalk-aflow-export-ui-drift.md` —— 钉钉表单改名「收款确认单」与日期控件选择器失效；用裁剪导出表 + 附件模式绕过。
 - **更新**: `workflow-issues/amazon-period-pipeline-audit-fixes.md` —— 追加第二轮修复（跨期拦截、Tax 缺列硬失败、桶月/汇率月一致、附加费别名、FBA 守恒、merge 唯一性、日期合法性、审批中占比）。

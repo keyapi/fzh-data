@@ -17,6 +17,8 @@ tags: [solutions, index]
 | 2026-11-19 | 账期附件跨桶错放：同一结算文件出现在另一账期桶 | [workflow-issues/amazon-period-cross-bucket-attachment-misfile.md](workflow-issues/amazon-period-cross-bucket-attachment-misfile.md) |
 | 2026-11-19 | 账期管道审计修复：去重、FBA 过滤键、Tax 别名与写表口径 | [workflow-issues/amazon-period-pipeline-audit-fixes.md](workflow-issues/amazon-period-pipeline-audit-fixes.md) |
 | 2026-11-19 | 账期币种匹配：全角括号与零宽字符让币种/汇率变空、人民币全 0 | [integration-issues/amazon-period-fx-currency-label-invisible-chars.md](integration-issues/amazon-period-fx-currency-label-invisible-chars.md) |
+| 2026-11-19 | 账期定稿源数据错误：独立对账、修正凭据与写前硬门禁 | [workflow-issues/amazon-period-source-corrections-and-e2e-gate.md](workflow-issues/amazon-period-source-corrections-and-e2e-gate.md) |
+| 2026-11-19 | Amazon 结算报告 V1/V2 与 XML：旧格式会让 Tax/FBA 静默少算 | [integration-issues/amazon-settlement-v1-v2-flatfile.md](integration-issues/amazon-settlement-v1-v2-flatfile.md) |
 | 2026-11-11 | 账期 Tax 必须用「每个收款币种一行」的汇率表，别名拆开表会把税额乘多遍 | [integration-issues/amazon-period-tax-fx-alias-multiplies.md](integration-issues/amazon-period-tax-fx-alias-multiplies.md) |
 | 2026-11-11 | 自己重跑账期 Tax：只改桶名和汇率列，脚本不补 txt | [workflow-issues/amazon-period-tax-rerun-without-agent.md](workflow-issues/amazon-period-tax-rerun-without-agent.md) |
 | 2026-11-09 | 账期核算定稿导出须用 keep_approval + 可选迟交 exclude-keys | [workflow-issues/amazon-period-colab-export-keep-approval.md](workflow-issues/amazon-period-colab-export-keep-approval.md) |
