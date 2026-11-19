@@ -413,19 +413,22 @@ def aggregate_order_costs(
     include_window: bool = False,
 ) -> pd.DataFrame:
     df = orders.copy()
-    df["_canon"] = df["渠道账号"].apply(lambda x: map_account(x, mapping))
+    raw_acct = df["渠道账号"].astype(str).str.strip()
+    df["_unmatched"] = ~raw_acct.str.lower().isin(set(mapping.keys()))
+    df["_canon"] = raw_acct.apply(lambda x: mapping.get(x.lower(), x))
     df["发货日期"] = pd.to_datetime(df.get("发货日期"), errors="coerce")
     is_fba = df.get("_is_fba", pd.Series(False, index=df.index)).fillna(False).astype(bool)
     df = add_cost_buckets(df, "自然月_")
 
     def agg(frame: pd.DataFrame, suffix: str) -> pd.DataFrame:
         if frame.empty:
-            return pd.DataFrame(columns=["_canon", f"订单_行数{suffix}"] + [
+            return pd.DataFrame(columns=["_canon", f"订单_行数{suffix}", f"订单_未匹配别名{suffix}"] + [
                 f"订单_{b}{suffix}" for b in COST_BUCKETS
             ] + [f"订单_成本合计{suffix}", f"订单_售价{suffix}", f"订单_尾程{suffix}"]).set_index("_canon")
         g = frame.groupby("_canon", dropna=False).agg(
             **{
                 f"订单_行数{suffix}": ("_canon", "size"),
+                f"订单_未匹配别名{suffix}": ("_unmatched", "any"),
                 **{f"订单_{b}{suffix}": (f"自然月_{b}", "sum") for b in COST_BUCKETS},
                 f"订单_成本合计{suffix}": ("自然月_成本合计", "sum"),
                 f"订单_售价{suffix}": ("售价*汇率", "sum"),
@@ -441,7 +444,9 @@ def aggregate_order_costs(
         # FBA 按付款/销售日期归月；合并表无日期，窗口成本只能整月计入并标记。
         next_df = next_orders.copy() if next_orders is not None and not next_orders.empty else pd.DataFrame()
         if not next_df.empty:
-            next_df["_canon"] = next_df["渠道账号"].apply(lambda x: map_account(x, mapping))
+            next_raw = next_df["渠道账号"].astype(str).str.strip()
+            next_df["_unmatched"] = ~next_raw.str.lower().isin(set(mapping.keys()))
+            next_df["_canon"] = next_raw.apply(lambda x: mapping.get(x.lower(), x))
             next_df["发货日期"] = pd.to_datetime(next_df.get("发货日期"), errors="coerce")
             next_df = add_cost_buckets(next_df, "自然月_")
             next_in_window = next_df[(next_df["发货日期"] >= start) & (next_df["发货日期"] <= end)]
@@ -496,6 +501,7 @@ def aggregate_order_costs(
     out = out.rename(
         columns={
             "订单_行数_自然月": "订单_自然月_行数",
+            "订单_未匹配别名_自然月": "订单_未匹配别名",
             **{f"订单_{b}_自然月": f"订单_自然月_{b}" for b in COST_BUCKETS},
             "订单_成本合计_自然月": "订单_自然月_成本合计",
             "订单_售价_自然月": "订单_自然月_售价",
@@ -613,6 +619,7 @@ def build_main_table(
         "订单_窗口_非FBA成本": 0,
         "订单_FBA整月成本": 0,
         "订单_含FBA": False,
+        "订单_未匹配别名": False,
         "订单_平台": "",
         **{f"订单_自然月_{b}": 0 for b in COST_BUCKETS},
         **{f"订单_窗口_{b}": 0 for b in COST_BUCKETS},
@@ -627,13 +634,19 @@ def build_main_table(
     main["OA_运营人员"] = main["OA_运营人员"].fillna("").astype(str)
     main["订单_平台"] = main["订单_平台"].fillna("").astype(str)
 
-    main["有OA"] = main["OA_行数"].fillna(0).gt(0)
+    oa_money_cols = [
+        "OA_销售额_人民币", "OA_应收_人民币", "OA_收款费用_人民币",
+        "OA_Tax_人民币", "OA_附加费_人民币",
+    ]
+    main["有OA"] = main["OA_行数"].fillna(0).gt(0) | (
+        main[oa_money_cols].fillna(0).abs().sum(axis=1) > 0.005
+    )
     main["有订单"] = main["订单_自然月_行数"].fillna(0).gt(0) | main["订单_窗口_行数"].fillna(0).gt(0)
     main["有管道输出"] = main["账号ws_行数"].fillna(0).gt(0)
     main["在主表"] = main["主表_运营人员"].notna()
 
     def status(row: pd.Series) -> str:
-        if str(row["渠道账号"]).strip() == "UNMATCHED":
+        if bool(row.get("订单_未匹配别名", False)):
             return "未匹配别名（不得并入真实账号）"
         has_oa, has_order, has_pipe, in_master = row["有OA"], row["有订单"], row["有管道输出"], row["在主表"]
         if has_oa and has_order:
@@ -896,13 +909,13 @@ def build_unmatched_detail(orders: pd.DataFrame, mapping: dict[str, str]) -> pd.
     df = orders.copy()
     if df.empty:
         return pd.DataFrame(columns=["渠道账号(原始)", "行数", "成本合计", "平台", "订单号样例"])
-    df["_canon"] = df["渠道账号"].apply(lambda x: map_account(x, mapping))
-    df = df[df["_canon"] == "UNMATCHED"]
+    raw = df["渠道账号"].astype(str).str.strip()
+    df = df[~raw.str.lower().isin(set(mapping.keys()))].copy()
     if df.empty:
         return pd.DataFrame(columns=["渠道账号(原始)", "行数", "成本合计", "平台", "订单号样例"])
     df = add_cost_buckets(df, "未匹配_")
     g = df.groupby("渠道账号", dropna=False).agg(
-        行数=("_canon", "size"),
+        行数=("渠道账号", "size"),
         成本合计=("未匹配_成本合计", "sum"),
         平台=("渠道", lambda s: ",".join(sorted({str(x).strip() for x in s if str(x).strip()}))),
         订单号样例=("订单号", lambda s: ",".join(list(dict.fromkeys(str(x) for x in s))[:3])),
