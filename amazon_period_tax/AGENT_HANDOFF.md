@@ -46,6 +46,10 @@ uv run python amazon_period_tax/scripts/ensure_additional_fee_worksheet.py --exc
 | df6 写表 | 可能多行/币种 | **强制每账号一行** |
 | 数据源 | Drive MyPC | `LOCAL_NAS_PERIOD_ROOT` |
 | 探索 sheet | notebook | `explore_tables.build_exploration_tables`（仅供参考） |
+| 币种写法 | 原样精确匹配 | `normalize_currency_label`（去零宽/全角转半角）+ `find_unmatched_currency` 告警 |
+
+> 币种是**精确字符串 join**：OA 表单里 `匈牙利福林（HUF）` 曾带 U+200C 与全角括号，导致币种/汇率为空、人民币全 0。新增币种写法先过 `normalize_currency_label`；跑完看 `warnings` 里有没有「币种未匹配汇率」。
+> 重跑历史期前先比对「输入定稿 vs 现有原始表」的审批编号多集，后补单据（如 202610 的 11-05 WM 行）不在旧定稿里。
 
 ## 命令
 
@@ -95,5 +99,6 @@ Phase3 写 **Google 表** [`钉钉OA收款费用Amazon多平台&附加费&Tax`](
 - Phase3 写表 id：`docs/solutions/integration-issues/amazon-period-phase3-gsheet-not-colab-id.md`
 - 定稿 `keep_approval`：`docs/solutions/workflow-issues/amazon-period-colab-export-keep-approval.md`
 - Tax 汇率别名：`docs/solutions/integration-issues/amazon-period-tax-fx-alias-multiplies.md`
+- 币种全角/零宽字符：`docs/solutions/integration-issues/amazon-period-fx-currency-label-invisible-chars.md`
 - 自己重跑 Tax：`docs/solutions/workflow-issues/amazon-period-tax-rerun-without-agent.md`
 - 下游 Phase3 Colab：`钉钉OA收款费用Amazon多平台&附加费&Tax 20250704.ipynb`

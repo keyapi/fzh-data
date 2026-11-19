@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from exchange_rate import load_exchange_rate_table
+from exchange_rate import load_exchange_rate_table, normalize_currency_label
 from gsheet_tax import (
     additional_fee_worksheet_name_from_yyyymm,
     open_additional_fee_tax_spreadsheet,
@@ -208,6 +209,8 @@ def build_row_level_df(
     df = _resolve_sales_accounts(df)
     if "币种" in df.columns:
         df = df.rename(columns={"币种": "货币中文名"})
+    if "货币中文名" in df.columns:
+        df["货币中文名"] = df["货币中文名"].map(normalize_currency_label)
     df.drop(columns=["收款币种", "汇率"], inplace=True, errors="ignore")
     df = df.merge(df_rate_explode[["货币中文名", "收款币种", "汇率"]], how="left", on="货币中文名")
     df.loc[df["销售账户"] == "DLZ", "销售账户"] = "DLZPPL"
@@ -240,6 +243,19 @@ def build_row_level_df(
         )
     approval_filter = (df["审批状态"].isin(["完成", "审批中"])) & (df["审批结果"] != "拒绝")
     return df, approval_filter
+
+
+def find_unmatched_currency(df: pd.DataFrame) -> pd.DataFrame:
+    """币种没能从汇率表匹配到、但金额不为 0 的行（静默变 0 的根因兜底）。"""
+    amount_cols = [c for c in ["应收金额", "销售额", *LS_COL_COST] if c in df.columns]
+    if "汇率" not in df.columns or not amount_cols:
+        return pd.DataFrame()
+    amounts = df[amount_cols].apply(pd.to_numeric, errors="coerce").fillna(0).abs().sum(axis=1)
+    mask = df["汇率"].isna() & (amounts > 0)
+    cols = [c for c in ["审批编号", "销售账户", "渠道账号", "货币中文名", "应收金额", "销售额"] if c in df.columns]
+    out = df.loc[mask, cols].copy()
+    out["外币金额合计"] = amounts[mask]
+    return out
 
 
 def build_group_account_cost(
@@ -456,6 +472,7 @@ def run_phase3(
         df_orig, df_exchange_rate=df_rate, df_explode=df_explode, df_rate_explode=df_rate_explode
     )
     unmatched = int(((df["渠道账号"].isna()) | (df["渠道账号"] == "")).sum())
+    fx_missing = find_unmatched_currency(df)
     df_group = build_group_account_cost(
         df, approval_filter, df_rate_explode=df_rate_explode, df_account=df_account
     )
@@ -479,6 +496,13 @@ def run_phase3(
     )
     if unmatched:
         rep.warnings.append(f"渠道账号未匹配 {unmatched} 行（销售账户→别名表）")
+    if not fx_missing.empty:
+        labels = sorted({str(x) for x in fx_missing["货币中文名"].dropna().unique()})
+        rep.warnings.append(
+            f"币种未匹配汇率 {len(fx_missing)} 行（币种={labels}），这些行的人民币会是 0/空"
+        )
+        print("[WARN] 币种未匹配汇率，检查汇率表别名或不可见字符：", file=sys.stderr)
+        print(fx_missing.to_string(index=False), file=sys.stderr)
     if df_merged["渠道账号"].duplicated().any():
         rep.warnings.append("合并后渠道账号重复")
 

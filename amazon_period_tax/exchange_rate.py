@@ -2,10 +2,33 @@
 """和财务部共享 / 汇率 — 与 Colab cell 1.1x 一致。"""
 from __future__ import annotations
 
+import re
+import unicodedata
+
 import pandas as pd
 
 # 和财务部共享 — 避免 Drive 按标题搜索（易 SSL/限流）
 CFO_SPREADSHEET_ID = "1UhFiMF9tLmndoOaz7PaEP_Fz1ZGYK9GVT6hiIYLM8Go"
+
+# 零宽 / 格式化字符（OA 表单下拉值里混进过 U+200C，肉眼不可见）
+_INVISIBLE = re.compile(r"[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]")
+
+
+def normalize_currency_label(value) -> str:
+    """统一币种写法：去零宽字符，全角转半角（NFKC），去首尾空白。
+
+    例：'\\u200c匈牙利福林（HUF）' → '匈牙利福林(HUF)'，才能和汇率表别名对上。
+    """
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    s = _INVISIBLE.sub("", str(value))
+    s = unicodedata.normalize("NFKC", s)
+    return s.strip()
 
 
 def load_exchange_rate_table(
@@ -26,8 +49,9 @@ def load_exchange_rate_table(
         raise KeyError(f"汇率表无列 {month_col!r}，现有: {list(raw.columns)[-6:]}")
     df = raw.copy()
     df["汇率"] = pd.to_numeric(df[month_col], errors="coerce")
-    df["货币别名"] = df["货币别名"].astype(str).str.replace("，", ",", regex=False)
-    df["货币别名"] = df["货币中文名"].astype(str) + "," + df["货币别名"]
+    df["货币中文名"] = df["货币中文名"].map(normalize_currency_label)
+    df["货币别名"] = df["货币别名"].map(normalize_currency_label)
+    df["货币别名"] = df["货币中文名"] + "," + df["货币别名"]
     df["货币别名"] = df["货币别名"].str.split(",").apply(lambda x: [e.strip() for e in x if e.strip()])
     exploded = df.explode("货币别名")
     exploded["货币别名"] = exploded["货币别名"].str.strip()
