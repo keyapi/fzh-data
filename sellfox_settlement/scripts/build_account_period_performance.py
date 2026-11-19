@@ -21,8 +21,8 @@
   - Tax 为显式开关列：同时输出含税/不含税，不静默二选一。
   - 附加费只单列，不并入业绩主公式。
   - 通途成本拆四桶（绍兴产品/头程/国外二次加工/尾程）+ 海外仓。
-  - 期间：默认 OA 账期 04 日 ~ 次月 03 日；同时给自然月成本与同窗口成本。
-  - 尾程来自写回「运费」列，当前是 EN 预估，不是承运商实际账单，列内有标记。
+  - 成本默认按整月订单；--include-window 时才额外算 04–03 窗口参考。
+  - 尾程来自写回「运费」列，7–9 月 EN 预估覆盖率 >99%，列内有标记。
 
 用法:
   uv run python sellfox_settlement/scripts/build_account_period_performance.py --month 202608
@@ -892,6 +892,24 @@ def build_checks(
     return pd.DataFrame(rows)
 
 
+def build_unmatched_detail(orders: pd.DataFrame, mapping: dict[str, str]) -> pd.DataFrame:
+    df = orders.copy()
+    if df.empty:
+        return pd.DataFrame(columns=["渠道账号(原始)", "行数", "成本合计", "平台", "订单号样例"])
+    df["_canon"] = df["渠道账号"].apply(lambda x: map_account(x, mapping))
+    df = df[df["_canon"] == "UNMATCHED"]
+    if df.empty:
+        return pd.DataFrame(columns=["渠道账号(原始)", "行数", "成本合计", "平台", "订单号样例"])
+    df = add_cost_buckets(df, "未匹配_")
+    g = df.groupby("渠道账号", dropna=False).agg(
+        行数=("_canon", "size"),
+        成本合计=("未匹配_成本合计", "sum"),
+        平台=("渠道", lambda s: ",".join(sorted({str(x).strip() for x in s if str(x).strip()}))),
+        订单号样例=("订单号", lambda s: ",".join(list(dict.fromkeys(str(x) for x in s))[:3])),
+    ).reset_index().rename(columns={"渠道账号": "渠道账号(原始)"})
+    return g.sort_values("成本合计", ascending=False)
+
+
 def build_exceptions(main: pd.DataFrame, duplicates: pd.DataFrame) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for _, row in main[main["账号状态"] != "双边"].iterrows():
@@ -1122,6 +1140,7 @@ def main() -> int:
         main_df = main_df[main_df["账号状态"] != "仅主表（本月无OA无发货）"].copy()
     checks = build_checks(oa, surcharge_tax, main_df, orders["orders"], mapping, start, end)
     exceptions = build_exceptions(main_df, duplicates)
+    unmatched_detail = build_unmatched_detail(orders["orders"], mapping)
     readiness = build_readiness(month, oa, surcharge_tax, orders, orders["pipeline"], start, end, next_note)
 
     print("[5/6] 生成说明页 …")
@@ -1178,6 +1197,7 @@ def main() -> int:
         "账号业绩": main_df,
         "运营人员汇总": staff_summary,
         "单边与异常": exceptions,
+        "未匹配明细": unmatched_detail,
         "口径核对": checks,
         "输入就绪": readiness,
         "数量对账": pd.DataFrame(
@@ -1236,6 +1256,7 @@ def main() -> int:
             "used_for_performance_rmb": float(main_df["成本_合计"].fillna(0).sum()),
             "cost_basis": effective_cost_basis,
         },
+        "unmatched_detail": unmatched_detail.to_dict("records"),
         "checks_passed": int(checks["通过"].sum()),
         "checks_total": int(len(checks)),
         "readiness_issues": readiness[
