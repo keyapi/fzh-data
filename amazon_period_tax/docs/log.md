@@ -8,6 +8,7 @@ title: amazon_period_tax 变更日志
 
 ## 2026-11-19
 
+- **第二轮修复（Codex 复核 REJECT 后）**：跨期错放拦截（解析 `settlement-id`+内部区间，`OUT-OF-PERIOD` 默认排除）、跨桶 `settlement_ledger`、Tax/附加费缺列硬失败、桶月/汇率月一致、附加费别名（BasePPPL→BASEPPPL）、FBA 分摊守恒、merge 唯一性、日期合法性、审批中占比报告。测试 100 passed。未写任何表。
 - **审计修复（15 项，只改代码/测试，未写表）**：
   - `read_amz_txt`：按内容 md5 去重（`SKIP-DUP`）、修复缓存移出桶外（`{桶父目录}/.repair_cache_{桶}`）、
     跳过 `.` 开头目录、逐文件行数对账（`FAIL rows-mismatch`）、`stats_out` 对账数字。

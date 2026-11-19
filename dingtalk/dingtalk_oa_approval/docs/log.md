@@ -8,6 +8,9 @@ title: dingtalk_oa_approval 变更日志
 
 ## 2026-11-19（账期管道审计修复）
 
+- **修（第二轮）**: 钉钉 aflow 导出表单已改名「收款确认单」；`select_form` 增加包含匹配与菜单项诊断。日期控件选择器仍待修，附件下载可走「裁剪已有导出表 → `--mode attachments --all-originators`」。
+- **发现**: 8 月 JohnaUS 8/11 附件上传的就是 7 月副本（内部结算号仍为 27080868331），真实 27171210801（752.64 USD）不在钉钉/ NAS，需从 Amazon 后台补下载。
+
 - **修**: `filter_export_by_period.py` 定稿导出漏审批过滤 —— 只按账期月 + 迟交键，已撤销/拒绝会混入。
   现复用 `parse.keep_approval`（完成/审批中且非拒绝），输出分解 `in / period_rows / kept /
   excluded_late / excluded_status`。2026-09 实跑旧 171 行 → 新 168 行（剔除 3 张已撤销）。

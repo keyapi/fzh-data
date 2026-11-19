@@ -7,6 +7,12 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-19（账期 7–10 月端到端审计与第二轮修复）
+
+- **新增**: `workflow-issues/amazon-period-cross-bucket-attachment-misfile.md` —— 同一结算 txt 被放进另一账期桶（JohnaUS 7 月副本混入 8 月，导致 Tax 多算 1,854.29 且真实 8/11 报告缺失）。按 `settlement-id` + 内部结算区间拦截 `OUT-OF-PERIOD`，新增跨桶 `settlement_ledger`。
+- **新增**: `developer-experience/dingtalk-aflow-export-ui-drift.md` —— 钉钉表单改名「收款确认单」与日期控件选择器失效；用裁剪导出表 + 附件模式绕过。
+- **更新**: `workflow-issues/amazon-period-pipeline-audit-fixes.md` —— 追加第二轮修复（跨期拦截、Tax 缺列硬失败、桶月/汇率月一致、附加费别名、FBA 守恒、merge 唯一性、日期合法性、审批中占比）。
+
 ## 2026-11-11（账期 Tax 汇率别名乘多遍）
 
 - **新增**: `integration-issues/amazon-period-tax-fx-alias-multiplies.md` —— `run_period_tax` 曾用货币别名拆开表按 `收款币种` 合并，Tax 人民币被乘多遍。改为每个币种一行，并在 `enrich_with_fx` 去重。8/9/10 月 `Tax{YYYYMM}` 已重写。

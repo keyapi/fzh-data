@@ -396,7 +396,17 @@ def select_form(page: Page, form: str) -> bool:
         page.wait_for_timeout(800)
         page.locator('.ant-cascader-menu-item:has-text("已启用")').first.click()
         page.wait_for_timeout(800)
-        page.locator(f'.ant-cascader-menu :text-is("{form}")').first.click()
+        items = page.locator(".ant-cascader-menu-item")
+        texts = [(items.nth(i).inner_text() or "").strip() for i in range(items.count())]
+        target = form
+        if form not in texts:
+            cand = [t for t in texts if form in t]
+            if cand:
+                target = cand[0]
+                print(f"[信息] 表单名按包含匹配: 「{form}」→「{target}」")
+            else:
+                print(f"[调试] 级联菜单项={texts}")
+        page.locator(f'.ant-cascader-menu :text-is("{target}")').first.click()
         page.wait_for_timeout(800)
         got = current_form(page)
         if got != want:

@@ -130,4 +130,6 @@ uv run python amazon_period_tax/scripts/run_period_phase3.py ... --dry-run --str
 - 币种全角/零宽字符：`docs/solutions/integration-issues/amazon-period-fx-currency-label-invisible-chars.md`
 - 自己重跑 Tax：`docs/solutions/workflow-issues/amazon-period-tax-rerun-without-agent.md`
 - 管道审计修复（去重/FBA 过滤/Tax 别名/RAW/verify）：`docs/solutions/workflow-issues/amazon-period-pipeline-audit-fixes.md`
+- 跨桶错放/结算号台账：`docs/solutions/workflow-issues/amazon-period-cross-bucket-attachment-misfile.md`
+- 钉钉 aflow 导出 UI 漂移：`docs/solutions/developer-experience/dingtalk-aflow-export-ui-drift.md`
 - 下游 Phase3 Colab：`钉钉OA收款费用Amazon多平台&附加费&Tax 20250704.ipynb`
