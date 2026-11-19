@@ -36,3 +36,21 @@ def test_target_case_insensitive_collision():
         existing={"amzstruseryus-2026-09-30.TXT"},
     )
     assert new is None
+
+
+def test_invalid_calendar_date_rejected():
+    """2026-02-31 不是真实日期 → 不得解析成结算日。"""
+    assert settlement_date_from_stem("AMZStruseryUS-2026-02-31") is None
+    new, why = propose_txt_name("AMZStruseryUS-2026-02-31.txt", hint_ym="2026-02")
+    assert new is None
+    assert why == "无法解析结算日"
+
+
+def test_non_leap_feb_29_rejected_and_leap_accepted():
+    assert settlement_date_from_stem("AMZStruseryUS-2026-02-29") is None
+    assert settlement_date_from_stem("AMZStruseryUS-2024-02-29") == "2024-02-29"
+
+
+def test_invalid_compact_date_rejected():
+    assert settlement_date_from_stem("AMZStruseryUS-20260431") is None
+    assert settlement_date_from_stem("AMZStruseryUS-20260430") == "2026-04-30"

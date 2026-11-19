@@ -56,6 +56,90 @@ def _num_series(df: pd.DataFrame, col: str) -> pd.Series:
     return df[col].map(parse_number).astype(float)
 
 
+_MONTH_PATTERNS = (
+    re.compile(r"^\s*(\d{4})[-/.](\d{1,2})"),
+    re.compile(r"^\s*(\d{4})(\d{2})(\d{2})"),
+)
+
+
+def month_of(value) -> str | None:
+    """账期日期单元格（2026-07-04 / 2026/7/4 / 20260704）→ ``YYYY-MM``。"""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    s = str(value).strip()
+    if not s or s.lower() in {"nan", "none", "nat"}:
+        return None
+    for pat in _MONTH_PATTERNS:
+        m = pat.match(s)
+        if m:
+            year, month = int(m.group(1)), int(m.group(2))
+            if 1 <= month <= 12:
+                return f"{year:04d}-{month:02d}"
+    return None
+
+
+def approval_in_progress_summary(
+    df: pd.DataFrame,
+    *,
+    date_col: str = "账期日期",
+    status_col: str = "审批状态",
+    result_col: str = "审批结果",
+) -> pd.DataFrame:
+    """按月统计「审批中」行数/应收/销售及其占本表比例（只报告，不判 FAIL）。"""
+    cols = ["月份", "行数", "应收金额", "销售额", "行数占比", "应收占比", "销售占比"]
+    if df.empty or status_col not in df.columns:
+        return pd.DataFrame(columns=cols)
+    status = df[status_col].astype(str).str.strip()
+    result = (
+        df[result_col].astype(str).str.strip()
+        if result_col in df.columns
+        else pd.Series("", index=df.index)
+    )
+    pending = (status == "审批中") & (result != "拒绝")
+    months = df[date_col].map(month_of) if date_col in df.columns else pd.Series(index=df.index, dtype=object)
+    months = months.fillna("未知")
+
+    recv = _num_series(df, "应收金额")
+    sales = _num_series(df, "销售额")
+    total_rows = len(df)
+    total_recv = float(recv.sum())
+    total_sales = float(sales.sum())
+    rows = []
+    for month in sorted(months.unique()):
+        idx = months == month
+        p = pending & idx
+        n = int(p.sum())
+        r = float(recv[p].sum())
+        s = float(sales[p].sum())
+        rows.append(
+            {
+                "月份": month,
+                "行数": n,
+                "应收金额": r,
+                "销售额": s,
+                "行数占比": (n / total_rows) if total_rows else 0.0,
+                "应收占比": (r / total_recv) if total_recv else 0.0,
+                "销售占比": (s / total_sales) if total_sales else 0.0,
+            }
+        )
+    return pd.DataFrame(rows, columns=cols)
+
+
+def format_approval_summary(summary: pd.DataFrame) -> str:
+    if summary.empty:
+        return "无审批中行"
+    return "; ".join(
+        f"{r['月份']}: 行{r['行数']}({r['行数占比']:.1%}) "
+        f"应收{r['应收金额']:.2f}({r['应收占比']:.1%}) 销售{r['销售额']:.2f}({r['销售占比']:.1%})"
+        for _, r in summary.iterrows()
+    )
+
+
 def period_range_from_bucket(bucket: str) -> str:
     m = re.search(r"\d{8}-\d{8}", bucket)
     if not m:
@@ -108,6 +192,19 @@ def check_tax(
             f"SKIP-DUP={stats.get('files_dup', 0)}（已排除，不计入合计；>0 说明桶里有重复上传）",
         )
     )
+    out_n = int(stats.get("files_out_of_period", 0))
+    checks.append(
+        Check(
+            "Tax: 桶内无跨期 txt",
+            out_n == 0,
+            f"OUT-OF-PERIOD={out_n}（窗口外副本默认已排除，>0 说明有错放文件）",
+        )
+    )
+    nodate = int(stats.get("files_no_period_date", 0))
+    if nodate:
+        checks.append(
+            Check("Tax: 结算日可校验（报告）", True, f"NO-PERIOD-DATE={nodate} 份 txt 无内部结束日")
+        )
     if df_raw.empty:
         checks.append(Check("Tax: 有数据", False, "桶内没有可用 AMZ txt"))
         return checks
@@ -193,6 +290,12 @@ def check_phase3(gc, *, bucket: str) -> list[Check]:
     checks.append(Check("Phase3: 五张主表存在", not missing_sheets, f"缺失={missing_sheets}"))
     if missing_sheets:
         return checks
+
+    # 0) 审批中占比（只报告，不阻断）—— 审批中单据已计入本表金额，按账期月看敞口。
+    approval_summary = approval_in_progress_summary(orig)
+    checks.append(
+        Check("Phase3: 审批中占比（只报告）", True, format_approval_summary(approval_summary))
+    )
 
     # 1) 人民币.Tax == Tax{YYYYMM} 合计
     rmb_tax = _num_series(rmb, "Tax amount人民币").sum()

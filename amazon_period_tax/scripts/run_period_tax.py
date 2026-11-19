@@ -17,6 +17,7 @@ for p in (_REPO, _REPO / "tongtool_order_cost", _PKG, _DING):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+from bucket_meta import resolve_exchange_month  # noqa: E402
 from exchange_rate import load_exchange_rate_table  # noqa: E402
 from explore_tables import build_exploration_tables  # noqa: E402
 from gsheet_tax import sort_additional_fee_tax_tabs, tax_worksheet_name, write_df_to_gsheet  # noqa: E402
@@ -65,7 +66,21 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bucket", default="账期20261004-20261103")
     ap.add_argument("--bucket-dir", default="", help="覆盖 --bucket，直接指定本地同步目录")
-    ap.add_argument("--exchange-month", default="202610", help="和财务部共享/汇率 列名")
+    ap.add_argument(
+        "--exchange-month",
+        default="",
+        help="和财务部共享/汇率 列名 YYYYMM（默认从桶名推导；显式不一致时报错，需 --force-month）",
+    )
+    ap.add_argument(
+        "--force-month",
+        action="store_true",
+        help="允许 --exchange-month 与桶账期月不一致（只在确认错配是刻意的场景用）",
+    )
+    ap.add_argument(
+        "--allow-out-of-period",
+        action="store_true",
+        help="强制纳入内部 settlement-end-date 不在账期桶窗口内的 txt（默认排除，防跨月重复计入）",
+    )
     ap.add_argument(
         "--out-dir",
         default="",
@@ -86,6 +101,9 @@ def main() -> None:
 
     bucket_dir = resolve_bucket_dir(args)
     bucket_name = bucket_dir.name
+    # 读写前先校验汇率月与桶一致（否则会拿 7 月汇率算 8 月 Tax）。
+    exchange_month = resolve_exchange_month(bucket_name, args.exchange_month, force=args.force_month)
+    args.exchange_month = exchange_month
     mirror_dir = Path(args.out_dir) if args.out_dir else None
 
     read_stats: dict = {}
@@ -93,18 +111,26 @@ def main() -> None:
         bucket_dir,
         repair_dir=Path(args.repair_dir) if args.repair_dir else None,
         stats_out=read_stats,
+        allow_out_of_period=args.allow_out_of_period,
     )
     print(
         f"bucket={bucket_dir} txt_rows={len(df)} files_ok={sum(1 for r in read_report if r.startswith('OK'))} "
         f"dup={read_stats.get('files_dup')} failed={read_stats.get('files_failed')} "
+        f"out_of_period={read_stats.get('files_out_of_period')} "
         f"rows_mismatch={read_stats.get('rows_mismatch')}"
     )
     for line in read_report:
-        if line.startswith("SKIP-DUP") or line.startswith("FAIL"):
+        if line.startswith(("SKIP-DUP", "FAIL", "OUT-OF-PERIOD", "NO-PERIOD-DATE")):
             print(line)
     n_skip_dup = int(read_stats.get("files_dup", 0))
     if n_skip_dup:
         print(f"SKIP-DUP {n_skip_dup} 份同内容 txt 已忽略（只读第一份，避免 Tax 双算）")
+    n_out_of_period = int(read_stats.get("files_out_of_period", 0))
+    if n_out_of_period:
+        print(
+            f"OUT-OF-PERIOD {n_out_of_period} 份 txt 的内部结算日不在桶窗口内"
+            + ("（--allow-out-of-period 已强制纳入）" if args.allow_out_of_period else "，已排除")
+        )
 
     from tongtool_order_cost.gsheets import client as gs_client  # noqa: E402
 
@@ -156,6 +182,11 @@ def main() -> None:
         "txt_rows": int(len(df)),
         "read_stats": read_stats,
         "files": read_report,
+        "issue_files": [
+            ln
+            for ln in read_report
+            if ln.startswith(("FAIL", "OUT-OF-PERIOD", "NO-PERIOD-DATE", "SKIP-DUP"))
+        ],
         "df6_detail_rows": int(len(df6_detail)),
         "df6_gsheet_rows": int(len(df6_gsheet)),
         "unique_accounts": int(n_acct_files),
@@ -168,6 +199,8 @@ def main() -> None:
     strict_failures = []
     if n_skip_dup:
         strict_failures.append(f"SKIP-DUP={n_skip_dup}")
+    if n_out_of_period:
+        strict_failures.append(f"OUT-OF-PERIOD={n_out_of_period}")
     if read_stats.get("files_failed"):
         strict_failures.append(f"FAIL={read_stats['files_failed']}")
     if read_stats.get("rows_mismatch"):
@@ -179,6 +212,8 @@ def main() -> None:
     report["strict_failures"] = strict_failures
     if strict_failures:
         print("STRICT 检查未通过:", "; ".join(strict_failures))
+        for ln in report["issue_files"][:20]:
+            print(" ", ln)
 
     if args.dry_run:
         print(json.dumps({k: report[k] for k in report if k != "files"}, ensure_ascii=False, indent=2))

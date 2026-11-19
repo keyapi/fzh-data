@@ -51,11 +51,29 @@ def load_exchange_rate_table(
     df["汇率"] = pd.to_numeric(df[month_col], errors="coerce")
     df["货币中文名"] = df["货币中文名"].map(normalize_currency_label)
     df["货币别名"] = df["货币别名"].map(normalize_currency_label)
+
+    # 同一收款币种只能有一行：否则 merge(validate="many_to_one") 会把 Tax 乘多遍。
+    code = df["收款币种"].map(normalize_currency_label)
+    dup_code = df.loc[code.ne("") & code.duplicated(keep=False), "收款币种"]
+    if not dup_code.empty:
+        raise ValueError(f"汇率表 收款币种 重复（必须唯一）: {sorted(set(dup_code.astype(str)))[:10]!r}")
+
     df["货币别名"] = df["货币中文名"] + "," + df["货币别名"]
     df["货币别名"] = df["货币别名"].str.split(",").apply(lambda x: [e.strip() for e in x if e.strip()])
     exploded = df.explode("货币别名")
     exploded["货币别名"] = exploded["货币别名"].str.strip()
     exploded = exploded.drop(columns=["货币中文名"], errors="ignore")
     exploded = exploded.rename(columns={"货币别名": "货币中文名"})
-    exploded = exploded.drop_duplicates(subset=["货币中文名"], keep="first")
+    exploded = exploded.loc[exploded["货币中文名"].astype(str).str.strip().ne("")]
+
+    # 同一中文名/别名映射到不同币种或不同汇率 → 歧义，直接报错（不再静默 keep-first）。
+    dup_name = exploded.loc[exploded["货币中文名"].duplicated(keep=False)]
+    if not dup_name.empty:
+        conflicts = dup_name.groupby("货币中文名").agg(
+            币种数=("收款币种", "nunique"), 汇率数=("汇率", "nunique")
+        )
+        bad = conflicts[(conflicts["币种数"] > 1) | (conflicts["汇率数"] > 1)].index.tolist()
+        if bad:
+            raise ValueError(f"汇率表 货币中文名/别名 指向不同币种或汇率: {bad[:10]!r}")
+        exploded = exploded.drop_duplicates(subset=["货币中文名"], keep="first")
     return df[["收款币种", "汇率"]].copy(), exploded

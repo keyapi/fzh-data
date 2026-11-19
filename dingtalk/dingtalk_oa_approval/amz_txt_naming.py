@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -24,9 +25,11 @@ def preprocess_stem(stem: str) -> str:
 
 
 def _pad_ymd(y: int, mo: int, d: int) -> str | None:
-    if not (1 <= mo <= 12 and 1 <= d <= 31):
+    """真实日历校验：2026-02-31 / 平年 02-29 等非法日期返回 None（不再只看 1..31）。"""
+    try:
+        return date(y, mo, d).isoformat()
+    except ValueError:
         return None
-    return f"{y:04d}-{mo:02d}-{d:02d}"
 
 
 def _year_for_mmdd(mm: int, y_hint: int, mo_hint: int | None) -> int:

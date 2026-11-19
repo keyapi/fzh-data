@@ -36,6 +36,11 @@ def main() -> None:
     )
     ap.add_argument("--repair-dir", default="", help="FBA 源 txt tab 修复缓存目录")
     ap.add_argument(
+        "--allow-empty-tax",
+        action="store_true",
+        help="显式允许 Tax{YYYYMM}/附加费{YYYYMM} 为空或缺必需列（默认直接报错，防止静默少算）",
+    )
+    ap.add_argument(
         "--strict",
         action="store_true",
         help="有未匹配渠道账号 / 币种未匹配汇率 / Tax 别名未匹配 / 合并重复等 warning 时非 0 退出",
@@ -92,6 +97,7 @@ def main() -> None:
         repair_dir=Path(args.repair_dir) if args.repair_dir else None,
         write_gsheet=write,
         write_gsheet_fba=args.write_gsheet_fba and not args.dry_run,
+        allow_empty_tax=args.allow_empty_tax,
     )
     payload = rep.__dict__
     print(json.dumps(payload, ensure_ascii=False, indent=2))
