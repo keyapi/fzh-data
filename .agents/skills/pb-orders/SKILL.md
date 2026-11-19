@@ -150,7 +150,7 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
   导入前按完整订单号查重（重号整批失败），多明细 PO 落成 `-1/-2` 是正常。
 - **报日期必须标来源**：SPS Order 的 `Ship No Later` / IA 计划值 / EN DN-Shipment 不能混说；
   IA 计划值不是 EN 出货 ETA。`TT0031010K0062878/80` 是**床楔形枕**（楔形白色153/194），
-  不是三角靠枕。
+  不是三角靠枕；`CEN803NLinen-Black-153` 是**三角靠枕**（三角黑色153）。
 - **绝不把邮件口令 / 账号密码写进仓库**；邮件里不出现 Tracy / 中间人 / 5% 佣金。
 
 ## 相关经验（docs/solutions）
