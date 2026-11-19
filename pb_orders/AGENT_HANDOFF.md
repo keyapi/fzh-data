@@ -626,9 +626,10 @@ uv run pytest tests/ -q
     `Tongtool Order` 按完整订单号查重（重号会整批失败）；多明细 PO 落成 `-1/-2` 是正常。
     完整步骤见 `docs/solutions/workflow-issues/pb-orders-tongtool-import-and-wxp-handoff.md`。
 
-50. **建 Notion 无货行前先按 PO 查重**（2026-11-19 踩过）：当天 4 个 PO 已有行且已记录
-    AKN 发送时间，我又新建了 4 行造成重复，只能删除自己那 4 行。先
-    `SELECT ... WHERE PO IN (...)`，有行就只追加备注，不要新建。
+50. **Notion 只登记「断货 → 到货 → 发货」；建行前先按 PO 查重**（2026-11-19 用户明确）：
+    正常订单到货后美中暂时迟发/未揽收，**不登记**「PB 无货未发」台账（例如 138333288 /
+    138333550 只在钉钉跟踪）。建行前先 `SELECT ... WHERE PO IN (...)`，有行就只追加备注，
+    不要新建——当天 4 个 PO 已有行且已记录 AKN 发送时间，我误建 4 行重复，只能删除。
 
 51. **报日期必须写清来源**（2026-11-19 用户强烈要求）：`Ship No Later` /
     `Requested Delivery` 来自 **PB/SPS Order**；`01/19/2027` 这类「计划到货」来自
@@ -636,6 +637,10 @@ uv run pytest tests/ -q
     实例：楔形白色153/194 同属 `SO-26-00125` / `PP-26-00040`，WO 仍 Draft、无 DN/Shipment，
     01/19/2027 只是 IA 计划值。另：TT0031010K0062878/80 是**床楔形枕**（楔形白色153/194），
     不是三角靠枕；`CEN803NLinen-Black-153` 是**三角靠枕**，写**三角黑色153**。
+
+52. **给 Diane 的带表格状态回复先发自己测试**（2026-11-19）：先发一封到 `us@mxdeals.com`，
+    检查 multipart/alternative 里 HTML `<table>` 的表头 + 数据行完整，再同一正文发 Diane；
+    两封都 IMAP `APPEND` 到 Sent。不要直接发没有自检的 HTML 表格。
 
 ## 8. 数量对账口径
 

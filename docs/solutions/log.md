@@ -17,6 +17,7 @@ tags: [solutions, log]
 - **新增**: `workflow-issues/pb-orders-tongtool-import-and-wxp-handoff.md` —— 通途自定义渠道订单导入（模板 `PotteryBarnFromOrder` / 渠道 `PotteryBarn` / 账号 `PBUS` / 每行一个）；导入后**先选销售渠道 PotteryBarn，再本页全选，最后重新核查**；钉钉给 WXP 只发一条摘要，避免刷屏。
 - **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` §7 补「日期来源必须写全」：`Ship No Later`/`Requested Delivery` 来自 SPS Order；`01/19/2027` 这类来自 IA 计划（TBC），不是 EN 出货 ETA；EN 实际出货看 DN/Shipment。实例：楔形白色153/194 同属 SO-26-00125 / PP-26-00040，WO 仍 Draft、无 DN/Shipment。
 - **词表**: `CONCEPTS.md` 补「床楔形枕 vs 三角靠枕」——`TT0031010K0062878/80` 是床楔形枕（楔形白色153/194），不要称三角靠枕或只写「白色153/194」；`CEN803NLinen-Black-153` 是三角靠枕，写三角黑色153。
+- **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` 新增 §10：Notion 台账只登记「断货 → 到货 → 发货」，正常订单到货后美中暂时迟发不登记；建行前按 PO 查重；到货批次发完后批量回扫状态（2026-11-16 21 单：20 已发货 / 138280979 待揽收）。§3 补「给 Diane 的 HTML 表格回复先发 `us@mxdeals.com` 自检，再发 Diane」。
 
 ## 2026-11-17（SPS IA 模板取值 / 回信 HTML 表格 / 通途付款日期）
 

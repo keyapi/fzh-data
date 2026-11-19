@@ -146,6 +146,9 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
   同一 advice date 重发会**多一份 IA**，交易列表以最新时间为准。
 - **WSI/Cancel 回信要带 HTML 表格**：multipart/alternative（纯文本 + HTML），HTML 里嵌入原邮件表格
   并把 `Vendor Comment` 单元格填 `Cancel accepted`；只发纯文本会把表格压成一行。
+- **Notion 只登记「断货 → 到货 → 发货」**：正常订单到货后美中暂时迟发不登记；
+  建行前先按 PO 查重，已有行只追加备注。给 Diane 的 HTML 表格回复先发一封到
+  `us@mxdeals.com` 自检表头/数据行，再发 Diane。
 - **通途导入后的核查顺序**：先销售渠道选 **PotteryBarn** → 本页全选 → **重新核查**；
   导入前按完整订单号查重（重号整批失败），多明细 PO 落成 `-1/-2` 是正常。
 - **报日期必须标来源**：SPS Order 的 `Ship No Later` / IA 计划值 / EN DN-Shipment 不能混说；

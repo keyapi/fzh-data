@@ -33,7 +33,10 @@ timestamp: 2026-09-22
   文件按需单独发；一次发太多条会被要求撤回。DWS 回执 `sendStatus=SUCCESS`。
 - **日期来源**：`Ship No Later`/`Requested Delivery` 来自 SPS Order；`01/19/2027` 这类是
   IA 计划（TBC），不是 EN 出货 ETA；EN 实际出货看 DN/Shipment。TT0031010K0062878/80 是
-  **床楔形枕**（楔形白色153/194），不是三角靠枕。
+  **床楔形枕**（楔形白色153/194），不是三角靠枕；`CEN803NLinen-Black-153` 是**三角靠枕**
+  （三角黑色153）。
+- **Notion 范围**：只登记「断货 → 到货 → 发货」；正常订单到货后美中暂时迟发不登记；
+  建行前按 PO 查重。给 Diane 的 HTML 表格回复先发 `us@mxdeals.com` 自检表头/数据行，再发 Diane。
 
 ## 2026-11-02（第三十轮：JSON API 部署到现网 api.vilavi.cn/pb）
 
