@@ -598,6 +598,21 @@ uv run pytest tests/ -q
     - WSI/Cancel 回信必须是 **multipart/alternative（纯文本 + HTML）**，HTML 里嵌入原邮件表格并把
       `Vendor Comment` 单元格填 `Cancel accepted`；只发纯文本会把表格压成一行。
 
+46. **通途「已发货 / despatched」是 WXP 的正常顺序，不是异常**（2026-11-19 用户再次强调）：
+    WXP **先在通途标记发货** → 标签/背贴发给美中 → 美中有货就发走，**没货才回头告诉我们**。
+    所以「打单后才发现无货」时，通途里这单会挂着「已发货」、包裹甚至 `delivered` —— 这只是标记。
+    **不要叫它状态异常、不要要求作废或改成未发**；处理是 **GS「处理特殊订单」登记**，
+    月底核算时删掉这单。判真发仍只看 UPS 取件。
+    另：**EN Bin 一律不看**，尤其 `美中USTX到货仓` 未执行收货，账面数完全不代表可发
+    （2026-11-19 又踩了一次：拿 EN Bin 100 个皮壳当线索，被用户纠正）。
+    报告的 restock date **必须是工作日**：周末/节假日顺延到下一个工作日（12/12 周六 → 12/14 周一）。
+
+47. **shipment CSV 的包裹号看 `Pack Level Carrier Tracking ID`，不要看 `Carrier Tracking`**
+    （2026-11-19 用户再次纠正）：`Carrier Tracking` 是主跟踪号，一单多件时也可能只有一个；
+    `Pack Level Carrier Tracking ID` 才是逐包裹的完整列表。实测 2026-08-27 ASN 12262：
+    `Carrier Tracking = 1ZC0019E0314807245`，`Pack Level = 1ZC0019E0314807245 1ZC0019E0315985060`；
+    只看前者会误判「只发了一个包裹」。
+
 ## 8. 数量对账口径
 
 ### 8.1 库存预检（步骤 0）
@@ -896,4 +911,5 @@ uv run pytest tests/ -q
 - `docs/solutions/workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` —— PB 断货通知与 0 库存订单处理 — 数据来源、PO 映射与三个反直觉陷阱
 - `docs/solutions/workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— 打单后才发现无货的闭环（invoice / Notion / SPS / 邮件）
 - `docs/solutions/workflow-issues/pb-invoice-csv-header-loss.md` —— invoice CSV 摘单丢表头：行筛选保留表头 + 交付前的结构断言
+- `docs/solutions/workflow-issues/pb-partial-package-unshipped-invoice-paid.md` —— 部分包裹未发：`Pack Level Carrier Tracking ID` / 已付发票不重开 / 旧 UPS 标签 90 天与 Packslip 提取
 - `docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md` —— 网页与 JSON API 共用服务层的设计取舍（鉴权 / 幂等 / 补发号登记）

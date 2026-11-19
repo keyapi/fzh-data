@@ -36,6 +36,7 @@ tags: [workflow-issues, index]
 | [erpnext-version-api-compatibility.md](erpnext-version-api-compatibility.md) | ERPNext 跨版本 API 兼容 |
 | [erpnext-so-closed-unshipped-and-unstarted-work-orders.md](erpnext-so-closed-unshipped-and-unstarted-work-orders.md) | 已关闭却未发货的死单 + 工单进度不可信（子表反查父单的 API 铁律） |
 | [pb-out-of-stock-notification-and-zero-stock-orders.md](pb-out-of-stock-notification-and-zero-stock-orders.md) | PB 断货通知与 0 库存订单处理（PO→Tongtool Order 映射、UPS 才算真发、补发加后缀 `-N`、三个反直觉陷阱） |
+| [pb-partial-package-unshipped-invoice-paid.md](pb-partial-package-unshipped-invoice-paid.md) | PB 部分包裹未发：shipment 看 `Pack Level Carrier Tracking ID`、已付发票不重开、旧 UPS 标签 90 天与从 Packslip 提取 |
 | [cargo-location-tracking-source-reliability.md](cargo-location-tracking-source-reliability.md) | 「货物到哪了」查询方法：四个数据源可靠性分级 |
 | [amazon-account-period-late-submission-audit.md](amazon-account-period-late-submission-audit.md) | Amazon&新平台账期「提交异常/迟交」审计方法与规则 |
 | [workflow-copy-prod-to-test.md](workflow-copy-prod-to-test.md) | 从生产系统复制 Purchase Receipt 工作流 V3 到测试系统 |

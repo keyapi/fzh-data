@@ -7,6 +7,13 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-19（部分包裹未发：Pack Level 跟踪号 / 已付不重开票 / 旧标签 90 天）
+
+- **新增**: `workflow-issues/pb-partial-package-unshipped-invoice-paid.md` —— 一个 ASN 多包裹时，`shipment x*.csv` 的包裹数看 **`Pack Level Carrier Tracking ID`**（`Carrier Tracking` 只是主号，一单多件也可能只有一个）；每个包裹真发没发只认 UPS 取件。PB 按整张 invoice 付款：2 件已付、只到 1 件 → 欠 1 件货，补发**不得再开票**；若新建 ASN 触发自动 invoice，必须先拦截/取消。美国 UPS 标签按 **90 天**窗口；旧标签仍 `Label created` 时可复用，并可从旧批 `Packslip 美中 xNN.pdf` 按页原样抽取（每页 = Packing Slip + UPS 标签）。
+- **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— §4 补「EN Bin 一律不看，尤其 `美中USTX到货仓` 未执行收货」；§6 补「通途『已发货 / despatched』是 WXP 正常顺序（先标发 → 发美中 → 没货才回话），不是状态异常；在 GS『处理特殊订单』登记、核算时删除」；§7 补 restock date 遇周末/节假日顺延到下一个工作日（12/12 周六 → 12/14 周一）。
+- **更新**: `pb_orders/docs/reference/stockout-closed-loop.md` —— 新增 §0（通途标发是正常流程 + GS 登记）、§1.2 增加「EN Bin 一律不看」、§1.2 判定规则补工作日顺延。
+- **更新**: `pb-orders` skill 铁律补「通途标发不是异常 / GS 登记」「EN Bin 尤其 USTX 未收货不看」「shipment 看 `Pack Level Carrier Tracking ID`」；`pb_orders/AGENT_HANDOFF.md` 补坑 46/47，相关经验加新文档链接。
+
 ## 2026-11-17（SPS IA 模板取值 / 回信 HTML 表格 / 通途付款日期）
 
 - **更新**: `workflow-issues/sps-portal-ia-akn-operations.md` 新增 §2.1：IA 模板按库存状态二选一 —— **有货 Stock=100，On Order 数量/日期留空；无货 Stock=0，On Order=50，日期=到货日**。补清空单元格手法（On Order 用 Delete；日期用 Ctrl+A/Backspace/Enter）、加新 SKU 的重复行处理；§4 补“同一 advice date 重发会多一份 IA，不覆盖，以最新为准”；覆盖模板会新建 Template 文档，旧链接是 `UNDEFINED` 旧值。

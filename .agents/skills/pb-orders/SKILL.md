@@ -25,6 +25,10 @@ metadata:
 2. 数据在**仓库外**：`D:\Work\美国\Tracy Miller\PB orders\<YYYYMMDD>\`。
 3. 凭证在**父仓库** `D:\Work\赛狐\Cursor`，worktree 里没有。一律 `uv run python`。
 4. 判定「真发」只认 **UPS 取件** —— ASN / 通途 `despatched` / `PBUS-<PO>` 都只等于「建了标」。
+5. **shipment CSV 的包裹号看 `Pack Level Carrier Tracking ID`，不要看 `Carrier Tracking`**：
+   后者是主跟踪号，一单多件时也可能只有一个；前者才逐包裹列出全部
+   （2026-08-27 ASN 12262：Carrier Tracking 只有 `1ZC…14807245`，Pack Level 才是
+   `1ZC…14807245 1ZC…15985060` 两个）。
 
 ## 两条主线
 
@@ -44,6 +48,8 @@ uv run python run_pb_orders.py --dir "<批次目录>"                           
 + 钉钉 **`2026年下单表` / `发货信息总表`**（头程在途、ETA）+ 通途**采购在途**。
 有在途且 ETA 早于客户最晚发货日 → 以在途为准；没有才按「补货下单 + 提前期」推并标 TBC。
 **不要默认拍 +3 个月**（reference 文档 §1.2）。
+**报出去的日期必须是工作日**：预约送仓/ETA 落在周末或节假日 → 顺延到下一个工作日
+（2026-11-19 实例：12/12 周六 → 报 12/14 周一）；临近圣诞也不要为了「往后加几天」写成 12/24 之后。
 
 美中仓回话说某 PO 无货时，按顺序做五件事 —— 见 reference 文档 §2：
 
@@ -116,7 +122,12 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
 
 - **`Vendor Style` 大小写不敏感**（`CEN961NLinen-SageGreen-138` ≡ 大写形态）；对齐时统一 `upper()`。
 - **别用通途库存判定断货**：通途为标记发货要先「报溢」，可用库存恒 0 是常态。
-- **EN 侧不扣减通途库存**（2026-10 确认）→ EN 的 Bin 数量**不能当可用库存**。
+- **通途「已发货 / despatched」是 WXP 的正常顺序，不是异常**：WXP **先在通途标记发货** →
+  把标签/背贴发给美中 → 美中有货就发走，**没货才回头告诉我们**。所以「打单后才发现无货」是常态；
+  通途里这单会挂着「已发货」，**不要叫它状态异常、也不要要求改成未发**。处理方式是
+  **在 GS「处理特殊订单」登记**，月底核算时把这单删掉即可。判真发仍只看 **UPS 取件**。
+- **EN 侧不扣减通途库存**（2026-10 确认）→ EN 的 Bin 数量**不能当可用库存**；
+  尤其 **`美中USTX到货仓` 未执行收货**，账面数完全不代表可发，**一律不要看它**。
 - **SO 的「未交量」≠ 在途**：货常常已经出境到目的仓。
 - **invoice 的 H 行才带 PO 号**，D 行 PO 为空 —— 删无货单要整块删（H+D），否则留孤儿明细。
 - **改 invoice CSV 必须保留第 1 行表头**：按行摘单时 `keep = [lines[0]]` 再处理数据行；
@@ -138,6 +149,7 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
 ## 相关经验（docs/solutions）
 
 - `docs/solutions/workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— 打单后才发现无货的闭环：invoice 清理惯例、邮件成链、两套库存不能混用
+- `docs/solutions/workflow-issues/pb-partial-package-unshipped-invoice-paid.md` —— 部分包裹未发：`Pack Level Carrier Tracking ID`、已付发票不重开、旧 UPS 标签 90 天与 Packslip 提取
 - `docs/solutions/workflow-issues/pb-invoice-csv-header-loss.md` —— invoice CSV 摘单丢表头：行筛选保留表头 + 交付前结构断言（同额票是金额校验盲区）
 - `docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md` —— 网页与 JSON API 共用服务层：双鉴权 / 幂等 / 补发号登记；现网判定与 compose 服务名
 - `docs/solutions/workflow-issues/pb-replenishment-sizing-from-sales.md` —— 补货量估算：美中 Daneey 口径、通途订单表读法、剔除断货月、交付用 Excel
