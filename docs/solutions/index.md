@@ -14,6 +14,7 @@ tags: [solutions, index]
 | 日期 | 标题 | 文件 |
 |------|------|------|
 | 2026-11-19 | PB 部分包裹未发 — 看 Pack Level 跟踪号、已付发票不重开、旧 UPS 标签 90 天 | [workflow-issues/pb-partial-package-unshipped-invoice-paid.md](workflow-issues/pb-partial-package-unshipped-invoice-paid.md) |
+| 2026-11-19 | PB 订单导入通途 + WXP 交接 — 模板/渠道/账号、核查顺序、钉钉消息 | [workflow-issues/pb-orders-tongtool-import-and-wxp-handoff.md](workflow-issues/pb-orders-tongtool-import-and-wxp-handoff.md) |
 | 2026-10-29 | 人 + Agent 共用的订单 API —— PB 网页与 JSON API 共用一套服务层 | [architecture-patterns/pb-orders-json-api-human-agent.md](architecture-patterns/pb-orders-json-api-human-agent.md) |
 | 2026-10-29 | PB invoice CSV 摘单后丢了表头 —— 行筛选必须保留第 1 行，并用程序断言 | [workflow-issues/pb-invoice-csv-header-loss.md](workflow-issues/pb-invoice-csv-header-loss.md) |
 | 2026-10-16 | SPS 门户的 IA 与 AKN 操作 — 断货后重发 Inventory Advice / PO Acknowledgement | [workflow-issues/sps-portal-ia-akn-operations.md](workflow-issues/sps-portal-ia-akn-operations.md) |

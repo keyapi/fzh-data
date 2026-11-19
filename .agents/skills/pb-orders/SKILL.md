@@ -146,12 +146,18 @@ curl -sS -X POST "$BASE/api/v1/jobs/<check_job_id>/fulfill" -H "$H" \
   同一 advice date 重发会**多一份 IA**，交易列表以最新时间为准。
 - **WSI/Cancel 回信要带 HTML 表格**：multipart/alternative（纯文本 + HTML），HTML 里嵌入原邮件表格
   并把 `Vendor Comment` 单元格填 `Cancel accepted`；只发纯文本会把表格压成一行。
+- **通途导入后的核查顺序**：先销售渠道选 **PotteryBarn** → 本页全选 → **重新核查**；
+  导入前按完整订单号查重（重号整批失败），多明细 PO 落成 `-1/-2` 是正常。
+- **报日期必须标来源**：SPS Order 的 `Ship No Later` / IA 计划值 / EN DN-Shipment 不能混说；
+  IA 计划值不是 EN 出货 ETA。`TT0031010K0062878/80` 是**床楔形枕**（楔形白色153/194），
+  不是三角靠枕。
 - **绝不把邮件口令 / 账号密码写进仓库**；邮件里不出现 Tracy / 中间人 / 5% 佣金。
 
 ## 相关经验（docs/solutions）
 
 - `docs/solutions/workflow-issues/pb-stockout-post-shipment-closed-loop.md` —— 打单后才发现无货的闭环：invoice 清理惯例、邮件成链、两套库存不能混用
 - `docs/solutions/workflow-issues/pb-partial-package-unshipped-invoice-paid.md` —— 部分包裹未发：`Pack Level Carrier Tracking ID`、已付发票不重开、旧 UPS 标签 90 天与 Packslip 提取
+- `docs/solutions/workflow-issues/pb-orders-tongtool-import-and-wxp-handoff.md` —— 通途导入（模板/渠道/账号）、先选渠道再本页全选重新核查、钉钉交接 WXP
 - `docs/solutions/workflow-issues/pb-invoice-csv-header-loss.md` —— invoice CSV 摘单丢表头：行筛选保留表头 + 交付前结构断言（同额票是金额校验盲区）
 - `docs/solutions/architecture-patterns/pb-orders-json-api-human-agent.md` —— 网页与 JSON API 共用服务层：双鉴权 / 幂等 / 补发号登记；现网判定与 compose 服务名
 - `docs/solutions/workflow-issues/pb-replenishment-sizing-from-sales.md` —— 补货量估算：美中 Daneey 口径、通途订单表读法、剔除断货月、交付用 Excel

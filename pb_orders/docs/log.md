@@ -26,6 +26,14 @@ timestamp: 2026-09-22
 - **命名口径**：Packslip 文件名 `xN` 的 **N = 真实标签页数（包裹数），不是 shipment 数**。
   2026-11-19 实例：37 个 shipment → 40 页标签 → `x40`；把 137770200 旧标签 1 页合并到第一页 →
   **41 页 → `x41`**。不要按 37/38 命名。
+- **通途导入**：2026-11-19 用 MCP 导入 41 行 xlsx（模板 `PotteryBarnFromOrder` / 渠道
+  `PotteryBarn` / 账号 `PBUS` / 每行一个），无重号。导入后顺序必须是 **先选销售渠道
+  PotteryBarn → 本页全选 → 重新核查**；41/41 全部匹配 SKU 与美中-DANEEY 仓库。
+- **WXP 交接**：钉钉给吴晓鹏只发一条摘要（`PB 美中 41单，通途已建单` + 补发备注），
+  文件按需单独发；一次发太多条会被要求撤回。DWS 回执 `sendStatus=SUCCESS`。
+- **日期来源**：`Ship No Later`/`Requested Delivery` 来自 SPS Order；`01/19/2027` 这类是
+  IA 计划（TBC），不是 EN 出货 ETA；EN 实际出货看 DN/Shipment。TT0031010K0062878/80 是
+  **床楔形枕**（楔形白色153/194），不是三角靠枕。
 
 ## 2026-11-02（第三十轮：JSON API 部署到现网 api.vilavi.cn/pb）
 

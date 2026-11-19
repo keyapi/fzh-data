@@ -14,6 +14,9 @@ tags: [solutions, log]
 - **更新**: `pb_orders/docs/reference/stockout-closed-loop.md` —— 新增 §0（通途标发是正常流程 + GS 登记）、§1.2 增加「EN Bin 一律不看」、§1.2 判定规则补工作日顺延。
 - **更新**: `pb-orders` skill 铁律补「通途标发不是异常 / GS 登记」「EN Bin 尤其 USTX 未收货不看」「shipment 看 `Pack Level Carrier Tracking ID`」；`pb_orders/AGENT_HANDOFF.md` 补坑 46/47，相关经验加新文档链接。
 - **口径**: Packslip 文件名 `xN` 的 N = **真实标签页数（包裹数），不是 shipment 数**。2026-11-19：37 个 shipment → 40 页 → `x40`；合并 137770200 旧标签 1 页 → 41 页 → `x41`。
+- **新增**: `workflow-issues/pb-orders-tongtool-import-and-wxp-handoff.md` —— 通途自定义渠道订单导入（模板 `PotteryBarnFromOrder` / 渠道 `PotteryBarn` / 账号 `PBUS` / 每行一个）；导入后**先选销售渠道 PotteryBarn，再本页全选，最后重新核查**；钉钉给 WXP 只发一条摘要，避免刷屏。
+- **更新**: `workflow-issues/pb-stockout-post-shipment-closed-loop.md` §7 补「日期来源必须写全」：`Ship No Later`/`Requested Delivery` 来自 SPS Order；`01/19/2027` 这类来自 IA 计划（TBC），不是 EN 出货 ETA；EN 实际出货看 DN/Shipment。实例：楔形白色153/194 同属 SO-26-00125 / PP-26-00040，WO 仍 Draft、无 DN/Shipment。
+- **词表**: `CONCEPTS.md` 补「床楔形枕 vs 三角靠枕」——`TT0031010K0062878/80` 是床楔形枕（楔形白色153/194），不要称三角靠枕或只写「白色153/194」；`CEN803NLinen-Black-153` 写楔形黑色153。
 
 ## 2026-11-17（SPS IA 模板取值 / 回信 HTML 表格 / 通途付款日期）
 

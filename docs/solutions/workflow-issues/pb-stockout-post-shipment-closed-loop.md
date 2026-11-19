@@ -127,6 +127,15 @@ WXP 先在通途「标记发货」→ 标签/背贴发给美中 → 美中有货
 所有日期按 `事实 / 推导 / 估算 / 人工判断` 标注来源，别把估算写成事实
 （参见 `docs/solutions/architecture-patterns/en-end-to-end-supply-chain-fulfillment-visibility.md`）。
 
+**来源标签必须写全，不能混着说**：
+
+- `Ship No Later` / `Requested Delivery` = **PB/SPS Order 明细行**；
+- `01/19/2027` 这类「计划到货」= **IA 模板/补货计划**（估算/TBC），**不是 EN 出货 ETA**；
+- EN 实际出货看 **Delivery Note / Shipment**；SO/PP/WO 只能说明下单与生产状态。
+- 2026-11-19 实例：楔形白色153/194（TT0031010K0062878/80，**床楔形枕，不是三角靠枕**）
+  同属 EN `SO-26-00125` / `PP-26-00040`，WO 仍 Draft、无 DN/Shipment；
+  `01/19/2027` 只是 IA 计划值，不是 EN 已出货日期。
+
 ### 8. WSI/Cancel 回信必须带 **HTML 表格**，纯文本会把表格压扁
 
 2026-11-16 实测：Diane 的 `WSI WISMO/Cancel Request/CHAD` 邮件后面是**一整张 HTML 表格**
