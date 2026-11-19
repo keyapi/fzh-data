@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -260,6 +262,37 @@ def main() -> None:
         if args.sort_gsheet_tabs:
             sort_additional_fee_tax_tabs(gc, pin_worksheet=ws_name)
             print("gsheet tabs sorted (Colab 附加费/Tax 规则)")
+        try:
+            mdir = Path(
+                os.environ.get("PERIOD_WRITE_MANIFEST_DIR", str(Path.cwd() / "reports" / "_write_runs"))
+            )
+            mdir.mkdir(parents=True, exist_ok=True)
+            run_id = f"{ts}_tax_{args.exchange_month}"
+            mirror = report.get("mirror_xlsx")
+            manifest = {
+                "run_id": run_id,
+                "kind": "tax",
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "bucket": bucket_name,
+                "bucket_dir": str(bucket_dir),
+                "exchange_month": args.exchange_month,
+                "tax_worksheet": ws_name,
+                "rows": len(df6_gsheet),
+                "tax_rmb": report.get("tax_rmb_sum"),
+                "read_stats": read_stats if isinstance(read_stats, dict) else {"value": read_stats},
+                "mirror_xlsx": mirror,
+                "mirror_md5": (
+                    hashlib.md5(Path(mirror).read_bytes()).hexdigest()
+                    if mirror and Path(mirror).is_file()
+                    else None
+                ),
+            }
+            mp = mdir / f"{run_id}.json"
+            mp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+            report["manifest_path"] = str(mp)
+            print("manifest", mp)
+        except Exception as e:  # manifest 失败不影响已写入的 Tax，但必须可见
+            print("[warn] tax manifest 未写入:", e)
 
     if args.upload_nas:
         dest = upload_excel_to_nas(xlsx_path, bucket_name)
