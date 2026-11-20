@@ -39,7 +39,20 @@ from phase3_constants import (
     OPS_CHANNEL_WS_TITLE,
     OPS_SPREADSHEET_ID,
 )
-from phase3_gsheet import phase3_spreadsheet_available, read_worksheet_df, write_worksheet_df
+from phase3_gsheet import (
+    df_to_gsheet_rows,
+    phase3_spreadsheet_available,
+    read_worksheet_df,
+    write_worksheet_df,
+)
+from publish_guard import (
+    PublishResult,
+    WriteItem,
+    normalize_rows,
+    prepare_publish,
+    publish_prepared,
+    recover_prepared,
+)
 
 _DING = Path(__file__).resolve().parents[1] / "dingtalk" / "dingtalk_oa_approval"
 if str(_DING) not in sys.path:
@@ -1070,6 +1083,21 @@ class Phase3Report:
     warnings: list[str] = field(default_factory=list)
     worksheets_written: list[str] = field(default_factory=list)
     manifest_path: str | None = None
+    publish_status: str = ""
+
+
+@dataclass(frozen=True)
+class PublishOptions:
+    """Phase3 正式发布选项：PREPARED/回读 + 强制 policy/FX/授权凭据。
+
+    ``guarded=True`` 时写入走 ``publish_guard``（首个 clear 前快照目标全集、完整回读、
+    失败 partial 停后续批次）。CLI 正式发布一律传 ``PublishOptions()``。
+    """
+
+    guarded: bool = True
+    require_policy: bool = True
+    require_fx: bool = True
+    require_receipt: bool = True
 
 
 AMOUNT_ROW_DIM_COLS = ("销售账户", "渠道账号", "运营人员", "收款归属", "选择平台")
@@ -1166,6 +1194,14 @@ def preflight_write_errors(
     authorization_results: Sequence[AuthorizationResult] | None = None,
     correction_period: str = "",
     now=None,
+    fx=None,
+    require_fx: bool = False,
+    require_receipt: bool = False,
+    require_proposals: bool = False,
+    input_md5: str | None = None,
+    approved_input_md5: str | None = None,
+    prior_runs: Sequence = (),
+    source_hash: str | None = None,
 ) -> list[str]:
     """Phase3 写前硬门禁（不写任何表，只返回问题清单）。
 
@@ -1175,6 +1211,9 @@ def preflight_write_errors(
     F 批：``correction_policy`` + ``correction_proposals``（+ 已存 ``authorization_results``）
     交给 ``correction_policy.write_gate_errors``——未授权 T2、政策过期、proposal/policy
     hash 变化都在写前 FAIL，与 CLI ``--strict`` 无关。没有修正提案时不改变现有行为。
+
+    R1–R4：``fx``/``require_fx`` 人民币预算、``require_receipt`` 授权凭据、
+    ``input_md5`` vs ``approved_input_md5`` 的批准源核对、``prior_runs`` 防拆 run。
     """
     problems: list[str] = []
     fx_missing = find_unmatched_currency(df)
@@ -1201,8 +1240,12 @@ def preflight_write_errors(
     problems.extend(tax_account_problems(df_tax, df_account, only_nonzero=True))
     for err in fba_errors or []:
         problems.append(f"FBA: {err}")
-    if correction_proposals:
-        period = correction_period or str(correction_proposals[0].period or "")
+    if require_fx and fx is None:
+        problems.append("POLICY: 正式发布缺已确认目标月 FX 表（人民币预算无法成立）")
+    if correction_proposals or require_proposals or approved_input_md5:
+        period = correction_period or (
+            str(correction_proposals[0].period or "") if correction_proposals else ""
+        )
         problems.extend(
             write_gate_errors(
                 period=period,
@@ -1210,6 +1253,14 @@ def preflight_write_errors(
                 proposals=list(correction_proposals),
                 results=authorization_results,
                 now=now,
+                fx=fx,
+                require_fx=require_fx,
+                require_receipt=require_receipt,
+                require_proposals=require_proposals,
+                input_md5=input_md5,
+                approved_input_md5=approved_input_md5,
+                prior_runs=prior_runs,
+                source_hash=source_hash,
             )
         )
     return problems
@@ -1229,11 +1280,21 @@ def run_phase3(
     write_repairs: bool = True,
     correction_policy: CorrectionPolicy | None = None,
     correction_proposals: Sequence[CorrectionProposal] = (),
+    correction_authorization: Sequence[AuthorizationResult] | None = None,
+    correction_fx=None,
+    approved_input_md5: str | None = None,
+    prior_runs: Sequence = (),
+    publish_options: "PublishOptions | None" = None,
+    publish_gateway=None,
+    publish_now=None,
 ) -> tuple[Phase3Report, dict[str, pd.DataFrame]]:
     period_range = period_range_from_bucket(bucket)
     yyyymm = exchange_month.strip()
     if yyyymm != accounting_yyyymm_from_bucket(bucket):
         raise ValueError(f"--exchange-month {yyyymm} 与桶 {bucket} 不一致")
+    # 有政策 + 请求写表 = 正式发布：自动启用 PREPARED/回读与 R1–R4 强制项。
+    if publish_options is None and correction_policy is not None and (write_gsheet or write_gsheet_fba):
+        publish_options = PublishOptions()
 
     oa_failures: list[str] = []
     df_orig = load_oa_dataframe(input_xlsx, failures_out=oa_failures)
@@ -1390,6 +1451,10 @@ def run_phase3(
 
     # 写前硬门禁：任何一项不过都必须在此之前抛错，不能先写后报。
     if write_gsheet or write_gsheet_fba:
+        if publish_options is not None and publish_options.require_policy and correction_policy is None:
+            raise RuntimeError(
+                "正式发布必须声明 --correction-policy（policy/证据/源链），拒绝无政策写表"
+            )
         problems = preflight_write_errors(
             df,
             df_group=df_group,
@@ -1401,12 +1466,146 @@ def run_phase3(
             fba_errors=fba_errors,
             correction_policy=correction_policy,
             correction_proposals=correction_proposals,
+            authorization_results=correction_authorization,
             correction_period=yyyymm,
+            now=publish_now,
+            fx=correction_fx,
+            require_fx=bool(publish_options and publish_options.require_fx),
+            require_receipt=bool(publish_options and publish_options.require_receipt),
+            input_md5=_md5(input_xlsx),
+            approved_input_md5=approved_input_md5,
+            prior_runs=prior_runs,
+            source_hash=_md5(input_xlsx),
         )
         if problems:
             raise RuntimeError("写前门禁失败，已拒绝写入: " + "; ".join(problems))
 
+    manifest_dir = Path(
+        os.environ.get("PERIOD_WRITE_MANIFEST_DIR", str(Path.cwd() / "reports" / "_write_runs"))
+    )
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + period_range
+    publish_result = None
+    prepared: dict | None = None
+
+    items: list = []
+    gateway = None
     if write_gsheet:
+        ws_main = period_range
+        ws_orig = f"{period_range}原始"
+        ws_rmb = f"人民币{period_range}"
+        ws_rate_receipt = f"{period_range}收款比例收款归属"
+        ws_rate_staff = f"{period_range}收款比例运营人员"
+        if publish_options is not None and publish_options.guarded:
+            if publish_gateway is not None:
+                gateway = publish_gateway
+            else:
+                from phase3_gsheet import Phase3GsheetGateway
+
+                gateway = Phase3GsheetGateway(gc)
+            items += [
+                WriteItem(ws_main, df_to_gsheet_rows(df_group)),
+                WriteItem(ws_orig, df_to_gsheet_rows(df)),
+                WriteItem(ws_rmb, df_to_gsheet_rows(df_merged)),
+                WriteItem(ws_rate_receipt, df_to_gsheet_rows(frames["collection_rate_receipt"])),
+                WriteItem(ws_rate_staff, df_to_gsheet_rows(frames["collection_rate_staff"])),
+            ]
+
+    if write_gsheet_fba:
+        if not phase3_spreadsheet_available(gc):
+            raise PermissionError("Phase3 表不可读，无法写 FBA 工作表")
+        fba_items: list = []
+        if frames.get("fba_summary") is not None and not frames["fba_summary"].empty:
+            fba_items.append(
+                WriteItem(f"{period_range}{FBA_SUMMARY_SUFFIX}", df_to_gsheet_rows(frames["fba_summary"]))
+            )
+        if frames.get("fba_staff") is not None and not frames["fba_staff"].empty:
+            fba_items.append(
+                WriteItem(f"{period_range}{FBA_STAFF_SUFFIX}", df_to_gsheet_rows(frames["fba_staff"]))
+            )
+        if publish_options is not None and publish_options.guarded and fba_items:
+            if gateway is None:
+                if publish_gateway is not None:
+                    gateway = publish_gateway
+                else:
+                    from phase3_gsheet import Phase3GsheetGateway
+
+                    gateway = Phase3GsheetGateway(gc)
+            items += fba_items
+        else:
+            # 旧路径（未启用 PREPARED/回读）：直接写
+            if frames.get("fba_summary") is not None and not frames["fba_summary"].empty:
+                ws_fba_summary = f"{period_range}{FBA_SUMMARY_SUFFIX}"
+                write_worksheet_df(gc, frames["fba_summary"], worksheet=ws_fba_summary)
+                rep.worksheets_written.append(ws_fba_summary)
+            if frames.get("fba_staff") is not None and not frames["fba_staff"].empty:
+                ws_fba_staff = f"{period_range}{FBA_STAFF_SUFFIX}"
+                write_worksheet_df(gc, frames["fba_staff"], worksheet=ws_fba_staff)
+                rep.worksheets_written.append(ws_fba_staff)
+            from phase3_gsheet import sort_phase3_tabs
+
+            sort_phase3_tabs(gc, pin_worksheet=period_range)
+
+    if items and gateway is not None:
+        rep.worksheets_written = []
+        inputs = {
+            "input_md5": _md5(input_xlsx),
+            "master_md5": _md5(Path("channel_account_sync/out/channel_account_gsheet.json")),
+            "fx_md5": correction_fx.source_hash if correction_fx is not None else None,
+            "fba_hash": (frames.get("fba_summary").attrs.get("fba_source_hash") if frames.get("fba_summary") is not None else None),
+            "exception_md5": _md5(
+                Path(os.environ["LOCAL_NAS_PERIOD_ROOT"]) / "_period_exceptions" / f"账期{period_range}.txt"
+            )
+            if os.environ.get("LOCAL_NAS_PERIOD_ROOT", "").strip()
+            else None,
+        }
+        outputs = {
+            "rows": {k: int(len(v)) for k, v in frames.items() if hasattr(v, "__len__")},
+        }
+        prepared = prepare_publish(
+            gateway,
+            items,
+            run_id=run_id,
+            inputs=inputs,
+            outputs=outputs,
+            permission_probe=getattr(gateway, "permission_probe", None),
+        )
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        (manifest_dir / f"{run_id}.prepared.json").write_text(
+            json.dumps(prepared, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        publish_result = publish_prepared(gateway, items, prepared)
+        rep.publish_status = publish_result.status
+        rep.worksheets_written = list(publish_result.written)
+        if not publish_result.published:
+            final = {
+                "run_id": run_id,
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "kind": "phase3",
+                "status": publish_result.status,
+                "period": period_range,
+                "bucket": bucket,
+                "exchange_month": yyyymm,
+                "prepared": prepared,
+                "publish": {
+                    "status": publish_result.status,
+                    "published": False,
+                    "errors": publish_result.errors,
+                    "written": publish_result.written,
+                    "failed_worksheet": publish_result.failed_worksheet,
+                    "readback": publish_result.readback,
+                },
+            }
+            mp = manifest_dir / f"{run_id}.json"
+            mp.write_text(json.dumps(final, ensure_ascii=False, indent=2), encoding="utf-8")
+            rep.manifest_path = str(mp)
+            raise RuntimeError(
+                "发布未完成（" + publish_result.status + "，未 published）: "
+                + "; ".join(publish_result.errors)
+            )
+        from phase3_gsheet import sort_phase3_tabs
+
+        sort_phase3_tabs(gc, pin_worksheet=period_range)
+    elif write_gsheet:
         if not phase3_spreadsheet_available(gc):
             raise PermissionError(
                 "无法 open_by_key Phase3 表（钉钉OA收款费用…）。"
@@ -1427,27 +1626,8 @@ def run_phase3(
 
         sort_phase3_tabs(gc, pin_worksheet=ws_main)
 
-    if write_gsheet_fba:
-        if not phase3_spreadsheet_available(gc):
-            raise PermissionError("Phase3 表不可读，无法写 FBA 工作表")
-        if frames.get("fba_summary") is not None and not frames["fba_summary"].empty:
-            ws_fba_summary = f"{period_range}{FBA_SUMMARY_SUFFIX}"
-            write_worksheet_df(gc, frames["fba_summary"], worksheet=ws_fba_summary)
-            rep.worksheets_written.append(ws_fba_summary)
-        if frames.get("fba_staff") is not None and not frames["fba_staff"].empty:
-            ws_fba_staff = f"{period_range}{FBA_STAFF_SUFFIX}"
-            write_worksheet_df(gc, frames["fba_staff"], worksheet=ws_fba_staff)
-            rep.worksheets_written.append(ws_fba_staff)
-        from phase3_gsheet import sort_phase3_tabs
-
-        sort_phase3_tabs(gc, pin_worksheet=period_range)
-
     if write_gsheet or write_gsheet_fba:
-        manifest_dir = Path(
-            os.environ.get("PERIOD_WRITE_MANIFEST_DIR", str(Path.cwd() / "reports" / "_write_runs"))
-        )
         manifest_dir.mkdir(parents=True, exist_ok=True)
-        run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + period_range
         alias_snap = Path("channel_account_sync/out/channel_account_gsheet.json")
         nas_root_raw = os.environ.get("LOCAL_NAS_PERIOD_ROOT", "").strip()
         whitelist = (
@@ -1482,10 +1662,41 @@ def run_phase3(
         }
         # F：发布清单绑定 policy/proposal/逐条 correction/证据 hash；任一变化旧 PASS 失效。
         manifest.update(
-            manifest_policy_fields(policy=correction_policy, proposals=correction_proposals)
+            manifest_policy_fields(
+                policy=correction_policy,
+                proposals=correction_proposals,
+                results=correction_authorization,
+                fx=correction_fx,
+            )
         )
+        # R3/R4：PREPARED 快照、write_set、回读结果、依赖 hash 与目标基线。
+        if prepared is not None:
+            manifest.update(
+                {
+                    "status": "published",
+                    "prepared": prepared,
+                    "publish": {
+                        "status": "published",
+                        "published": True,
+                        "written": list(rep.worksheets_written),
+                        "readback": publish_result.readback if publish_result else {},
+                    },
+                    "target_baseline_hash": prepared.get("target_baseline_hash"),
+                    "dependencies": {
+                        **(prepared.get("inputs") or {}),
+                        "policy_hash": correction_policy.hash if correction_policy else None,
+                        "proposal_hash": manifest.get("proposal_hash"),
+                        "evidence_hash": manifest.get("corrections") and [
+                            c.get("evidence_hash") for c in manifest["corrections"]
+                        ],
+                        "target_baseline_hash": prepared.get("target_baseline_hash"),
+                    },
+                    "source_hash": manifest.get("input_md5"),
+                }
+            )
         mp = manifest_dir / f"{run_id}.json"
         mp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         rep.manifest_path = str(mp)
 
     return rep, frames
+

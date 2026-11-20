@@ -4,7 +4,7 @@ type: Handoff
 title: Amazon 账期 txt Tax 管道（本地）
 description: 替代 Colab「税账期TXT 挂载Gdrive」Tax 主线 + Phase2 探索 sheet/FBA；读 NAS 同步桶、汇率 gsheet、出 Excel + Tax worksheet
 tags: [amazon, tax, txt, colab, gsheet, nas]
-timestamp: 2026-11-04
+timestamp: 2026-11-20
 ---
 
 # amazon_period_tax
@@ -122,10 +122,44 @@ uv run python amazon_period_tax/scripts/run_period_phase3.py ... --dry-run --str
 写表用 `RAW`：`审批编号` 等 ID 列强制文本，数字保留原生类型。
 
 
+## T2 runtime 加固 R1–R4（2026-11-20，T2 仍关闭）
+
+> 只改代码与测试，未写任何 GSheet/NAS/Excel；生产 11-19 已验收结果未重写。
+> 依据：仓库外 `reports/next_steps_20261120.md` §2；实施报告 `reports/t2_hardening_20261120.md`。
+
+| 单元 | 行为 | 落点 |
+|------|------|------|
+| **R1 人民币预算** | 单条/批次上限按 **CNY**：原币差 × 已确认目标月 FX；纯文本（账号/日期/币种）修正按 `affected_amount` 计价，不能为 0；同期间+同源版本历史累加（`prior_runs`），每条取绝对值（正负不抵消），防拆 run；缺 FX/币种未确认 → 阻断（writer=0） | `correction_policy.{FxTable,load_fx_table,resolve_impact_budget,cumulative_prior_impact,evaluate_batch}` |
+| **R2 授权链与入口** | `approved` 必须绑定 proposal hash / 授权依据 / 角色 / 时间 / scope（`authorization` 对象）；硬身份/有效期/期间检查先于批准捷径；三个写入口强制声明 policy + corrections + fx | `correction_policy.authorization_receipt_problems`；`scripts/{apply_remediation,run_period_phase3,run_period_tax}.py` |
+| **R3 PREPARED/回读** | 首个 clear 前保存目标全集快照、write_set、输入/输出预期、权限探针、恢复方案；逐表完整回读 → `published`；失败 `partial` 且停后续批次；外部并发改动时恢复 `attempts=0` | `publish_guard.{prepare_publish,publish_prepared,recover_prepared}`；`phase3_gsheet.Phase3GsheetGateway`；`gsheet_tax.TaxGsheetGateway` |
+| **R4 hash 失效/幂等** | 写入口用**当前**政策重判已存授权（旧 `auto_allowed` 遇 T2=false 拒绝）；`stale_pass_problems` 比对 fx/dependencies/目标基线；`idempotent=True` 让同一 correction 重复运行经济应用=1 | `correction_policy.write_gate_errors`、`remediation.apply_corrections` |
+
+**正式发布命令（三个开关缺一不可）**：
+
+```powershell
+uv run python amazon_period_tax/scripts/run_period_phase3.py --in <定稿.xlsx> --bucket 账期... --exchange-month 202611 `
+  --correction-policy <policy.json> --corrections <corrections.json> --fx <fx.json> `
+  --prior-manifest <上次 manifest.json> --write-gsheet
+uv run python amazon_period_tax/scripts/run_period_tax.py --bucket 账期... --exchange-month 202611 `
+  --correction-policy <policy.json> --corrections <corrections.json> --fx <fx.json> --write-gsheet
+uv run python amazon_period_tax/scripts/apply_remediation.py --corrections <c.json> --period 202611 `
+  --in <原件.xlsx> --out <corrected.xlsx> --evidence-root <附件目录> --policy <policy.json> --fx <fx.json> [--idempotent]
+```
+
+FX 文件格式（JSON 或 CSV，月份必须等于目标账期月）：
+
+```json
+{"month": "202611", "rates": {"USD": "7.12", "EUR": "7.80", "SEK": "0.72"}}
+```
+
+> **没有「修正也要空跑」的旁路**：`--corrections` 可以是该期空清单，但必须与
+> `--prior-manifest` 的输入 hash 一致，否则按「空 proposal 但输入与批准源不符」拒绝。
+> 不带政策/FX 只能 `--dry-run`；Phase3 的目标快照 `.prepared.json` 在首个 clear 前落盘，
+> `partial` 时 manifest 绝不写 `published`。
+
 ## 相关
 
-- Colab 调研：`sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md` §1
-- txt 命名：`docs/solutions/conventions/amazon-period-file-reconcile.md`
+- Colab 调研：`sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md` §1- txt 命名：`docs/solutions/conventions/amazon-period-file-reconcile.md`
 - Phase3 写表 id：`docs/solutions/integration-issues/amazon-period-phase3-gsheet-not-colab-id.md`
 - 定稿 `keep_approval`：`docs/solutions/workflow-issues/amazon-period-colab-export-keep-approval.md`
 - Tax 汇率别名：`docs/solutions/integration-issues/amazon-period-tax-fx-alias-multiplies.md`

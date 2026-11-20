@@ -30,18 +30,22 @@ import re
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import Sequence
 
 import openpyxl
 
 from bucket_meta import bucket_yyyymm
 from correction_policy import (
+    STATUS_APPROVED,
     STATUS_AUTO_ALLOWED,
     TIER_T1,
-    CorrectionPolicy,
     AuthorizationResult,
+    CorrectionPolicy,
     build_proposals,
     evaluate_batch,
+    authorization_receipt_problems,
     manifest_policy_fields,
+    proposal_hash,
     stale_pass_problems,
     write_gate_errors,
 )
@@ -311,16 +315,36 @@ def validate_corrections(
     return {"period": str(period), "source_md5": actual, "items": period_items}
 
 
-def _match_row(ws, idx: dict, approval: str, key: dict) -> int:
-    matches: list[int] = []
-    for row in range(2, ws.max_row + 1):
-        if _text(ws.cell(row=row, column=idx["审批编号"]).value) != approval:
-            continue
-        if all(
-            col in idx and _value_equal(col, ws.cell(row=row, column=idx[col]).value, want)
-            for col, want in key.items()
-        ):
-            matches.append(row)
+def _match_row(
+    ws,
+    idx: dict,
+    approval: str,
+    key: dict,
+    *,
+    idempotent: bool = False,
+    after_map: dict | None = None,
+) -> int:
+    def _find(want: dict) -> list[int]:
+        out: list[int] = []
+        for row in range(2, ws.max_row + 1):
+            if _text(ws.cell(row=row, column=idx["审批编号"]).value) != approval:
+                continue
+            if all(
+                col in idx and _value_equal(col, ws.cell(row=row, column=idx[col]).value, value)
+                for col, value in want.items()
+            ):
+                out.append(row)
+        return out
+
+    matches = _find(key)
+    if not matches and idempotent and after_map:
+        # 幂等重跑：行指纹里若含本修正改过的列，用 after 值再定位一次。
+        shifted = {
+            col: after_map.get(col, value) if col in after_map else value
+            for col, value in key.items()
+        }
+        if shifted != key:
+            matches = _find(shifted)
     if len(matches) != 1:
         raise RemediationError(f"审批 {approval} 命中 {len(matches)} 行（要求恰好 1 行）: {matches}")
     return matches[0]
@@ -339,6 +363,14 @@ def apply_corrections(
     authorization: list[AuthorizationResult] | None = None,
     prior_manifest: dict | None = None,
     now=None,
+    fx=None,
+    require_fx: bool = False,
+    require_receipt: bool = False,
+    approved_input_md5: str | None = None,
+    prior_runs: Sequence = (),
+    dependencies: dict | None = None,
+    target_baseline_hash: str | None = None,
+    idempotent: bool = False,
 ) -> dict:
     """应用指定账期的修正，写 corrected 副本，返回应用清单。
 
@@ -347,6 +379,15 @@ def apply_corrections(
 
     传 ``policy``（或 ``authorization``）时走 F 批授权门禁：T1 自动、T2 窄通道、
     preview 一律不得写入；无政策时保持 E2 的 ``approved`` 语义不变。
+
+    R2/R4 加固（正式发布入口传 True）：
+
+    - ``require_receipt``：``approved`` 必须带绑定 proposal hash / 依据 / 角色 / 时间 /
+      scope 的 ``authorization`` 凭据（单个 ``confirmed_by`` 字符串不算授权）。
+    - ``require_fx`` + ``fx``：人民币预算必须成立，缺 FX/币种未确认 → 写入口 0。
+    - ``approved_input_md5``：输入必须等于批准源；不同即拒绝。
+    - ``idempotent``：同一修正重复运行只经济应用一次——格值已等于 after 视为已应用
+      （不再报 before 不符），上一份 manifest 已记录同 hash 的修正整条跳过。
     """
     src = Path(src)
     out = Path(out)
@@ -356,12 +397,13 @@ def apply_corrections(
     auto_allowed_ids: set[str] = set()
     tiers: dict[str, str] = {}
     policy_fields: dict | None = None
-    if policy is not None or authorization is not None:
+    proposals = []
+    if policy is not None or authorization is not None or require_fx or require_receipt:
         proposals = build_proposals(corrections, period=str(period))
         results = (
             list(authorization)
             if authorization is not None
-            else list(evaluate_batch(proposals, policy, now=now).results)
+            else list(evaluate_batch(proposals, policy, now=now, fx=fx, require_fx=require_fx).results)
         )
         problems = write_gate_errors(
             period=str(period),
@@ -369,13 +411,34 @@ def apply_corrections(
             proposals=proposals,
             results=results,
             now=now,
+            fx=fx,
+            require_fx=require_fx,
+            require_receipt=require_receipt,
+            input_md5=src_md5 or md5_file(src),
+            approved_input_md5=approved_input_md5,
+            prior_runs=prior_runs,
+            source_hash=src_md5 or md5_file(src),
         )
+        if require_receipt:
+            by_id = {p.correction_id: p for p in proposals}
+            for item in corrections.get("corrections") or []:
+                cid = str(item.get("correction_id") or "").strip()
+                if str(item.get("status") or "").strip().lower() != STATUS_APPROVED:
+                    continue
+                proposal = by_id.get(cid)
+                if proposal is None:
+                    problems.append(f"{cid}: 找不到对应的 proposal（无法核验授权凭据）")
+                    continue
+                problems.extend(
+                    f"{cid}: {p}"
+                    for p in authorization_receipt_problems(proposal, policy, now=now)
+                )
         if problems:
             raise RemediationError("修正授权门禁未通过: " + "; ".join(problems))
         auto_allowed_ids = {r.correction_id for r in results if r.status == STATUS_AUTO_ALLOWED}
         tiers = {p.correction_id: p.tier for p in proposals}
         policy_fields = manifest_policy_fields(
-            policy=policy, proposals=proposals, results=results, now=now
+            policy=policy, proposals=proposals, results=results, now=now, fx=fx
         )
         if prior_manifest is not None:
             stale = stale_pass_problems(
@@ -383,6 +446,9 @@ def apply_corrections(
                 input_md5=src_md5 or md5_file(src),
                 policy=policy,
                 proposals=proposals,
+                fx=fx,
+                dependencies=dependencies,
+                target_baseline_hash=target_baseline_hash,
             )
             if stale:
                 raise RemediationError("旧 PASS 已失效（不得复用）: " + "; ".join(stale))
@@ -404,13 +470,36 @@ def apply_corrections(
     if "审批编号" not in idx:
         raise RemediationError(f"{src} 缺少 审批编号 列")
 
+    already_applied: dict[str, str] = {}
+    if prior_manifest and isinstance(prior_manifest.get("corrections"), list):
+        for entry in prior_manifest["corrections"]:
+            if not isinstance(entry, dict):
+                continue
+            cid = str(entry.get("correction_id") or "")
+            recorded = str(entry.get("proposal_hash") or "")
+            if cid and recorded:
+                already_applied[cid] = recorded
+    current_hashes = {p.correction_id: proposal_hash(p) for p in proposals}
+
     applied: list[dict] = []
+    skipped_already: list[str] = []
     seen_targets: set[tuple[int, int]] = set()
     for item in validation["items"]:
         cid = str(item["correction_id"])
+        if idempotent and already_applied.get(cid) == current_hashes.get(cid):
+            skipped_already.append(cid)
+            continue
         approval = _text(item["approval_id"])
-        row = _match_row(ws, idx, approval, item["source_row_key"])
+        after_map = {
+            str(col): change[1]
+            for col, change in (item["field_changes"] or {}).items()
+            if isinstance(change, (list, tuple)) and len(change) == 2
+        }
+        row = _match_row(
+            ws, idx, approval, item["source_row_key"], idempotent=idempotent, after_map=after_map
+        )
         diffs = []
+        pending_cells = []
         for col, change in item["field_changes"].items():
             if col not in idx:
                 raise RemediationError(f"{cid}: 修正列不存在: {col}")
@@ -420,12 +509,20 @@ def apply_corrections(
                 raise RemediationError(f"{cid}: 同一行同一列被重复修正: 第 {row} 行 {col}")
             seen_targets.add((row, col_no))
             cell = ws.cell(row=row, column=col_no)
+            if idempotent and _value_equal(col, cell.value, after):
+                # 上一轮已写成功：不再计一次经济应用，也不因 before 不符报错。
+                diffs.append({"column": col, "before": before, "after": after, "skipped": "already_applied"})
+                pending_cells.append((cid, col, False))
+                continue
             if not _value_equal(col, cell.value, before):
                 raise RemediationError(
                     f"{cid}: 列 {col} before 不符: 当前 {_text(cell.value)!r} != 凭据 {before!r}"
                 )
             cell.value = str(after) if _is_text_column(col) else float(_as_decimal(after, label=f"{cid}.{col}"))
             diffs.append({"column": col, "before": before, "after": after})
+            pending_cells.append((cid, col, True))
+        if pending_cells and not any(flag for _, _, flag in pending_cells):
+            skipped_already.append(cid)
         applied.append(
             {
                 "correction_id": cid,
@@ -434,6 +531,10 @@ def apply_corrections(
                 "diffs": diffs,
             }
         )
+
+    economic = sum(
+        1 for a in applied if any("skipped" not in d for d in a["diffs"])
+    )
 
     if preview:
         return {
@@ -444,6 +545,8 @@ def apply_corrections(
             "out": None,
             "applied": applied,
             "authorization": policy_fields,
+            "economic_applications": economic,
+            "already_applied": skipped_already,
         }
 
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -457,4 +560,6 @@ def apply_corrections(
         "out_md5": md5_file(out),
         "applied": applied,
         "authorization": policy_fields,
+        "economic_applications": economic,
+        "already_applied": skipped_already,
     }

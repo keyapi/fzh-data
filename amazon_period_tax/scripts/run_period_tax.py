@@ -23,6 +23,7 @@ from bucket_meta import resolve_exchange_month  # noqa: E402
 from correction_policy import (  # noqa: E402
     PolicyError,
     build_proposals,
+    evaluate_batch,
     load_policy,
     manifest_policy_fields,
     policy_errors,
@@ -43,6 +44,21 @@ def resolve_bucket_dir(args) -> Path:
     from paths import local_nas_period  # noqa: E402
 
     return local_nas_period() / args.bucket
+
+
+def bucket_input_hash(bucket_dir: Path) -> str:
+    """账期桶输入指纹：按相对路径 + 内容 md5 排序聚合（R4 依赖 hash）。"""
+    root = Path(bucket_dir)
+    parts: list[str] = []
+    if root.is_dir():
+        for path in sorted(root.rglob("*")):
+            if not path.is_file() or path.name.startswith("."):
+                continue
+            if path.suffix.lower() not in (".txt", ".csv"):
+                continue
+            rel = path.relative_to(root).as_posix()
+            parts.append(f"{rel}:{hashlib.md5(path.read_bytes()).hexdigest()}")
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
 def upload_excel_to_nas(local_xlsx: Path, bucket: str) -> str | None:
@@ -181,10 +197,21 @@ def main() -> None:
         default="",
         help="可选 corrections JSON；配合 --correction-policy 产出 proposal/授权判定",
     )
+    ap.add_argument(
+        "--fx",
+        default="",
+        help="已确认目标月汇率表 JSON/CSV（R1）：正式发布必须声明，缺 FX/币种未确认 writer=0",
+    )
+    ap.add_argument(
+        "--prior-manifest",
+        default="",
+        help="已批准批次 manifest（R4）：核对输入与批准源、依赖 hash 与聚合上限",
+    )
     args = ap.parse_args()
 
     bucket_dir = resolve_bucket_dir(args)
     bucket_name = bucket_dir.name
+    bucket_input_md5 = bucket_input_hash(bucket_dir)
     # 读写前先校验汇率月与桶一致（否则会拿 7 月汇率算 8 月 Tax）。
     exchange_month = resolve_exchange_month(bucket_name, args.exchange_month, force=args.force_month)
     args.exchange_month = exchange_month
@@ -195,6 +222,25 @@ def main() -> None:
     correction_policy = None
     correction_proposals: list = []
     policy_problems: list[str] = []
+    fx = None
+    prior_manifest = None
+    approved_input_md5 = None
+    # R2：正式发布（写 GSheet / 上 NAS）必须声明 policy + corrections + FX 三件套。
+    publish_requested = bool(args.write_gsheet or args.upload_nas)
+    if publish_requested:
+        missing = [
+            flag
+            for flag, value in (
+                ("--correction-policy", args.correction_policy),
+                ("--corrections", args.corrections),
+                ("--fx", args.fx),
+            )
+            if not value
+        ]
+        if missing:
+            policy_problems.append(
+                "正式发布必须声明 " + " / ".join(missing) + "（policy、证据/源链、人民币预算）"
+            )
     if args.correction_policy:
         try:
             correction_policy = load_policy(Path(args.correction_policy))
@@ -204,6 +250,17 @@ def main() -> None:
         policy_problems.append(
             "CORRECTIONS: 给了 --corrections 但缺 --correction-policy，无法授权/校验"
         )
+    if args.fx:
+        from correction_policy import BudgetError, load_fx_table
+
+        try:
+            fx = load_fx_table(Path(args.fx), month=args.exchange_month)
+        except BudgetError as e:
+            policy_problems.append(f"FX: {e}")
+    if args.prior_manifest:
+        prior_manifest = json.loads(Path(args.prior_manifest).read_text(encoding="utf-8"))
+        approved_input_md5 = prior_manifest.get("input_md5")
+    prior_runs = [prior_manifest] if prior_manifest else []
     if correction_policy is not None:
         if args.corrections:
             try:
@@ -216,19 +273,41 @@ def main() -> None:
                 except PolicyError as e:
                     policy_problems.append(f"CORRECTIONS: {e}")
                 else:
-                    if not correction_proposals:
+                    if not correction_proposals and publish_requested and not approved_input_md5:
                         policy_problems.append(
-                            f"CORRECTIONS: 凭据里没有 period={args.exchange_month} 的修正"
+                            f"CORRECTIONS: 凭据里没有 period={args.exchange_month} 的修正；"
+                            "正式发布不得用空 proposal 代替已批准源"
+                            "（无修正时须 --prior-manifest 证明批准源=本次输入）"
                         )
         policy_problems.extend(
             write_gate_errors(
                 period=args.exchange_month,
                 policy=correction_policy,
                 proposals=correction_proposals,
+                fx=fx,
+                require_fx=publish_requested,
+                require_receipt=publish_requested,
+                input_md5=bucket_input_md5,
+                approved_input_md5=approved_input_md5,
+                prior_runs=prior_runs,
+                source_hash=bucket_input_md5,
             )
         )
         if not correction_proposals:
             policy_problems.extend(f"POLICY: {e}" for e in policy_errors(correction_policy))
+    batch_auth = None
+    if correction_policy is not None and correction_proposals:
+        batch_auth = evaluate_batch(
+            correction_proposals,
+            correction_policy,
+            fx=fx,
+            require_fx=publish_requested,
+            require_receipt=publish_requested,
+            expected_period=args.exchange_month,
+            month=args.exchange_month,
+            prior_runs=prior_runs,
+            source_hash=bucket_input_md5,
+        )
     if policy_problems:
         print("POLICY 修正政策未通过:", "; ".join(policy_problems))
 
@@ -424,22 +503,73 @@ def main() -> None:
 
     if args.write_gsheet:
         ws_name = tax_worksheet_name(bucket_name)
-        write_df_to_gsheet(df6_gsheet, gc, worksheet=ws_name)
+        mdir = Path(
+            os.environ.get("PERIOD_WRITE_MANIFEST_DIR", str(Path.cwd() / "reports" / "_write_runs"))
+        )
+        mdir.mkdir(parents=True, exist_ok=True)
+        run_id = f"{ts}_tax_{args.exchange_month}"
+        # R3：首个 clear 之前保存目标全集快照 + write_set + 输入/输出预期 + 权限 + 恢复方案，
+        # 写完完整回读；失败 partial，绝不标 published。
+        from publish_guard import WriteItem, prepare_publish, publish_prepared
+        from gsheet_tax import TaxGsheetGateway
+
+        gateway = TaxGsheetGateway(gc)
+        rows = [df6_gsheet.columns.astype(str).tolist()]
+        for row in df6_gsheet.itertuples(index=False, name=None):
+            rows.append(["" if (v is None or pd.isna(v)) else v for v in row])
+        item = WriteItem(ws_name, rows)
+        prepared = prepare_publish(
+            gateway,
+            [item],
+            run_id=run_id,
+            inputs={
+                "input_md5": bucket_input_md5,
+                "tax_rmb": report.get("tax_rmb_sum"),
+                "df6_rows": len(df6_gsheet),
+            },
+            outputs={"rows": len(df6_gsheet), "tax_rmb": report.get("tax_rmb_sum")},
+            permission_probe=getattr(gateway, "permission_probe", None),
+        )
+        (mdir / f"{run_id}.prepared.json").write_text(
+            json.dumps(prepared, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        result = publish_prepared(gateway, [item], prepared)
+        report["publish_status"] = result.status
+        report["publish_readback"] = result.readback
+        if not result.published:
+            fail_manifest = {
+                "run_id": run_id,
+                "kind": "tax",
+                "status": result.status,
+                "created_at": datetime.now().isoformat(timespec="seconds"),
+                "bucket": bucket_name,
+                "exchange_month": args.exchange_month,
+                "tax_worksheet": ws_name,
+                "prepared": prepared,
+                "publish": {
+                    "status": result.status,
+                    "published": False,
+                    "errors": result.errors,
+                    "readback": result.readback,
+                },
+            }
+            (mdir / f"{run_id}.json").write_text(
+                json.dumps(fail_manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            raise SystemExit(
+                f"Tax 发布未完成（{result.status}，未 published）: " + "; ".join(result.errors)
+            )
         print(f"gsheet 附加费&Tax / {ws_name} rows={len(df6_gsheet)} (one row per 渠道账号)")
         report["gsheet_worksheet"] = ws_name
         if args.sort_gsheet_tabs:
             sort_additional_fee_tax_tabs(gc, pin_worksheet=ws_name)
             print("gsheet tabs sorted (Colab 附加费/Tax 规则)")
         try:
-            mdir = Path(
-                os.environ.get("PERIOD_WRITE_MANIFEST_DIR", str(Path.cwd() / "reports" / "_write_runs"))
-            )
-            mdir.mkdir(parents=True, exist_ok=True)
-            run_id = f"{ts}_tax_{args.exchange_month}"
             mirror = report.get("mirror_xlsx")
             manifest = {
                 "run_id": run_id,
                 "kind": "tax",
+                "status": "published",
                 "created_at": datetime.now().isoformat(timespec="seconds"),
                 "bucket": bucket_name,
                 "bucket_dir": str(bucket_dir),
@@ -454,11 +584,26 @@ def main() -> None:
                     if mirror and Path(mirror).is_file()
                     else None
                 ),
+                "prepared": prepared,
+                "publish": {
+                    "status": result.status,
+                    "published": True,
+                    "readback": result.readback,
+                },
+                "target_baseline_hash": prepared.get("target_baseline_hash"),
+                "source_hash": bucket_input_md5,
+                "dependencies": {
+                    **(prepared.get("inputs") or {}),
+                    "policy_hash": correction_policy.hash if correction_policy else None,
+                },
             }
             # F：发布清单绑定 policy/proposal/逐条 correction/证据 hash。
             manifest.update(
                 manifest_policy_fields(
-                    policy=correction_policy, proposals=correction_proposals
+                    policy=correction_policy,
+                    proposals=correction_proposals,
+                    fx=fx,
+                    batch=batch_auth,
                 )
             )
             mp = mdir / f"{run_id}.json"

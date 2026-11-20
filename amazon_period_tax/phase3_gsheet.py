@@ -107,6 +107,42 @@ def read_worksheet_df(gc, worksheet: str) -> pd.DataFrame:
     return worksheet_values_to_df(ws.get_all_values())
 
 
+class Phase3GsheetGateway:
+    """``publish_guard.WorksheetGateway`` 的真实实现：整表读 / 整表写（RAW）。
+
+    读取返回 ``[header] + body``；写入走 ``write_worksheet_df``（clear + RAW update），
+    与发布前快照同一口径，回读 hash 才能对齐。
+    """
+
+    def __init__(self, gc):
+        self.gc = gc
+
+    def read_values(self, title: str) -> list[list]:
+        df = read_worksheet_df(self.gc, title)
+        if df is None or df.empty:
+            return []
+        return df_to_gsheet_rows(df)
+
+    def write_values(self, title: str, rows: list[list]) -> None:
+        if not rows:
+            import gspread
+
+            try:
+                ws = open_phase3_spreadsheet(self.gc).worksheet(title)
+            except gspread.exceptions.WorksheetNotFound:
+                return  # 目标本来就没有这张表，恢复到「空」= 无需操作
+            ws.clear()
+            return
+        df = worksheet_values_to_df(rows)
+        write_worksheet_df(self.gc, df, worksheet=title)
+
+    def permission_probe(self) -> dict:
+        ok = phase3_spreadsheet_available(self.gc)
+        if not ok:
+            raise PermissionError("无法打开 Phase3 目标表（服务账号未获协作）")
+        return {"phase3_readable": True}
+
+
 def complete_year(date_part: str) -> str:
     if len(date_part) == 9:
         return date_part[:5] + "20" + date_part[5:]

@@ -198,9 +198,9 @@ generated: 2026-11-20 14:07
 
 | Type | Title | Path | Updated |
 |------|-------|------|---------|
-| Handoff | Amazon 账期 txt Tax 管道（本地） | [amazon_period_tax/AGENT_HANDOFF.md](amazon_period_tax/AGENT_HANDOFF.md) | 2026-11-19 |
+| Handoff | Amazon 账期 txt Tax 管道（本地） | [amazon_period_tax/AGENT_HANDOFF.md](amazon_period_tax/AGENT_HANDOFF.md) | 2026-11-20 |
 | Index | amazon_period_tax 文档 | [amazon_period_tax/docs/index.md](amazon_period_tax/docs/index.md) | 2026-11-09 |
-| Log | amazon_period_tax 变更日志 | [amazon_period_tax/docs/log.md](amazon_period_tax/docs/log.md) | 2026-11-19 |
+| Log | amazon_period_tax 变更日志 | [amazon_period_tax/docs/log.md](amazon_period_tax/docs/log.md) | 2026-11-20 |
 | Reference | Amazon 账期 txt Tax 本地管道 | [amazon_period_tax/README.md](amazon_period_tax/README.md) | 2026-11-09 |
 
 ### channel_account_sync

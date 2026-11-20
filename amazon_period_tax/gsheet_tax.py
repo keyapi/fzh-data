@@ -131,8 +131,54 @@ def write_df_to_gsheet(
     ws.update(data, value_input_option="USER_ENTERED")
 
 
-def sort_additional_fee_tax_tabs(
-    gc,
+class TaxGsheetGateway:
+    """``publish_guard.WorksheetGateway`` 的「附加费&Tax」实现（整表读 / 整表写）。
+
+    ``write_df_to_gsheet`` 用 USER_ENTERED 写入，因此读回值可能是字符串/数字混合；
+    ``publish_guard.rows_hash`` 已把两侧都归一，比较不会因类型误报。
+    """
+
+    def __init__(self, gc, *, spreadsheet: str = "附加费&Tax"):
+        self.gc = gc
+        self.spreadsheet = spreadsheet
+
+    def _sheet(self):
+        return (
+            open_additional_fee_tax_spreadsheet(self.gc)
+            if self.spreadsheet == "附加费&Tax"
+            else self.gc.open(self.spreadsheet)
+        )
+
+    def read_values(self, title: str) -> list[list]:
+        import gspread
+
+        try:
+            ws = self._sheet().worksheet(title)
+        except gspread.exceptions.WorksheetNotFound:
+            return []
+        return ws.get_all_values()
+
+    def write_values(self, title: str, rows: list[list]) -> None:
+        rows = rows or []
+        if not rows:
+            import gspread
+
+            try:
+                ws = self._sheet().worksheet(title)
+            except gspread.exceptions.WorksheetNotFound:
+                return
+            ws.clear()
+            return
+        header = rows[0]
+        df = pd.DataFrame(rows[1:], columns=header)
+        write_df_to_gsheet(df, self.gc, spreadsheet=self.spreadsheet, worksheet=title)
+
+    def permission_probe(self) -> dict:
+        self._sheet()
+        return {"spreadsheet": self.spreadsheet, "readable": True}
+
+
+def sort_additional_fee_tax_tabs(    gc,
     *,
     spreadsheet: str = "附加费&Tax",
     pin_worksheet: str | None = None,
