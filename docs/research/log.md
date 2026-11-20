@@ -95,3 +95,11 @@ description: docs/research 目录变更历史
 - **新增**: [2026-07-24-unified-ai-access-independent-review.md](2026-07-24-unified-ai-access-independent-review.md) — 对 PR #109 统一 AI 接入调研的独立复审；回答开放问题 8.1–8.5；裁决推荐 Open WebUI 主路径（A′）并强制反证 IvyeaOps 全量改造。
 - **新增**: 本 log.md（OKF bundle 补齐）。
 - **新增**: [2026-10-08-key-test-branch-unification-review.md](2026-10-08-key-test-branch-unification-review.md) — key_test 生产线/测试线分叉的逐文件评审清单：22 个双边冲突文件分 4 档（纯格式 3 / 测试侧变薄 6 / 测试侧领先 12 / 需人工看 1）+ 41 个测试独有文件分 5 类 + 三个待决策 + 4 条已核对事实。
+
+## 2026-11-20
+
+- **新增**: [2026-11-20-mahjong-sofa-cross-system-audit.md](2026-11-20-mahjong-sofa-cross-system-audit.md) — 麻将沙发「1 个 SKU = 3 个垫子」跨系统现状盘点。
+- **EN（生产实查）**: 48 个物料组（产品 5 + 配套 43）、171 物料、222 BOM、152 个 `TJ#…xN` 套件。四条硬证据指向「1 SKU = 3 垫」：皮壳 BOM 41/41 全为 3 拉链/60 扣胚/4.8m 面料、绍兴包装 3 内箱 3 真空袋 1 外箱、重量模板 13.5kg、绍兴 GCK 口头确认。
+- **通途（直连 API，非 MCP）**: 沙发类目 437 商品中麻将 41 个，全为普通商品、**0 组合**；BOHO 17 个名称未写「3个」；10 个重量填 2–3kg、尺寸有 0 与空值；EN「纯色版」3 个在通途被叫「衍生款」。MCP 在本机 403，全部改走 `TongToolClient` 直连。
+- **赛狐（代理 API 全量翻页）**: 3,518 SKU 中麻将 190 = 底层 38 + 组合 152；底层全未写「3个」，重尺全 0；成本与 EN 不一致（KS0319 部分高 60–75 元）。
+- **结论**: 三系统在「1 SKU = 3 垫」上一致，但 EN/赛狐 额外建的 152 个「N 件」组合 = N 套 = 3N 垫，与「3 垫 = 1 沙发」的直觉冲突；通途没有任何组合，三方口径缺一腿。单件销售需补齐单垫皮壳/包装/重量 BOM，给出 A 增量 / B 重构 / C 仅渠道 三条路径。
