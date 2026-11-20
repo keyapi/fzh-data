@@ -111,10 +111,22 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     if not args.en_only:
         sheet = fetch_sheet()
+        # C1：快照必须带真实抓取时间/来源/内容 hash，读取端才可能证明它不是旧证据。
+        from channel_account_sync.snapshot import attach_metadata
+
+        sheet = attach_metadata(sheet)
         (OUT / "channel_account_gsheet.json").write_text(
             json.dumps(sheet, ensure_ascii=False, indent=2), encoding="utf-8"
         )
-        print("sheet", sheet["spreadsheet_title"], sheet["target_title"], "rows", sheet["n_rows"])
+        print(
+            "sheet",
+            sheet["spreadsheet_title"],
+            sheet["target_title"],
+            "rows",
+            sheet["n_rows"],
+            "fetched_at",
+            sheet["snapshot"]["fetched_at"],
+        )
     if not args.sheet_only:
         en = fetch_en()
         (OUT / "channel_account_en.json").write_text(

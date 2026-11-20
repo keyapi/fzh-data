@@ -72,8 +72,9 @@ def collect_strict_failures(
     missing_fx,
     gsheet_rows: int,
     n_accounts: int,
+    n_needs_review: int = 0,
 ) -> list[str]:
-    """`--strict` 的失败清单：SKIP-DUP / OUT-OF-PERIOD / FAIL 任一 >0 即非空。"""
+    """`--strict` 的失败清单：SKIP-DUP / OUT-OF-PERIOD / FAIL / NEEDS-REVIEW 任一 >0 即非空。"""
     failures: list[str] = []
     if n_skip_dup:
         failures.append(f"SKIP-DUP={n_skip_dup}")
@@ -81,6 +82,8 @@ def collect_strict_failures(
         failures.append(f"OUT-OF-PERIOD={n_out_of_period}")
     if read_stats.get("files_failed"):
         failures.append(f"FAIL={read_stats['files_failed']}")
+    if n_needs_review or read_stats.get("files_needs_review"):
+        failures.append(f"NEEDS-REVIEW={n_needs_review or read_stats['files_needs_review']}")
     if read_stats.get("rows_mismatch"):
         failures.append(f"rows_mismatch={read_stats['rows_mismatch']}")
     missing = [str(x) for x in (missing_fx if missing_fx is not None else [])]
@@ -97,15 +100,22 @@ def enforce_write_gate(
     strict_failures: list[str],
     master_problems: list[str],
     publish_requested: bool,
+    publish_blockers: list[str] | None = None,
 ) -> None:
-    """写前生效的硬门禁（A3/T03 + A4/T04）。
+    """写前生效的硬门禁（A3/T03 + A4/T04 + E1 文件总账）。
 
     - ``strict_failures`` 非空且 ``--strict``：**任何写入之前**退出，不再先写后返回 1。
     - ``master_problems`` 非空且请求发布（--write-gsheet / --upload-nas）：无论是否 strict 都拒绝，
-      未知账号/缺人员的 Tax 不得原样发布。
+      未知账号/缺人员/快照过期/ live 与快照不一致的 Tax 不得发布。
+    - ``publish_blockers`` 非空且请求发布：源文件总账未闭合（FAIL / NEEDS-REVIEW /
+      未审定跨期 / 无内部日期）时同样拒绝，不依赖 ``--strict``。
     """
     if strict and strict_failures:
         raise SystemExit(f"STRICT 检查未通过（写前拒绝）: {'; '.join(strict_failures)}")
+    if publish_requested and publish_blockers:
+        raise SystemExit(
+            "源文件总账未通过（拒绝发布）: " + "; ".join(publish_blockers)
+        )
     if publish_requested and master_problems:
         raise SystemExit(
             "Tax 账号/人员主数据校验未通过（拒绝发布）: " + "; ".join(master_problems)
@@ -163,15 +173,19 @@ def main() -> None:
         repair_dir=Path(args.repair_dir) if args.repair_dir else None,
         stats_out=read_stats,
         allow_out_of_period=args.allow_out_of_period,
+        write_repairs=not args.dry_run,  # R05：dry-run 只读，不落修复缓存
     )
     print(
         f"bucket={bucket_dir} txt_rows={len(df)} files_ok={sum(1 for r in read_report if r.startswith('OK'))} "
         f"dup={read_stats.get('files_dup')} failed={read_stats.get('files_failed')} "
         f"out_of_period={read_stats.get('files_out_of_period')} "
+        f"needs_review={read_stats.get('files_needs_review')} "
         f"rows_mismatch={read_stats.get('rows_mismatch')}"
     )
     for line in read_report:
-        if line.startswith(("SKIP-DUP", "FAIL", "OUT-OF-PERIOD", "NO-PERIOD-DATE")):
+        if line.startswith(
+            ("SKIP-DUP", "FAIL", "OUT-OF-PERIOD", "NO-PERIOD-DATE", "NEEDS-REVIEW", "APPROVED-EXCLUDED", "INVENTORY")
+        ):
             print(line)
     n_skip_dup = int(read_stats.get("files_dup", 0))
     if n_skip_dup:
@@ -215,13 +229,43 @@ def main() -> None:
 
     # A3/T03：发布前用 **live** 渠道主表核对每个渠道账号 + 当期运营人员（不能原样发布 unknown）。
     master_problems: list[str] = []
+    _acct_view = None
+    _df_explode = None
     try:
-        _acct_view, _ = load_channel_accounts(gc, args.exchange_month)
+        _acct_view, _df_explode = load_channel_accounts(gc, args.exchange_month)
         master_problems = tax_account_problems(df6_gsheet, _acct_view, only_nonzero=False)
     except Exception as e:  # 主表读不到/缺当期列 = 主数据不可校验，同样是门禁失败
         master_problems = [f"渠道主表校验失败: {e}"]
+    # C1：快照 metadata + live/snapshot 投影一致（仅发布时校验，诊断/本地 xlsx 不受影响）
+    master_gate = None
+    if args.write_gsheet or args.upload_nas:
+        from channel_canonical import snapshot_path
+        from master_data import default_expected_source, publish_gate_problems
+
+        snap = None
+        snap_err = None
+        try:
+            snap = json.loads(Path(snapshot_path()).read_text(encoding="utf-8"))
+        except Exception as e:
+            snap_err = f"{type(e).__name__}: {e}"
+        master_gate = publish_gate_problems(
+            exchange_month=args.exchange_month,
+            acct_view=_acct_view,
+            df_explode=_df_explode,
+            snapshot=snap,
+            snapshot_error=snap_err,
+            batch_accounts=df6_gsheet["渠道账号"].tolist(),
+            batch_aliases=df6_gsheet["渠道账号"].tolist(),
+            expected_source=default_expected_source(),
+        )
+        master_problems.extend(master_gate.problems)
     if master_problems:
         print("MASTER 主数据校验未通过:", "; ".join(master_problems))
+    if master_gate and master_gate.unknown_alias_candidates:
+        print(
+            "MASTER 未知别名候选（不自动写回主表）:",
+            master_gate.unknown_alias_candidates[:10],
+        )
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     xlsx_name = f"合并Amazon_{bucket_name}_{ts}.xlsx"
@@ -246,8 +290,13 @@ def main() -> None:
         "issue_files": [
             ln
             for ln in read_report
-            if ln.startswith(("FAIL", "OUT-OF-PERIOD", "NO-PERIOD-DATE", "SKIP-DUP"))
+            if ln.startswith(
+                ("FAIL", "OUT-OF-PERIOD", "NO-PERIOD-DATE", "SKIP-DUP", "NEEDS-REVIEW", "APPROVED-EXCLUDED")
+            )
         ],
+        "ledger_blockers": list(read_stats.get("publish_blockers") or []),
+        "ledger_partition": dict(read_stats.get("partition") or {}),
+        "inventory": dict(read_stats.get("inventory") or {}),
         "df6_detail_rows": int(len(df6_detail)),
         "df6_gsheet_rows": int(len(df6_gsheet)),
         "unique_accounts": int(n_acct_files),
@@ -264,17 +313,26 @@ def main() -> None:
         missing_fx=missing_fx,
         gsheet_rows=len(df6_gsheet),
         n_accounts=n_acct_files,
+        n_needs_review=int(read_stats.get("files_needs_review", 0)),
     )
     report["strict_failures"] = strict_failures
     report["master_problems"] = master_problems
+    report["unknown_alias_candidates"] = list(
+        getattr(master_gate, "unknown_alias_candidates", []) or []
+    )
     if strict_failures:
         print("STRICT 检查未通过:", "; ".join(strict_failures))
         for ln in report["issue_files"][:20]:
             print(" ", ln)
 
+    publish_blockers = list(read_stats.get("publish_blockers") or [])
     if args.dry_run:
         print(json.dumps({k: report[k] for k in report if k != "files"}, ensure_ascii=False, indent=2))
-        if (args.strict and strict_failures) or master_problems:
+        if (
+            (args.strict and strict_failures)
+            or master_problems
+            or ((args.write_gsheet or args.upload_nas) and publish_blockers)
+        ):
             raise SystemExit(1)
         return
 
@@ -284,6 +342,7 @@ def main() -> None:
         strict_failures=strict_failures,
         master_problems=master_problems,
         publish_requested=bool(args.write_gsheet or args.upload_nas),
+        publish_blockers=publish_blockers,
     )
 
     write_excel_sheets(xlsx_path, sheets)

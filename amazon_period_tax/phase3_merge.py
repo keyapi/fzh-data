@@ -706,6 +706,7 @@ def build_fba_summary(
     bucket_dir: Path,
     df_exchange_rate: pd.DataFrame,
     repair_dir: Path | None = None,
+    write_repairs: bool = True,
 ) -> tuple[pd.DataFrame, dict]:
     """用本地 FBA 管道生成 ``{期}FBA费用扣减后分类汇总``（只算不写）。
 
@@ -717,7 +718,9 @@ def build_fba_summary(
     from tax_aggregate import enrich_with_fx
 
     info: dict = {"bucket_dir": str(bucket_dir), "read_stats": {}, "rule_rows": 0, "fba_rows": 0}
-    df_raw, reports = read_bucket_amz_txts(bucket_dir, repair_dir=repair_dir, stats_out=info["read_stats"])
+    df_raw, reports = read_bucket_amz_txts(
+        bucket_dir, repair_dir=repair_dir, stats_out=info["read_stats"], write_repairs=write_repairs
+    )
     info["read_reports"] = reports
     if df_raw.empty:
         return pd.DataFrame(), info
@@ -995,6 +998,7 @@ def run_phase3(
     write_gsheet: bool = False,
     write_gsheet_fba: bool = False,
     allow_empty_tax: bool = False,
+    write_repairs: bool = True,
 ) -> tuple[Phase3Report, dict[str, pd.DataFrame]]:
     period_range = period_range_from_bucket(bucket)
     yyyymm = exchange_month.strip()
@@ -1098,6 +1102,7 @@ def run_phase3(
                 bucket_dir=Path(bucket_dir),
                 df_exchange_rate=df_rate,
                 repair_dir=repair_dir,
+                write_repairs=write_repairs,
             )
             frames["fba_summary"] = fba_summary
             frames["fba_staff"] = build_fba_staff(df_group, fba_summary)
@@ -1107,6 +1112,11 @@ def run_phase3(
             bad = int(fba_info["read_stats"].get("files_failed", 0)) + int(
                 fba_info["read_stats"].get("rows_mismatch", 0)
             )
+            if fba_info["read_stats"].get("files_needs_review"):
+                rep.warnings.append(
+                    f"FBA 源 txt 有 {fba_info['read_stats']['files_needs_review']} 份需人工复核"
+                    "（疑似误名/同结算多版本，未计入）"
+                )
             if bad:
                 rep.warnings.append(f"FBA 源 txt 读取异常 {bad} 处（见 fba read_reports）")
         except Exception as e:  # 生成失败不能影响五张主表

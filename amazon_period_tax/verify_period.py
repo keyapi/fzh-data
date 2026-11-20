@@ -176,13 +176,23 @@ def check_tax(
     checks: list[Check] = []
     yyyymm = str(exchange_month).strip()
     stats: dict = {}
-    df_raw, _reports = read_bucket_amz_txts(bucket_dir, repair_dir=repair_dir, stats_out=stats)
+    df_raw, _reports = read_bucket_amz_txts(
+        bucket_dir, repair_dir=repair_dir, stats_out=stats, write_repairs=False
+    )
     checks.append(
         Check(
             "Tax: 源文件读取失败=0",
             int(stats.get("files_failed", 0)) == 0 and int(stats.get("rows_mismatch", 0)) == 0,
             f"files={stats.get('files_total')} used={stats.get('files_used')} "
             f"failed={stats.get('files_failed')} rows_mismatch={stats.get('rows_mismatch')}",
+        )
+    )
+    checks.append(
+        Check(
+            "Tax: 无待人工复核文件",
+            int(stats.get("files_needs_review", 0)) == 0,
+            f"NEEDS-REVIEW={stats.get('files_needs_review', 0)}"
+            "（疑似误名/同结算多版本/同内容不同账号，必须人工裁定）",
         )
     )
     checks.append(

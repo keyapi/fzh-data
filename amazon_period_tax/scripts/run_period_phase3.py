@@ -98,6 +98,7 @@ def main() -> None:
         write_gsheet=write,
         write_gsheet_fba=args.write_gsheet_fba and not args.dry_run,
         allow_empty_tax=args.allow_empty_tax,
+        write_repairs=not args.dry_run,  # R05：dry-run 不落 tab 修复缓存
     )
     payload = rep.__dict__
     print(json.dumps(payload, ensure_ascii=False, indent=2))
