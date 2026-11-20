@@ -168,8 +168,7 @@ def has_any_ref(row: pd.Series) -> bool:
 
 def get_rule_mode(row: pd.Series) -> str:
     hc, hr = has_any_coeff(row), has_any_ref(row)
-    if hc and hr:
-        return "invalid_mixed"
+    # 与 Colab 1.7.0 一致：系数与参考值同时存在时，参考值优先（不是 invalid）
     if hr:
         cur = rule_cell_str(row, "收款币种")
         if not cur:
