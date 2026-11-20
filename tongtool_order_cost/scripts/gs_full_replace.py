@@ -85,7 +85,7 @@ def totals(df: pd.DataFrame, metrics: list[str]) -> dict:
 
 
 def run(month: str, label: str, apply: bool, book: str | None = None,
-        local_override: str | None = None) -> int:
+        local_override: str | None = None, allow_key_drift: bool = False) -> int:
     c = cfg(month, book)[label]
     if local_override:
         c = {**c, "local": local_override}
@@ -107,6 +107,10 @@ def run(month: str, label: str, apply: bool, book: str | None = None,
             raise SystemExit(
                 "BUILD GATE FAIL: " + "; ".join(
                     f"{a.get('name')}: {a.get('detail')}" for a in _fails))
+        if apply:
+            _so = (_m.get("stats") or {}).get("special_orders") or {}
+            if not _so.get("file"):
+                raise SystemExit("BUILD GATE FAIL: 特殊订单清单缺失，禁止写回")
         # 待写 CSV 必须与 manifest 记录的产物哈希一致；--local 派生表除外
         if apply and not local_override:
             _hashes = _m.get("outputs_sha256") or {}
@@ -133,6 +137,10 @@ def run(month: str, label: str, apply: bool, book: str | None = None,
     new_keys = Counter(norm([r[x] for x in c["keys"]]) for _, r in local.iterrows())
     old_only = sum((old_keys - new_keys).values())
     new_only = sum((new_keys - old_keys).values())
+    if apply and not allow_key_drift and label in ("self", "fba") and (old_only or new_only):
+        raise SystemExit(
+            f"BUILD GATE FAIL: {label} 键集合漂移 old_only={old_only} new_only={new_only}；"
+            "确认后加 --allow-key-drift")
     print(f"   keys: old {len(old_keys)} new {len(new_keys)} "
           f"old_only {old_only} new_only {new_only}")
     ot, nt = totals(old_df, c["metrics"]), totals(local, c["metrics"])
@@ -220,11 +228,12 @@ def main() -> int:
                     help="工作簿名覆盖（默认 通途订单<月>；如 通途订单202607-特殊规则）")
     ap.add_argument("--apply", action="store_true")
     ap.add_argument("--local", default=None, help="本地 CSV 覆盖（用于带额外列的月份）")
+    ap.add_argument("--allow-key-drift", action="store_true", help="允许 self/FBA 键集合变化（需人工确认）")
     args = ap.parse_args()
     labels = ["self", "fba", "merged"] if args.label == "all" else [args.label]
     errors = 0
     for label in labels:
-        errors += run(args.month, label, args.apply, args.book, args.local)
+        errors += run(args.month, label, args.apply, args.book, args.local, args.allow_key_drift)
         if errors:
             print("STOP: 前一张表回读失败，后续不再写")
             break

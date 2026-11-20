@@ -1331,6 +1331,14 @@ def build_order_tabs(
         "recon_95_78_totals": recon_totals,
         "outputs": {"self": str(self_csv), "fba": str(fba_csv), "merged": str(merged_csv)},
         "outputs_sha256": {"self": _sha(self_csv), "fba": _sha(fba_csv), "merged": _sha(merged_csv)},
+        "inputs_sha256": {
+            name: (_sha(Path(p)) if Path(p).exists() else "")
+            for name, p in {
+                "raw": raw_path, "ref_map": ref_map, "en_items": en_items,
+                "flags": flags, "bom": bom, "wh_map": wh_map, "fx": fx_path,
+                "wh_sources": wh_sources, "special_orders": special_path,
+            }.items()
+        },
     }
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2,
