@@ -642,6 +642,14 @@ uv run pytest tests/ -q
     检查 multipart/alternative 里 HTML `<table>` 的表头 + 数据行完整，再同一正文发 Diane；
     两封都 IMAP `APPEND` 到 Sent。不要直接发没有自检的 HTML 表格。
 
+53. **Label 与背贴是「按页序 1:1」，手工重做子集必须两套 PDF 同序抽取**
+    （2026-11-20 踩过）：`service.py` 明确 `df_join 行序 == PDF 页序`，
+    `pb_label_pdf` 与 `pb_back_label_pdf` 都吃同一个 `df_join` / 子集，背贴第 N 页对应标签第 N 页；
+    代码不按 SKU 重新排序（同 PO 多件时无法可靠重排）。
+    所以只抽 5 页 label 配 52 页全量背贴会错位；必须用**同一 package index 列表**
+    从 label PDF 和背贴 PDF 各抽一份、按同序输出，并断言两份的 PO/Line 序列一致。
+    2026-11-20 已按此生成 `11.16 未揽收重做 5个包裹 label+packing` + `...背贴` 两份。
+
 ## 8. 数量对账口径
 
 ### 8.1 库存预检（步骤 0）

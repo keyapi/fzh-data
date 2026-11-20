@@ -7,6 +7,10 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-20（Label 与背贴页序 1:1）
+
+- **更新**: `pb-partial-package-unshipped-invoice-paid.md` / `pb-orders` skill / `pb_orders/AGENT_HANDOFF.md` 坑 53 —— Label 与背贴不是可独立排序的两份文件：`service.py` 的 `df_join 行序 == PDF 页序`，label 与 back label 都按同一 dataframe 顺序生成，背贴第 N 页对应标签第 N 页。手工重做子集必须从两个 PDF 用**同一 package index 列表**同序抽取，并断言 PO/Line 序列一致；只抽 5 页 label 配 52 页全量背贴会错位。
+
 ## 2026-11-19（部分包裹未发：Pack Level 跟踪号 / 已付不重开票 / 旧标签 90 天）
 
 - **新增**: `workflow-issues/pb-partial-package-unshipped-invoice-paid.md` —— 一个 ASN 多包裹时，`shipment x*.csv` 的包裹数看 **`Pack Level Carrier Tracking ID`**（`Carrier Tracking` 只是主号，一单多件也可能只有一个）；每个包裹真发没发只认 UPS 取件。PB 按整张 invoice 付款：2 件已付、只到 1 件 → 欠 1 件货，补发**不得再开票**；若新建 ASN 触发自动 invoice，必须先拦截/取消。美国 UPS 标签按 **90 天**窗口；旧标签仍 `Label created` 时可复用，并可从旧批 `Packslip 美中 xNN.pdf` 按页原样抽取（每页 = Packing Slip + UPS 标签）。

@@ -89,6 +89,11 @@ PB 的 ACH 是按**发票**付款，不是按包裹：
 3. 用 `fitz.open()` + `insert_pdf(from_page=..., to_page=...)` 把该页原样抽成单页 PDF；
 4. 在目标批次目录写一份说明 txt：来源文件/页码、ASN、两个跟踪号、发票已付事实、标签有效期。
 
+**重做子集必须两套 PDF 同序抽取**：label 与背贴是**页序 1:1**——`service.py` 的
+`df_join 行序 == PDF 页序`，背贴第 N 页对应标签第 N 个包裹（label PDF 第 `2N−1`、`2N` 页，
+背贴第 N 页）。只抽 5 页 label 配 52 页全量背贴会错位；必须用同一 package index 列表
+从两个 PDF 同序抽取，并断言两份的 PO/Line 序列一致。
+
 **命名**：Packslip 文件名 `xN` 的 N 是**真实标签页数（包裹数）**，不是 shipment 数。
 实例：37 个 shipment 的 Packing Slip PDF 是 40 页 → `x40`；把 137770200 的旧标签 1 页
 合并到第一页后是 41 页 → `x41`。不要按 shipment 数量命名。
