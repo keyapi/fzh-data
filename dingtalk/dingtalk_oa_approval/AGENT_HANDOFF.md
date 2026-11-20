@@ -2,14 +2,15 @@
 okf: v0.1
 type: Handoff
 title: 钉钉 OA 销售收款确认单附件
-description: 用企业内部应用读审批实例、下载账期明细/图片；与 DRM 按人归档的 NAS 桶对照。不改本地同步副本，搬文件只走 NAS API。
+description: 用企业内部应用读审批实例、下载账期明细/图片，也可 API 发起带附件的原生销售收款确认单；与 DRM 按人归档的 NAS 桶对照。不改本地同步副本，搬文件只走 NAS API。
 tags: [dingtalk, oa, approval, attachment, nas, 账期]
-timestamp: 2026-09-10
+timestamp: 2026-11-02
+updated: 2026-11-02
 ---
 
 # dingtalk_oa_approval
 
-> 与 `dingtalk/dingtalk_robot` 并列。本模块**读 OA 审批附件**；机器人模块只负责群通知。
+> 与 `dingtalk/dingtalk_robot` 并列。本模块**读 OA 审批附件**，也可 **API 发起**带附件的原生销售收款确认单；机器人模块只负责群通知。
 
 ## 凭证
 
@@ -17,7 +18,8 @@ timestamp: 2026-09-10
 - ⚠️ 这套应用是**临时**借用的（原为钉钉登录 / 离职打通），权限面偏大。读**后台原生模板**（销售收款确认单）建议另开一个**企业内部应用**，只开下面 3 个 workflow 权限；`qyapi_aflow`（审批流数据管理）对读原生 OA 单没有用，可以从 new-api 应用拿掉。详见 [docs/reference/oa-attachment-api.md](docs/reference/oa-attachment-api.md)。
 - 公开仓库用人名拼音首字母。真名文件夹映射：复制 `person_folders.example.json` 为 `person_folders.local.json`（gitignore）后填 NAS 真实文件夹名。
 - 可设 `DINGTALK_OA_ENV` 指向仓库外 env（gitignore）。缓存目录 `DINGTALK_OA_DATA`（默认模块 `data/`）。核算导出 Excel / aflow 下载目录 `DINGTALK_OA_WORK`（**未设路径时脚本不得默认同事人名目录**）。NAS FileStation 账期根 `NAS_FINANCE_PERIOD_ROOT`（可分号分隔候选）。本地同步盘账期根 `LOCAL_NAS_PERIOD_ROOT`（**未设即报错**）。财务 NAS 账号读 `NAS_API/.env` 的 `NAS_ADMIN_USER`（或 `NAS_SSH_USER` / `NAS_USERNAME`），密码 `NAS_SSH_PASSWORD`，**不要把账号写进 git**。只用 `NAS_USERNAME`（通常是只做 API 的账号，有时权限就够用）时脚本会发警告——它可能看不见「财务部」共享，那时在 .env 加 `NAS_ADMIN_USER=<管理员账号>` 即可，不用改代码。都不要把含人名的路径写进 git。
-- 权限：`Workflow.Instance.Read`、`Workflow.Instance.Write`（下载接口要写权限）、`Workflow.Form.Read`。
+- 权限（读）：`Workflow.Instance.Read`、`Workflow.Instance.Write`（下载接口要写权限）、`Workflow.Form.Read`。
+- 权限（带附件发起，另开、每开一次必须发布新版本）：`Storage.UploadInfo.Read`、`Storage.File.Write`。已有 `Workflow.Instance.Write` 只能读实例 / 拿审批钉盘 `spaceId`，不够上传。详见 [docs/solutions/integration-issues/dingtalk-oa-create-receipt-with-attachments.md](../../docs/solutions/integration-issues/dingtalk-oa-create-receipt-with-attachments.md)。
 - 模板：销售收款确认单 `PROC-FB234439-0642-451E-A514-20FBEF4A4241`。Excel「数据id」= `processInstanceId`，「审批编号」= `businessId`。
 
 ## 落盘（防重名覆盖）
@@ -46,6 +48,8 @@ DRM 在 NAS 上按 **发起人姓名** 分子文件夹。这只表示谁提交�
 - 财务 NAS FileStation 用 `NAS_API/.env` 里的管理员账号（要能看见财务部共享），不要用看不到财务部的测试账号。
 - 未开的新月桶等 DRM 日切后再下；迟交件按账期月进已有桶，不预建空人名夹。
 - 算某个账期月之前，先跑 `late_submission_keys.py --period <YYYY-MM>` 从[迟交挪动登记](docs/reference/late-submission-registry.md)导出**唯一键** `审批编号|账期日期|销售账户|销售额` 剔除集，再交给 `filter_export_by_period.py --exclude-keys`，否则迟交单会被算两次。两个脚本都调 `ding_xlsx.build_key()`，**不要**直接用表里那列「唯一键」（金额 `0` vs `0.0` 会对不上）。
+- **API 发起带附件**：OSS PUT 不要用 Python `urllib.request`（会注入 `Content-Type` → `SignatureDoesNotMatch`）；unionId 走旧 `topapi/v2/user/get`，新通讯录按 userId 可能 404。重交前确认上一张已 `TERMINATED`。
+- **PB 月包不要把月合计写成表单行**。日行 + 日 CSV，月合并 CSV 只当最后一份附件。见 [docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md](../../docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md)。
 
 ## 7 月 Amazon 对账结论（2026-09-10）
 

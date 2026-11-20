@@ -10,6 +10,7 @@ timestamp: 2026-09-10
 
 | 标题 | 文件 |
 |------|------|
+| PB 月度钉钉销售收款确认单——日行 + 日 CSV，月合并只当最后附件 | [pb-dingtalk-receipt-monthly-package.md](pb-dingtalk-receipt-monthly-package.md) |
 | 通途拆单类型与拆单前 SKU 位置（自动/手动/TikTok；EN platform_sku） | [tongtu-split-types-and-presplit-sku.md](tongtu-split-types-and-presplit-sku.md) |
 | Amazon 账期按账号对 NAS/钉钉/赛狐结算组 | [amazon-period-file-reconcile.md](amazon-period-file-reconcile.md) |
 | parcel_track 处理天数统一 3 个营业日与 per-carrier 顺序并发 | [parcel-track-handling-days-sequential-workers.md](parcel-track-handling-days-sequential-workers.md) |

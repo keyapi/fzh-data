@@ -7,26 +7,34 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-11（账期 Tax 汇率别名乘多遍）
+- **新增**: `integration-issues/amazon-period-tax-fx-alias-multiplies.md` —— `run_period_tax` 曾用货币别名拆开表按 `收款币种` 合并，Tax 人民币被乘多遍。改为每个币种一行，并在 `enrich_with_fx` 去重。8/9/10 月 `Tax{YYYYMM}` 已重写。
+- **新增**: `workflow-issues/amazon-period-tax-rerun-without-agent.md` —— 自己重跑只改 `--bucket` 与 `--exchange-month`。脚本不下载 txt；文件名不必先规范化；渠道别名读 `channel_account_gsheet.json` 快照。
+
+## 2026-11-09（Amazon 账期 Phase3 本地写表 + 定稿 keep_approval）
+- **新增**: `integration-issues/amazon-period-phase3-gsheet-not-colab-id.md` —— Phase3 写回 Google 表须用 Spreadsheet id（`18e64…`），勿用同名 Colab notebook 的 Drive 文件 id（`1tyBOh…`）；400 invalid argument 先核 ID 类型。
+- **新增**: `workflow-issues/amazon-period-colab-export-keep-approval.md` —— `export_colab_period.py` 定稿必须 `keep_approval` + 可选 `--exclude-keys`；模块 `amazon_period_tax/` + `run_period_phase3.py` 本地对齐 Colab Phase3。
+
+## 2026-11-02（钉钉销售收款确认单 API 发起 + PB 月包惯例）
+- **新增**: `integration-issues/dingtalk-oa-create-receipt-with-attachments.md` —— 原生 OA 单可 API 带附件发起。读附件已有的 `Workflow.Instance.Write` 不够：还要 `Storage.UploadInfo.Read` / `Storage.File.Write`，每开一次发布新版本。OSS PUT 用 `urllib` 会注入 `Content-Type` 导致 `SignatureDoesNotMatch`；unionId 走旧 `topapi/v2/user/get`。发起前确认上一张已 `TERMINATED`。
+- **新增**: `conventions/pb-dingtalk-receipt-monthly-package.md` —— PB 月度钉钉包：表单只写各结日一行，不要月合计行；附件按日 CSV 升序，**最后**挂 `PB invoice 合并 YYYYMM.csv`（`merge_invoices.py`）。日文件夹须先收进 `YYYYMM/`。摘单丢表头的事故正文在 PR #297，不在此重复。
+
 ## 2026-11-11（Claude Desktop MCP / npx @latest 装包失败）
-
 - **新增**: `developer-experience/claude-desktop-mcp-server-disconnected-npx.md` —— Claude Desktop 弹 `MCP playwright: Server disconnected`，根因是 `@latest` 在 Windows 更新重启后的首次启动自动升级 0.0.85，解包两个 `.d.ts` 报 `ENOENT`、入口 `cli.js` 缺失，node 立即退出；约 2 分钟后新会话的 npx 把目录补装完整。可排除磁盘满（C 剩 12G）与「重启打断安装」（安装发生在重启之后）。判读口诀：先读 `mcp-server-<name>.log`，找 `will be installed` + `TAR_ENTRY_ERROR` + `MODULE_NOT_FOUND`；npm 对解包错误只 warn 不重试，Claude 也不会在同一会话自动重拉。本次决定保留 `@latest`、不加自愈包装脚本。`docs/mcp-setup.md` 排错表同步加了对应行。
-## 2026-11-11（钉钉考勤导出操作手册）
 
+## 2026-11-11（钉钉考勤导出操作手册）
 - **新增**: `workflow-issues/dingtalk-attendance-export-runbook.md` —— 只记录操作路径与坑：`oa.dingtalk.com → 工作台 → 考勤打卡 → 考勤统计 → 报表管理`；权限决定了能看到哪些报表；人员范围按**考勤组**全选并用组人数对账；单次最多一个月；导出为快照；MCP 下载落 `.playwright-mcp/`。不含人名、人数与考勤数据。
 
 ## 2026-11-11（通途特殊规则换表 / 参考值优先）
-
 - **新增**: `workflow-issues/tongtool-special-rule-ref-priority-and-bom-caliber.md` —— 特殊规则表换维护人/换 ws 后：同一行系数与参考值同时存在时按老板口径**参考值优先**（引擎打印提醒并计 `n_mixed_ref_priority`）；FBA 28 条规则的 `二次加工`/`绍兴二次` 按新成本口径对调（二次=0、绍兴承接），数值和总净额不变；旧 9/3 BOM 制定的参考值遇到最新 BOM 会把扣减翻成增加（阅读枕 776–777 由 −77.8 变 +20.2 元/件），必须先逐条对拍再决定是否重填；老板 2026-11-10 确认按现有参考值执行。
 - **补充**: 分公司发成品二次=0（202609 18 行 −1,341.65；202608 16 行 −1,303.48）；FBA 绍兴二次直接用 `cost_sxbzcp`，不再用 `sx_cost_all−cost_fg`（264 行 `sx_cost_all=0` 会低估）；最终表是 `build_tabs/1104 BOM`，`out/merged_202609.csv` 11-04 为旧表。
 
 ## 2026-11-10
-
 - **更新**: `workflow-issues/tongtu-split-merge-writeback-cost-rules.md` — 新增「成本列一致性 + 整成品 method 覆盖」：皮壳含/不含/系数改为当前皮壳成本；整成品 SKU（非组件后缀）EN 皮壳 vs BOM 半成品/成品时按 BOM 计价；GS 最小修补 8/9 月 6 个 ws（202608 46 行 +1,920.04 / 202609 9 行 +370.55）。
 - **更新**: `documentation-gaps/tongtu-colab-local-parity-gap.md` — 重审旧 Colab self 展示规则：23组合并/17行通用填充物删除会低记行级 `售价*汇率`（202608 1,729.98 / 202609 1,278.13 CNY），**不采用**；self 166 改用本地成熟算法合并组视图。
 - **更新**: 同一篇补记 `build-order-tabs` 已落地（本地重建 166/95/78；两月对拍成本/数量 0 差异；202609 尾程 +304,541.93 待财务确认）；构建口径见 `tongtool_order_cost/docs/reference/build-order-tabs.md`。
 
 ## 2026-11-09
-
 - **新增**: `workflow-issues/tongtu-split-merge-writeback-cost-rules.md` — 通途拆单合并成本写回五类错误与修复（组行匹配、件数、产品族、订单号截断、审计口径）；8/9 月合并组自查 0/0 失败，GS 写回变化 20/10 行。
 - **新增**: `conventions/tongtu-split-types-and-presplit-sku.md` — 通途自动拆单 / 手动拆单 / TikTok 跨账号拆单的区别；拆单前组合 SKU 在 EN `platform_sku`（自动）或原单基号（手动）；写回键仍用组件 SKU。
 - **新增**: `tooling-decisions/tongtu-branch-vs-fba-cost-comparison.md` — 分公司发货 vs FBA 成本对比口径：共同成本与差异块拆分、必排项、边界，以及 202607-09 重算结果。
@@ -36,6 +44,8 @@ tags: [solutions, log]
 
 ## 2026-11-05
 - **新增**: 通途订单成本引擎本地化三篇经验 → [`architecture-patterns/tongtu-cost-engine-local-migration.md`](architecture-patterns/tongtu-cost-engine-local-migration.md)、[`workflow-issues/tongtu-order-universe-invalid-split-fba.md`](workflow-issues/tongtu-order-universe-invalid-split-fba.md)、[`integration-issues/tongtu-fba-alias-normalization-registration.md`](integration-issues/tongtu-fba-alias-normalization-registration.md)
+- **新增**: `integration-issues/github-ssh-intermittent-publickey-denied.md` —— EN 测试机 `git push` 报 `Permission denied (publickey)`，但密钥与 GitHub 账户登记**逐字节一致**、无私钥/公钥错配、无 deploy key 冲突、主机密钥真实；同一把钥匙 22/443 端口与亚洲/美国节点都**时通时不通**，本地 Windows 换另一把钥匙同样复现；HTTPS 路径 5/5 稳定 —— 判定为大陆出口到 GitHub SSH 的链路抖动，不是密钥故障。固化三步判定法（`ssh -T` 试 3 次，任一次 `Hi <user>!` 就别动 key）与一键 HTTPS 回退（`EN_API/git_push_https.sh`，推完 `trap` 自动切回 SSH）。
+- **背景**: 现场第一反应是"密钥丢了"，但换 key 只会白折腾；真正需要的是"先证明链路问题"的判定顺序。生产机没有存 PAT，HTTPS 回退目前只对测试机开箱可用。
 
 ## 2026-10-17
 - **新增**: 通途SKU↔EN物料 权威映射（ref_code / importBOMCostList.客户物料号）与 gsheet 源头修正 → [`tongtu-en-item-mapping-and-gsheet-source-fix.md`](integration-issues/tongtu-en-item-mapping-and-gsheet-source-fix.md)
@@ -44,22 +54,18 @@ tags: [solutions, log]
 - **新增**: `architecture-patterns/ustx-cost-caliber-comparison.md` —— 美中仓库由 `2CJG-SX`（绍兴加工）改走当地 USTX 加工的 A/B1/B2 三口径只读对比。四条沉淀：**① 先验「测算表是手填还是公式」再定等价闸门**——`测算 美中USTX二次加工成本` 的月度值全是手填（无公式），与 import 重建在 57 个共有键上**无一相等**，原计划「measured vs reconstructed 超差即阻断」的前提被证伪 → **差异本身即交付物**，不设等价阻断；**② 歧义维表键 fail-closed**——`import皮壳成本` 同键指向不同重量模板时摘除索引、对应行记 `ambiguous_shell_key` 排除，不 `setdefault` 猜首/末行；**③ 闸门分级**——阻断级 vs 告警级，`conclusions_blocked` 只能由 blocking 闸门触发（首版误把告警算进去导致永远 blocked）；**④ 只读快照 `render_option` 值/公式双冻结**。7 月美中 4,379 行：A 526,225 → ΔB1 +226,629 / ΔB2 +264,912（￥加权，按 `发货数量`）。
 
 ## 2026-10-15（派生成本/规则结果的独立验证 + gspread 插列坑）
-
 - **新增**: 审核派生成本/规则结果的独立验证法（外部对偶、同名列陷阱、无留档只能说"量级吻合"） → `best-practices/auditing-derived-costs-independent-verification.md`
 - **新增**: gspread `insert_cols` 把「行」当「列」→ 一次 252 列的抢救与恢复 → `developer-experience/gspread-insert-cols-rows-as-columns.md`
 
 ## 2026-11-03（钉钉群采集 / claude stdin / worktree 计划任务）
-
 - **新增**: `tooling-decisions/dingtalk-group-harvest-dws-user-identity.md` —— 钉钉群历史消息/文件归档用 DWS 个人 OAuth 身份，而不是群机器人、企业内部应用或会话存档；完整性账本 + 水位 + 文件去重 + 数据落仓库外。
 - **新增**: `developer-experience/claude-headless-long-prompt-stdin.md` —— Windows 下 `claude -p` 长提示词塞进 argv 会超 32K 限制并静默回退；改为 `subprocess.run([cli, "-p"], input=prompt)`。
 - **新增**: `developer-experience/windows-schtasks-worktree-path-trap.md` —— 在 worktree 里注册 schtasks 会把任务指向临时目录；合并后必须在主仓库重跑安装脚本。
 
 ## 2026-11-06（邮件域名到期 / Gmail 550-5.7.26）
-
 - **新增**: `integration-issues/email-domain-expiry-gmail-550-5-7-26.md` —— 域名 2026-11-03 到期后，阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析，腾讯企业邮发出的邮件被 Gmail 以 550-5.7.26 硬拒。11-04 续费成功但邮件未恢复：**续费 ≠ 恢复**，必须回查注册局 NS 并确认记录在服务（直接问权威 NS，不只看控制台）。另一层陷阱是**注册商 ≠ DNS 托管商**（阿里云注册、DNSPod 解析；主域 `vilavi.cn` 在 Cloudflare）。DKIM selector 是腾讯企业邮生成的自定义随机串（`sjnr2306` / `evhe2306`），常见 selector 全 NXDOMAIN 不能证明“没有 DKIM”。恢复后补 DMARC `p=none`、修 MX 优先级 5/10。
 
 ## 2026-10-27（供应分型 / frePPLe / 先搜分支）
-
 - **更新**: `workflow-issues/search-first-before-implementing.md`（`last_updated: 2026-10-27`）—— 补 Case 4：**main 上 grep 不到 ≠ 项目没有**。预测（statsforecast 2.1.1）、供应净额、库存政策、交期配置分别在本地的 `keyapi/forecast-refresh-oct27`、`keyapi/supply-integrate-oct27` 分支和 PR #300；先查 `git branch -a` / `git log --all` / `gh pr list --state all` / `git ls-tree`，再决定“复用 / 接线 / 重造”。
 - **新增**: `tooling-decisions/frepple-evaluation-and-borrow-logic.md` —— frePPLe 社区版 8.0+ MIT、7.x AGPL、企业/云闭源；库存规划/承诺交期/Gantt 仅商业版；ERPNext 连接器 GPL-3.0 且 2022-02 后未更新（LICENSE 与 hooks 的 MIT 声明不一致，以 GPL-3.0 为准）。结论：**借 solver 逻辑（lead-time offset / allocation / pegging / CTP），不部署系统**；预测/库存/交期/净额复用本仓库已有资产。
 - **新增**: `workflow-issues/supply-sku-segmentation-and-stockout-evidence.md` —— 分型前先排包装费/无 `sku_item` 映射的非商品（`497268621` 是“礼盒包装费 ETSY”），再按成品/半成品/皮壳分型；`monthly_series` 只覆盖三个主仓，会漏渠道把畅销皮壳误判成长尾；PJ 检查点 22 个日期、6 个间隔 >7 天（最大 38 天），不能证明“断货超过一周”；零库存当日仍有销量的仅 1.3%；Jeck 表是成本系数表不是促销表；`item_attr.moq` 非零仅 21/15,230，是字段未维护，不是工厂 MOQ。
@@ -94,10 +100,20 @@ tags: [solutions, log]
 - **新增**: `tooling-decisions/tailscale-relay-vs-public-https-china.md` — 境内访问境内服务器时 Tailscale 走**香港中继**（`relay "hkg"`，`tailscale ping` 超时）：实测服务器本机 1-3ms、公网 HTTPS 125ms、**Tailscale 20-30 秒**（TCP 握手单独就要 12-19 秒），12MB 文件根本传不完。结论是**弃用 Tailscale 改走同机公网 HTTPS + 应用层登录**（容器仍只绑 127.0.0.1）。含「把个人笔记本加进 Tailscale 解决不了这个问题」的解释与 UDP 41640 打洞失败的常见原因。
 - **新增**: `integration-issues/dingtalk-oidc-bridge-client-onboarding.md` — 自建服务接入公司钉钉 OIDC 桥的**客户端侧**做法（桥本身见 `dingtalk-sso-new-api-oidc-bridge.md`）：不用改钉钉后台、复用签名 cookie、**OIDC state 必须外置到 Redis**、闸门写在应用中间件而不是 nginx `auth_request`（桥没有 `/verify` 端点）、**桥的 corpId 校验时灵时不灵**所以限制用户要靠服务侧白名单。
 - **新增**: `integration-issues/reverse-proxy-prefix-return-to.md` — 前缀化反向代理下 `return_to` 踩的坑：`request.url.path` 是**反代剥掉前缀后的应用侧路径**，直接回写给浏览器会把登录后的用户送到**域名根路径**（同域上的另一个服务）。修法是把「应用侧路径」与「浏览器可见路径」分清，回写的 URL 一律补前缀；顺带给 `safe_return_to` 加前缀校验挡同域横向跳转。**使用者实际登录时发现**，自测没覆盖到。
-## 2026-09-22
 - **修正**: 「新机器怎么让 `ce-okf` 可用」原来教人跑 `setup.ps1`，**对 Claude Code 是多余的**。仓库里 `.claude/skills` 本身就是 git 跟踪的 symlink，只要克隆时让它正确检出，Claude Code 自动看到全部项目 skill。实测对照（同一台机器、开发者模式已开）：默认 `git clone` → `CLAUDE.md` 是 9 字节 stub（0 行）、`.claude/skills` 是**普通文件**、skill 为空；`git clone -c core.symlinks=true` → 两个都是**真 symlink**、`CLAUDE.md` 解析 243 行、`.claude/skills` 列 **47 个 skill**，**全程没跑 setup.ps1**。根因是 Git for Windows 的 `--system core.symlinks=false`；克隆时的 `-c` 只在那一刻生效、**不写进新克隆的 `.git/config`**（已核），所以还要补 `git config core.symlinks true` 才能扛住后续 `pull` 新增的 symlink 条目。`setup.ps1` 缩到**只剩 Claude Desktop 需要**（Desktop 只读 `~/.claude/skills/`，看不到项目级目录）。改动落在 `AGENTS.md` 克隆节 + `CONTRIBUTING.md`「首次初始化」+ `.agents/skills/ce-okf/SKILL.md`「首次安装到新机器」。macOS / Linux 原生支持 symlink，直接 clone 即可。
 - **更新**: `ce-okf` 的依赖关系讲清 —— 之前 `AGENTS.md` 的「新机器首次 clone 后必做」清单里**一个字都没提** compound-engineering，而 `ce-okf` 第 1 步要调 `/ce-compound`。同事 clone 完能跑，但会静默走兜底、自己不知道。补：① `AGENTS.md` 加第 **4.5 步**（上游是标准 Claude Code 插件，装法是两条斜杠命令 `/plugin marketplace add EveryInc/compound-engineering-plugin` + `/plugin install compound-engineering`，**脚本代劳不了**，所以只能写进清单让同事的 Agent 读到）；② `.agents/skills/ce-okf/SKILL.md` 的「分工」表加「在本仓库？」列，把 `ce-compound` 标成**第三方 / 可选增强**并列出不装时丢掉什么（重叠检测损失最大、grounding 校验、检索广度），写明**流程照样完整、只降正文质量**。
 - **更新**: `developer-experience/git-worktree-branch-upstream-tracks-main.md` — 把"已排除本仓库自身"从三段散句改成**可逐条勾选的排除表**（换机器重新排查时照着跑一遍即可）：脚本调用 `worktree add`（`.md` 里的命中都是文档在教人敲命令）/ `setup.ps1` 实际内容（只做 `CLAUDE.md` symlink + `.agents/skills/*` 链接 + superpowers 链接，**不碰 worktree、不写 `branch.*`**）/ `.claude/settings.json` 不存在 / `.claude/settings.local.json` 只有权限 allowlist、**无 `hooks` 段、无 `WorktreeCreate` hook** / `.git/hooks` 只有 `.sample` / 107 个 `config.worktree` 无 `branch`/`push` 设置。顺带记一句成因量级：`"Bash(git worktree *)"` 在权限 allowlist 里，**Agent 建 worktree 免确认**，所以产出量才这么大。
+
+- **新增**: `integration-issues/carrier-label-batch-field-length-limits.md` — Overstock/Wayfair 组合件（皮壳 `-Cover` + 海绵 `-Foam`）在仓库侧炸成多 SKU，而一个包裹只能贴一个面单 ⇒ 给承运商的批量导入 csv 必须**每包裹一行**、把多个 SKU 拼进同一个字段。这段拼接随 SKU 数变长，撞上承运商字段硬上限：**UPS Reference 1~5 各 35 字符、超了整批被拒**（`Invalid Package Reference Value`，第三方支持文章明写这是 carrier limitation）；**FedEx 批量模板 `Available headers` 里 `poNumber=String(30)`、`reference=String(30)`、`itemDescription=String(450)`、`harmonizedCode=String(35)`** —— 同一个拼接串在不同字段要用不同上限，不能一刀切。两者失败模式不同：UPS fail-loud（整批拒）、FedEx fail-silent（承运商侧按上限切，位置不受控）。方法上固化两条：**上限从官方模板自带的字段定义表读**（FedEx 那张表就在本地模板 xlsx，不用翻文档站）、**用"承运商已接受历史文件的最长值"交叉验证**（实测 UPS Reference 2 最长 30 / FedEx poNumber 最长 29，都贴着上限 ⇒ "一直没出问题"只是还没撞上多 SKU 订单）。关键认知：**这个风险是模板从「每包裹一行」改「每货品一行」新引入的** —— 旧模板下每包裹只有一个 SKU、合并是空操作（最长 32 字符），历史里找不到先例。
+- **新增**: `integration-issues/sku-name-backfill-via-en-customer-code.md` — 背贴 4×2" 标签的品名查名键 = 通途导出 `Reference 2` 的**原样字符串**（两侧 `strip().upper()` 后匹配），表是 `US SKU Name` sheet。某组合件的海绵 SKU 缺失 ⇒ 标签那一行品名空白。**通途SKU 在 EN 存于 `Item.customer_code`（逗号串）与 `customer_items[].ref_code`（子表），不在 `item_languages.tt_sku`** —— 后者只存 `-Cover` 形式的成品码，海绵件的 `item_languages` 干脆是空的。三个访问性坑（均实测）：`Item Language` **子表不能 list**（`403 PermissionError`，但可逐 Item 读带出）、`commodity_sku` **不能当过滤字段**（`Field not permitted in query`）、`Item.name` 是**物料编码**不是通途SKU（`name like %TT...%` 一律空）。PIM API `vilavi_pim.api.pim_api.get_sku_item_itemgroup_mapping` 能一把映射，**但必须先做假阳性测试**（丢 `TT9999999K9999999-Foam` / 随便一个串进去应返回 `not_found`）并横验同族自洽（100→100、153→153、160→160、183→183 全对）才敢用。**尺寸↔序号不成顺序**（153 是 `...4183`、160 却是 `...4182`）必须逐条读不能推。另记一条判断法：同一个件在**通途=直角 / EN PIM=方格 / 同包裹皮壳=菱形**时三者互斥、且 EN 里三种款式各有独立物料 ⇒ 该件是**跨款式中性件**，写中性名比咬着某个款式名安全。实战：8 个尺寸对账出「7 缺 1 有」，从 EN 借数补齐后复测缺名数 0。
+- **新增**: `developer-experience/colab-notebook-drive-api-editing.md` — 改同事 Colab notebook 代码的可复现做法：`.ipynb` 在 Drive 里就是 JSON 文件（无专门 API）。**读要 `alt=media`**（`/export?mimeType=` 对 Colab 文件 403 `Export only supports Docs editors files`）；**写用 multipart 并显式带 `mimeType: application/vnd.google.colaboratory`** 防类型被改；cell 定位用 `strip()` 匹配并**断言唯一命中**（commented-out 老代码与生效代码只差一个 `#`）；写完**必须重新下载逐段断言**「除目标格外其余 cell JSON 逐字相等」（本次 29→31 cells）；写前比 `modifiedTime` 做并发守卫（实测用户跑一次 cell、Colab 把**执行输出**存回文件就会动）；语法自检要把 `!cmd` 中和成 `pass  # !cmd` **且保留缩进**（丢缩进会得到假 `IndentationError`，实测白折腾一轮）；"先备份再改"落点是 notebook 自带的 `## 下面老代码，不用运行` 区块。**⚠️ 私钥风险**：业务 notebook 常把服务账号私钥塞在顶部依赖安装 cell 里 ⇒ 本地兜底备份必须放**仓库外**。
+- **新增**: `developer-experience/colab-shell-out-filename-spaces.md` — `!zip -q {zip} {" ".join(files)}` 在文件名**含空格**时必然失败：`!cmd` 把整行原样交给 shell，`Overstock-...-351 每货品一行_UPS_....csv` 被空格切成两个不存在的路径 ⇒ `zip error: Nothing to do!`（非零退出但**不抛异常**）⇒ 压缩包根本没生成 ⇒ 紧接着 `files.download()` 抛 `FileNotFoundError`。**报错点离根因很远**（崩在 download，因在 zip），容易误判成"下载坏了"。修法：换 Python `zipfile`（收字符串列表，没有 shell 这一层）。预防：notebook 里凡"把变量拼进 shell 命令"先问值可能含空格/引号/中文吗；业务同事保存导出时会顺手加中文后缀（`... 每包裹一行.xls`）正是本次来源。通用思路：**报错点离根因远时，先怀疑"上一步静默失败了"**。
+- **更新**: `CONCEPTS.md` 补「背贴」与「通途SKU 的后缀形态（`-Cover`/`-Foam`/裸基础码）」两条词条（此前文档里高频使用但从未定义）；`sellfox_shipping/AGENT_HANDOFF.md` 补字段上限与查名链两条坑；`google_drive_permissions/AGENT_HANDOFF.md` 把 `.ipynb→Drive files.get/update` 那一行展开成可操作要点并指向新文档。
+- **新增模块**: `colab_kit/`（+ skill `colab-kit`）—— 把「改同事 Colab notebook」这套动作从**每次现写 Drive 调用**固化成 CLI：网络命令 `meta`/`fetch`/`backup`/`guard`/`write`/`verify`，本地命令 `cells`/`dump`/`find`/`insert`/`backup-cell`/`sed`/`syntax`/`diff`。**触发动机**：本次会话的读/写/改/回读校验每一步都是临时手写的，而这类需求会反复出现（另一条线「PB 订单处理」已从 Colab 迁入仓库，Overstock 这条将来也可能迁）。实测：本地命令对真实 31 格 notebook 跑通（`find` 对同一锚点命中 **2 格** —— 生效代码 + 注释掉的老代码，正是 `sed` 默认拒绝多命中的理由）；网络命令只读手测 `meta`→`fetch`→`guard`（过期 `modifiedTime` 正确 exit 2）→`verify --expect-changed ""`；`uv run pytest colab_kit/tests -q` → 14 passed。
+- **新增模块**: `tongtool_order_shipping/`（+ skill `tongtool-order-shipping`）—— **module 归属修正**：上一批把「承运商字段上限」与「背贴品名补齐」两篇挂成 `module: sellfox_shipping`，那是错的（`sellfox_shipping` 是**赛狐侧**尾程打单）；这两篇讲的是**通途订单导出**的发货侧后处理，只是"都用 UPS/FedEx 面单"这点关系。两篇的 `module:` 已改为 `tongtool_order_shipping`。该模块**目前无代码** —— 流水线本体仍是同事的 Colab notebook，本目录承载硬约束与将来迁入的落点（先例 `pb_orders/`）。
+- **修复（既有漂移）**: `intent_router/tests/test_catalog.py::test_catalog_skill_set_equals_agents_md_table` 在本批之前**已经是红的**（已用 HEAD 版文件核实）：AGENTS.md 有 `sellfox-amazon-settlement` / `dingtalk-oa-approval` / `gsheet-monthly-order` 三行，而 `intent_router/catalog.yaml` 一个都没有 —— 即「加了 AGENTS.md 行却没补 catalog 条目」，正是该文件头部注释与 `ce-okf` 记录里警告过的同一类脱节（这次方向相反）。已补 3 条选项（含各自的 `coverage`/`exclusions`/`examples`，`dir` 均验证存在），本批后 `pytest intent_router/tests colab_kit/tests` → **274 passed, 33 skipped**（原先 1 failed）。同时给 `sellfox-shipping` / `tongtool-order-cost` / `google-drive-permissions` 三条的 `exclusions` 补上新兄弟模块，让路由真正分得开。
+- **新增**: `tooling-decisions/colab-kit-notebook-edit-toolbox.md` —— 为什么把「改同事的 Colab notebook」做成**独立模块 + skill**（`colab_kit/`）而不是塞进 `google_drive_permissions/`。三条取舍：网络/本地命令分开（改 cell 是纯 JSON，可离线单测）；`verify` 与 `guard` 是**一等公民**（手写时最容易省掉的正是这两步）；`sed` 默认拒绝多命中（实测同一锚点命中 2 格）。与 `google_drive_permissions` 的分界写成对照表：**权限 vs 内容**，失败模式从"权限判断错"变成"**写坏别人的活文档**"。另一条动因是会重复 —— `pb_orders/` 已迁过一条，Overstock 这条将来也可能迁。
+- **新增**: `developer-experience/gh-pr-edit-projects-classic-workaround.md` —— `gh pr edit <n> --title/--body-file` 在本机（gh 2.71.2）**exit 1 且改动不生效**，报 `GraphQL: Projects (classic) is being deprecated … (repository.pullRequest.projectCards)`：`gh pr edit` 走 GraphQL 且前置查询会取 `projectCards`，弃用后整条命令在发出修改前就中止。绕法 = **`gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f title=… -F body=@file`**（REST，不碰 `projectCards`），改完 `gh pr view` 回读。**真正的坑是信号不可信**：命令串里接了 `| tail` 时 `$?` 是 `tail` 的、永远 0，报错行也被淹没 —— 本次就是靠回读 PR 才发现标题没变。
 
 ## 2026-09-16
 - **新增**: `workflow-issues/pb-out-of-stock-notification-and-zero-stock-orders.md` — PB 断货通知与 0 库存订单处理：① 判「哪些订单因无货卡住」用 PB 订单目录 `<YYYYMMDD>/checked0stock order xNN *.csv`（每期一份，比对多期可分新断/持续断）；② **PB PO → EN `Tongtool Order`（`PBUS-<PO>`，拆单为 `-N`）→ `platform_sku` → `erp_item_code`** 映射链，EN 的 `Sales Order.po_no` 与 PB PO 无关；③ `PBUS-<PO>` 是否存在 ⟺ 是否已打单；④ 通知邮件模板（`Vendor 5806`、ASN 已生成标注、一信一 SKU）；⑤ restock date = 补货 SO 下单日 + 3 个月，**一个 SKU 多张未发单会得到不同日期**。
@@ -117,13 +133,18 @@ tags: [solutions, log]
 - **新增**: `architecture-patterns/account-period-revenue-reconciliation-ecosystem.md` — 账期/收款核算「生态地图」：把 销售额(通途) + 各平台账期(Amazon=赛狐结算/列式, OSTKUS, PB, Wayfair, Temu/TikTok/Walmart…) + 汇率 + Tax + 附加费 + 回款归属 + 回款率 + 钉钉提交/审批 + NAS 归桶 + 报税 整条链路画成地图，赛狐只是 Amazon 一块；含公共口径(账期月自然月/4号-3号窗口/结算 vs 日期范围口径/回款率=应收/销售/固定月汇率) 与 现有资产指针 + 缺口待办。
 - **新增**: `workflow-issues/amazon-account-period-late-submission-audit.md` — Amazon&新平台账期「提交异常/迟交」审计方法与规则：账期归属=账期日期自然月、提交窗口 4号~下月3号(先 8号~下月7号)、发起时间=提交、`账期月Z` vs `桶B` 判 正常/迟交/遗档/早交；跨文件去重 + `选择平台==亚马逊` 分流；2026-03~08 各桶 正常/迟交/遗档/早交 实测表(8月桶 40 行账期7月、7月桶 40 行完成>08-03+13 未办结、3月桶 6 行 2025 遗档)；产物在 `D:\Work\王忠于\成本核算\`。
 - **新增**: `tooling-decisions/amazon-settlement-autofetch-sellfox.md` — 赛狐自动拉取 Amazon 账期：结算中心V2(汇总+明细, `currency` 取原币, 默认 CNY) vs 紫鸟/赛狐插件列式报表(`报告中心 getPlugPageList type=3/4`, 已实测拿到 32 列 Custom Transaction CSV)；两报表口径(payout vs activity/posted)取舍、科目映射、赛狐店名↔渠道账号交叉表(写入共享表「和运营部共享/渠道账号」`赛狐店铺` 列, VERCART=AMZVer, 北京熙锦=AMZBJXJ, Daneey-CA=AMZDANEEYCA, 如泱-CA=AMZBJRYECLTDCA, 北京固祥未启用排除)。产出 `sellfox_settlement/reconcile_amazon.py`(+`fetch-custom`) 与 `sellfox_settlement/docs/research/saihu-amazon-settlement-autofetch-2026-09-09.md`(§10-13) + `sellfox_settlement/AGENT_HANDOFF.md` + `.agents/skills/sellfox-amazon-settlement/`。背景: 财务全靠运营钉钉手动提交 Amazon 账期金额, 依赖人工、金额易错、txt 只能解析 tax。
+
 ## 2026-09-14
 - **新增**: `workflow-issues/erpnext-so-closed-unshipped-and-unstarted-work-orders.md` — 子表字段反查父单的三条 API 铁律（子表直查 403 / 父单直查子字段 417 / 子表过滤结果"一行一子行"必须按父单去重）+ `in` 列表超 4094 字节请求行上限须分块 + `Sales Order Item.name == Production Plan Item.sales_order_item` 连接键 + 出库单必须按 `item_code` 匹配（老出库行 `customer_item_code` 为空）+ `amended_from` 区分改单与死单 + 客户码注册在成品 `KS` 上而订单行卖 `PK#` 皮壳。两条反直觉结论：**ERPNext 的 `Closed` ≠ 已发完**；**`Work Order.status` / `produced_qty` 不可信，进度要看工序卡**（`WO-26-02609` 头 `Not Started`，实际 44 件已过 5 道工序；且完成件数不能各工序求和）。
 - **新增**: `EN_API/item_shipment_status.py` + `EN_API/AGENT_HANDOFF_物料发货状态.md` — 客户物料号 / EN 物料号 → 销售订单发货状态 + 生产计划/工单/工序卡报表（单物料颗粒度，3 sheet Excel，`--assert-fixture` 回归自检）。分页相对 `dn_trace_report.py` 加 `order_by="name asc"` 并按实收行数前移；只落新脚本，未回灌旧脚本。
 - **实测**: `CENKZ1325-Yellow-138` / `PK#KS0001-DM-140-YELLOW`（美中公司 DANEEY）10 张 SO / 330 件，已发 126 / 未发 184，其中死单 64（SO-26-00099、SO-26-00003、SO-25-00198 尾数 4）、在产待发 120。
+
 ## 2026-09-10
 - **更新**: `conventions/amazon-period-file-reconcile.md` — 补浏览器补下载路径、env/人名不上 git；公开叙述仍用拼音首字母。
 - **新增**: `conventions/amazon-period-file-reconcile.md` — Amazon 账期按账号对 NAS/钉钉/赛狐结算组：负责人≠人名夹、店名经别名、groupPage≠txt 原件、「或」≠「钉钉且附件」；公开叙述用人名首字母。
+- **新增**: `tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md` — DeepSeek flash 系列 9/10 12:00 降价（空闲 ¥0.02/¥1/¥4，高峰 2 倍；pro 不变）+ 9/14 12:00 V4 Pro 下线路由到 V4.1 Flash；按账单**行单价反解**峰谷占比（flash 高峰 79.4%）与缓存命中占比（97.2%），实测 24 天 flash 家族 ¥620.82 → ¥358.07（-42.3%）；逐上游对比 OpenRouter（因缓存单价不占优，除 pin StreamLake 外均更贵或打平）→ **结论不迁移**；含 new-api `ChannelTypeOpenRouter=20`、OpenRouter 默认自动路由 vs new-api 多渠道回退、中国用户代理/支付/账单地址/封号/数据留存掣肘。
+- **更新**: `new-api-deployment/deepseek_time_pricing.py`（新价 + `PRO_EOL` + `--at` dry-run）、`sync_pricing.py`（同步新价）、`AGENT_HANDOFF.md`（第四节定价配置）— 已部署生产 `/opt/new-api/`。
+
 ## 2026-09-21
 - **新增**: `integration-issues/sellfox-amazon-settlement-plug-only.md` — Amazon 账期报表（Transaction / Summary PDF）在赛狐侧**只有「插件获取报告」（`report/center/task/getPlugPageList.json`）一条路**，且该接口**纯读、API 不可触发抓取** —— 两条旁证：`创建报告任务` 的 `reportType` 只支持 `PRODUCT_SALE_REPORT`，`亚马逊原报告` 的类型枚举里没有账期。第二条硬约束：**`fileUrls` 是 1 小时有效的腾讯 COS 预签名 URL**，不能存链接，必须「拿新 URL → 立刻下载落盘」。实测：90 家 Amazon 店**仅 39 店有数据、51 店完全没抓过**（呈整店群分布 ⇒ 人工按品牌执行、非周期性任务），**只覆盖 2026-06/07，8-9 月一条没有**。另留档一个**已被否决**的替代方案（`monthProfit/shopSummary` 服务端销售额、覆盖全店但属赛狐自算口径），以免将来重复提议。
 - **新增**: `SELLFOX_API/fetch_amazon_settlement.py`（下载归档）+ `SELLFOX_API/probe_amazon_reports.py`（覆盖度矩阵）；调研全记录见 `docs/research/2026-09-21-sellfox-amazon-settlement-reports.md`。
@@ -137,13 +158,6 @@ tags: [solutions, log]
   ④ **做对的**：鉴权先验最小闭环（本机 + Tailscale Funnel，零生产影响）拿到 `openai-mcp/1.0.0` 带 `Authorization` 头的决定性日志，结论赛狐与 NAS 共用。
 - **更新**: [workflow-issues/search-first-before-implementing.md](workflow-issues/search-first-before-implementing.md) — 补 **Case 2 / Case 3** 与「Why This Matters」补充段。① **内部约定常常只在代码里，不在文档里** —— 给 NAS 路径拼 File Station 深链时我**自己猜了格式**（`?launch=FileStation&path=`）还当成结论写进文档；用户指出 EN 的**产品物料库**早已做过，去测试服务器一搜就找到 `vilavi_pim/api/nas.py` 与 `work_order_task/.../item_group_nas_path.py::encode_filestation_link()`，真格式是**双层 URL 编码**（`quote(quote(path))`），顺带对齐出会话失效错误码是 **105/106/107**（我原只判 106/107）、Thumb 的 `path` **要加双引号**（spec 要求）。② **评估第三方方案要抄「能力清单」** —— 只写对比表就决定自建，事后抄 mrquj 的工具表才发现一次漏了 7 项（搜索/缩略图/文件夹大小/校验和/分享链接/压缩包/读图）。原文档只讲「搜文档」，现补上「搜代码」与「抄清单」两步。另修 `docs/solutions/index.md` 一处 **frontmatter 被顶到第 2 行** 的缺陷（上一次提交把新行插到了 frontmatter 之上，已移回表格）。
 
-## 2026-09-20
-- **新增**: `workflow-issues/sellfox-incentive-cost-adjust-2026-09.md` — 「特殊规则改赛狐入库成本」的批量执行尝试：目标值来自共享 Google Sheet 特殊规则 844-874 行（汇率 6.8，通途SKU→赛狐SKU 走 EN BOM「客户物料号→产品编号」，28/28 命中），生成 56 明细行 / 6 张备货单。**结论：清单能生成，但大部分行改不动**，因为①**成本补录单下调受「批次剩余货值」封顶**（`单件可下调幅度 ≲ 当前单价 × 剩余占比`，剩余为 0 就完全降不了 → 下调有强时效性，要在被消耗前做），②**同一 SKU 只能有一张待审核补录单**。另记录两条数据可信度教训：**批次表 `goodsAva` 不能当当前库存**（30 行 21 行与库存明细不符，POLAND 整组差约 1000）、**备货单列表接口 `items` 只返回 3 条预览**（据此判断 SKU 成员关系必然误判，本轮连错两次）。
-- **更新**: `integration-issues/sellfox-cost-adjust-api.md` — 补「建单/审核会被拒的两条硬约束」（`货值不能为负数` 的公式与实测边界 178.045；`存在待审核的补录单` 与 `delete.json` 用法）与 2026-09-20 实测表；`integration-issues/sellfox-restock-headfee-api.md` — 新增「`searchType` 三个调用面三种约定」表（站点列表 `sku` / 批次表 `commoditySku` / 公开 OpenAPI 不含 SKU）+ 列表 3 行预览陷阱；`research/2026-09-18-sellfox-cost-accounting-fifo.md` — **更正 `goodsAva > 0` = 还在库 的说法**，并在「改成本工具结论」补下调封顶；`cost_adjust/AGENT_HANDOFF.md` — 关键坑新增 8/9/10/11 四条，未解决表补两行。
-- **词汇**: `CONCEPTS.md` 新增「剩余货值约束（货值不能为负数）」「激励价」「海外仓批次表 goodsAva」，并加一条 `searchType` 三面约定的 Flagged ambiguity。
-- **新增**: `workflow-issues/sellfox-inventory-sync-cost-drift.md` — 「用库存调整单把外部库存数量同步进赛狐」的长期代价。**先纠正一个易走偏的结论**：赛狐自己的三方仓模块就有「生成调整单」功能（i18n `main.warehouse.tripartite.warehouse.generate.adjustment.order`，权限 `MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），**官方建模本就是生成调整单** → 用它同步数量**不是选错工具**，问题在成本侧。三点成因：①调整单明细零成本字段，但每建一张必产生新批次，成本 = **创建时该(仓库,SKU)加权均价快照**；②该快照**不可修正**（`+N/-N` 不互抵、已完成单不可删不可撤、调整单无成本字段故无入口）；③结果=可修正的备货单批次被 FIFO 逐渐吃掉、不可修正的快照不断堆积 → **越跑越难改均价且无回退路径**。给出三个选项（维持/A 改用其他入库单`perPurchase`必填/B 保持调整单但先修好成本）。
-- **更新**: `integration-issues/sellfox-adjust-order-write-chain.md` 的「结论：调整单不适合承载数量同步」→ 改为「用它做数量同步的代价（不是用错工具）」，与新文档口径一致；`cost_adjust/AGENT_HANDOFF.md` 未解决项同步（三方仓端点已探、本账号未开通功能）。
-## 2026-09-21
 - **新增**: `tooling-decisions/typesafe-jev-intent-router.md` — 中文意图路由模块 `intent_router/`：用 TypeSafe Jev / System One 把一句中文需求路由到本仓库 30+ 个模块，**只分类不执行**。动机是触发词匹配是关键词不是语义（`item-cost`/`stock-init`/`warehouse-restock` 同吃 EN BOM 成本，触发词分不开）。**两条实测结论决定了它怎么用**：① `confidence` **0.97–1.00、几近饱和**（连模型选 `none` 时也有 0.99）—— 它是**分布集中度不是正确率**，所以 `--min-confidence` 实际**不触发**，真正兜底的是 **`none` 选项**，别把高 confidence 读成"一定对"；② `ambiguity` 只跨 0.87–0.98，清晰请求 0.95 与域外请求 0.96 几乎重叠，**不具区分度**，故只在「无法判定」分支显示。对抗"自信的错"靠**默认总打印 top-3 候选**。**坑**：worktree 里 `.env` 在 `parents[4]` 而非 `parents[1]`，本仓库既有三个加载器全部取不到 key，改用有界上溯；YAML 把裸写的 `401` 强制转成 int 导致 string 形式 criteria 崩溃。另：`criteria` 用 object 形式是**先用 2 选项 payload 打真实请求确认过**（HTTP 200 无 422）才敢铺开的。**防漂移测试已按设计生效一次**：PR #249 给 AGENTS.md 加 `ce-okf` 行后测试立刻报错并打出差集，补 catalog 条目即恢复。
 - **新增**: `developer-experience/windows-worktree-claude-md-symlink.md` — Windows 上 worktree 里 `CLAUDE.md` 是 symlink 还是 stub，取决于**开发者模式**（它正是提供"非管理员建文件符号链接"权限的东西）。修正 `CONTRIBUTING.md` 的过期结论：旧文写"开发者模式会让 worktree 创建因权限不足失败"，实测**已反向失效** —— 开启后 `git -c core.symlinks=true worktree add` 成功且 `CLAUDE.md -> AGENTS.md` 是真 symlink、`git status` 干净。**关键坑**：本仓库 `.git/config` 把 `core.symlinks` 显式设成 `false`，worktree 共享该配置，所以不传 `-c` 覆盖即使开了开发者模式仍拿到 stub。stub 状态极隐蔽 —— git 干净、不报错，但该 worktree 里 Claude 系统提示的项目指令**只有 `AGENTS.md` 这 9 个字符**，AGENTS.md 正文完全没进来。另：`setup.ps1` 只在主仓库根目录跑（`~/.claude/skills/*` 是全机一份、必须指向主仓库；在 worktree 跑会指错且 `[SKIP]` 导致修不回来）。
 - **更新**: `CONTRIBUTING.md`「Git Worktree 创建（Windows 特别说明）」三处 —— `:61` 的过期结论、`:67` 的推荐命令（`core.symlinks=false` 改成按开发者模式二选一 + 一次性 `git config core.symlinks true`）、`:69-71` 删掉"在 worktree 里跑 setup.ps1"（现在有害）。补「存量 worktree 修复」：`git -C <wt> checkout -- CLAUDE.md .claude/skills`（只碰这两个条目）。**批量扫必须先按工作区内容筛选**，只处理"除 `T CLAUDE.md`/`T .claude/skills` 两行外别无改动"的 —— 本机 134 个 worktree 中 88 个属此类（全扫 0 失败、status 归零），44 个带在制品（有些上千文件）一个未动。
@@ -166,6 +180,11 @@ tags: [solutions, log]
 - **更新**: `docs/solutions/developer-experience/index.md`、`docs/solutions/index.md`。
 
 ## 2026-09-20
+- **新增**: `workflow-issues/sellfox-incentive-cost-adjust-2026-09.md` — 「特殊规则改赛狐入库成本」的批量执行尝试：目标值来自共享 Google Sheet 特殊规则 844-874 行（汇率 6.8，通途SKU→赛狐SKU 走 EN BOM「客户物料号→产品编号」，28/28 命中），生成 56 明细行 / 6 张备货单。**结论：清单能生成，但大部分行改不动**，因为①**成本补录单下调受「批次剩余货值」封顶**（`单件可下调幅度 ≲ 当前单价 × 剩余占比`，剩余为 0 就完全降不了 → 下调有强时效性，要在被消耗前做），②**同一 SKU 只能有一张待审核补录单**。另记录两条数据可信度教训：**批次表 `goodsAva` 不能当当前库存**（30 行 21 行与库存明细不符，POLAND 整组差约 1000）、**备货单列表接口 `items` 只返回 3 条预览**（据此判断 SKU 成员关系必然误判，本轮连错两次）。
+- **更新**: `integration-issues/sellfox-cost-adjust-api.md` — 补「建单/审核会被拒的两条硬约束」（`货值不能为负数` 的公式与实测边界 178.045；`存在待审核的补录单` 与 `delete.json` 用法）与 2026-09-20 实测表；`integration-issues/sellfox-restock-headfee-api.md` — 新增「`searchType` 三个调用面三种约定」表（站点列表 `sku` / 批次表 `commoditySku` / 公开 OpenAPI 不含 SKU）+ 列表 3 行预览陷阱；`research/2026-09-18-sellfox-cost-accounting-fifo.md` — **更正 `goodsAva > 0` = 还在库 的说法**，并在「改成本工具结论」补下调封顶；`cost_adjust/AGENT_HANDOFF.md` — 关键坑新增 8/9/10/11 四条，未解决表补两行。
+- **词汇**: `CONCEPTS.md` 新增「剩余货值约束（货值不能为负数）」「激励价」「海外仓批次表 goodsAva」，并加一条 `searchType` 三面约定的 Flagged ambiguity。
+- **新增**: `workflow-issues/sellfox-inventory-sync-cost-drift.md` — 「用库存调整单把外部库存数量同步进赛狐」的长期代价。**先纠正一个易走偏的结论**：赛狐自己的三方仓模块就有「生成调整单」功能（i18n `main.warehouse.tripartite.warehouse.generate.adjustment.order`，权限 `MOD_OVERSEA_WAREHOUSE.CREATE_ADJUST`），**官方建模本就是生成调整单** → 用它同步数量**不是选错工具**，问题在成本侧。三点成因：①调整单明细零成本字段，但每建一张必产生新批次，成本 = **创建时该(仓库,SKU)加权均价快照**；②该快照**不可修正**（`+N/-N` 不互抵、已完成单不可删不可撤、调整单无成本字段故无入口）；③结果=可修正的备货单批次被 FIFO 逐渐吃掉、不可修正的快照不断堆积 → **越跑越难改均价且无回退路径**。给出三个选项（维持/A 改用其他入库单`perPurchase`必填/B 保持调整单但先修好成本）。
+- **更新**: `integration-issues/sellfox-adjust-order-write-chain.md` 的「结论：调整单不适合承载数量同步」→ 改为「用它做数量同步的代价（不是用错工具）」，与新文档口径一致；`cost_adjust/AGENT_HANDOFF.md` 未解决项同步（三方仓端点已探、本账号未开通功能）。
 
 - **修复（链接）**：本 bundle 失效相对链接（少退一级，`../../` → `../../../`）：`architecture-patterns/agent-dingtalk-file-bridge-via-erpnext.md`、`workflow-issues/en-channel-account-gsheet-sync.md`（5 条）、`workflow-issues/search-first-before-implementing.md`。
 
@@ -179,10 +198,6 @@ tags: [solutions, log]
 - **更新**: `integration-issues/sellfox-adjust-order-write-chain.md` — 补「调整单作为数量同步工具」的完整实测：**创建时不录成本**（item 零成本字段）；**新批次成本 = 该(仓库,SKU)当前加权平均成本快照**，不是来源单成本（实测 SKU 均价 4.3763 → 新批次 transportCost 4.3763，而其来源备货单是 4.08）——这解释了它们为何天然"不跟随"；**不可逆**：`+N/-N` 后扣减按 FIFO 吃最老批次、不冲新批次（实测备货单批次 139→138、新批次 1 件留下、单位费用 4.3763→4.3782 且清不掉）；**已完成单不可删除不可撤销**（删除报 `仅【待调整】、【待提交】状态的单据可删除`，详情页只有 `取消`=返回 与 `打印`，端点族无 antiAudit/revoke，唯一可写的是 `editRemark`）。另记站点内部路径 `/api/gw/sellfox/sellfox-warehouse/sellfox/api/warehouse/adjust/{pageList,detail,create,submit,confirmAdjust,approval,delete,editRemark}`（OpenAPI 的 `/api/ware/adjust/*` 在站点上 404）；结论：**调整单不适合承载数量同步**，替代是「其他入库单」（`perPurchase` 必填 + `shipFee/otherFee`）。
 - **新增**: `integration-issues/sellfox-adjust-order-write-chain.md` — 赛狐《调整单》写链路生产实测，结论与文档不符：`createV2` 的 `data` 恒为 `null` 不回传单号；无审批流账号下**建单即完成并扣库存**（`adjustStatus=3`、`processInstanceId=null`），`batchConfirmAdjust` 对已完成单报「非待调整状态无法进行该操作」，只适用停在待调整(2) 的单；`originId` 只能取自《查询库存明细》的 `id`（37 张历史单 524/524 条明细 `warehouseItemId` 全为 null，无法反推）；`sum` 恒为 0 是废字段，`newAvailable` 实为当前库存。实测 POLAND(279841) `test001-white` 2000 → 1997。
 - **新增**: `SELLFOX_API/sellfox_adjust_test.py` — 调整单链路可复跑脚本（默认 dry-run，`--apply` 才写；建单后按状态决定是否 confirm）。
-
-## 2026-09-10
-- **新增**: `tooling-decisions/deepseek-flash-price-cut-2026-09-10-openrouter-evaluation.md` — DeepSeek flash 系列 9/10 12:00 降价（空闲 ¥0.02/¥1/¥4，高峰 2 倍；pro 不变）+ 9/14 12:00 V4 Pro 下线路由到 V4.1 Flash；按账单**行单价反解**峰谷占比（flash 高峰 79.4%）与缓存命中占比（97.2%），实测 24 天 flash 家族 ¥620.82 → ¥358.07（-42.3%）；逐上游对比 OpenRouter（因缓存单价不占优，除 pin StreamLake 外均更贵或打平）→ **结论不迁移**；含 new-api `ChannelTypeOpenRouter=20`、OpenRouter 默认自动路由 vs new-api 多渠道回退、中国用户代理/支付/账单地址/封号/数据留存掣肘。
-- **更新**: `new-api-deployment/deepseek_time_pricing.py`（新价 + `PRO_EOL` + `--at` dry-run）、`sync_pricing.py`（同步新价）、`AGENT_HANDOFF.md`（第四节定价配置）— 已部署生产 `/opt/new-api/`。
 
 ## 2026-09-08
 - **新增**: `integration-issues/cliproxyapi-auth-unavailable-oauth-recovery.md` — CLIProxyAPI `503 auth_unavailable` 恢复：服务健康不等于目标模型具备上游授权；按升级、浏览器 OAuth、失效认证记录隔离、重启和真实模型请求验收处理。
@@ -208,6 +223,7 @@ tags: [solutions, log]
 ## 2026-08-28
 - **新增**: `integration-issues/nas-multi-domain-access-openwrt-quickconnect.md` — NAS 多域名（nas.daneey.com / nas.vilavi.cn）、OpenWrt ACME 第二张证、DSM 反代铁律、QC 直连/cn4、联通 443 限制；政策保留 `fangzhouhui.quickconnect.cn` 统一入口。
 - **新增**: `NAS_API/` OKF bundle、`AGENT_HANDOFF.md`、`.agents/skills/nas-access/`。
+
 ## 2026-08-25
 - **新增**: `workflow-issues/en-channel-account-gsheet-sync.md` — Google 表渠道账号 → 生产 EN Channel Account；人变才加行；Amazon 禁止 EUR、按 Johna 九国拆；Illiosenergy/`ILLIOSPL`。
 - **新增**: `channel_account_sync/` 折叠/命名库、fetch/compare/apply、OKF、Skill。
@@ -265,10 +281,6 @@ tags: [solutions, log]
 - **新增**: `workflow-issues/tongtool-sku-rename-gsheet-remap.md` — 通途主档 SKU 改名导致 1.7.0 漏匹配；本地 gspread 凭证 + 订单 Google Sheet 旧名替换 + goodsQuery 校验。
 - **新增**: `workflow-issues/index.md`
 - **更新**: `conventions/amazon-online-product-pairing-candidate-workflow.md` — 记录四家族试点的真实召回/排序指标、3,557 条分层对账、主动弃权和反馈溯源要求；明确模型未达生产门槛。
-- **更新**: `conventions/amazon-online-product-pairing-candidate-workflow.md` — 记录四家族试点的真实召回/排序指标、3,557 条分层对账、主动弃权和反馈溯源要求；明确模型未达生产门槛。
-- **新增**: `developer-experience/cursor-tongtool-mcp-registration.md` — Cursor 通途 MCP 不会从 clone/Marketplace/安装提示出现；`setup_cursor_mcp.py` 写用户级 mcp.json；同会话 goodsQuery 200。
-- **新增**: `workflow-issues/tongtool-sku-rename-gsheet-remap.md` — 通途主档 SKU 改名导致 1.7.0 漏匹配；本地 gspread 凭证 + 订单 Google Sheet 旧名替换 + goodsQuery 校验。
-- **新增**: `workflow-issues/index.md`
 
 ## 2026-08-13
 - **新增**: `developer-experience/windows-codex-powershell-utf8.md` — Windows Agent 的 `&&` ParserError、GBK/UTF-8 乱码与 PS 5.1 BOM 对照；`scripts/env_doctor.py` + `windows-agent-shell` skill；本机 PS 5.1 基线 vs pwsh 7.6.4 验证。
@@ -285,19 +297,3 @@ tags: [solutions, log]
 - **新增**: `conventions/erpnext-item-variant-creation-convention.md` — EN 物料/变体创建惯例（四层属性体系、9 类配套物料、API 创建链条、已知坑）
 - **新增**: `conventions/index.md` — conventions 分类索引
 - **背景**: 通途→EN→赛狐缺口分析中补建缺失物料 `KS0001-CMM-153-PURPLE`，逆向还原物料体系惯例；此前无文档记录此惯例
-
-## 2026-09-22
-- **新增**: `integration-issues/carrier-label-batch-field-length-limits.md` — Overstock/Wayfair 组合件（皮壳 `-Cover` + 海绵 `-Foam`）在仓库侧炸成多 SKU，而一个包裹只能贴一个面单 ⇒ 给承运商的批量导入 csv 必须**每包裹一行**、把多个 SKU 拼进同一个字段。这段拼接随 SKU 数变长，撞上承运商字段硬上限：**UPS Reference 1~5 各 35 字符、超了整批被拒**（`Invalid Package Reference Value`，第三方支持文章明写这是 carrier limitation）；**FedEx 批量模板 `Available headers` 里 `poNumber=String(30)`、`reference=String(30)`、`itemDescription=String(450)`、`harmonizedCode=String(35)`** —— 同一个拼接串在不同字段要用不同上限，不能一刀切。两者失败模式不同：UPS fail-loud（整批拒）、FedEx fail-silent（承运商侧按上限切，位置不受控）。方法上固化两条：**上限从官方模板自带的字段定义表读**（FedEx 那张表就在本地模板 xlsx，不用翻文档站）、**用"承运商已接受历史文件的最长值"交叉验证**（实测 UPS Reference 2 最长 30 / FedEx poNumber 最长 29，都贴着上限 ⇒ "一直没出问题"只是还没撞上多 SKU 订单）。关键认知：**这个风险是模板从「每包裹一行」改「每货品一行」新引入的** —— 旧模板下每包裹只有一个 SKU、合并是空操作（最长 32 字符），历史里找不到先例。
-- **新增**: `integration-issues/sku-name-backfill-via-en-customer-code.md` — 背贴 4×2" 标签的品名查名键 = 通途导出 `Reference 2` 的**原样字符串**（两侧 `strip().upper()` 后匹配），表是 `US SKU Name` sheet。某组合件的海绵 SKU 缺失 ⇒ 标签那一行品名空白。**通途SKU 在 EN 存于 `Item.customer_code`（逗号串）与 `customer_items[].ref_code`（子表），不在 `item_languages.tt_sku`** —— 后者只存 `-Cover` 形式的成品码，海绵件的 `item_languages` 干脆是空的。三个访问性坑（均实测）：`Item Language` **子表不能 list**（`403 PermissionError`，但可逐 Item 读带出）、`commodity_sku` **不能当过滤字段**（`Field not permitted in query`）、`Item.name` 是**物料编码**不是通途SKU（`name like %TT...%` 一律空）。PIM API `vilavi_pim.api.pim_api.get_sku_item_itemgroup_mapping` 能一把映射，**但必须先做假阳性测试**（丢 `TT9999999K9999999-Foam` / 随便一个串进去应返回 `not_found`）并横验同族自洽（100→100、153→153、160→160、183→183 全对）才敢用。**尺寸↔序号不成顺序**（153 是 `...4183`、160 却是 `...4182`）必须逐条读不能推。另记一条判断法：同一个件在**通途=直角 / EN PIM=方格 / 同包裹皮壳=菱形**时三者互斥、且 EN 里三种款式各有独立物料 ⇒ 该件是**跨款式中性件**，写中性名比咬着某个款式名安全。实战：8 个尺寸对账出「7 缺 1 有」，从 EN 借数补齐后复测缺名数 0。
-- **新增**: `developer-experience/colab-notebook-drive-api-editing.md` — 改同事 Colab notebook 代码的可复现做法：`.ipynb` 在 Drive 里就是 JSON 文件（无专门 API）。**读要 `alt=media`**（`/export?mimeType=` 对 Colab 文件 403 `Export only supports Docs editors files`）；**写用 multipart 并显式带 `mimeType: application/vnd.google.colaboratory`** 防类型被改；cell 定位用 `strip()` 匹配并**断言唯一命中**（commented-out 老代码与生效代码只差一个 `#`）；写完**必须重新下载逐段断言**「除目标格外其余 cell JSON 逐字相等」（本次 29→31 cells）；写前比 `modifiedTime` 做并发守卫（实测用户跑一次 cell、Colab 把**执行输出**存回文件就会动）；语法自检要把 `!cmd` 中和成 `pass  # !cmd` **且保留缩进**（丢缩进会得到假 `IndentationError`，实测白折腾一轮）；"先备份再改"落点是 notebook 自带的 `## 下面老代码，不用运行` 区块。**⚠️ 私钥风险**：业务 notebook 常把服务账号私钥塞在顶部依赖安装 cell 里 ⇒ 本地兜底备份必须放**仓库外**。
-- **新增**: `developer-experience/colab-shell-out-filename-spaces.md` — `!zip -q {zip} {" ".join(files)}` 在文件名**含空格**时必然失败：`!cmd` 把整行原样交给 shell，`Overstock-...-351 每货品一行_UPS_....csv` 被空格切成两个不存在的路径 ⇒ `zip error: Nothing to do!`（非零退出但**不抛异常**）⇒ 压缩包根本没生成 ⇒ 紧接着 `files.download()` 抛 `FileNotFoundError`。**报错点离根因很远**（崩在 download，因在 zip），容易误判成"下载坏了"。修法：换 Python `zipfile`（收字符串列表，没有 shell 这一层）。预防：notebook 里凡"把变量拼进 shell 命令"先问值可能含空格/引号/中文吗；业务同事保存导出时会顺手加中文后缀（`... 每包裹一行.xls`）正是本次来源。通用思路：**报错点离根因远时，先怀疑"上一步静默失败了"**。
-- **更新**: `CONCEPTS.md` 补「背贴」与「通途SKU 的后缀形态（`-Cover`/`-Foam`/裸基础码）」两条词条（此前文档里高频使用但从未定义）；`sellfox_shipping/AGENT_HANDOFF.md` 补字段上限与查名链两条坑；`google_drive_permissions/AGENT_HANDOFF.md` 把 `.ipynb→Drive files.get/update` 那一行展开成可操作要点并指向新文档。
-- **新增模块**: `colab_kit/`（+ skill `colab-kit`）—— 把「改同事 Colab notebook」这套动作从**每次现写 Drive 调用**固化成 CLI：网络命令 `meta`/`fetch`/`backup`/`guard`/`write`/`verify`，本地命令 `cells`/`dump`/`find`/`insert`/`backup-cell`/`sed`/`syntax`/`diff`。**触发动机**：本次会话的读/写/改/回读校验每一步都是临时手写的，而这类需求会反复出现（另一条线「PB 订单处理」已从 Colab 迁入仓库，Overstock 这条将来也可能迁）。实测：本地命令对真实 31 格 notebook 跑通（`find` 对同一锚点命中 **2 格** —— 生效代码 + 注释掉的老代码，正是 `sed` 默认拒绝多命中的理由）；网络命令只读手测 `meta`→`fetch`→`guard`（过期 `modifiedTime` 正确 exit 2）→`verify --expect-changed ""`；`uv run pytest colab_kit/tests -q` → 14 passed。
-- **新增模块**: `tongtool_order_shipping/`（+ skill `tongtool-order-shipping`）—— **module 归属修正**：上一批把「承运商字段上限」与「背贴品名补齐」两篇挂成 `module: sellfox_shipping`，那是错的（`sellfox_shipping` 是**赛狐侧**尾程打单）；这两篇讲的是**通途订单导出**的发货侧后处理，只是"都用 UPS/FedEx 面单"这点关系。两篇的 `module:` 已改为 `tongtool_order_shipping`。该模块**目前无代码** —— 流水线本体仍是同事的 Colab notebook，本目录承载硬约束与将来迁入的落点（先例 `pb_orders/`）。
-- **修复（既有漂移）**: `intent_router/tests/test_catalog.py::test_catalog_skill_set_equals_agents_md_table` 在本批之前**已经是红的**（已用 HEAD 版文件核实）：AGENTS.md 有 `sellfox-amazon-settlement` / `dingtalk-oa-approval` / `gsheet-monthly-order` 三行，而 `intent_router/catalog.yaml` 一个都没有 —— 即「加了 AGENTS.md 行却没补 catalog 条目」，正是该文件头部注释与 `ce-okf` 记录里警告过的同一类脱节（这次方向相反）。已补 3 条选项（含各自的 `coverage`/`exclusions`/`examples`，`dir` 均验证存在），本批后 `pytest intent_router/tests colab_kit/tests` → **274 passed, 33 skipped**（原先 1 failed）。同时给 `sellfox-shipping` / `tongtool-order-cost` / `google-drive-permissions` 三条的 `exclusions` 补上新兄弟模块，让路由真正分得开。
-- **新增**: `tooling-decisions/colab-kit-notebook-edit-toolbox.md` —— 为什么把「改同事的 Colab notebook」做成**独立模块 + skill**（`colab_kit/`）而不是塞进 `google_drive_permissions/`。三条取舍：网络/本地命令分开（改 cell 是纯 JSON，可离线单测）；`verify` 与 `guard` 是**一等公民**（手写时最容易省掉的正是这两步）；`sed` 默认拒绝多命中（实测同一锚点命中 2 格）。与 `google_drive_permissions` 的分界写成对照表：**权限 vs 内容**，失败模式从"权限判断错"变成"**写坏别人的活文档**"。另一条动因是会重复 —— `pb_orders/` 已迁过一条，Overstock 这条将来也可能迁。
-- **新增**: `developer-experience/gh-pr-edit-projects-classic-workaround.md` —— `gh pr edit <n> --title/--body-file` 在本机（gh 2.71.2）**exit 1 且改动不生效**，报 `GraphQL: Projects (classic) is being deprecated … (repository.pullRequest.projectCards)`：`gh pr edit` 走 GraphQL 且前置查询会取 `projectCards`，弃用后整条命令在发出修改前就中止。绕法 = **`gh api -X PATCH repos/<owner>/<repo>/pulls/<n> -f title=… -F body=@file`**（REST，不碰 `projectCards`），改完 `gh pr view` 回读。**真正的坑是信号不可信**：命令串里接了 `| tail` 时 `$?` 是 `tail` 的、永远 0，报错行也被淹没 —— 本次就是靠回读 PR 才发现标题没变。
-
-## 2026-11-05
-- **新增**: `integration-issues/github-ssh-intermittent-publickey-denied.md` —— EN 测试机 `git push` 报 `Permission denied (publickey)`，但密钥与 GitHub 账户登记**逐字节一致**、无私钥/公钥错配、无 deploy key 冲突、主机密钥真实；同一把钥匙 22/443 端口与亚洲/美国节点都**时通时不通**，本地 Windows 换另一把钥匙同样复现；HTTPS 路径 5/5 稳定 —— 判定为大陆出口到 GitHub SSH 的链路抖动，不是密钥故障。固化三步判定法（`ssh -T` 试 3 次，任一次 `Hi <user>!` 就别动 key）与一键 HTTPS 回退（`EN_API/git_push_https.sh`，推完 `trap` 自动切回 SSH）。
-- **背景**: 现场第一反应是"密钥丢了"，但换 key 只会白折腾；真正需要的是"先证明链路问题"的判定顺序。生产机没有存 PAT，HTTPS 回退目前只对测试机开箱可用。

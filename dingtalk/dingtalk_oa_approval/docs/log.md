@@ -6,6 +6,12 @@ title: dingtalk_oa_approval 变更日志
 
 # 变更日志
 
+## 2026-11-02（API 发起带附件的销售收款确认单）
+- **新增**: 本模块从「只读附件」扩展到**可以 API 发起**原生销售收款确认单。学习正文：`docs/solutions/integration-issues/dingtalk-oa-create-receipt-with-attachments.md`。
+- **权限**: 已有 `Workflow.Instance.Write` 只能读实例/拿审批钉盘 spaceId。带附件还要 `Storage.UploadInfo.Read` + `Storage.File.Write`，开完必须发布新版本。
+- **坑**: Python `urllib` PUT 会加 `Content-Type: application/x-www-form-urlencoded` → OSS `SignatureDoesNotMatch`；改 `requests` 且只带签名头。新通讯录按 userId 可能 404，旧 `topapi/v2/user/get` 仍能拿 unionId。
+- **铁律补**: 重交前确认上一张 `TERMINATED`；不要把月合计写成表单行。
+
 ## 2026-09-11（跨月剔除补上生成端 + 修键不对称 + NAS 账号出声）
 
 - **新增** `late_submission_keys.py`：读 Google 表「钉钉账期提交时间不对挪动记录」→ 按 `--period` 生成 `--exclude-keys` 文件。此前只有消费端（`filter_export_by_period.py`），从表里导出键这一步是手工的。

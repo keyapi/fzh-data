@@ -153,6 +153,8 @@ uv sync
 | `supply-chain-visibility` | `supply_chain_visibility/` | EN 供应链可视化：全链路实体地图 + 呈现形式调研 + SO 表单内嵌摘要 / 原生报表（`key_test` 产物） |
 | `nas-itemgroup-folders` | `nas_itemgroup_folders/` | NAS-ERPNext 物料组文件夹对账 + 叶子组 (LGKS) 管理 |
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
+| `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + **API 带附件发起** + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
+| `amazon-period-tax` | `amazon_period_tax/` | NAS 账期 txt → 附加费&Tax/Phase3 gsheet 本地管道（Colab 税账期 + 钉钉OA收款费用多平台） |
 | `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
 | `dingtalk-group-harvest` | `dingtalk/dingtalk_group_harvest/` | 钉钉 AI 项目群：DWS 个人身份增量采集群消息/附件/文档 + 周报（数据落仓库外） |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
@@ -264,16 +266,16 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 
 ### 经验库路由（`docs/solutions/`）
 
-**动手前先查这里有没有现成结论**——踩过的坑基本都在。131 篇按 category 分 8 类，每类一份 `index.md`：
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。139 篇按 category 分 8 类，每类一份 `index.md`：
 
 | 类别 | 篇数 | 什么时候读 |
 |------|-----|-----------|
-| `workflow-issues/` | 35 | 账期对账、迟交/错位、跨期结算、批处理流程 |
-| `integration-issues/` | 25 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
+| `workflow-issues/` | 37 | 账期对账、迟交/错位、跨期结算、批处理流程 |
+| `integration-issues/` | 29 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
 | `architecture-patterns/` | 21 | 「这个管道/系统为什么这样设计」 |
 | `tooling-decisions/` | 15 | 脚本、工具选型、产出校验 |
 | `developer-experience/` | 14 | Windows / worktree / MCP / Colab 等本机环境坑 |
-| `conventions/` | 10 | 团队约定（配对、命名、SOP） |
+| `conventions/` | 11 | 团队约定（配对、命名、SOP） |
 | `best-practices/` | 9 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
 | `documentation-gaps/` | 3 | 文档与断言的缺口 |
 

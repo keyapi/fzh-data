@@ -4,6 +4,7 @@ type: Handoff
 title: Pottery Barn (PB) 对账月度更新 — 子项目交接
 tags: [pb, potterybarn, reconciliation, remittance, invoice, ups, handoff]
 timestamp: 2026-08-14
+updated: 2026-11-02
 ---
 
 # Pottery Barn (PB) 对账月度更新
@@ -102,6 +103,7 @@ python merge_invoices.py --month 202608 --write     # 输出 <月份文件夹>/P
 - **交叉核对**：每天与 `invoice/*.txt` 文件名里的小计（人手写的当日合计）比对，打印 `txt ✔ / ✘`。
 - 已存在同名输出时**默认不覆盖**，改写 `_<时间戳>` 副本（`--force` 覆盖；`--out` 指定路径；
   `--base` 指向副本做回归验证）。
+- **钉钉销售收款确认单月包**（2026-11 起）：日文件夹须先归进 `YYYYMM/` 再 `--write`。表单只按结日一行（新平台 / PotteryBarnUS / USD），**不要**填月度总金额行。日 CSV 按升序附上后，**最后**再附本脚本产出的 `PB invoice 合并 YYYYMM.csv`。详见 [docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md](../docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md)。摘单后 CSV 丢表头的事故正文在 PR #297，不要在这里重写。
 
 ## 4e. 未付发票 UPS 批量核查（ups_track 模块）
 

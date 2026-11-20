@@ -22,6 +22,7 @@ resource: ../reconcile_pb.py
 8. 合并当月 invoice CSV 交财务（收款附件）：`python merge_invoices.py --month YYYYMM --dry-run` 核对
    逐日小计与 `invoice/*.txt` → `--write` 产出 `<月份文件夹>/PB invoice 合并 YYYYMM.csv`。
    金额口径 = 过滤 `Record Type`(X) = H 后累加 `Invoice Total`(CA)；H+D 一起算会重复。详见 §9。
+   钉钉销售收款确认单：表单只写各结日一行，**不要**加月合计行；附件按日 CSV 升序，**最后**挂这份合并文件。详见 `docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md`。
 
 ## 2. 表格列映射
 
@@ -127,6 +128,7 @@ python merge_invoices.py --month YYYYMM --write     # -> <月份文件夹>/PB in
 - 金额口径：只对 `Record Type` = H 的行累加 `Invoice Total`(CA)。H+D 都算会重复计数。
 - 硬校验：日文件夹有 `invoice/` 却没有 `invoice*.csv` 命中 → 报错退出（防文件名错拼被静默漏掉）。
 - 已存在同名输出默认不覆盖，改写 `_<时间戳>` 副本；`--force` / `--out` / `--base` 可覆盖行为。
+- **钉钉月包**：日文件夹还在 `PB orders/` 根下时先归进 `YYYYMM/`（脚本只扫月份目录）。表单不要月合计行；合并 CSV 只当审批单最后一份附件。惯例见 `docs/solutions/conventions/pb-dingtalk-receipt-monthly-package.md`。
 
 ## 10. 未付发票 UPS 批量核查（ups_track 模块）
 
