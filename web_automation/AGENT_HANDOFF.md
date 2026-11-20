@@ -37,6 +37,21 @@ Agent 参考（OKF 文档见 [docs/index.md](docs/index.md)；`click-based/AGENT
 | **`dingtalk.aflow.receipt.attachments`** | `legacy-compatible/dingtalk_aflow_receipt.py --mode attachments` | 按导出表补**离职发起人**附件（API `userNotExist` 那批） |
 | `web.generic.explore` | Playwright MCP | 新页面探路（snapshot+evaluate 后沉淀 Python） |
 
+> 钉钉**考勤**导出尚未脚本化、也不在 dispatcher 里；按下面「钉钉考勤导出（Ad-hoc）」手工/Playwright MCP 执行。
+
+## 钉钉考勤导出（Ad-hoc，未脚本化）
+
+- **入口**：`oa.dingtalk.com` → 工作台 → 考勤打卡 → **考勤统计 → 报表管理**（不是考勤打卡首页的「统计」）。
+- **权限决定可见报表**：子管理员「考勤打卡」细分权限没勾「查看、导出报表」时只能看到部分表；
+  考勤组**子负责人只能手机端**导出，部门主管只能导本部门及下级。
+- **人员范围按考勤组全选**：同一业务单位常拆成多个考勤组（不同班制/厂区/单休与生产）。
+  先到「考勤组管理」看各组人数，导出后按「考勤组」列统计，**行数必须等于各组人数之和**。
+- **时间**：电脑端单次最多一个月；标准版可导 180 天内历史。
+- **快照**：导出后审批通过的补卡/请假/加班不会回写；工资核算前如有未审批单据需重导。
+- **下载位置**：Playwright MCP 的下载落 **MCP server 的 `.playwright-mcp/`**（不是当前工作目录）；
+  本轮实测产物在 `%TEMP%\playwright-artifacts-*/<guid>`，需自行复制重命名。
+- **完整操作手册**：`docs/solutions/workflow-issues/dingtalk-attendance-export-runbook.md`。
+
 ## 钉钉 aflow 销售收款确认单导出（背景/过程/结果摘要）
 
 - **背景/为什么**：财务每期要从钉钉 aflow「OA审批管理后台」手工导出销售收款确认单单据为 Excel。

@@ -14,6 +14,7 @@ tags: [web-automation, tongtu, sellfox, playwright, index]
 - **浏览器启动统一出口** → [browser-launch](reference/browser-launch.md)
 - **订单详情统计月度导出** → [orderdetail-export](reference/orderdetail-export.md)
 - **钉钉 aflow 销售收款确认单导出** → [aflow-receipt-export](reference/aflow-receipt-export.md)
+- **钉钉考勤表导出（手工/Ad-hoc）** → [工作流问题：导出操作手册](../../docs/solutions/workflow-issues/dingtalk-attendance-export-runbook.md)
 - **安全与本地状态** → [security-and-local-state](reference/security-and-local-state.md)
 - **Phase B 退役门槛** → [phase-b-retirement-gates](reference/phase-b-retirement-gates.md)
 - **架构选型** → [technical-decisions](reference/technical-decisions.md)

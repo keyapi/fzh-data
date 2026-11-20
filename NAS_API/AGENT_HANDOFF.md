@@ -69,6 +69,23 @@
 - 光猫 WiFi（无劫持）：预期走 cn4（用户接受）
 - **深圳：** `fzh.myds.me` 解析仍可能失败（园区 DNS）；QC 跳 myds 后打不开——**未解决**；可用 `nas.daneey.com:11024` 或 `nas.vilavi.cn:11024`
 
+## 邮件域名与发信认证（SPF/DKIM/DMARC）
+
+域名资产分三层，改记录前先分清：**注册商 / 权威 DNS / 邮件服务商**。
+
+| 域名 | 注册商 | 权威 DNS | 用途 |
+|------|--------|----------|------|
+| `vilavidress.com` | 阿里云（hichina） | DNSPod（`a.dnspod.com`、`b.dnspod.com`、`c.dnspod.com`） | 腾讯企业邮发信 |
+| `vilavi.cn` | 未核实 | Cloudflare（`alex.ns.cloudflare.com`、`grace.ns.cloudflare.com`） | 主域 + NAS 入口 + 腾讯企业邮 |
+
+铁律：
+
+1. **续费 ≠ 恢复**：过期后注册局 NS 会切到 `EXPIREN*.HICHINA.COM` 停放组；续费后必须回查 Verisign RDAP 的 `nameservers`，并直接问权威 NS 确认记录在服务（别只看控制台绿标）。
+2. **DKIM selector 从腾讯企业邮后台「查看配置」读**：是自定义随机串（如 `sjnr2306`、`evhe2306`）；用 `dkim`/`s1` 等常见名探测全 NXDOMAIN，不能证明“没有 DKIM”。
+3. 发信四件套：根 TXT(SPF) / MX（优先级 5 与 10）/ `<selector>._domainkey` / `_dmarc`。
+
+完整排查与恢复步骤：[docs/solutions/integration-issues/email-domain-expiry-gmail-550-5-7-26.md](../docs/solutions/integration-issues/email-domain-expiry-gmail-550-5-7-26.md)
+
 ## 未决 / 搁置
 
 - [ ] 深圳 `fzh.myds.me` 解析/访问

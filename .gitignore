@@ -34,6 +34,13 @@ venv/
 secrets/*.json
 dingtalk/dingtalk_oa_approval/data/
 dingtalk/dingtalk_oa_approval/person_folders.local.json
+# 钉钉群采集：原始聊天/文件/本地配置一律不入库
+dingtalk/dingtalk_group_harvest/config/groups.local.json
+dingtalk/dingtalk_group_harvest/data/
+dingtalk/dingtalk_group_harvest/.spike/
+# 定时任务注册脚本按机器生成的包装
+dingtalk/dingtalk_group_harvest/scripts/run_harvest_*.cmd
+dingtalk_harvest/
 secrets/*.md
 *.cookie.txt
 cookie.txt

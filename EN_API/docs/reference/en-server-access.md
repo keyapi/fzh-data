@@ -69,7 +69,23 @@ cd /home/frappe/frappe-bench && sudo -u frappe bench restart
 
 3. **OPS 很长时必须走 POST body**：放 query string 会被 nginx 414。
 
+4. **`git push` 报 `Permission denied (publickey)` 先别换 key**
+   大陆出口到 GitHub SSH 会间歇性拒认证：密钥是好的、主机密钥是真的，就是时通时不通。
+   判定：`ssh -T git@github.com` 连试 3 次，**任意一次**返回 `Hi <user>!` 就说明密钥没问题。
+   先重试 `git push`；仍不行就走 HTTPS 回退（推完自动切回 SSH）：
+
+   ```bash
+   ~/git-push-https.sh ~/frappe-bench/apps/key_test
+   ```
+
+   背景与完整证据见
+   [`github-ssh-intermittent-publickey-denied.md`](../../../docs/solutions/integration-issues/github-ssh-intermittent-publickey-denied.md)
+   （仓库版脚本：`EN_API/git_push_https.sh`）。**生产机没有存 token**，HTTPS 回退目前只对测试机可用。
+
 ## 相关
+
+- [`../../../docs/solutions/integration-issues/github-ssh-intermittent-publickey-denied.md`](../../../docs/solutions/integration-issues/github-ssh-intermittent-publickey-denied.md)
+  — `git push` 报 publickey 被拒：三步判定法 + HTTPS 回退脚本
 
 - [`../AGENT_HANDOFF.md`](../AGENT_HANDOFF.md) — EN_API 模块入口
 - [`../../../docs/solutions/documentation-gaps/agent-system-access-documentation-gap.md`](../../../docs/solutions/documentation-gaps/agent-system-access-documentation-gap.md)

@@ -11,6 +11,9 @@ tags: [workflow-issues, index]
 |------|------|
 | [amazon-period-tax-rerun-without-agent.md](amazon-period-tax-rerun-without-agent.md) | 自己重跑 Tax：只改桶名和汇率列；脚本不补 txt；别名读本地 JSON 快照 |
 | [amazon-period-colab-export-keep-approval.md](amazon-period-colab-export-keep-approval.md) | 核算定稿须 `keep_approval` + 可选迟交 `--exclude-keys`；旧定稿易多行 |
+| [dingtalk-attendance-export-runbook.md](dingtalk-attendance-export-runbook.md) | 钉钉管理后台考勤导出：入口、权限、考勤组范围、单月限制、下载与核对 |
+| [tongtu-split-merge-writeback-cost-rules.md](tongtu-split-merge-writeback-cost-rules.md) | 拆单合并成本写回五类错误：组行匹配、件数翻倍、产品族（PP棉/海绵）、订单号截断、审计口径；8/9 月 0/0 失败 |
+| [tongtool-special-rule-ref-priority-and-bom-caliber.md](tongtool-special-rule-ref-priority-and-bom-caliber.md) | 换表后参考值优先；FBA 二次/绍兴换列；旧 9/3 BOM 参考值遇到新 BOM 会把扣减翻成增加 |
 | [supply-sku-segmentation-and-stockout-evidence.md](supply-sku-segmentation-and-stockout-evidence.md) | 供应分型先排费用/组件，再按成品/半成品/皮壳分型；PJ 检查点不是每周；Jeck 表是成本表不是促销 |
 | [key-test-login-hook-and-prod-test-divergence.md](key-test-login-hook-and-prod-test-divergence.md) | key_test 每次登录写元数据（~0.75–1.05s）+ 猴补丁核心报表；生产 `production-backup` 与测试 `main` 割裂 |
 | [mcp-to-chatgpt-bringup-lessons.md](mcp-to-chatgpt-bringup-lessons.md) | 把 FAC / 赛狐 / NAS 三个 MCP 接上 ChatGPT 的方法与四个教训 |
@@ -42,3 +45,4 @@ tags: [workflow-issues, index]
 | [cargo-location-tracking-source-reliability.md](cargo-location-tracking-source-reliability.md) | 「货物到哪了」查询方法：四个数据源可靠性分级 |
 | [amazon-account-period-late-submission-audit.md](amazon-account-period-late-submission-audit.md) | Amazon&新平台账期「提交异常/迟交」审计方法与规则 |
 | [workflow-copy-prod-to-test.md](workflow-copy-prod-to-test.md) | 从生产系统复制 Purchase Receipt 工作流 V3 到测试系统 |
+| [tongtu-order-universe-invalid-split-fba.md](tongtu-order-universe-invalid-split-fba.md) | 通途订单全集：作废原单、拆分子单、原始表与 FBA 销量表的口径陷阱 |

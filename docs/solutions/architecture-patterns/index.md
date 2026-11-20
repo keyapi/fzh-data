@@ -10,6 +10,7 @@ timestamp: 2026-07-28
 
 | 标题 | 文件 |
 |------|------|
+| EN 直接采购件用「自套 BOM」出成本的惯例 + 骨架缺口 | [en-direct-purchase-self-bom.md](en-direct-purchase-self-bom.md) |
 | EN 端到端供应链履约可视化蓝图 | [en-end-to-end-supply-chain-fulfillment-visibility.md](en-end-to-end-supply-chain-fulfillment-visibility.md) |
 | 公开代码仓与私有公司知识分层——兼顾 Agent 检索、同事使用与防泄露 | [public-private-agent-knowledge-split.md](public-private-agent-knowledge-split.md) |
 | 办公室出口拓扑与应急链路（OpenClash ↔ 上海跳板 ↔ 美国 Vultr） | [office-egress-fallback-chain.md](office-egress-fallback-chain.md) |
@@ -28,3 +29,5 @@ timestamp: 2026-07-28
 | 账期/收款核算 生态地图（各平台账期 → 汇率/税/附加费 → 回款归属/回款率 → 归集给财务） | [account-period-revenue-reconciliation-ecosystem.md](account-period-revenue-reconciliation-ecosystem.md) |
 | ERPNext 工作流配置完整指南 | [erpnext-workflow-configuration.md](erpnext-workflow-configuration.md) |
 | SKU 背贴 PDF 生成与通用名称查询模式 | [sku-label-pdf-generation-and-name-lookup.md](sku-label-pdf-generation-and-name-lookup.md) |
+| 美中 USTX 成本三方案离线对比（口径不对称 / 差异即结论 / 歧义键 fail-closed） | [ustx-cost-caliber-comparison.md](ustx-cost-caliber-comparison.md) |
+| 通途订单成本引擎：Colab 迁移本地包的四列口径与合并/BOM 架构 | [tongtu-cost-engine-local-migration.md](tongtu-cost-engine-local-migration.md) |

@@ -3,7 +3,8 @@ name: nas-access
 description: |
   群晖 NAS 多域名访问、QuickConnect 直连/中继、OpenWrt DNS 劫持、DSM 第二张证书与反代。
   触发词：NAS、群晖、QuickConnect、myds.me、daneey、vilavi.cn、mxdeals、
-  fangzhouhui、cn4、11024、DSM 证书、反代、OpenWrt 劫持、深圳 NAS。
+  fangzhouhui、cn4、11024、DSM 证书、反代、OpenWrt 劫持、深圳 NAS、
+  邮件认证、SPF/DKIM/DMARC、退信、域名过期、DNSPod 解析。
 ---
 
 # NAS 多域名访问
@@ -13,12 +14,14 @@ description: |
 - 用户问 NAS / 群晖 / QuickConnect / DSM 外网访问
 - 证书警告、`fzh.myds.me`、自定义域名、`cn4` 中继
 - OpenWrt 劫持、ACME、Cloudflare/阿里云 DDNS
+- 邮件被 Gmail 拒收（550-5.7.26）、SPF/DKIM/DMARC、域名过期/续费后解析不生效
 
 ## 必读
 
 1. [NAS_API/AGENT_HANDOFF.md](../../../NAS_API/AGENT_HANDOFF.md) — 速查表与铁律
 2. [NAS_API/docs/reference/nas-multi-domain-access.md](../../../NAS_API/docs/reference/nas-multi-domain-access.md) — 完整参考
 3. [docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md](../../../docs/solutions/integration-issues/nas-multi-domain-access-openwrt-quickconnect.md) — 问题/解法记录
+4. [docs/solutions/integration-issues/email-domain-expiry-gmail-550-5-7-26.md](../../../docs/solutions/integration-issues/email-domain-expiry-gmail-550-5-7-26.md) — 邮件域名认证/退信排查（续费≠恢复、registrar≠DNS 托管）
 
 ## 铁律（30 秒）
 
