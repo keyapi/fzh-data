@@ -177,6 +177,7 @@ uv sync
 | `nas-product-visuals` | `nas_product_visuals/` | 群晖 NAS 产品目录扫描 + ACL 权限实时修复脚本集 |
 | `pb-orders` | `pb_orders/` | Pottery Barn 出件：SPS 库存预检（明细级）→ 通途导入 xlsx + 标签/背贴 PDF；CLI + 网页版 |
 | `pb-reconciliation` | `pb_reconciliation/` | Pottery Barn 对账月度更新 + TM 佣金结算表 |
+| `camping-world` | `camping_world/` | Camping World 入驻：评估表/回信草稿/主体对照/选品定价/订单 SOP（订单代码待 SPS 规格） |
 | `sellfox-api-proxy` | `sellfox-api-proxy/` | 赛狐 API 代理网关（破 IP 白名单 + 凭证安全分发） |
 | `sps-api` | `sps_api/` | SPS Commerce API 可行性探测（EDI / ASN / 发票 / 库存） |
 | `ups-track` | `ups_track/` | UPS 官方 Track API 批量查询（当前状态 + 完整节点时间线） |
