@@ -69,7 +69,7 @@ tags: [data-gates, pandas-merge, account-period, data-quality, finance]
 3. **每个 join 独立核账**：`validate`/`indicator`、前后行数、各来源金额守恒；`groupby` 用 `dropna=False`。
 4. **同层控制数**：明细对明细、账号对账号；不要拿“明细备份”对“账号调整后”。逐账号舍入 0.02–0.05 属展示尾差，财务目前不要求说明，但控制数不能混层。
 5. **写前校验**：三张 writer 在 `clear` 前先跑 `validate_account_period.py`；FAIL/异常不写。附件链路先跑独立 `validate_ingest.py`（manifest：hash/期间/V1V2/100 倍）。
-6. **manifest 绑定**：月份、模式、源/规则/待写 payload hash、目标表 ID、校验版本；跨进程短效 token 不能替代源变更检查。
+6. **manifest 绑定**：月份、模式、源/规则/待写 payload hash、目标表 ID、校验版本；跨进程短效 token 不能替代源变更检查。已落地最小版 `snapshot_guard.py`：validate 时记录 5 个源表 `modifiedTime` + 待写 payload sha256，writer 在 `clear` 前 verify；源或 payload 变化即中止重跑。校验到写入之间仍有竞态，需所有写入方串行/协作锁。
 
 ### 5. 实测基线（2026-11-20）
 
