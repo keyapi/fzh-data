@@ -11,29 +11,51 @@ timestamp: 2026-11-20
 > 适用：给美国零售商（PB/CW）及其中间人（Tracy）的首次与常态沟通。
 > 目标：显得专业、有经验、好合作；不越位、不预设、不亮强立场。
 
-## 1. 六条核心原则
+## 1. 七条核心原则
 
-1. **先问，后述。** 先问对方有哪些方式/流程，再说明我们现状。顺序反了会像在推销方案。
-2. **不亮强偏好。** 用 "we are happy to follow CW's recommended process"，
-   不用 "we strongly prefer" / "we will only"。
-3. **事实陈述，不做推断。** "We currently use SPS for PB" 是事实；
+1. **对等（peer-to-peer）。** 双方是商业伙伴，不是上下级。说清我们能做什么、现状是什么，
+   再问对方的选择；不要写成"您让我们怎么做我们就怎么做"。
+2. **高温暖 + 高直接。** 礼貌不等于退让。该问的直接问，该说的直接说，用 please/thanks
+   维持温度，但不要用弱化词把请求埋掉。
+3. **先问，后述。** 先问对方有哪些方式/流程，再说明我们现状。顺序反了会像在推销方案。
+4. **陈述句优先。** "We already handle labels through SPS for PB" 是陈述；
+   "We would be happy to do whatever you prefer" 是低位表达，不写。
+5. **事实陈述，不做推断。** "We currently use SPS for PB" 是事实；
    "SPS should work for CW too" 是推断，不能写。
-4. **请求式措辞。** Could you / Would it be possible / We'd appreciate your guidance，
-   少用 Please confirm（命令感）。
-5. **短、分点、可转发。** 对方常把邮件转给品类经理；编号问题方便逐条回。
-6. **不承诺未确认的事。** 主体、费用、时间表都可以说"待确认后回复"，不要先答应。
+6. **短、分点、可转发。** 对方常把邮件转给品类经理；编号问题方便逐条回。
+7. **不确定语气会怎么落地的句子，直接不写。** 宁可少一句，也不要写一句让自己显得没底气的话。
 
 ## 2. 措辞对照
 
+### 2.1 强立场 → 中性提问
+
 | 不要写 | 改写成 |
 |---|---|
-| We strongly prefer to keep label generation inside SPS. | Could you let us know what options CW supports for label generation? We currently handle this through SPS for PB and are happy to follow CW's recommended process. |
-| We will only use a separate FedEx workflow if SPS cannot support it. | If a different process is preferred, we're glad to follow it. |
+| We strongly prefer to keep label generation inside SPS. | Could you let us know which options CW supports for label generation? |
+| We will only use a separate FedEx workflow if SPS cannot support it. | If a different process is preferred, we can set that up. |
+| You must tell us… | Could you confirm… |
+
+### 2.2 低位/谄媚 → 对等
+
+| 不要写 | 改写成 |
+|---|---|
+| We are happy to follow whichever process CW recommends. | Could you let us know which options CW supports? We already handle this through SPS for PB, so that route would be straightforward on our side. |
+| We would be grateful for any guidance you can provide. | Could CW advise on the vendor number and UPC/GS1 requirements? |
+| I hope that's OK. | （删掉） |
+| Sorry to bother you. | （删掉，或 "Thank you for your time."） |
+| I just wanted to check… | I'm following up on… |
+| Would it be possible to…（连用） | Could you… |
+| Thank you so much for doing your job. | （删掉） |
+| Please let us know if a short call would be helpful. | A short call may be the quickest way to close these points; we're available this week if useful. |
+
+### 2.3 其他常见替换
+
+| 不要写 | 改写成 |
+|---|---|
 | Please confirm the retail price band. | Could you share the retail price band CW expects for this assortment? |
 | We need the vendor number and UPC guidance. | Could CW advise on the vendor number and UPC/GS1 requirements? |
 | We cannot complete the form until… | We can complete most of the form now and will add the remaining items once [X] is confirmed. |
-| You must tell us… | We'd appreciate your help confirming… |
-| ASAP / urgent | at your earliest convenience / by [date] if possible |
+| ASAP / urgent | by [date] if possible |
 | I think / I guess | We understand / Based on the documents |
 | We have a problem with… | One point we'd like to clarify… |
 
@@ -74,3 +96,8 @@ timestamp: 2026-11-20
 - https://www.grammarly.com/blog/emailing/business-email-etiquette
 - https://www.indeed.com/career-advice/career-development/email-etiquette
 - https://quickconfirm.com/Business-Email-Etiquette-The-Complete-Guide.cfm
+- https://aiemaily.com/blog/email-tone（warmth × directness 两轴）
+- https://www.netsuite.com/portal/resource/articles/business-strategy/passive-phrases.shtml
+  （低位/被动措辞清单）
+- https://www.pynhq.com/blog/leave-these-6-email-phrases-behind
+- https://www.typedesk.com/blog/professional-email-tone-examples（assertive but respectful）

@@ -8,6 +8,14 @@ tags: [campingworld, cw, changelog]
 
 # 变更日志
 
+## 2026-11-20（第四轮：对等语气）
+
+- 删除 "we are happy to follow whichever process CW recommends" 这类低位表达；
+  改为"问 CW 支持哪些方式 + 陈述 SPS 现状"的对等写法。
+- 风格指南新增「对等原则」与「低位/谄媚 → 对等」措辞对照；
+  新增规则：**不确定语气如何落地的句子，直接不写**。
+- 回信仍暂不发送。
+
 ## 2026-11-20（第三轮：回信语气与措辞）
 
 - **重写回信**：按"先问对方有哪些方式，再说明我们现状"的结构；删除 "We strongly prefer" /
