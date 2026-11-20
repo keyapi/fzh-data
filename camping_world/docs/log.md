@@ -8,6 +8,17 @@ tags: [campingworld, cw, changelog]
 
 # 变更日志
 
+## 2026-11-20（第二轮：口径调整）
+
+- **SPS 优先**：标签链路改为 SPS Fulfillment 首选，FedEx 后台/API 仅作兜底；
+  YTQ 的 Wayfair/Overstock 路径标注为"最后手段"。
+- **新增** `reference/cw-pitfalls-and-lessons.md`：PB 已验证经验 + 行业调研（EDI chargeback、
+  ASN/SSCC、UPC/GS1、HTS/Prop 65、保险措辞、入驻节奏），全部带来源链接。
+- **新增** `reference/cw-open-questions.md`：A–F 六组待 CW 书面确认的问题；
+  明确"调研能确认但 CW 没说清，也必须对方确认"的原则。
+- **主体**：决策方式改为"先问老板 + 参考 Tracy 意见"，未定前不锁死公司名。
+- **回信**：标记为**暂不发送**。
+
 ## 2026-11-20
 
 - **新建模块**：`camping_world/`，承接 Tracy 2026-11-19 转发的 CW 入驻包。

@@ -9,7 +9,7 @@ timestamp: 2026-11-20
 # 回复 Tracy 草稿
 
 > **发送前必须人工确认**：签约主体、是否授权由 Key 直接回复、是否需要抄送 Sheng HY。
-> 不要由脚本直接发送。
+> **当前状态：暂不发送（用户 2026-11-20 指示）**。等主体与关键问题内部对齐后再发。
 
 **To**: tracy@inventivesleep.com
 **Cc**: waiter.shenghy@gmail.com（可选）
@@ -30,9 +30,9 @@ Compliance Guide and the EDI Overview, and here is where we stand.
    - the 850 / 855 / 860 / 856 / 810 / 846 specifications for CW;
    - whether adding CW changes our monthly SPS fee;
    - **whether SPS Fulfillment can generate the FedEx labels and bill them 3rd-party to
-     CW's FedEx account.** If it can, our process stays very close to what we do for PB.
-     If it cannot, we will use FedEx Ship Manager with CW's accounts — we already use this
-     approach for other marketplaces, so it is workable, just more manual.
+     CW's FedEx account.** We would strongly prefer to keep label generation inside SPS,
+     as we do today for PB; we would only set up a separate FedEx workflow if SPS cannot
+     support it.
 
 2. **Forms.** We can complete the Vendor Information Form, the ACH Authorization and the
    Item Set-Up Sheet, and provide W-9 and COI once the contracting entity is confirmed.

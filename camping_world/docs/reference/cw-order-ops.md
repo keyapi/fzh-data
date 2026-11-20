@@ -38,13 +38,16 @@ timestamp: 2026-11-20
 - 住宅 → **FedEx Home Delivery**；商业 → **FedEx Ground**。
 - **禁止 UPS**。
 
-### 3.2 标签链路（三选一，按 SPS 确认结果）
+### 3.2 标签链路（**SPS 优先**）
 
-| 方案 | 操作 | 适用 |
+| 方案 | 操作 | 使用条件 |
 |---|---|---|
-| A. SPS Fulfillment | 在 SPS 里建单、比价、出 FedEx 标签、回填 tracking | 与 PB 最接近，优先确认 |
-| B. FedEx Ship Manager 网页 | 手工建单，3rd Party Bill To CW 账号，reference 填 CW PO# | YTQ 做 Wayfair/Overstock 的现成路径 |
-| C. FedEx Ship API | 脚本建单 | 量大后再上；需生产 shipper 权限 |
+| **A. SPS Fulfillment（首选）** | 在 SPS 里建单、比价、出 FedEx 标签、回填 tracking、3rd Party Bill To CW 账号 | **默认方案**。与 PB 最接近，维护成本最低 |
+| B. FedEx Ship Manager 网页 | 手工建单，3rd Party Bill To，reference 填 CW PO# | **只在 SPS 确认不能出标签时使用**；YTQ 做 Wayfair/Overstock 的现成路径 |
+| C. FedEx Ship API | 脚本建单 | 方案 B 的量大升级版；需生产 shipper 权限 |
+
+> 原则：**能用 SPS 就尽量走 SPS。** 外部 FedEx 后台/API 操作步骤多、易错、难审计，
+> 只作为 SPS 不可行时的兜底，不作为默认设计。
 
 ### 3.3 FedEx 必填字段（逐箱检查）
 
@@ -81,17 +84,18 @@ timestamp: 2026-11-20
 - 若 CW 要求退回残次品，按 Vendor Information Form 的 Return Goods 段执行。
 - 记录退货原因，月度复核是否超过 1% 计提。
 
-## 7. 内部先例（YTQ）
+## 7. 内部先例（YTQ）— 仅作兜底
 
 YTQ 做 Wayfair/Overstock 的路径：
 `平台后台导 CSV → 通途处理 → 导出 → Colab 脚本处理 → FedEx/UPS 后台上传（第三方账号）`。
 
-CW 若不能走 SPS 出标签，直接复用这条路径，只需把承运商换成 FedEx、账号换成 CW 的
-third-party 账号、reference 换成 CW PO#。
+这条路径可用，但**步骤多、人工上传、易错**。CW 的默认设计仍是 SPS；只有 SPS 确认不能出
+标签时，才复用 YTQ 这条，并把承运商换成 FedEx、账号换成 CW 的 third-party 账号、
+reference 换成 CW PO#。
 
 ## 8. 上线前必须确认
 
-1. SPS 能否出 FedEx 标签（方案 A）。
+1. SPS 能否出 FedEx 标签（**默认必须走 SPS；确认不可行后才启用 FedEx 后台**）。
 2. 两个住宅 FedEx 账号分别对应什么场景。
 3. Branded packing slip 与 GS1-128 模板的审批人。
 4. 我方 FedEx 发件账号（Track 的 sandbox key 不能用于 Ship）。

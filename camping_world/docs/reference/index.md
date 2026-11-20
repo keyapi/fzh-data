@@ -12,8 +12,10 @@ tags: [campingworld, reference, index]
 | [cw-reply-draft.md](cw-reply-draft.md) | 回复 Tracy 的英文邮件草稿 |
 | [cw-entity-dossier.md](cw-entity-dossier.md) | Centrade Inc / Daneey LLC 主体对照与方案代价 |
 | [cw-assortment-pricing.md](cw-assortment-pricing.md) | 市场锚点、报价表、成本模型、首批 SKU、试价 |
-| [cw-order-ops.md](cw-order-ops.md) | 订单 SOP：855/846/856/810、FedEx 选路、标签方案 |
+| [cw-order-ops.md](cw-order-ops.md) | 订单 SOP：855/846/856/810、FedEx 选路、**SPS 优先**的标签链路 |
 | [cw-forms-and-docs.md](cw-forms-and-docs.md) | COI / W-9 / ACH 要求与提交顺序 |
+| [cw-pitfalls-and-lessons.md](cw-pitfalls-and-lessons.md) | 美国商超入驻经验与坑（PB 已验证 + 行业调研，带来源） |
+| [cw-open-questions.md](cw-open-questions.md) | 需要 CW 书面确认的问题清单（含"我们调研能确认但 CW 没说清"的） |
 
 ## 外部资源
 

@@ -37,6 +37,9 @@ timestamp: 2026-11-20
 
 ## 3. 三种方案与代价
 
+> **决策方式（2026-11-20 用户指示）**：主体先问老板；同时参考 Tracy 的意见（她熟悉 CW 的
+> vendor 口径）。在老板与 Tracy 反馈前，**不在任何表格上锁死公司名**。
+
 ### A. Centrade Inc 签约 + Daneey 仓发货（推荐先走这条）
 - 优点：W-9、ACH、EIN 都是现成的；与 PB 主体一致。
 - 风险：CW 可能要求 Ship From 与 Vendor Name 一致，或要求把 Daneey 仓库登记为额外发货点；

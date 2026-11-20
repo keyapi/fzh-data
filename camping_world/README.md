@@ -29,8 +29,10 @@ timestamp: 2026-11-20
 - [回复 Tracy 邮件草稿](docs/reference/cw-reply-draft.md)
 - [主体资料对照](docs/reference/cw-entity-dossier.md)
 - [选品与定价](docs/reference/cw-assortment-pricing.md)
-- [订单操作 SOP](docs/reference/cw-order-ops.md)
+- [订单操作 SOP](docs/reference/cw-order-ops.md)（SPS 优先）
 - [COI / W-9 / ACH 资料清单](docs/reference/cw-forms-and-docs.md)
+- [美国商超入驻经验与坑](docs/reference/cw-pitfalls-and-lessons.md)
+- [待 CW 书面确认的问题](docs/reference/cw-open-questions.md)
 
 ## 脚本
 

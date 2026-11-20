@@ -21,6 +21,8 @@ tags: [campingworld, cw, onboarding, index]
 | 选品、报价、毛利 | [reference/cw-assortment-pricing.md](reference/cw-assortment-pricing.md) |
 | 订单怎么处理（EDI/标签） | [reference/cw-order-ops.md](reference/cw-order-ops.md) |
 | W-9 / ACH / COI 要什么 | [reference/cw-forms-and-docs.md](reference/cw-forms-and-docs.md) |
+| 美国商超入驻的经验与坑 | [reference/cw-pitfalls-and-lessons.md](reference/cw-pitfalls-and-lessons.md) |
+| 还要向 CW 确认什么 | [reference/cw-open-questions.md](reference/cw-open-questions.md) |
 
 ## 目录结构
 
