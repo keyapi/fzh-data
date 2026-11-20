@@ -957,6 +957,8 @@ def build_fba_shadow(
             if r.get("bridge_reason") == "gs_only_bom_fallback"), 6),
         "cost_identity_violations": cost_identity_violations,
         "direct_purchase_zero_rows": direct_purchase_zero_rows,
+        "unknown_country_rows": sum(1 for r in gs_rows if not r["country"]),
+        "unknown_en_country_rows": sum(1 for r in en_rows if not r["country"]),
         "whitelist_rows": len(whitelist_rows),
         "whitelist_skus": len({w["sku"] for w in whitelist_rows}),
         "whitelist_qty": round(sum(float(w["qty"] or 0.0) for w in whitelist_rows), 6),

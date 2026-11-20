@@ -111,6 +111,23 @@ def run(month: str, label: str, apply: bool, book: str | None = None,
             _so = (_m.get("stats") or {}).get("special_orders") or {}
             if not _so.get("file"):
                 raise SystemExit("BUILD GATE FAIL: 特殊订单清单缺失，禁止写回")
+            _inputs = (_m.get("stats") or {}).get("inputs") or {}
+            _flags = Path(_inputs.get("flags") or "")
+            if _flags and not _flags.exists():
+                raise SystemExit(f"BUILD GATE FAIL: order_flags 缺失 {_flags}，禁止写回")
+            _hashes = _m.get("inputs_sha256") or {}
+            for _name, _p in _inputs.items():
+                _want = _hashes.get(_name)
+                if not _want:
+                    continue
+                _pp = Path(_p)
+                if not _pp.is_absolute():
+                    _pp = ROOT / _pp
+                if _pp.exists():
+                    _h = hashlib.sha256(_pp.read_bytes()).hexdigest()
+                    if _h != _want:
+                        raise SystemExit(
+                            f"BUILD GATE FAIL: 输入 {_name} 与构建时哈希不一致（{_pp}）")
         # 待写 CSV 必须与 manifest 记录的产物哈希一致；--local 派生表除外
         if apply and not local_override:
             _hashes = _m.get("outputs_sha256") or {}

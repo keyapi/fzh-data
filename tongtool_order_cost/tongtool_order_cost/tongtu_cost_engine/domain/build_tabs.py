@@ -985,6 +985,11 @@ def _cost_gates(self_stats: Mapping, fba_stats: Mapping) -> list[dict]:
              f"cost_status≠ok {fba_blocked} 行；shadow 缺失 {fba_missing} 组"),
         gate("FBA shadow 已校验", fba_missing == 0,
              f"缺失/阻断组 {fba_missing}"),
+        gate("FBA 国家识别=0",
+             int(fba_stats.get("unknown_country_rows", 0) or 0) == 0
+             and int(fba_stats.get("unknown_en_country_rows", 0) or 0) == 0,
+             f"GS 未知站点 {fba_stats.get('unknown_country_rows', 0)} 行；"
+             f"EN 未知 FBA 仓 {fba_stats.get('unknown_en_country_rows', 0)} 行"),
     ]
 
 

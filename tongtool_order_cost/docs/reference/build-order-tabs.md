@@ -147,13 +147,14 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 
 构建和写回都不允许静默继续：
 
-- **构建**：`self/FBA 成本阻断=0`、`FBA shadow 已校验`、`汇率缺失=0`、`发货仓库映射完整=0`、
+- **构建**：`self/FBA 成本阻断=0`、`FBA shadow 已校验`、`FBA 国家识别=0`、`汇率缺失=0`、`发货仓库映射完整=0`、
   `渠道账号缺失=0`、`订单号/通途SKU 空值=0`、`数值非有限=0`；`作废原单标记已加载` 缺失为 warn；
   Phase1/Phase2 的 fail 断言会汇总进最终结果。
 - **汇率**：`fx_<月>.csv` 必须唯一、有限且 >0；零/负/重复不一致直接报错，不再用隐含汇率或 `or 1.0`。
 - **仓库**：模糊匹配必须唯一，多候选按未映射计，禁止取 first。
 - **写回**：`gs_full_replace.py` 要求 manifest 存在、月份一致、无 fail 断言、特殊订单清单存在；
   待写 CSV 的 sha256 必须与 manifest `outputs_sha256` 一致（`--local` 派生表除外）；
+  构建输入（raw/EN/ref/flags/BOM/仓库/汇率/特殊订单）的 sha256 必须与 manifest `inputs_sha256` 一致；
   self/FBA 键集合漂移默认 fail（`--allow-key-drift` 才放行）；回读错误返回非零并停止后续表。
 - **输入绑定**：manifest `inputs_sha256` 记录 raw/EN/ref/flags/BOM/仓库/汇率/特殊订单哈希，便于追溯。
 - **待确认（warn，不阻断）**：皮壳非组件行有成本但目的地加工=0（默认排除 allowlist
