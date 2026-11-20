@@ -12,7 +12,7 @@ for p in (_REPO, _REPO / "amazon_period_tax"):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from correction_policy import PolicyError, load_policy  # noqa: E402
+from correction_policy import BudgetError, PolicyError, load_fx_table, load_policy  # noqa: E402
 from remediation import RemediationError, apply_corrections, load_corrections  # noqa: E402
 
 
@@ -39,6 +39,21 @@ def main() -> None:
         default="",
         help="上次发布 manifest；输入/政策/proposal hash 变化时旧 PASS 失效并拒绝复用",
     )
+    ap.add_argument(
+        "--fx",
+        default="",
+        help="已确认目标月汇率表 JSON/CSV（R1）：正式写 corrected 副本必须声明",
+    )
+    ap.add_argument(
+        "--idempotent",
+        action="store_true",
+        help="R4 幂等：同一 correction 重复运行只经济应用一次（格值已是 after 视为已应用）",
+    )
+    ap.add_argument(
+        "--approved-input-md5",
+        default="",
+        help="R2 批准源 hash；与当前输入不符即拒绝（空 proposal 也不能绕过）",
+    )
     args = ap.parse_args()
 
     corrections = load_corrections(Path(args.corrections))
@@ -48,9 +63,20 @@ def main() -> None:
             policy = load_policy(Path(args.policy))
         except PolicyError as e:
             raise SystemExit(f"修正政策无效（拒绝执行）: {e}") from None
+    fx = None
+    if args.fx:
+        try:
+            fx = load_fx_table(Path(args.fx), month=args.period)
+        except BudgetError as e:
+            raise SystemExit(f"汇率表无效（拒绝执行）: {e}") from None
     prior_manifest = None
     if args.prior_manifest:
         prior_manifest = json.loads(Path(args.prior_manifest).read_text(encoding="utf-8"))
+    # R2：正式写 corrected 副本（非 preview）必须同时声明 policy + FX。
+    if not args.preview and (policy is None or fx is None):
+        raise SystemExit(
+            "正式生成 corrected 副本必须声明 --policy 与 --fx（policy/证据/源链 + 人民币预算）"
+        )
     try:
         result = apply_corrections(
             src=Path(args.src),
@@ -61,10 +87,16 @@ def main() -> None:
             preview=args.preview,
             policy=policy,
             prior_manifest=prior_manifest,
+            fx=fx,
+            require_fx=not args.preview,
+            require_receipt=not args.preview,
+            approved_input_md5=args.approved_input_md5 or None,
+            idempotent=args.idempotent,
         )
     except RemediationError as e:
         raise SystemExit(f"修正被拒绝（未写任何文件）: {e}") from None
     print(json.dumps(result, ensure_ascii=False, indent=2))
+
 
 
 if __name__ == "__main__":

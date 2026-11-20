@@ -14,7 +14,19 @@ for p in (_REPO, _REPO / "tongtool_order_cost", _PKG):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
-from phase3_merge import run_phase3  # noqa: E402
+from phase3_merge import PublishOptions, run_phase3  # noqa: E402
+
+
+def _load_corrections(path: str, period: str, policy, *, now=None):
+    """读取 corrections 凭据并按政策判定（不写任何表）。"""
+    import json
+
+    from correction_policy import PolicyError, build_proposals, evaluate_batch
+
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    proposals = build_proposals(payload, period=period)
+    results = evaluate_batch(proposals, policy, now=now, expected_period=period)
+    return proposals, list(results.results)
 
 
 def main() -> None:
@@ -46,6 +58,26 @@ def main() -> None:
         help="有未匹配渠道账号 / 币种未匹配汇率 / Tax 别名未匹配 / 合并重复等 warning 时非 0 退出",
     )
     ap.add_argument(
+        "--correction-policy",
+        default="",
+        help="git 外预授权政策 JSON（R2）：正式发布必须声明；缺/过期/未授权 T2 一律拒绝写入",
+    )
+    ap.add_argument(
+        "--corrections",
+        default="",
+        help="corrections 凭据 JSON（R2 源链）：正式发布必须声明，可为该期空清单",
+    )
+    ap.add_argument(
+        "--fx",
+        default="",
+        help="已确认目标月汇率表 JSON/CSV（R1）：正式发布必须声明，缺 FX/币种未确认 writer=0",
+    )
+    ap.add_argument(
+        "--prior-manifest",
+        default="",
+        help="已批准批次的 manifest（R4）：核对输入与批准源、依赖 hash 与目标基线",
+    )
+    ap.add_argument(
         "--gspread-auth",
         choices=("sa", "user"),
         default="sa",
@@ -54,6 +86,50 @@ def main() -> None:
     ap.add_argument("--out-dir", default="", help="可选：写 run 报告 JSON")
     ap.add_argument("--dry-run", action="store_true", help="只算不写 GSheet（默认与未传 --write-gsheet 相同）")
     args = ap.parse_args()
+
+    writing = (args.write_gsheet or args.write_gsheet_fba) and not args.dry_run
+    if writing and not (args.correction_policy and args.corrections and args.fx):
+        raise SystemExit(
+            "正式发布必须同时声明 --correction-policy / --corrections / --fx"
+            "（policy、证据/源链、人民币预算）；缺任一项拒绝写入"
+        )
+
+    policy = None
+    proposals: list = []
+    if args.correction_policy:
+        from correction_policy import PolicyError, load_policy
+
+        try:
+            policy = load_policy(Path(args.correction_policy))
+        except PolicyError as e:
+            raise SystemExit(f"修正政策无效（拒绝写入）: {e}") from None
+    if args.corrections:
+        try:
+            proposals, _results = _load_corrections(args.corrections, args.exchange_month, policy)
+        except (OSError, ValueError, json.JSONDecodeError) as e:
+            raise SystemExit(f"corrections 凭据无效（拒绝写入）: {e}") from None
+
+    fx = None
+    if args.fx:
+        from correction_policy import BudgetError, load_fx_table
+
+        try:
+            fx = load_fx_table(Path(args.fx), month=args.exchange_month)
+        except BudgetError as e:
+            raise SystemExit(f"汇率表无效（拒绝写入）: {e}") from None
+
+    prior_manifest = None
+    approved_input_md5 = None
+    prior_runs: list = []
+    if args.prior_manifest:
+        prior_manifest = json.loads(Path(args.prior_manifest).read_text(encoding="utf-8"))
+        approved_input_md5 = prior_manifest.get("input_md5")
+        prior_runs = [prior_manifest]
+    if writing and not proposals and not approved_input_md5:
+        raise SystemExit(
+            "正式发布但本批没有任何 corrections：必须用 --prior-manifest 证明批准源=本次输入"
+            "（空 proposal 不能当「输入未被修正」的证明）"
+        )
 
     def _gspread_client():
         if args.gspread_auth == "sa":
@@ -99,6 +175,12 @@ def main() -> None:
         write_gsheet_fba=args.write_gsheet_fba and not args.dry_run,
         allow_empty_tax=args.allow_empty_tax,
         write_repairs=not args.dry_run,  # R05：dry-run 不落 tab 修复缓存
+        correction_policy=policy,
+        correction_proposals=proposals,
+        correction_fx=fx,
+        approved_input_md5=approved_input_md5,
+        prior_runs=prior_runs,
+        publish_options=PublishOptions() if write or (args.write_gsheet_fba and not args.dry_run) else None,
     )
     payload = rep.__dict__
     print(json.dumps(payload, ensure_ascii=False, indent=2))

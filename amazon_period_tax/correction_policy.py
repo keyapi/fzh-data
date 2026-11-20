@@ -16,6 +16,18 @@
 - 凭据里的 ``proposal_hash`` 绑定 before/after、行指纹、证据 hash 与影响额；内容一变
   旧授权即失效。``policy_hash`` 绑定政策原文，政策改版旧 PASS 失效。
 - **只计算不写表**：本模块不写 GSheet / NAS / Excel，也不发送任何通知。
+
+T2 加固（R1–R4，``reports/t2_hardening_20261120.md``）：
+
+- **R1 人民币预算**：单条/批次上限按 **CNY** 判定——原币差乘已确认目标月 FX；
+  纯文本（账号/日期/币种）修正按受影响金额规模（``affected_amount``）计价，不能是 0；
+  同一期间 + 同源版本的累计影响跨 run 累加，正负号不抵消（每条取绝对值），防拆 run。
+  缺 FX / 币种未确认 → 阻断（writer=0）。
+- **R2 授权链**：``approved`` 不再只靠一个字符串——正式发布要求带
+  ``authorization`` 凭据（绑定 proposal hash、授权依据、角色、时间、scope）。
+- **R4 旧 PASS 失效**：写前用**当前**政策重新判定已存凭据，旧 ``auto_allowed``
+  遇到 T2 关闭/政策改版必须拒绝；依赖 hash（input/master/FX/FBA/例外/证据/政策/
+  proposal/目标基线）任一变化即旧 PASS 失效。
 """
 from __future__ import annotations
 
@@ -163,6 +175,10 @@ class CorrectionPolicy:
     max_batch_impact: Decimal
     raw: Mapping[str, Any] = field(repr=False, compare=False)
     hash: str = ""
+    # R1/R2 加固开关：由政策显式声明；写入口（正式发布）强制按 True 处理。
+    t2_require_fx: bool = False
+    t2_require_receipt: bool = False
+    authorization_roles: frozenset[str] = frozenset()
 
     def allows_platform(self, platform: str) -> bool:
         return str(platform or "").strip() in self.t2_platforms
@@ -214,6 +230,10 @@ def parse_policy(data: Mapping[str, Any], *, source: str = "<memory>") -> Correc
         if not _PERIOD_RE.match(period):
             raise PolicyError(f"{source}: closed_periods 含非 YYYYMM: {period!r}")
 
+    auth = data.get("authorization") or {}
+    if not isinstance(auth, Mapping):
+        raise PolicyError(f"{source}: authorization 必须是对象")
+
     raw = json.loads(_canonical(dict(data)))
     return CorrectionPolicy(
         policy_id=data["policy_id"].strip(),
@@ -233,6 +253,9 @@ def parse_policy(data: Mapping[str, Any], *, source: str = "<memory>") -> Correc
         max_batch_impact=max_batch,
         raw=raw,
         hash=digest(raw),
+        t2_require_fx=bool(t2.get("require_fx", False)),
+        t2_require_receipt=bool(t2.get("require_receipt", False)) or bool(auth.get("require_receipt", False)),
+        authorization_roles=_str_set(auth.get("allowed_roles"), label="authorization.allowed_roles"),
     )
 
 
@@ -275,6 +298,227 @@ def _hours(value: Decimal) -> timedelta:
     return timedelta(seconds=float(value * Decimal(3600)))
 
 
+# ------------------------------------------------------------------ FX / 人民币预算
+
+
+class BudgetError(PolicyError):
+    """人民币影响预算无法成立（缺 FX / 币种未确认 / 文本修正无受影响金额）。"""
+
+
+def normalize_currency(value) -> str:
+    """币种代码归一：与汇率表同口径（去零宽/NFKC/纯 ASCII 大写）。"""
+    if value is None:
+        return ""
+    try:
+        from exchange_rate import normalize_currency_label
+    except Exception:  # pragma: no cover - 汇率模块不可用时退化为轻量归一
+        import unicodedata
+
+        return unicodedata.normalize("NFKC", str(value)).strip().upper()
+    return normalize_currency_label(value)
+
+
+@dataclass(frozen=True)
+class FxTable:
+    """**已确认目标月** 汇率表：``rates`` 是 1 单位原币 = 多少 CNY。"""
+
+    month: str
+    rates: Mapping[str, Decimal]
+    source: str = ""
+    source_hash: str = ""
+
+    def rate(self, currency: str) -> Decimal | None:
+        return self.rates.get(normalize_currency(currency))
+
+
+def fx_table_from_mapping(
+    data: Mapping[str, Any],
+    *,
+    month: str,
+    source: str = "<memory>",
+    source_hash: str = "",
+) -> FxTable:
+    """从 ``{currency: rate}`` 或 ``{"rates": {...}}`` 构造；非法/非正数直接报错。"""
+    raw = data.get("rates") if isinstance(data, Mapping) and "rates" in data else data
+    if not isinstance(raw, Mapping) or not raw:
+        raise BudgetError(f"{source}: 汇率必须是 非空 {{币种: 汇率}}")
+    rates: dict[str, Decimal] = {}
+    for cur, value in raw.items():
+        code = normalize_currency(cur)
+        if not code:
+            raise BudgetError(f"{source}: 空币种键")
+        rate = _as_decimal(value, label=f"{source}.{code}", minimum=Decimal("0"))
+        if rate <= 0:
+            raise BudgetError(f"{source}: {code} 汇率必须 > 0，收到 {value!r}")
+        if code in rates and rates[code] != rate:
+            raise BudgetError(f"{source}: {code} 出现多个不同汇率")
+        rates[code] = rate
+    if not _PERIOD_RE.match(str(month)):
+        raise BudgetError(f"{source}: FX 月份必须是 YYYYMM，收到 {month!r}")
+    return FxTable(month=str(month), rates=rates, source=source, source_hash=source_hash)
+
+
+def load_fx_table(path: Path, *, month: str | None = None) -> FxTable:
+    """从 **git 外** JSON / CSV 加载已确认汇率；文件缺失/结构非法一律 ``BudgetError``。"""
+    p = Path(path)
+    if not p.is_file():
+        raise BudgetError(f"汇率文件不存在: {p}")
+    blob = p.read_bytes()
+    digest_ = hashlib.sha256(blob).hexdigest()
+    text = blob.decode("utf-8-sig")
+    if p.suffix.lower() == ".json":
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            raise BudgetError(f"汇率文件不是合法 JSON: {p}: {e}") from None
+        if not isinstance(data, Mapping):
+            raise BudgetError(f"{p}: 汇率 JSON 顶层必须是对象")
+        file_month = str(data.get("month") or month or "").strip()
+        if not file_month:
+            raise BudgetError(f"{p}: 缺 month（已确认目标月）")
+        if month and str(data.get("month") or month) != str(month):
+            raise BudgetError(f"{p}: 汇率月份 {data.get('month')} != 目标月 {month}")
+        return fx_table_from_mapping(
+            data,
+            month=file_month,
+            source=str(p),
+            source_hash=digest_,
+        )
+    # CSV：currency,rate[,month]
+    import csv
+    import io
+
+    reader = csv.DictReader(io.StringIO(text))
+    fields = {str(f or "").strip().lower() for f in (reader.fieldnames or [])}
+    if not {"currency", "rate"} <= fields:
+        raise BudgetError(f"{p}: CSV 需要 currency,rate 列，现有 {reader.fieldnames!r}")
+    raw: dict[str, str] = {}
+    file_month = str(month or "")
+    for row in reader:
+        cur = str(row.get("currency") or "").strip()
+        if not cur:
+            continue
+        row_month = str(row.get("month") or "").strip()
+        if row_month:
+            if file_month and row_month != file_month:
+                raise BudgetError(f"{p}: 行月份 {row_month} != 目标月 {file_month}")
+            file_month = row_month
+        raw[cur] = str(row.get("rate") or "").strip()
+    if not file_month:
+        raise BudgetError(f"{p}: 缺 month（CSV 需 month 列或显式 --month）")
+    return fx_table_from_mapping(raw, month=file_month, source=str(p), source_hash=digest_)
+
+
+def fx_digest(fx: FxTable | None) -> str | None:
+    """汇率表依赖 hash（月 + 汇率 + 原文 hash）；无表返回 None。"""
+    if fx is None:
+        return None
+    return digest(
+        {
+            "month": fx.month,
+            "rates": {k: _dec_str(v) for k, v in sorted(fx.rates.items())},
+            "source_hash": fx.source_hash,
+        }
+    )
+
+
+# 文本列（改这些列不直接产生金额差，但会改变钱归谁/归哪期）。
+TEXT_COLUMN_HINTS = ("账户", "账号", "平台", "币种", "日期", "归属", "人员")
+
+
+def is_text_column(col) -> bool:
+    return any(h in str(col) for h in TEXT_COLUMN_HINTS)
+
+
+def amount_basis(field_changes: Mapping[str, Any]) -> Decimal:
+    """受影响金额规模：字段里可解析的金额差绝对值之和（文本列贡献 0）。"""
+    total = Decimal("0")
+    for col, change in field_changes.items():
+        if not isinstance(change, (list, tuple)) or len(change) != 2:
+            continue
+        before, after = change
+        try:
+            total += abs(Decimal(str(after)) - Decimal(str(before)))
+        except (InvalidOperation, ValueError):
+            continue
+    return total
+
+
+@dataclass(frozen=True)
+class ImpactBudget:
+    """一条修正的人民币影响。``basis``：amount_delta（金额差）/ affected_amount（文本修正）。"""
+
+    currency: str
+    impact_original: Decimal
+    impact_cny: Decimal
+    basis: str
+    fx_rate: Decimal | None = None
+    fx_month: str | None = None
+
+
+def resolve_impact_budget(
+    proposal: "CorrectionProposal",
+    *,
+    fx: FxTable | None,
+    month: str = "",
+    require_fx: bool = False,
+) -> ImpactBudget:
+    """把一条 proposal 的影响换算成 CNY；不能成立时抛 ``BudgetError``（写入口=0）。
+
+    - ``require_fx`` 或给了 ``fx`` 时：必须声明币种、汇率表月份必须是目标月、币种必须有汇率。
+    - 纯文本修正（账号/日期/币种）：影响 = ``affected_amount``（受影响金额规模），
+      不能是 0；没有该字段直接拒绝，不允许静默按 0 通过。
+    - 未启用 FX 的模式（历史兼容）：直接用原币 ``impact``，文本修正按声明值或 0。
+    """
+    delta = amount_basis(proposal.field_changes)
+    text_only = delta == 0
+    currency = normalize_currency(proposal.currency or proposal.evidence.get("currency") or "")
+    if fx is None and not require_fx:
+        impact = proposal.impact
+        if text_only:
+            impact = proposal.affected_amount or impact
+        return ImpactBudget(
+            currency=currency,
+            impact_original=impact,
+            impact_cny=impact,
+            basis="affected_amount" if text_only else "amount_delta",
+        )
+
+    if fx is None:
+        raise BudgetError("缺已确认目标月 FX 表（禁止用原币/0 代替人民币预算）")
+    target_month = str(month or fx.month)
+    if str(fx.month) != target_month:
+        raise BudgetError(f"FX 月份 {fx.month} 与目标月 {target_month} 不符")
+    if not currency:
+        raise BudgetError("proposal 未声明币种（币种未确认不能算人民币影响）")
+    rate = fx.rate(currency)
+    if rate is None:
+        raise BudgetError(f"币种 {currency} 在 {fx.month} 汇率表中缺失")
+    if text_only:
+        basis_amount = proposal.affected_amount
+        if basis_amount is None or basis_amount <= 0:
+            raise BudgetError(
+                "纯文本修正（账号/日期/币种）缺受影响金额规模 affected_amount，"
+                "不能按影响 0 通过"
+            )
+        return ImpactBudget(
+            currency=currency,
+            impact_original=basis_amount,
+            impact_cny=(basis_amount * rate).quantize(Decimal("0.01")),
+            basis="affected_amount",
+            fx_rate=rate,
+            fx_month=str(fx.month),
+        )
+    return ImpactBudget(
+        currency=currency,
+        impact_original=delta,
+        impact_cny=(delta * rate).quantize(Decimal("0.01")),
+        basis="amount_delta",
+        fx_rate=rate,
+        fx_month=str(fx.month),
+    )
+
+
 # ------------------------------------------------------------------ Proposal
 
 
@@ -297,6 +541,9 @@ class CorrectionProposal:
     confirmed_by: str | None = None
     approved_at: datetime | None = None
     status: str = ""
+    currency: str | None = None
+    affected_amount: Decimal | None = None
+    authorization: Mapping[str, Any] | None = None
 
     @property
     def human_approved(self) -> bool:
@@ -361,6 +608,17 @@ def build_proposal(item: Mapping[str, Any], *, period: str | None = None) -> Cor
     approved_at = (
         _parse_dt(item["approved_at"], label=f"{cid}.approved_at") if item.get("approved_at") else None
     )
+    affected_raw = item.get("affected_amount")
+    if affected_raw is None:
+        affected_raw = evidence.get("affected_amount")
+    affected_amount = (
+        _as_decimal(affected_raw, label=f"{cid}.affected_amount", minimum=Decimal("0"))
+        if affected_raw is not None
+        else None
+    )
+    authorization = item.get("authorization")
+    if authorization is not None and not isinstance(authorization, Mapping):
+        raise PolicyError(f"{cid}: authorization 必须是对象")
     return CorrectionProposal(
         correction_id=cid,
         period=item_period,
@@ -377,6 +635,12 @@ def build_proposal(item: Mapping[str, Any], *, period: str | None = None) -> Cor
         confirmed_by=(str(item["confirmed_by"]).strip() if item.get("confirmed_by") else None),
         approved_at=approved_at,
         status=str(item.get("status") or "").strip().lower(),
+        currency=(
+            normalize_currency(item.get("currency") or scope.get("currency") or evidence.get("currency"))
+            or None
+        ),
+        affected_amount=affected_amount,
+        authorization=dict(authorization) if authorization is not None else None,
     )
 
 
@@ -414,6 +678,9 @@ def _proposal_payload(p: CorrectionProposal) -> dict:
         "account_after": p.account_after or "",
         "impact": _dec_str(p.impact),
         "source_hash": p.source_hash or "",
+        # R1：币种与受影响金额规模属于修正内容，改了就应使旧授权失效。
+        "currency": p.currency or "",
+        "affected_amount": _dec_str(p.affected_amount) if p.affected_amount is not None else "",
     }
 
 
@@ -469,6 +736,11 @@ class AuthorizationResult:
     approver: str | None = None
     evaluated_at: datetime | None = None
     reasons: tuple[str, ...] = ()
+    # R1：人民币影响与计价依据（无 FX 时为原币口径，basis 标 legacy）。
+    impact_cny: Decimal = Decimal("0")
+    currency: str = ""
+    budget_basis: str = "legacy"
+    fx_month: str | None = None
 
     @property
     def publishable(self) -> bool:
@@ -484,6 +756,9 @@ class BatchAuthorization:
     policy_hash: str | None
     batch_impact: Decimal
     errors: tuple[str, ...] = ()
+    prior_impact: Decimal = Decimal("0")
+    cumulative_impact: Decimal = Decimal("0")
+    period: str = ""
 
     def by_id(self) -> dict[str, AuthorizationResult]:
         return {r.correction_id: r for r in self.results}
@@ -491,6 +766,73 @@ class BatchAuthorization:
     @property
     def publishable(self) -> bool:
         return not self.errors and all(r.publishable for r in self.results)
+
+
+def authorization_receipt_problems(
+    proposal: CorrectionProposal,
+    policy: CorrectionPolicy | None,
+    *,
+    now: datetime | None = None,
+) -> list[str]:
+    """R2：人工批准的授权凭据校验（proposal hash / 依据 / 角色 / 时间 / scope）。
+
+    单个 ``confirmed_by`` 字符串不算授权；正式发布要求 ``authorization`` 对象绑定
+    当前 proposal hash 与 scope，防止「伪 confirmed_by」和「换证据复用旧批准」。
+    """
+    receipt = proposal.authorization
+    if not isinstance(receipt, Mapping) or not receipt:
+        return ["approved 缺授权凭据 authorization（须绑定 proposal hash/依据/角色/时间/scope）"]
+    problems: list[str] = []
+    recorded_hash = str(receipt.get("proposal_hash") or "").strip().lower()
+    if not recorded_hash:
+        problems.append("授权凭据缺 proposal_hash")
+    elif recorded_hash != proposal_hash(proposal):
+        problems.append(
+            f"授权凭据绑定的是别的 proposal（{recorded_hash[:12]}… != "
+            f"{proposal_hash(proposal)[:12]}…），换证据后旧批准失效"
+        )
+    for key in ("authority_ref", "role", "decided_at"):
+        if not str(receipt.get(key) or "").strip():
+            problems.append(f"授权凭据缺 {key}")
+    scope = receipt.get("scope")
+    if not isinstance(scope, Mapping) or not scope:
+        problems.append("授权凭据缺 scope")
+    else:
+        if str(scope.get("period") or "") != str(proposal.period):
+            problems.append(
+                f"授权 scope.period={scope.get('period')!r} 与 proposal 期间 {proposal.period!r} 不符"
+            )
+        scope_platform = str(scope.get("platform") or "").strip()
+        if scope_platform and scope_platform != proposal.platform:
+            problems.append(f"授权 scope.platform={scope_platform} 未覆盖 {proposal.platform}")
+        ids = scope.get("correction_ids")
+        if ids is not None:
+            if not isinstance(ids, (list, tuple)) or proposal.correction_id not in ids:
+                problems.append(f"授权 scope 未覆盖 correction_id {proposal.correction_id}")
+    decided_by = str(receipt.get("decided_by") or "").strip()
+    if decided_by and proposal.confirmed_by and decided_by != proposal.confirmed_by:
+        problems.append(
+            f"confirmed_by={proposal.confirmed_by!r} 与授权凭据 decided_by={decided_by!r} 不一致"
+        )
+    role = str(receipt.get("role") or "").strip()
+    if policy is not None and policy.authorization_roles and role not in policy.authorization_roles:
+        problems.append(f"角色 {role!r} 不在政策允许的授权角色 {sorted(policy.authorization_roles)}")
+    decided_raw = receipt.get("decided_at")
+    if decided_raw:
+        try:
+            decided_at = _parse_dt(decided_raw, label="authorization.decided_at")
+        except PolicyError as e:
+            problems.append(str(e))
+        else:
+            ts = _now(now)
+            if _aware(decided_at) > ts:
+                problems.append(f"授权时间 {decided_at.isoformat()} 晚于当前时间（未来批准）")
+            if policy is not None:
+                if _aware(decided_at) < _aware(policy.effective_from):
+                    problems.append("授权时间早于政策生效期")
+                if policy.effective_to is not None and _aware(decided_at) > _aware(policy.effective_to):
+                    problems.append("授权时间晚于政策有效期")
+    return problems
 
 
 def _result(
@@ -501,6 +843,7 @@ def _result(
     now: datetime,
     reasons: Sequence[str] = (),
     approver: str | None = None,
+    budget: ImpactBudget | None = None,
 ) -> AuthorizationResult:
     return AuthorizationResult(
         correction_id=proposal.correction_id,
@@ -516,6 +859,10 @@ def _result(
         approver=approver,
         evaluated_at=now,
         reasons=tuple(reasons),
+        impact_cny=budget.impact_cny if budget else proposal.impact,
+        currency=budget.currency if budget else "",
+        budget_basis=budget.basis if budget else "legacy",
+        fx_month=budget.fx_month if budget else None,
     )
 
 
@@ -524,12 +871,36 @@ def evaluate_proposal(
     policy: CorrectionPolicy | None,
     *,
     now: datetime | None = None,
+    fx: FxTable | None = None,
+    require_fx: bool = False,
+    month: str = "",
+    require_receipt: bool = False,
+    expected_period: str = "",
 ) -> AuthorizationResult:
-    """按等级判定一条修正能否自动/人工批准；不能发布的一律 ``preview``/``blocked``。"""
+    """按等级判定一条修正能否自动/人工批准；不能发布的一律 ``preview``/``blocked``。
+
+    检查顺序（硬身份/有效期/期间**先于**任何批准捷径）：
+
+    1. 政策有效性（缺/未生效/过期/TTL）；
+    2. 期间（``expected_period``）与 proposal 期间一致；
+    3. T3/T4 —— 签字也不能绕过；
+    4. 证据完整性；
+    5. 授权凭据（``require_receipt``/政策要求时）；
+    6. T1 自动 / T2 窄通道（人民币预算）。
+    """
     ts = _now(now)
     errors = policy_errors(policy, now=ts)
     if errors:
         return _result(proposal, STATUS_BLOCKED, policy=policy, now=ts, reasons=errors)
+
+    if expected_period and str(proposal.period) != str(expected_period):
+        return _result(
+            proposal,
+            STATUS_BLOCKED,
+            policy=policy,
+            now=ts,
+            reasons=(f"proposal 期间 {proposal.period!r} 与目标期 {expected_period!r} 不符",),
+        )
 
     if proposal.tier in (TIER_T3, TIER_T4):
         # 缺件待核 / 主数据缺失：签字也不能替代必需字段与唯一性，先修来源。
@@ -544,12 +915,25 @@ def evaluate_proposal(
             ),
         )
 
+    try:
+        budget = resolve_impact_budget(
+            proposal,
+            fx=fx,
+            month=month or proposal.period,
+            require_fx=require_fx or bool(policy and policy.t2_require_fx),
+        )
+    except BudgetError as e:
+        return _result(proposal, STATUS_BLOCKED, policy=policy, now=ts, reasons=(str(e),))
+
     evidence_problems = evidence_complete(proposal)
+    needs_receipt = require_receipt or bool(policy and policy.t2_require_receipt)
     if proposal.human_approved:
         problems = evidence_complete(proposal, automatic=False)
+        if needs_receipt:
+            problems = problems + authorization_receipt_problems(proposal, policy, now=ts)
         if problems:
             return _result(
-                proposal, STATUS_BLOCKED, policy=policy, now=ts, reasons=problems
+                proposal, STATUS_BLOCKED, policy=policy, now=ts, reasons=problems, budget=budget
             )
         return _result(
             proposal,
@@ -557,18 +941,44 @@ def evaluate_proposal(
             policy=policy,
             now=ts,
             approver=proposal.confirmed_by,
+            budget=budget,
+        )
+    if proposal.status == STATUS_APPROVED and not proposal.confirmed_by:
+        # 声称 approved 但没署名：不能悄悄降级成自动。
+        return _result(
+            proposal,
+            STATUS_BLOCKED,
+            policy=policy,
+            now=ts,
+            reasons=("status=approved 但缺 confirmed_by（无效批准）",),
+            budget=budget,
+        )
+    if proposal.confirmed_by and proposal.status != STATUS_APPROVED:
+        # preview/draft 里塞一个 confirmed_by 不能当批准用。
+        return _result(
+            proposal,
+            STATUS_BLOCKED,
+            policy=policy,
+            now=ts,
+            reasons=(f"status={proposal.status or '<空>'} 带有 confirmed_by，不能当 approved 使用",),
+            budget=budget,
         )
 
     if proposal.tier == TIER_T1:
         if not policy.auto_apply_t1:
             return _result(
-                proposal, STATUS_PREVIEW, policy=policy, now=ts, reasons=("政策关闭了 T1 自动",)
+                proposal,
+                STATUS_PREVIEW,
+                policy=policy,
+                now=ts,
+                reasons=("政策关闭了 T1 自动",),
+                budget=budget,
             )
         if evidence_problems:
             return _result(
-                proposal, STATUS_BLOCKED, policy=policy, now=ts, reasons=evidence_problems
+                proposal, STATUS_BLOCKED, policy=policy, now=ts, reasons=evidence_problems, budget=budget
             )
-        return _result(proposal, STATUS_AUTO_ALLOWED, policy=policy, now=ts)
+        return _result(proposal, STATUS_AUTO_ALLOWED, policy=policy, now=ts, budget=budget)
 
     # T2
     reasons: list[str] = []
@@ -588,13 +998,49 @@ def evaluate_proposal(
     if proposal.period in policy.closed_periods:
         reasons.append(f"期间 {proposal.period} 已关账，只能人工重述批次")
     reasons.extend(evidence_problems)
-    if proposal.impact > policy.max_single_impact:
+    if budget.impact_cny > policy.max_single_impact:
         reasons.append(
-            f"单条影响 {_dec_str(proposal.impact)} 超过上限 {_dec_str(policy.max_single_impact)}"
+            f"单条影响 {_dec_str(budget.impact_cny)} CNY 超过上限 "
+            f"{_dec_str(policy.max_single_impact)}"
         )
     if reasons:
-        return _result(proposal, STATUS_PREVIEW, policy=policy, now=ts, reasons=reasons)
-    return _result(proposal, STATUS_AUTO_ALLOWED, policy=policy, now=ts)
+        return _result(proposal, STATUS_PREVIEW, policy=policy, now=ts, reasons=reasons, budget=budget)
+    return _result(proposal, STATUS_AUTO_ALLOWED, policy=policy, now=ts, budget=budget)
+
+
+def cumulative_prior_impact(
+    prior_runs: Sequence[Mapping[str, Any]],
+    *,
+    period: str,
+    source_hash: str | None = None,
+) -> Decimal:
+    """同一期间 + 同源版本的历史已应用影响（绝对值累加，正负不抵消）。
+
+    ``prior_runs`` 是历史发布 manifest。缺 ``source_hash`` 的旧 manifest 按**同期间**
+    纳入（fail-closed：宁可多算，不能靠拆 run 绕过批次上限）。
+    """
+    total = Decimal("0")
+    for run in prior_runs or ():
+        if not isinstance(run, Mapping):
+            continue
+        if str(run.get("period") or "") != str(period):
+            continue
+        run_source = run.get("source_hash") or run.get("input_md5")
+        if source_hash and run_source and str(run_source) != str(source_hash):
+            continue
+        for item in run.get("corrections") or ():
+            if not isinstance(item, Mapping):
+                continue
+            raw = item.get("impact_cny")
+            if raw in (None, ""):
+                raw = item.get("impact")
+            try:
+                value = Decimal(str(raw))
+            except (InvalidOperation, ValueError):
+                continue
+            if value.is_finite():
+                total += abs(value)
+    return total
 
 
 def evaluate_batch(
@@ -602,15 +1048,43 @@ def evaluate_batch(
     policy: CorrectionPolicy | None,
     *,
     now: datetime | None = None,
+    fx: FxTable | None = None,
+    require_fx: bool = False,
+    month: str = "",
+    require_receipt: bool = False,
+    expected_period: str = "",
+    prior_runs: Sequence[Mapping[str, Any]] = (),
+    source_hash: str | None = None,
 ) -> BatchAuthorization:
-    """批量判定 + 批次影响上限（不能靠拆多笔绕过）。"""
+    """批量判定 + 批次影响上限（不能靠拆多笔/拆多 run 绕过）。
+
+    批次人民币影响 = 本批每条 ``abs(impact_cny)`` 之和 + 同期间/同源版本的历史累计。
+    每条取绝对值：正负修正**不相互抵消**（调增 500 + 调减 500 仍算 1000）。
+    """
     ts = _now(now)
     errors = tuple(policy_errors(policy, now=ts))
-    results = [evaluate_proposal(p, policy, now=ts) for p in proposals]
-    batch_impact = sum(
-        (r.impact for r in results if r.status == STATUS_AUTO_ALLOWED), Decimal("0")
+    results = [
+        evaluate_proposal(
+            p,
+            policy,
+            now=ts,
+            fx=fx,
+            require_fx=require_fx,
+            month=month,
+            require_receipt=require_receipt,
+            expected_period=expected_period,
+        )
+        for p in proposals
+    ]
+    batch_period = str(expected_period or (proposals[0].period if proposals else ""))
+    prior_impact = cumulative_prior_impact(
+        prior_runs, period=batch_period, source_hash=source_hash
     )
-    if policy is not None and not errors and batch_impact > policy.max_batch_impact:
+    batch_impact = sum(
+        (abs(r.impact_cny) for r in results if r.status == STATUS_AUTO_ALLOWED), Decimal("0")
+    )
+    cumulative = batch_impact + prior_impact
+    if policy is not None and not errors and cumulative > policy.max_batch_impact:
         downgraded: list[AuthorizationResult] = []
         for r in results:
             if r.status == STATUS_AUTO_ALLOWED and r.tier == TIER_T2:
@@ -621,7 +1095,8 @@ def evaluate_batch(
                             "status": STATUS_PREVIEW,
                             "reasons": r.reasons
                             + (
-                                f"批次影响 {_dec_str(batch_impact)} 超过上限 "
+                                f"批次影响 {_dec_str(cumulative)} CNY（本批 {_dec_str(batch_impact)}"
+                                f" + 同期间/同源历史 {_dec_str(prior_impact)}）超过上限 "
                                 f"{_dec_str(policy.max_batch_impact)}",
                             ),
                         }
@@ -638,6 +1113,9 @@ def evaluate_batch(
         policy_hash=policy.hash if policy else None,
         batch_impact=batch_impact,
         errors=errors,
+        prior_impact=prior_impact,
+        cumulative_impact=cumulative,
+        period=batch_period,
     )
 
 
@@ -651,14 +1129,44 @@ def write_gate_errors(
     proposals: Sequence[CorrectionProposal] = (),
     results: Sequence[AuthorizationResult] | None = None,
     now: datetime | None = None,
+    fx: FxTable | None = None,
+    require_fx: bool = False,
+    require_receipt: bool = False,
+    require_proposals: bool = False,
+    input_md5: str | None = None,
+    approved_input_md5: str | None = None,
+    prior_runs: Sequence[Mapping[str, Any]] = (),
+    source_hash: str | None = None,
 ) -> list[str]:
     """写前硬门禁：未授权 T2 / 政策过期 / proposal/policy hash 变化 → 返回问题清单。
 
     ``proposals`` 是本次**打算写入**的修正；若为空则无修正可写，直接通过。
     ``results`` 可传入已存的授权凭据（用于校验 hash 未变）；不传则按当前政策现场判定。
+
+    加固参数（正式发布入口一律传 True）：
+
+    - ``require_proposals``：正式发布必须声明本批修正；空 proposal 但声称有批准源 → 拒绝。
+    - ``require_fx`` / ``fx``：人民币预算必须有已确认目标月汇率（缺 → writer=0）。
+    - ``require_receipt``：``approved`` 必须有绑定 proposal hash 的授权凭据。
+    - ``input_md5`` + ``approved_input_md5``：输入与批准源不符 → 拒绝（空 proposal 也不能过）。
+    - ``prior_runs`` + ``source_hash``：同一期间/同源版本的历史影响计入批次上限，防拆 run。
+
+    已存 ``results`` 一律用**当前**政策重新判定（R4）：旧 ``auto_allowed`` 遇到
+    T2 关闭/政策改版/汇率变化必须失效，不能只信旧 result.status。
     """
     proposals = list(proposals or [])
+    # 批准源核对与 proposal 是否为空无关：输入变了，旧批准（哪怕声称「本批没修正」）失效。
+    if approved_input_md5 and input_md5 and str(approved_input_md5) != str(input_md5):
+        return [
+            "AUTHORIZATION: 输入与批准源不符"
+            f"（{str(input_md5)[:12]}… != {str(approved_input_md5)[:12]}…）；"
+            "不能拿「没有 proposal」当正式输入未被修正的证明"
+        ]
     if not proposals:
+        if require_proposals:
+            return [
+                "AUTHORIZATION: 正式发布必须声明本批 corrections（空 proposal 不得写入）"
+            ]
         return []
 
     errors = policy_errors(policy, now=now)
@@ -673,8 +1181,22 @@ def write_gate_errors(
         return [
             f"AUTHORIZATION: proposal 期间与门禁期间 {period!r} 不符: {mismatched}"
         ]
+
+    fresh = evaluate_batch(
+        proposals,
+        policy,
+        now=now,
+        fx=fx,
+        require_fx=require_fx,
+        month=period,
+        require_receipt=require_receipt,
+        expected_period=period,
+        prior_runs=prior_runs,
+        source_hash=source_hash,
+    )
+    fresh_by_id = fresh.by_id()
     if results is None:
-        results_by_id = evaluate_batch(proposals, policy, now=now).by_id()
+        results_by_id = dict(fresh_by_id)
     else:
         results_by_id: dict[str, AuthorizationResult] = {}
         for r in results:
@@ -703,6 +1225,13 @@ def write_gate_errors(
                 f"{p.correction_id}: POLICY-HASH 变化（凭据 {str(r.policy_hash)[:12]}… "
                 f"!= 当前 {policy.hash[:12]}…），旧 PASS 失效"
             )
+        # R4：按当前政策/当前汇率重判；旧 PASS 与新判定不一致即失效。
+        fresh_r = fresh_by_id.get(p.correction_id)
+        if fresh_r is not None and fresh_r.status != r.status:
+            problems.append(
+                f"{p.correction_id}: 旧授权按当前政策重判为 {fresh_r.status}（原 {r.status}），"
+                f"旧 PASS 失效: {'; '.join(fresh_r.reasons) or '—'}"
+            )
         if r.status == STATUS_BLOCKED:
             problems.append(f"{p.correction_id}: {p.tier} 阻断: {'; '.join(r.reasons) or '未授权'}")
         elif r.status == STATUS_PREVIEW:
@@ -711,8 +1240,15 @@ def write_gate_errors(
             )
         elif r.status not in _PUBLISHABLE_STATUSES:
             problems.append(f"{p.correction_id}: 未知授权状态 {r.status!r}")
-        if r.status == STATUS_AUTO_ALLOWED and p.tier == TIER_T2 and p.period in policy.closed_periods:
-            problems.append(f"{p.correction_id}: 已关账期间 {p.period} 不得自动应用")
+        if r.status == STATUS_AUTO_ALLOWED and p.tier == TIER_T2:
+            rechecked = fresh_by_id.get(p.correction_id)
+            if rechecked is not None and rechecked.status != STATUS_AUTO_ALLOWED:
+                problems.append(
+                    f"{p.correction_id}: 旧 auto_allowed 结果在当前政策下不再成立"
+                    f"（{rechecked.status}），拒绝写入"
+                )
+            if p.period in policy.closed_periods:
+                problems.append(f"{p.correction_id}: 已关账期间 {p.period} 不得自动应用")
     return problems
 
 
@@ -725,8 +1261,10 @@ def manifest_policy_fields(
     proposals: Sequence[CorrectionProposal] = (),
     results: Sequence[AuthorizationResult] | None = None,
     now: datetime | None = None,
+    fx: FxTable | None = None,
+    batch: BatchAuthorization | None = None,
 ) -> dict:
-    """manifest 需要的 policy/proposal/逐条 correction/证据 hash。"""
+    """manifest 需要的 policy/proposal/逐条 correction/证据/汇率/人民币影响。"""
     proposals = list(proposals or [])
     if not proposals:
         return {
@@ -735,9 +1273,17 @@ def manifest_policy_fields(
             "policy_hash": policy.hash if policy else None,
             "proposal_hash": None,
             "corrections": [],
+            "fx_hash": fx_digest(fx),
+            "fx_month": fx.month if fx else None,
+            "batch_impact_cny": "0",
+            "cumulative_impact_cny": (
+                _dec_str(batch.cumulative_impact) if batch is not None else "0"
+            ),
         }
     if results is None:
-        results_by_id = evaluate_batch(proposals, policy, now=now).by_id() if policy else {}
+        results_by_id = (
+            evaluate_batch(proposals, policy, now=now, fx=fx).by_id() if policy else {}
+        )
     else:
         results_by_id = {r.correction_id: r for r in results}
     corrections = []
@@ -751,6 +1297,8 @@ def manifest_policy_fields(
                 "proposal_hash": proposal_hash(p),
                 "evidence_hash": p.evidence_hash,
                 "impact": _dec_str(p.impact),
+                "impact_cny": _dec_str(r.impact_cny) if r else _dec_str(p.impact),
+                "currency": (r.currency if r else p.currency) or "",
                 "period": p.period,
             }
         )
@@ -760,6 +1308,18 @@ def manifest_policy_fields(
         "policy_hash": policy.hash if policy else None,
         "proposal_hash": proposal_batch_hash(proposals),
         "corrections": corrections,
+        "fx_hash": fx_digest(fx),
+        "fx_month": fx.month if fx else None,
+        "batch_impact_cny": (
+            _dec_str(batch.batch_impact)
+            if batch is not None
+            else _dec_str(sum((r.impact_cny for r in results_by_id.values()), Decimal("0")))
+        ),
+        "cumulative_impact_cny": (
+            _dec_str(batch.cumulative_impact)
+            if batch is not None
+            else _dec_str(sum((abs(r.impact_cny) for r in results_by_id.values()), Decimal("0")))
+        ),
     }
 
 
@@ -769,8 +1329,16 @@ def stale_pass_problems(
     input_md5: str | None,
     policy: CorrectionPolicy | None,
     proposals: Sequence[CorrectionProposal] = (),
+    fx: FxTable | None = None,
+    dependencies: Mapping[str, Any] | None = None,
+    target_baseline_hash: str | None = None,
 ) -> list[str]:
-    """旧 PASS 失效判定：输入 / 政策 / proposal hash 任一变化即不可复用。"""
+    """旧 PASS 失效判定：输入 / 政策 / proposal / 汇率 / 依赖 / 目标基线任一变化即不可复用。
+
+    ``dependencies`` 是当前批的依赖 hash（input/master/FX/FBA/例外/证据等），与 manifest
+    里记录的 ``dependencies`` 逐键比较。``target_baseline_hash`` 是写前目标表基线——
+    外部并发改动会让旧 PASS 失效。
+    """
     if not manifest:
         return ["无历史发布 manifest（旧 PASS 不存在）"]
     problems: list[str] = []
@@ -791,7 +1359,7 @@ def stale_pass_problems(
                 f"政策 hash 变化（{str(recorded_policy)[:12]}… != {current_policy_hash[:12]}…）"
             )
 
-    proposals = list(proposals or [])
+    proposals = list(proposals or ())
     if proposals:
         current_proposal = proposal_batch_hash(proposals)
         recorded_proposal = manifest.get("proposal_hash")
@@ -800,5 +1368,38 @@ def stale_pass_problems(
         elif recorded_proposal != current_proposal:
             problems.append(
                 f"proposal hash 变化（{str(recorded_proposal)[:12]}… != {current_proposal[:12]}…）"
+            )
+
+    current_fx = fx_digest(fx)
+    if current_fx is not None:
+        recorded_fx = manifest.get("fx_hash")
+        if not recorded_fx:
+            problems.append("manifest 未记录 fx_hash（旧 PASS 不可核验汇率）")
+        elif recorded_fx != current_fx:
+            problems.append(
+                f"汇率 hash 变化（{str(recorded_fx)[:12]}… != {current_fx[:12]}…）"
+            )
+
+    if dependencies:
+        recorded_deps = manifest.get("dependencies")
+        if not isinstance(recorded_deps, Mapping):
+            problems.append("manifest 未记录 dependencies（旧 PASS 不可核验）")
+        else:
+            changed = sorted(
+                key
+                for key, value in dependencies.items()
+                if str(recorded_deps.get(key) or "") != str(value or "")
+            )
+            if changed:
+                problems.append(f"依赖 hash 变化: {changed}")
+
+    if target_baseline_hash:
+        recorded_baseline = manifest.get("target_baseline_hash")
+        if not recorded_baseline:
+            problems.append("manifest 未记录 target_baseline_hash（目标基线不可核验）")
+        elif str(recorded_baseline) != str(target_baseline_hash):
+            problems.append(
+                f"目标表基线变化（{str(recorded_baseline)[:12]}… != "
+                f"{str(target_baseline_hash)[:12]}…），目标已被外部改动"
             )
     return problems
