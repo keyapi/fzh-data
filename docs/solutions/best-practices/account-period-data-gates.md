@@ -59,6 +59,7 @@ tags: [data-gates, pandas-merge, account-period, data-quality, finance]
 - **StruseryBE 8.25 EUR 实际 ES**：账号/市场归属错 → 审批/附件 marketplace 一致 FAIL。
 - **`账号` vs `写回` 成本差 −556,373**：旧快照 → 源新鲜度 FAIL。
 - **旧 `特殊规则_写回` 1,691 键不一致**：旧快照 → 版本/基线 FAIL。
+- **规则限定列缺失会扩大命中**：c22 只在订单列存在时才加 `运营人员/发货区域/渠道账号/仓` 过滤；缺列时规则退化为“不限”，应 FAIL，不能静默放宽。
 - **FX 别名展开**：735→800（7/8）、659→746（9），规则重复执行；同 ISO 同率金额不变，但必须 canonical 化 → FX 唯一 WARN/FAIL。
 - **c82 负费用/净零行被删**：只保留费用和>0，NEG/ZERO_NET 丢失；且差额≤1 自动加最大行 → 不是批准的尾差政策，必须改。
 

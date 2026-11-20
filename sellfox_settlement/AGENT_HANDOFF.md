@@ -112,5 +112,5 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 - **期间**：收入 = OA 账期 `YYYYMMDD-YYYYMMDD`（04–03）；成本 = 当月 `写回`（自发货按发货日、FBA 按付款/销售日）；不按 04–03 二次过滤。
 - **1.7.0**：只读 `和财务部共享/黄-特殊规则-订单改销售额成本`（Jeck 过时）；Colab cell22 只改内存，需另建 `特殊规则-写回YYYY年M月FBA订单和非FBA订单`，原 `写回` 不动；旧下划线 `特殊规则_写回…` 是旧快照，禁用。FX 必须先做 ISO+月份唯一（否则规则重复执行；同汇率时金额不变）。
 - **坑**：新别名 `WFUS-Daneey→WFDANEEYUS`（202607 3 行、约 681.98）；AllegroHU 原始币种名含 U+200C+全角括号 → 汇率/RMB=0，需 NFKC+去 Cf；8 月 Tax corrected 394,575.92（旧 396,601.69 重复附件）；202609 成本差 56,431.88/业绩差 56,431.86 是逐账号舍入。
-- **门禁**：`validate_account_period.py`（账号覆盖/别名/merge 基数/运营/币种 FX/成本恒等/预留/Tax 附加费/黄表/过滤列；FAIL 退出 1）+ `validate_ingest.py`（附件 hash/期间/V1V2/100 倍）；三个 GS writer 已改为 clear 前强制校验；P2 最小快照 `snapshot_guard.py` 记录 5 个源表 modifiedTime + payload sha256，clear 前变化即中止。六组基线 FAIL 0 / WARN 4。
+- **门禁**：`validate_account_period.py`（账号覆盖/别名/merge 基数/运营/币种 FX/成本恒等/预留/Tax 附加费/黄表/过滤列；FAIL 退出 1）+ `validate_ingest.py`（附件 hash/期间/V1V2/100 倍）；三个 GS writer 已改为 clear 前强制校验；P2 最小快照 `snapshot_guard.py` 记录 5 个源表 modifiedTime + payload sha256，clear 前变化即中止。六组基线 FAIL 0 / WARN 4；审计已证实规则缺列会扩大命中、c82 负/净零行被删、差额≤1 自动调最大行。
 - 详见 `docs/solutions/workflow-issues/amazon-period-performance-report-pipeline.md` 与 `docs/solutions/best-practices/account-period-data-gates.md`；验证目录（仓库外）`D:/Work/张晶/国内报税/Amazon账期非V2/技术验证/20261118/out_0708/`。
