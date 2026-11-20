@@ -280,6 +280,10 @@ def notify_low_stock(result: ScanResult, *, when: _dt.date | None = None,
 
 
 def notify_inbound(result: InboundResult, *, dry_run: bool = False) -> dict:
+    if result.total_skus == 0:
+        # 无入库不推送（也不生成图片/Excel）
+        return {"errcode": 0, "skipped": "no_inbound", "sent": 0, "total": 0,
+                "messages": [], "files": [], "file_errors": []}
     body, _ = _inbound_body(result)
     single = result.warehouses[0] if len(result.warehouses) == 1 else None
     suffix = f"_{_safe_name(single.warehouse)}" if single else ""

@@ -141,3 +141,19 @@ def test_inbound_sends_one_card_per_warehouse(monkeypatch, capsys):
     assert rc == 0
     assert calls == ["W1", "W2", "W3"]
     capsys.readouterr()
+
+
+def test_inbound_skips_empty_warehouses(monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(cli, "INBOUND_STATE", tmp_path / "state.json")
+    monkeypatch.setattr(cli, "collect_tongtool_inbound", lambda *a, **k: {"W1": [], "W2": []})
+    calls = []
+
+    def fake(result, dry_run=False):
+        calls.append(result.warehouses[0].warehouse)
+        return {"errcode": 0, "messages": [], "files": [], "file_errors": []}
+
+    monkeypatch.setattr(cli, "notify_inbound", fake)
+    rc = main(["inbound", "--dry-run", "--today", "--source", "tongtool", "--warehouses", "W1,W2"])
+    assert rc == 0
+    assert calls == []
+    capsys.readouterr()

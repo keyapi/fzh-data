@@ -319,7 +319,7 @@ def cmd_inbound(args) -> int:
         InboundResult(day=result.day, warehouses=[wh],
                       input_rows=result.input_rows, accepted_rows=result.accepted_rows,
                       skipped=result.skipped, label=result.label, as_of=result.as_of)
-        for wh in result.warehouses
+        for wh in result.warehouses if wh.items
     ]
     responses = []
     rc = 0

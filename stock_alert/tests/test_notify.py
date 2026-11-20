@@ -261,6 +261,14 @@ def test_inbound_label_and_empty_message():
     assert '本次无采购入库' in text
 
 
+def test_notify_inbound_skips_empty():
+    r = aggregate({'W': []}, day=dt.date(2026, 11, 18),
+                  label='10:00–14:00 新增', as_of='14:00')
+    resp = notify_inbound(r)
+    assert resp['skipped'] == 'no_inbound'
+    assert resp['total'] == 0 and resp['messages'] == []
+
+
 def test_inbound_filename_includes_window_time(monkeypatch, tmp_path):
     import stock_alert.notify as mod
     monkeypatch.setattr(mod, '_OUT_DIR', tmp_path)
