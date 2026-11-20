@@ -22,6 +22,12 @@ def main() -> None:
     ap.add_argument("--period", required=True, help="YYYYMM")
     ap.add_argument("--in", dest="src", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument(
+        "--evidence-root",
+        required=True,
+        help="附件根目录（evidence.attachment 相对此目录解析并核验 md5）",
+    )
+    ap.add_argument("--preview", action="store_true", help="只列出将改哪些格，不写任何文件")
     args = ap.parse_args()
 
     corrections = load_corrections(Path(args.corrections))
@@ -30,6 +36,8 @@ def main() -> None:
         corrections=corrections,
         period=args.period,
         out=Path(args.out),
+        evidence_root=Path(args.evidence_root),
+        preview=args.preview,
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

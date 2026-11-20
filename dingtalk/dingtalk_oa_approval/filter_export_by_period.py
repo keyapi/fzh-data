@@ -16,7 +16,8 @@ _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
-from ding_xlsx import enrich, exclude_keys, id_text, read_dingtalk_xlsx
+from ding_xlsx import enrich, exclude_keys, id_text, read_dingtalk_xlsx_records
+from export_lineage import build_export_lineage, empty_enriched_frame
 from export_period_excels import drop_helper, write_xlsx
 from parse import keep_approval
 
@@ -82,23 +83,25 @@ def main() -> None:
     )
     args = ap.parse_args()
     src = Path(args.src)
-    df = read_dingtalk_xlsx(src)
-    if df.empty:
+    raw, read_report = read_dingtalk_xlsx_records(src)
+    if raw.empty and not read_report.get("rows_failed"):
         raise SystemExit(f"读不到含「账期日期」的行: {src}")
-    n_in = len(df)
-    en = enrich(df)
+    en = enrich(raw) if not raw.empty else empty_enriched_frame()
     keys = load_exclude_keys(Path(args.exclude_keys)) if args.exclude_keys else set()
-    kept, counts = filter_period_rows(en, args.period, keys)
+    lineage = build_export_lineage(en, args.period, keys, read_report)
+    print(lineage.summary())
+    blockers = lineage.blockers()
+    if blockers:
+        for b in blockers:
+            print(f"BLOCKING: {b}")
+        raise SystemExit(2)  # 有阻断项：不产出正式定稿，也不静默出半截表
+    kept = lineage.partitions["kept"]
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     if "审批编号" in kept.columns:
         kept["审批编号"] = kept["审批编号"].map(id_text)
     write_xlsx(out, {"核算行": drop_helper(kept)})
-    print(
-        f"in={n_in} period_rows={counts['period']} kept={counts['kept']} "
-        f"excluded_late={counts['excluded_late']} excluded_status={counts['excluded_status']} "
-        f"wrote={out}"
-    )
+    print(lineage.summary() + f" wrote={out}")
 
 
 if __name__ == "__main__":

@@ -5,17 +5,33 @@
 """
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
 
-from gsheet_tax import additional_fee_worksheet_name_from_yyyymm, open_additional_fee_tax_spreadsheet, tax_worksheet_name
-from phase3_constants import LS_COL_COST
+from bucket_meta import bucket_yyyymm, resolve_exchange_month
+from gsheet_tax import (
+    additional_fee_worksheet_name_from_yyyymm,
+    open_additional_fee_tax_spreadsheet,
+    tax_worksheet_name,
+)
+from phase3_constants import ADDITIONAL_FEE_COLS, LS_COL_COST
+from phase3_merge import FBA_DELTA_RMB, FBA_STAFF_SUFFIX, FBA_SUMMARY_SUFFIX
 
 TOL = 0.01
 MONEY_COLS = ["应收金额", "销售额", *LS_COL_COST]
+
+# 每张表必须具备的核心列（缺列直接 FAIL，不能靠 sum 空列=0 蒙混）。
+REQUIRED_COLUMNS = {
+    "原始": ["账期日期", "审批状态", "审批结果", "渠道账号", "汇率", "应收金额", "销售额"],
+    "人民币": ["渠道账号", "应收金额_人民币", "销售额_人民币", "Tax amount人民币", "附加费累加人民币"],
+    "主表(分组)": ["渠道账号", "应收金额_人民币", "销售额_人民币"],
+    "收款比例收款归属": ["收款归属", "应收金额_人民币", "销售额_人民币", "平均收款比例"],
+    "收款比例运营人员": ["运营人员", "销售额_人民币", "应收金额_人民币"],
+}
 
 
 @dataclass
@@ -54,6 +70,70 @@ def _num_series(df: pd.DataFrame, col: str) -> pd.Series:
     if col not in df.columns:
         return pd.Series(dtype=float)
     return df[col].map(parse_number).astype(float)
+
+
+def cell_blank(value) -> bool:
+    """GSheet 单元格是否为空（哨兵含空串/nan/None/连字符）。"""
+    if value is None:
+        return True
+    try:
+        if pd.isna(value):
+            return True
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip() in {"", "-", "nan", "None", "N/A", "NA"}
+
+
+def is_finite(value) -> bool:
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def finite_close(a, b, tol: float = TOL) -> bool:
+    """两侧都必须是有限数才可能 PASS；NaN/Inf 一律 False，不能当作「差为 0」。"""
+    return is_finite(a) and is_finite(b) and abs(float(a) - float(b)) <= tol
+
+
+def numeric_cell_errors(df: pd.DataFrame, cols, *, table: str, limit: int = 6) -> list[str]:
+    """非空单元格必须能解析成**有限**数；空单元格允许（费用列本就允许空）。"""
+    problems: list[str] = []
+    for col in cols:
+        if col not in df.columns:
+            continue
+        series = df[col]
+        for pos, raw in series.items():
+            if cell_blank(raw):
+                continue
+            val = parse_number(raw)
+            if val is None:
+                problems.append(f"{table}.{col}[行{pos}] 非空非法值 {raw!r}")
+            elif not is_finite(val):
+                problems.append(f"{table}.{col}[行{pos}] 非有限值 {raw!r}（NaN/Inf 不能当通过）")
+            if len(problems) >= limit:
+                return problems
+    return problems
+
+
+def rmb_columns(df: pd.DataFrame) -> list[str]:
+    return [c for c in df.columns if str(c).endswith("_人民币")]
+
+
+def missing_columns(df: pd.DataFrame, required) -> list[str]:
+    return [c for c in required if c not in df.columns]
+
+
+def period_sheet_names(bucket: str) -> dict[str, str]:
+    """``账期20260804-20260903`` → 五张主表 worksheet 名。"""
+    period = period_range_from_bucket(bucket_name(bucket))
+    return {
+        "主表(分组)": period,
+        "原始": f"{period}原始",
+        "人民币": f"人民币{period}",
+        "收款比例收款归属": f"{period}收款比例收款归属",
+        "收款比例运营人员": f"{period}收款比例运营人员",
+    }
 
 
 _MONTH_PATTERNS = (
@@ -231,13 +311,18 @@ def check_tax(
         checks.append(Check("Tax: 工作表存在", False, f"未找到 {tax_worksheet_name(bucket_name(bucket))}"))
         return checks
 
+    miss_cols = missing_columns(sheet, ["渠道账号", "Tax amount人民币"])
+    checks.append(Check("Tax: 源表列齐全", not miss_cols, f"缺列={miss_cols}"))
+    invalid = numeric_cell_errors(sheet, ["Tax amount人民币"], table="Tax")
+    checks.append(Check("Tax: 无非空非法/非有限金额", not invalid, "; ".join(invalid[:6]) or "全部有限"))
+
     sheet_total = _num_series(sheet, "Tax amount人民币").sum()
     expected_total = float(expected["Tax amount人民币"].sum())
     diff = abs(sheet_total - expected_total)
     checks.append(
         Check(
             "Tax: Σ(Tax amount人民币) == 本地重算",
-            diff <= TOL,
+            finite_close(sheet_total, expected_total),
             f"sheet={sheet_total:.2f} expected={expected_total:.2f} diff={diff:.4f}",
         )
     )
@@ -271,7 +356,7 @@ def check_tax(
     bad = [
         f"{acct}: sheet={sheet_map.get(acct)} exp={exp_map.get(acct)}"
         for acct in sorted(set(exp_map) | set(sheet_map))
-        if abs((sheet_map.get(acct) or 0.0) - (exp_map.get(acct) or 0.0)) > TOL
+        if not finite_close(sheet_map.get(acct), exp_map.get(acct))
     ]
     checks.append(Check("Tax: 每账号金额一致", not bad, "; ".join(bad[:8]) or "全部一致"))
     return checks
@@ -282,66 +367,125 @@ def bucket_name(bucket: str) -> str:
     return bucket if bucket.startswith("账期") else f"账期{bucket}"
 
 
-def check_phase3(gc, *, bucket: str) -> list[Check]:
-    """Phase3：Tax/附加费合计、原始缺汇率、渠道账号未匹配、分组合计 == 行级过滤后合计。"""
+def check_phase3(gc, *, bucket: str, require_fba: bool = False) -> list[Check]:
+    """Phase3：五张主表 + Tax/附加费源表 + 声明适用的 FBA 两表全覆盖。"""
     from phase3_gsheet import open_phase3_spreadsheet
 
     checks: list[Check] = []
-    period = period_range_from_bucket(bucket)
-    yyyymm = period[:6]
+    bname = bucket_name(bucket)
+    period = period_range_from_bucket(bname)
+    yyyymm = bucket_yyyymm(bname) or period[:6]
+    names = period_sheet_names(bucket)
     sh = open_phase3_spreadsheet(gc)
-    orig = read_sheet_df(gc, sh, f"{period}原始")
-    rmb = read_sheet_df(gc, sh, f"人民币{period}")
-    group = read_sheet_df(gc, sh, period)
-    tax = read_sheet_df(gc, open_additional_fee_tax_spreadsheet(gc), f"Tax{yyyymm}")
-    sep = read_sheet_df(gc, open_additional_fee_tax_spreadsheet(gc), additional_fee_worksheet_name_from_yyyymm(yyyymm))
+    add_sh = open_additional_fee_tax_spreadsheet(gc)
 
-    missing_sheets = [n for n, d in [("原始", orig), ("人民币", rmb), ("分组", group)] if d.empty]
-    checks.append(Check("Phase3: 五张主表存在", not missing_sheets, f"缺失={missing_sheets}"))
+    frames: dict[str, pd.DataFrame] = {}
+    missing_sheets: list[str] = []
+    for label, ws_name in names.items():
+        df = read_sheet_df(gc, sh, ws_name)
+        frames[label] = df
+        if df.empty:
+            missing_sheets.append(f"{label}({ws_name})")
+    tax = read_sheet_df(gc, add_sh, f"Tax{yyyymm}")
+    sep = read_sheet_df(gc, add_sh, additional_fee_worksheet_name_from_yyyymm(yyyymm))
+    if tax.empty:
+        missing_sheets.append(f"Tax{yyyymm}")
+    if sep.empty:
+        missing_sheets.append(f"附加费{yyyymm}")
+    checks.append(
+        Check("Phase3: 五张主表(含两张比例) + Tax/附加费源表存在", not missing_sheets, f"缺失={missing_sheets}")
+    )
     if missing_sheets:
         return checks
 
-    # 0) 审批中占比（只报告，不阻断）—— 审批中单据已计入本表金额，按账期月看敞口。
-    approval_summary = approval_in_progress_summary(orig)
+    orig, rmb, group = frames["原始"], frames["人民币"], frames["主表(分组)"]
+    rate_receipt, rate_staff = frames["收款比例收款归属"], frames["收款比例运营人员"]
+
+    # 0) 缺列：不能靠「列不存在 → sum 空 = 0」蒙混通过。
+    missing_cols: list[str] = []
+    for label, required in REQUIRED_COLUMNS.items():
+        miss = missing_columns(frames[label], required)
+        if miss:
+            missing_cols.append(f"{label}:{miss}")
+    miss_tax = missing_columns(tax, ["渠道账号", "Tax amount人民币"])
+    if miss_tax:
+        missing_cols.append(f"Tax:{miss_tax}")
+    sep_miss: list[str] = []
+    if "渠道账号" not in sep.columns:
+        sep_miss.append("渠道账号")
+    if not (set(ADDITIONAL_FEE_COLS) & set(sep.columns)):
+        sep_miss.append("附加费金额列")
+    if sep_miss:
+        missing_cols.append(f"附加费:{sep_miss}")
+    checks.append(Check("Phase3: 表列齐全", not missing_cols, "; ".join(missing_cols) or "全部齐"))
+    if missing_cols:
+        return checks  # 列都不齐，后面的按列计算没有意义
+
+    # 1) 非空非法/非有限：NaN/Inf 单独 FAIL，不能当「差=0」。
+    table_frames = {**frames, "Tax": tax, "附加费": sep}
+    scan = {
+        "原始": [c for c in [*MONEY_COLS, "汇率", *rmb_columns(orig)] if c in orig.columns],
+        "人民币": [
+            c
+            for c in [*rmb_columns(rmb), "Tax amount人民币", "附加费累加人民币", *ADDITIONAL_FEE_COLS]
+            if c in rmb.columns
+        ],
+        "主表(分组)": [c for c in [*rmb_columns(group), "收款费用累加人民币"] if c in group.columns],
+        "收款比例收款归属": [
+            c for c in ["应收金额_人民币", "销售额_人民币", "平均收款比例"] if c in rate_receipt.columns
+        ],
+        "收款比例运营人员": rmb_columns(rate_staff),
+        "Tax": ["Tax amount人民币"],
+        "附加费": [c for c in ADDITIONAL_FEE_COLS if c in sep.columns],
+    }
+    invalid_problems: list[str] = []
+    for label, cols in scan.items():
+        invalid_problems.extend(numeric_cell_errors(table_frames[label], cols, table=label))
     checks.append(
-        Check("Phase3: 审批中占比（只报告）", True, format_approval_summary(approval_summary))
+        Check("Phase3: 非空非法/非有限金额", not invalid_problems, "; ".join(invalid_problems[:6]) or "全部有限")
     )
 
-    # 1) 人民币.Tax == Tax{YYYYMM} 合计
+    # 2) 审批中占比（只报告，不阻断）。
+    approval_summary = approval_in_progress_summary(orig)
+    checks.append(Check("Phase3: 审批中占比（只报告）", True, format_approval_summary(approval_summary)))
+
+    # 3) 人民币.Tax == Tax{YYYYMM} 合计（NaN 不能当通过）
     rmb_tax = _num_series(rmb, "Tax amount人民币").sum()
     tax_total = _num_series(tax, "Tax amount人民币").sum()
     checks.append(
         Check(
             "Phase3: Σ(人民币.Tax) == Σ(Tax{YYYYMM})",
-            abs(rmb_tax - tax_total) <= TOL,
+            finite_close(rmb_tax, tax_total),
             f"rmb={rmb_tax:.2f} tax_ws={tax_total:.2f} diff={abs(rmb_tax - tax_total):.4f}",
         )
     )
 
-    # 2) 人民币.附加费 == 附加费{YYYYMM}
+    # 4) 人民币.附加费 == 附加费{YYYYMM}
     rmb_sep = _num_series(rmb, "附加费累加人民币").sum()
     sep_total = _num_series(sep, "附加费累加人民币").sum() if "附加费累加人民币" in sep.columns else 0.0
-    sep_ok = bool(sep.empty) or abs(rmb_sep - sep_total) <= TOL
     checks.append(
         Check(
             "Phase3: Σ(人民币.附加费) == Σ(附加费{YYYYMM})",
-            sep_ok,
+            finite_close(rmb_sep, sep_total),
             f"rmb={rmb_sep:.2f} sep_ws={sep_total:.2f} diff={abs(rmb_sep - sep_total):.4f}",
         )
     )
 
-    # 3) 原始：外币>0 且 汇率空 == 0
+    # 5) 原始：外币>0 且 汇率空 == 0
     fx = _num_series(orig, "汇率")
-    foreign = sum((_num_series(orig, c).abs() for c in MONEY_COLS if c in orig.columns), pd.Series(0.0, index=orig.index))
+    foreign = sum(
+        (_num_series(orig, c).abs() for c in MONEY_COLS if c in orig.columns),
+        pd.Series(0.0, index=orig.index),
+    )
     bad_fx = int(((fx.isna() | (fx == 0)) & (foreign > 0)).sum())
     checks.append(Check("Phase3: 原始 外币>0 且汇率空 == 0", bad_fx == 0, f"rows={bad_fx}"))
 
-    # 4) 原始：渠道账号未匹配 == 0
+    # 6) 原始：渠道账号未匹配 == 0
     acct = orig.get("渠道账号", pd.Series(dtype=object)).astype(str).str.strip()
     blank_acct = int(((acct == "") | (acct == "nan")).sum())
     checks.append(Check("Phase3: 渠道账号未匹配 == 0", blank_acct == 0, f"rows={blank_acct}"))
 
-    # 5) 原始：渠道账号正确提交次数 已生成（审计项 7 的落地标志）
+    # 7) 原始：渠道账号正确提交次数 已生成
     has_count = "渠道账号正确提交次数" in orig.columns
     count_filled = int(_num_series(orig, "渠道账号正确提交次数").notna().sum()) if has_count else 0
     checks.append(
@@ -352,7 +496,23 @@ def check_phase3(gc, *, bucket: str) -> list[Check]:
         )
     )
 
-    # 6) 分组合计 == 行级过滤后合计
+    # 8) 每行账期月：不只校验桶月，逐行日期必须落在桶起始自然月。
+    derived = bucket_yyyymm(bname)
+    if derived:
+        want = f"{derived[:4]}-{derived[4:]}"
+        months = orig["账期日期"].map(month_of)
+        bad_mask = months != want
+        n_bad = int(bad_mask.sum())
+        samples = [str(v) for v in orig.loc[bad_mask, "账期日期"].head(5)]
+        checks.append(
+            Check(
+                "Phase3: 原始 每行账期月 == 桶账期月",
+                n_bad == 0,
+                f"bad={n_bad} want={want} 样例={samples}",
+            )
+        )
+
+    # 9) 分组合计 == 行级过滤后合计
     status = orig.get("审批状态", pd.Series(dtype=object)).astype(str).str.strip()
     result = orig.get("审批结果", pd.Series(dtype=object)).astype(str).str.strip()
     approved = status.isin(["完成", "审批中"]) & (result != "拒绝")
@@ -362,11 +522,59 @@ def check_phase3(gc, *, bucket: str) -> list[Check]:
             continue
         row_sum = _num_series(orig, col)[approved].sum()
         group_sum = _num_series(group, col).sum()
-        if abs(row_sum - group_sum) > TOL:
+        if not finite_close(row_sum, group_sum):
             bad_cols.append(f"{col}: group={group_sum:.2f} rows={row_sum:.2f}")
     checks.append(
         Check("Phase3: 分组表合计 == 行级过滤后合计", not bad_cols, "; ".join(bad_cols[:6]) or "全部一致")
     )
+
+    # 10) 两张比例表与分组表同口径
+    rate_bad: list[str] = []
+    if "应收金额_人民币" in rate_receipt.columns:
+        a, b = _num_series(rate_receipt, "应收金额_人民币").sum(), _num_series(group, "应收金额_人民币").sum()
+        if not finite_close(a, b):
+            rate_bad.append(f"收款归属.应收 sum={a:.2f} group={b:.2f}")
+    if "销售额_人民币" in rate_staff.columns:
+        a, b = _num_series(rate_staff, "销售额_人民币").sum(), _num_series(group, "销售额_人民币").sum()
+        if not finite_close(a, b):
+            rate_bad.append(f"运营人员.销售 sum={a:.2f} group={b:.2f}")
+    checks.append(Check("Phase3: 两张比例表与分组表合计一致", not rate_bad, "; ".join(rate_bad) or "一致"))
+
+    # 11) FBA 两表：声明适用则必须成对存在且列/数值完整。
+    fba_summary = read_sheet_df(gc, sh, f"{period}{FBA_SUMMARY_SUFFIX}")
+    fba_staff = read_sheet_df(gc, sh, f"{period}{FBA_STAFF_SUFFIX}")
+    has_summary, has_staff = not fba_summary.empty, not fba_staff.empty
+    pair_ok = (has_summary == has_staff) and (has_summary or not require_fba)
+    checks.append(
+        Check(
+            "Phase3: FBA 两表成对（分类+人员）",
+            pair_ok,
+            f"分类={has_summary} 人员={has_staff} require_fba={require_fba}",
+        )
+    )
+    if has_summary and has_staff:
+        fba_problems: list[str] = []
+        if "渠道账号" not in fba_summary.columns:
+            fba_problems.append("分类缺 渠道账号")
+        if FBA_DELTA_RMB not in fba_summary.columns:
+            fba_problems.append(f"分类缺 {FBA_DELTA_RMB}")
+        if "运营人员" not in fba_staff.columns:
+            fba_problems.append("人员缺 运营人员")
+        fba_problems.extend(
+            numeric_cell_errors(
+                fba_summary,
+                [c for c in [FBA_DELTA_RMB, *rmb_columns(fba_summary)] if c in fba_summary.columns],
+                table="FBA分类",
+            )
+        )
+        fba_problems.extend(
+            numeric_cell_errors(
+                fba_staff, [c for c in rmb_columns(fba_staff) if c in fba_staff.columns], table="FBA人员"
+            )
+        )
+        checks.append(
+            Check("Phase3: FBA 两表列/数值完整", not fba_problems, "; ".join(fba_problems[:6]) or "完整")
+        )
     return checks
 
 
@@ -379,10 +587,18 @@ def run_checks(
     repair_dir: Path | None = None,
     do_tax: bool = True,
     do_phase3: bool = True,
+    require_fba: bool = False,
 ) -> list[Check]:
     checks: list[Check] = []
-    period = period_range_from_bucket(bucket_name(bucket))
-    month = exchange_month or period[:6]
+    if not do_tax and not do_phase3:
+        return [Check("Verify: 至少执行 Tax 或 Phase3 之一", False, "tax-only 与 phase3-only 不能同时给出")]
+    bname = bucket_name(bucket)
+    try:
+        month = resolve_exchange_month(bname, exchange_month)
+    except ValueError as exc:
+        checks.append(Check("Verify: --exchange-month 与桶账期月一致", False, str(exc)))
+        return checks
+    checks.append(Check("Verify: --exchange-month 与桶账期月一致", True, f"exchange_month={month}"))
     if do_tax:
         if bucket_dir is None or not Path(bucket_dir).is_dir():
             checks.append(Check("Tax: 源目录存在", False, str(bucket_dir)))
@@ -391,5 +607,5 @@ def run_checks(
                 check_tax(gc, bucket=bucket, bucket_dir=Path(bucket_dir), exchange_month=month, repair_dir=repair_dir)
             )
     if do_phase3:
-        checks.extend(check_phase3(gc, bucket=bucket))
+        checks.extend(check_phase3(gc, bucket=bucket, require_fba=require_fba))
     return checks

@@ -12,15 +12,9 @@ _HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(_HERE))
 
 from channel_canonical import canonical_account  # noqa: E402
-from ding_xlsx import enrich, exclude_keys, id_text, read_dingtalk_xlsx  # noqa: E402
+from ding_xlsx import enrich, id_text, read_dingtalk_xlsx_records  # noqa: E402
+from export_lineage import build_export_lineage, empty_enriched_frame  # noqa: E402
 from export_period_excels import drop_helper, write_xlsx  # noqa: E402
-from parse import keep_approval  # noqa: E402
-
-
-def keep_row(st, res) -> bool:
-    st = "" if st is None or (isinstance(st, float) and pd.isna(st)) else str(st)
-    res = "" if res is None or (isinstance(res, float) and pd.isna(res)) else str(res)
-    return keep_approval(st, res)
 
 
 def normalize_accounts(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
@@ -57,24 +51,31 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    raw = read_dingtalk_xlsx(Path(args.src))
-    en = enrich(raw)
-    kept = en[(en["账期月"] == args.period) & en.apply(lambda r: keep_row(r.get("审批状态"), r.get("审批结果")), axis=1)].copy()
-    excluded_late = 0
+    raw, read_report = read_dingtalk_xlsx_records(Path(args.src))
+    if raw.empty and not read_report.get("rows_failed"):
+        raise SystemExit(f"读不到含「账期日期」的行: {args.src}")
+    en = enrich(raw) if not raw.empty else empty_enriched_frame()
+    keys = set()
     if args.exclude_keys:
         from filter_export_by_period import load_exclude_keys  # noqa: E402
 
         keys = load_exclude_keys(Path(args.exclude_keys))
-        before = len(kept)
-        kept = exclude_keys(kept, keys)
-        excluded_late = before - len(kept)
+    lineage = build_export_lineage(en, args.period, keys, read_report)
+    print(lineage.summary())
+    blockers = lineage.blockers()
+    if blockers:
+        for b in blockers:
+            print(f"BLOCKING: {b}")
+        raise SystemExit(2)  # 有阻断项：不产出正式定稿
+    kept = lineage.partitions["kept"].copy()
     kept, n_norm = normalize_accounts(kept)
     out = Path(args.out)
     write_xlsx(out, {"核算行": drop_helper(kept)})
     amz = kept[kept["选择平台"] == "亚马逊"]
     print(
-        f"wrote {out} rows={len(kept)} amz={len(amz)} excluded_late={excluded_late} "
-        f"account_normalized={n_norm} dup={kept['_key'].duplicated().sum()}"
+        f"wrote {out} rows={len(kept)} amz={len(amz)} "
+        f"excluded_late={lineage.counts['excluded_late']} "
+        f"account_normalized={n_norm} dup={len(lineage.duplicate_keys)}"
     )
 
 

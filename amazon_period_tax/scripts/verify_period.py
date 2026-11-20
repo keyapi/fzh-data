@@ -51,6 +51,11 @@ def main() -> None:
     ap.add_argument("--repair-dir", default="")
     ap.add_argument("--tax-only", action="store_true")
     ap.add_argument("--phase3-only", action="store_true")
+    ap.add_argument(
+        "--require-fba",
+        action="store_true",
+        help="声明本期适用 FBA：FBA 分类/人员两张表必须成对存在",
+    )
     ap.add_argument("--gspread-auth", choices=("sa", "user"), default="sa")
     args = ap.parse_args()
 
@@ -75,6 +80,7 @@ def main() -> None:
         repair_dir=Path(args.repair_dir) if args.repair_dir else None,
         do_tax=do_tax,
         do_phase3=do_phase3,
+        require_fba=args.require_fba,
     )
     failed = [c for c in checks if not c.ok]
     print(f"bucket={bucket} checks={len(checks)} failed={len(failed)}")
