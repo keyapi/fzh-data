@@ -20,6 +20,14 @@ for p in (_REPO, _REPO / "tongtool_order_cost", _PKG, _DING):
         sys.path.insert(0, str(p))
 
 from bucket_meta import resolve_exchange_month  # noqa: E402
+from correction_policy import (  # noqa: E402
+    PolicyError,
+    build_proposals,
+    load_policy,
+    manifest_policy_fields,
+    policy_errors,
+    write_gate_errors,
+)
 from exchange_rate import load_exchange_rate_table  # noqa: E402
 from explore_tables import build_exploration_tables  # noqa: E402
 from gsheet_tax import sort_additional_fee_tax_tabs, tax_worksheet_name, write_df_to_gsheet  # noqa: E402
@@ -101,17 +109,22 @@ def enforce_write_gate(
     master_problems: list[str],
     publish_requested: bool,
     publish_blockers: list[str] | None = None,
+    policy_problems: list[str] | None = None,
 ) -> None:
-    """写前生效的硬门禁（A3/T03 + A4/T04 + E1 文件总账）。
+    """写前生效的硬门禁（A3/T03 + A4/T04 + E1 文件总账 + F 修正政策）。
 
     - ``strict_failures`` 非空且 ``--strict``：**任何写入之前**退出，不再先写后返回 1。
     - ``master_problems`` 非空且请求发布（--write-gsheet / --upload-nas）：无论是否 strict 都拒绝，
       未知账号/缺人员/快照过期/ live 与快照不一致的 Tax 不得发布。
     - ``publish_blockers`` 非空且请求发布：源文件总账未闭合（FAIL / NEEDS-REVIEW /
       未审定跨期 / 无内部日期）时同样拒绝，不依赖 ``--strict``。
+    - ``policy_problems`` 非空：用户显式给了修正政策/凭据却无效（缺/过期/未授权 T2/
+      hash 变化），任何写入（含本地 xlsx）之前一律拒绝，不依赖 ``--strict`` 与发布开关。
     """
     if strict and strict_failures:
         raise SystemExit(f"STRICT 检查未通过（写前拒绝）: {'; '.join(strict_failures)}")
+    if policy_problems:
+        raise SystemExit("修正政策未通过（拒绝写入）: " + "; ".join(policy_problems))
     if publish_requested and publish_blockers:
         raise SystemExit(
             "源文件总账未通过（拒绝发布）: " + "; ".join(publish_blockers)
@@ -158,6 +171,16 @@ def main() -> None:
         action="store_true",
         help="有重复文件/读失败/行数对不上/币种未匹配/账号行数不符时非 0 退出（默认只打印）",
     )
+    ap.add_argument(
+        "--correction-policy",
+        default="",
+        help="git 外预授权政策 JSON（F 批）：缺/过期/未授权 T2 时拒绝任何写入",
+    )
+    ap.add_argument(
+        "--corrections",
+        default="",
+        help="可选 corrections JSON；配合 --correction-policy 产出 proposal/授权判定",
+    )
     args = ap.parse_args()
 
     bucket_dir = resolve_bucket_dir(args)
@@ -166,6 +189,48 @@ def main() -> None:
     exchange_month = resolve_exchange_month(bucket_name, args.exchange_month, force=args.force_month)
     args.exchange_month = exchange_month
     mirror_dir = Path(args.out_dir) if args.out_dir else None
+
+    # F：修正政策（git 外 JSON）。无 --correction-policy 时行为不变；有则任何缺/过期/
+    # 未授权 T2 都在写前拒绝发布，与 --strict 无关。
+    correction_policy = None
+    correction_proposals: list = []
+    policy_problems: list[str] = []
+    if args.correction_policy:
+        try:
+            correction_policy = load_policy(Path(args.correction_policy))
+        except PolicyError as e:
+            policy_problems.append(f"POLICY: {e}")
+    elif args.corrections:
+        policy_problems.append(
+            "CORRECTIONS: 给了 --corrections 但缺 --correction-policy，无法授权/校验"
+        )
+    if correction_policy is not None:
+        if args.corrections:
+            try:
+                payload = json.loads(Path(args.corrections).read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as e:
+                policy_problems.append(f"CORRECTIONS: 读取失败: {e}")
+            else:
+                try:
+                    correction_proposals = build_proposals(payload, period=args.exchange_month)
+                except PolicyError as e:
+                    policy_problems.append(f"CORRECTIONS: {e}")
+                else:
+                    if not correction_proposals:
+                        policy_problems.append(
+                            f"CORRECTIONS: 凭据里没有 period={args.exchange_month} 的修正"
+                        )
+        policy_problems.extend(
+            write_gate_errors(
+                period=args.exchange_month,
+                policy=correction_policy,
+                proposals=correction_proposals,
+            )
+        )
+        if not correction_proposals:
+            policy_problems.extend(f"POLICY: {e}" for e in policy_errors(correction_policy))
+    if policy_problems:
+        print("POLICY 修正政策未通过:", "; ".join(policy_problems))
 
     read_stats: dict = {}
     df, read_report = read_bucket_amz_txts(
@@ -317,6 +382,7 @@ def main() -> None:
     )
     report["strict_failures"] = strict_failures
     report["master_problems"] = master_problems
+    report["policy_problems"] = policy_problems
     report["unknown_alias_candidates"] = list(
         getattr(master_gate, "unknown_alias_candidates", []) or []
     )
@@ -331,6 +397,7 @@ def main() -> None:
         if (
             (args.strict and strict_failures)
             or master_problems
+            or policy_problems
             or ((args.write_gsheet or args.upload_nas) and publish_blockers)
         ):
             raise SystemExit(1)
@@ -343,6 +410,7 @@ def main() -> None:
         master_problems=master_problems,
         publish_requested=bool(args.write_gsheet or args.upload_nas),
         publish_blockers=publish_blockers,
+        policy_problems=policy_problems,
     )
 
     write_excel_sheets(xlsx_path, sheets)
@@ -387,6 +455,12 @@ def main() -> None:
                     else None
                 ),
             }
+            # F：发布清单绑定 policy/proposal/逐条 correction/证据 hash。
+            manifest.update(
+                manifest_policy_fields(
+                    policy=correction_policy, proposals=correction_proposals
+                )
+            )
             mp = mdir / f"{run_id}.json"
             mp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
             report["manifest_path"] = str(mp)

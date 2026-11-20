@@ -13,6 +13,14 @@ C02（gate_remediation_plan_20261120.md U-E2 / E2.3）在原有「审批编号 +
 - 空 period 集合不产出 corrected 副本；preview/draft 凭据禁止走正式写入口；
 - 行指纹必须恰好命中 1 行；``before`` 必须与当前单元格一致；同一 (行, 列) 不能被两条
   修正同时改（重复应用）。
+
+F 批（``correction_policy.py``）接入后，可显式传入 ``policy``/``authorization``：
+
+- 有政策时先跑 ``write_gate_errors``——未授权 T2、政策过期、proposal/policy hash 变化
+  都在**打开工作簿之前**失败；
+- ``auto_allowed``（T1 或政策窄通道命中的 T2）不再要求逐条 ``status=approved``，但仍须
+  通过证据与唯一性校验；``approved``（人工精确批准）沿用 ``status + confirmed_by``；
+- ``preview`` 仍只计算 diff，**不写任何文件**。
 """
 from __future__ import annotations
 
@@ -26,6 +34,17 @@ from pathlib import Path
 import openpyxl
 
 from bucket_meta import bucket_yyyymm
+from correction_policy import (
+    STATUS_AUTO_ALLOWED,
+    TIER_T1,
+    CorrectionPolicy,
+    AuthorizationResult,
+    build_proposals,
+    evaluate_batch,
+    manifest_policy_fields,
+    stale_pass_problems,
+    write_gate_errors,
+)
 
 SCHEMA_VERSION = 1
 APPROVED = "approved"
@@ -34,6 +53,7 @@ APPROVED = "approved"
 _PREVIEW_MARKERS = {"preview", "draft", "pending", "rejected", "revoked", "cancelled", "canceled"}
 
 _MD5_RE = re.compile(r"^[0-9a-f]{32}$")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 # 这些列按文本比较/写入；其余按十进制数值。
 _TEXT_HINTS = ("账户", "账号", "平台", "币种", "日期")
@@ -119,7 +139,60 @@ def _value_equal(col, actual, want) -> bool:
         return _text(actual) == _text(want)
 
 
-def _validate_item(item: dict, period: str, evidence_root: Path | None) -> None:
+def _validate_evidence(
+    cid: str,
+    evidence: dict,
+    evidence_root: Path | None,
+    *,
+    tier: str = "",
+    auto_authorized: bool = False,
+) -> None:
+    """附件/规则证据：T1 允许用归一规则+证据 hash 代替附件；其余必须是原附件 bytes。"""
+    attachment = str(evidence.get("attachment") or "").strip()
+    attachment_md5 = str(evidence.get("attachment_md5") or "").strip().lower()
+    explicit_hash = str(evidence.get("evidence_hash") or "").strip().lower()
+
+    if tier == TIER_T1 and auto_authorized and str(evidence.get("rule") or "").strip():
+        # T1 表示修复：不要求原始附件，但必须留归一规则与可核验的摘要。
+        if not (
+            _MD5_RE.match(attachment_md5)
+            or _MD5_RE.match(explicit_hash)
+            or _SHA256_RE.match(explicit_hash)
+        ):
+            raise RemediationError(f"{cid}: T1 自动修正缺证据 hash（evidence_hash / attachment_md5）")
+        if not attachment:
+            return  # 规则类 T1：没有附件就不核验文件
+        if evidence_root is None:
+            raise RemediationError(f"{cid}: 未提供 evidence_root，无法核验附件 hash")
+        att_path = Path(evidence_root) / attachment
+        if not att_path.is_file():
+            raise RemediationError(f"{cid}: 附件不存在: {att_path}")
+        if attachment_md5 and md5_file(att_path).lower() != attachment_md5:
+            raise RemediationError(f"{cid}: 附件 md5 不符")
+        return
+
+    if not attachment:
+        raise RemediationError(f"{cid}: evidence.attachment 为空")
+    if not _MD5_RE.match(attachment_md5):
+        raise RemediationError(f"{cid}: evidence.attachment_md5 不是 32 位 md5")
+    if evidence_root is None:
+        raise RemediationError(f"{cid}: 未提供 evidence_root，无法核验附件 hash")
+    att_path = Path(evidence_root) / attachment
+    if not att_path.is_file():
+        raise RemediationError(f"{cid}: 附件不存在: {att_path}")
+    actual = md5_file(att_path)
+    if actual.lower() != attachment_md5:
+        raise RemediationError(f"{cid}: 附件 md5 不符: {actual} != {attachment_md5}")
+
+
+def _validate_item(
+    item: dict,
+    period: str,
+    evidence_root: Path | None,
+    *,
+    auto_authorized: bool = False,
+    tier: str = "",
+) -> None:
     cid = str(item.get("correction_id") or "").strip()
     scope = item.get("scope") or {}
     if str(scope.get("period", "")) != str(period):
@@ -131,10 +204,11 @@ def _validate_item(item: dict, period: str, evidence_root: Path | None) -> None:
             raise RemediationError(f"{cid}: scope.bucket={bucket!r} 映射月 {yyyymm} != {period}")
 
     status = str(item.get("status") or "").strip().lower()
-    if status != APPROVED:
-        raise RemediationError(f"{cid}: 状态 {status!r} 未获批准（只有 {APPROVED!r} 可应用）")
-    if not str(item.get("confirmed_by") or "").strip():
-        raise RemediationError(f"{cid}: 缺 confirmed_by（授权人）")
+    if not auto_authorized:
+        if status != APPROVED:
+            raise RemediationError(f"{cid}: 状态 {status!r} 未获批准（只有 {APPROVED!r} 可应用）")
+        if not str(item.get("confirmed_by") or "").strip():
+            raise RemediationError(f"{cid}: 缺 confirmed_by（授权人）")
     if not str(item.get("approval_id") or "").strip():
         raise RemediationError(f"{cid}: 缺 approval_id")
 
@@ -152,20 +226,9 @@ def _validate_item(item: dict, period: str, evidence_root: Path | None) -> None:
         _validate_field_change(cid, col, change)
 
     evidence = item.get("evidence") or {}
-    attachment = str(evidence.get("attachment") or "").strip()
-    attachment_md5 = str(evidence.get("attachment_md5") or "").strip().lower()
-    if not attachment:
-        raise RemediationError(f"{cid}: evidence.attachment 为空")
-    if not _MD5_RE.match(attachment_md5):
-        raise RemediationError(f"{cid}: evidence.attachment_md5 不是 32 位 md5")
-    if evidence_root is None:
-        raise RemediationError(f"{cid}: 未提供 evidence_root，无法核验附件 hash")
-    att_path = Path(evidence_root) / attachment
-    if not att_path.is_file():
-        raise RemediationError(f"{cid}: 附件不存在: {att_path}")
-    actual = md5_file(att_path)
-    if actual.lower() != attachment_md5:
-        raise RemediationError(f"{cid}: 附件 md5 不符: {actual} != {attachment_md5}")
+    _validate_evidence(
+        cid, evidence, evidence_root, tier=tier, auto_authorized=auto_authorized
+    )
 
 
 def validate_corrections(
@@ -175,6 +238,8 @@ def validate_corrections(
     src: Path,
     evidence_root: Path | None = None,
     src_md5: str | None = None,
+    auto_allowed_ids: set[str] | None = None,
+    tiers: dict[str, str] | None = None,
 ) -> dict:
     """校验整份凭据里属于 ``period`` 的修正，返回可应用清单；任一不满足直接抛错。"""
     if not isinstance(corrections, dict):
@@ -234,7 +299,14 @@ def validate_corrections(
         )
 
     for item in period_items:
-        _validate_item(item, str(period), evidence_root)
+        cid = str(item.get("correction_id") or "").strip()
+        _validate_item(
+            item,
+            str(period),
+            evidence_root,
+            auto_authorized=cid in (auto_allowed_ids or set()),
+            tier=(tiers or {}).get(cid, ""),
+        )
 
     return {"period": str(period), "source_md5": actual, "items": period_items}
 
@@ -263,19 +335,66 @@ def apply_corrections(
     evidence_root: Path | None = None,
     preview: bool = False,
     src_md5: str | None = None,
+    policy: CorrectionPolicy | None = None,
+    authorization: list[AuthorizationResult] | None = None,
+    prior_manifest: dict | None = None,
+    now=None,
 ) -> dict:
     """应用指定账期的修正，写 corrected 副本，返回应用清单。
 
     ``preview=True`` 只计算将改哪些格，**不写任何文件**；正式模式才会保存 ``out``。
     所有校验在打开工作簿前后、保存之前完成，失败不会留下半截副本。
+
+    传 ``policy``（或 ``authorization``）时走 F 批授权门禁：T1 自动、T2 窄通道、
+    preview 一律不得写入；无政策时保持 E2 的 ``approved`` 语义不变。
     """
     src = Path(src)
     out = Path(out)
     if src.resolve() == out.resolve():
         raise RemediationError(f"src 与 out 不能是同一个文件: {src}")
 
+    auto_allowed_ids: set[str] = set()
+    tiers: dict[str, str] = {}
+    policy_fields: dict | None = None
+    if policy is not None or authorization is not None:
+        proposals = build_proposals(corrections, period=str(period))
+        results = (
+            list(authorization)
+            if authorization is not None
+            else list(evaluate_batch(proposals, policy, now=now).results)
+        )
+        problems = write_gate_errors(
+            period=str(period),
+            policy=policy,
+            proposals=proposals,
+            results=results,
+            now=now,
+        )
+        if problems:
+            raise RemediationError("修正授权门禁未通过: " + "; ".join(problems))
+        auto_allowed_ids = {r.correction_id for r in results if r.status == STATUS_AUTO_ALLOWED}
+        tiers = {p.correction_id: p.tier for p in proposals}
+        policy_fields = manifest_policy_fields(
+            policy=policy, proposals=proposals, results=results, now=now
+        )
+        if prior_manifest is not None:
+            stale = stale_pass_problems(
+                prior_manifest,
+                input_md5=src_md5 or md5_file(src),
+                policy=policy,
+                proposals=proposals,
+            )
+            if stale:
+                raise RemediationError("旧 PASS 已失效（不得复用）: " + "; ".join(stale))
+
     validation = validate_corrections(
-        corrections, period=period, src=src, evidence_root=evidence_root, src_md5=src_md5
+        corrections,
+        period=period,
+        src=src,
+        evidence_root=evidence_root,
+        src_md5=src_md5,
+        auto_allowed_ids=auto_allowed_ids,
+        tiers=tiers,
     )
 
     wb = openpyxl.load_workbook(src)
@@ -324,6 +443,7 @@ def apply_corrections(
             "source_md5": validation["source_md5"],
             "out": None,
             "applied": applied,
+            "authorization": policy_fields,
         }
 
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -336,4 +456,5 @@ def apply_corrections(
         "source_md5": validation["source_md5"],
         "out_md5": md5_file(out),
         "applied": applied,
+        "authorization": policy_fields,
     }

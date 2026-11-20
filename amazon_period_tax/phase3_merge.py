@@ -10,11 +10,19 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
 
 from amounts import is_blank, is_blank_value, parse_amounts_frame
+from correction_policy import (
+    CorrectionPolicy,
+    CorrectionProposal,
+    AuthorizationResult,
+    manifest_policy_fields,
+    write_gate_errors,
+)
 from exchange_rate import load_exchange_rate_table, normalize_currency_label, unique_rates_by_key
 from gsheet_tax import (
     additional_fee_worksheet_name_from_yyyymm,
@@ -1153,11 +1161,20 @@ def preflight_write_errors(
     df_account: pd.DataFrame,
     approval_filter: pd.Series,
     fba_errors: list[str] | None = None,
+    correction_policy: CorrectionPolicy | None = None,
+    correction_proposals: Sequence[CorrectionProposal] = (),
+    authorization_results: Sequence[AuthorizationResult] | None = None,
+    correction_period: str = "",
+    now=None,
 ) -> list[str]:
     """Phase3 写前硬门禁（不写任何表，只返回问题清单）。
 
     ``fba_errors`` 来自本批 FBA 生成（读桶不闭合 / 缺 FX / 金额非法 / 规则非法 /
     0 命中 / 生成失败）。错误默认阻断所有正式写动作（F03/F04），不是 warning。
+
+    F 批：``correction_policy`` + ``correction_proposals``（+ 已存 ``authorization_results``）
+    交给 ``correction_policy.write_gate_errors``——未授权 T2、政策过期、proposal/policy
+    hash 变化都在写前 FAIL，与 CLI ``--strict`` 无关。没有修正提案时不改变现有行为。
     """
     problems: list[str] = []
     fx_missing = find_unmatched_currency(df)
@@ -1184,6 +1201,17 @@ def preflight_write_errors(
     problems.extend(tax_account_problems(df_tax, df_account, only_nonzero=True))
     for err in fba_errors or []:
         problems.append(f"FBA: {err}")
+    if correction_proposals:
+        period = correction_period or str(correction_proposals[0].period or "")
+        problems.extend(
+            write_gate_errors(
+                period=period,
+                policy=correction_policy,
+                proposals=list(correction_proposals),
+                results=authorization_results,
+                now=now,
+            )
+        )
     return problems
 
 
@@ -1199,6 +1227,8 @@ def run_phase3(
     write_gsheet_fba: bool = False,
     allow_empty_tax: bool = False,
     write_repairs: bool = True,
+    correction_policy: CorrectionPolicy | None = None,
+    correction_proposals: Sequence[CorrectionProposal] = (),
 ) -> tuple[Phase3Report, dict[str, pd.DataFrame]]:
     period_range = period_range_from_bucket(bucket)
     yyyymm = exchange_month.strip()
@@ -1369,6 +1399,9 @@ def run_phase3(
             df_account=df_account,
             approval_filter=approval_filter,
             fba_errors=fba_errors,
+            correction_policy=correction_policy,
+            correction_proposals=correction_proposals,
+            correction_period=yyyymm,
         )
         if problems:
             raise RuntimeError("写前门禁失败，已拒绝写入: " + "; ".join(problems))
@@ -1447,6 +1480,10 @@ def run_phase3(
             "worksheets_written": rep.worksheets_written,
             "warnings": rep.warnings,
         }
+        # F：发布清单绑定 policy/proposal/逐条 correction/证据 hash；任一变化旧 PASS 失效。
+        manifest.update(
+            manifest_policy_fields(policy=correction_policy, proposals=correction_proposals)
+        )
         mp = manifest_dir / f"{run_id}.json"
         mp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         rep.manifest_path = str(mp)
