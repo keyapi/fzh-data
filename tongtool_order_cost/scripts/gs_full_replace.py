@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -84,13 +85,37 @@ def totals(df: pd.DataFrame, metrics: list[str]) -> dict:
 
 
 def run(month: str, label: str, apply: bool, book: str | None = None,
-        local_override: str | None = None) -> None:
+        local_override: str | None = None) -> int:
     c = cfg(month, book)[label]
     if local_override:
         c = {**c, "local": local_override}
     local_path = ROOT / c["local"]
     if not local_path.exists():
         raise SystemExit(f"本地表不存在: {local_path}")
+    # 构建门禁：manifest 有任何 fail 时禁止写回（汇率/仓库/渠道/成本等）
+    manifest_path = ROOT / "out" / "build_tabs" / month / "manifest.json"
+    if not manifest_path.exists():
+        if apply:
+            raise SystemExit(f"BUILD GATE FAIL: 缺少构建 manifest {manifest_path}")
+    else:
+        import json as _json
+        _m = _json.loads(manifest_path.read_text(encoding="utf-8"))
+        if str(_m.get("month") or "") != str(month):
+            raise SystemExit(f"BUILD GATE FAIL: manifest 月份 {_m.get('month')} != {month}")
+        _fails = [a for a in _m.get("assertions", []) if a.get("status") == "fail"]
+        if _fails:
+            raise SystemExit(
+                "BUILD GATE FAIL: " + "; ".join(
+                    f"{a.get('name')}: {a.get('detail')}" for a in _fails))
+        # 待写 CSV 必须与 manifest 记录的产物哈希一致；--local 派生表除外
+        if apply and not local_override:
+            _hashes = _m.get("outputs_sha256") or {}
+            _want = _hashes.get(label)
+            if _want:
+                _h = hashlib.sha256(local_path.read_bytes()).hexdigest()
+                if _h != _want:
+                    raise SystemExit(
+                        f"BUILD GATE FAIL: {label} CSV 哈希与 manifest 不一致（可能被替换）")
     gc = retry(gsheets.client)
     sh = retry(lambda: gc.open(c["book"]))
     w = retry(lambda: sh.worksheet(c["ws"]))
@@ -129,7 +154,7 @@ def run(month: str, label: str, apply: bool, book: str | None = None,
         f"old_only={old_only}\nnew_only={new_only}\n", encoding="utf-8")
     if not apply:
         print(f"   DRY-RUN (no write) -> {out_dir}")
-        return
+        return 0
 
     sa_path = gsheets.service_account_path()
     creds = service_account.Credentials.from_service_account_file(
@@ -184,6 +209,7 @@ def run(month: str, label: str, apply: bool, book: str | None = None,
     (run_dir / "result.json").write_text(json.dumps(
         {"month": month, "label": label, "readback_errors": errs,
          "rows": len(local)}, ensure_ascii=False, indent=2), encoding="utf-8")
+    return errs
 
 
 def main() -> int:
@@ -196,8 +222,15 @@ def main() -> int:
     ap.add_argument("--local", default=None, help="本地 CSV 覆盖（用于带额外列的月份）")
     args = ap.parse_args()
     labels = ["self", "fba", "merged"] if args.label == "all" else [args.label]
+    errors = 0
     for label in labels:
-        run(args.month, label, args.apply, args.book, args.local)
+        errors += run(args.month, label, args.apply, args.book, args.local)
+        if errors:
+            print("STOP: 前一张表回读失败，后续不再写")
+            break
+    if errors:
+        print(f"FAIL: readback errors={errors}")
+        return 1
     return 0
 
 

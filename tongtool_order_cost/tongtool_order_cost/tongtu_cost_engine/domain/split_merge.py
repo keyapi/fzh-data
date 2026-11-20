@@ -1899,6 +1899,11 @@ def _check_aux_amount(
                 skipped += 1
                 skip_reasons["原单行无金额（售价=0）"] += 1
                 continue
+            if all(r.sale_cny == 0 for r in subs):
+                # EN 子单行没有售价字段，无法做金额守恒；显式跳过，不当作违例
+                skipped += 1
+                skip_reasons["子单 EN 行无金额（无法校验）"] += 1
+                continue
             checked += 1
             expected = sum(r.sale_cny for r in subs)
             actual = sum(r.sale_cny for r in orig)

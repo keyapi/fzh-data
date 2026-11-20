@@ -17,7 +17,9 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import re
 import uuid
 from collections import Counter, defaultdict
@@ -168,8 +170,13 @@ def _load_fx(path: Path) -> dict[str, float]:
     for rec in df.to_dict("records"):
         cur = _text(rec.get("收款币种")).upper()
         rate = _num(rec.get("汇率"))
-        if cur and rate is not None:
-            out[cur] = rate
+        if not cur or rate is None:
+            continue
+        if not math.isfinite(rate) or rate <= 0:
+            raise ValueError(f"汇率非法: {cur}={rate} ({path})")
+        if cur in out and abs(out[cur] - rate) > 1e-9:
+            raise ValueError(f"汇率重复且不一致: {cur}={out[cur]} vs {rate} ({path})")
+        out[cur] = rate
     return out
 
 
@@ -307,14 +314,19 @@ def _warehouse_source(wh: str, sources: Mapping[str, dict]) -> dict:
     if hit:
         return dict(hit)
     # 多渠道仓库：按仓库名里的国家粗分（与 Colab cell_056 一致）
+    candidates: list[dict] = []
     if "多渠道仓库" in wh:
-        for key, rec in sources.items():
-            if "多渠道仓库" in key and (wh[:2] in key or key[:2] in wh):
-                return dict(rec)
-    for key, rec in sources.items():
-        if key and (key in wh or wh in key):
-            return dict(rec)
-    return {}
+        candidates = [
+            rec for key, rec in sources.items()
+            if "多渠道仓库" in key and (wh[:2] in key or key[:2] in wh)
+        ]
+    if not candidates:
+        candidates = [
+            rec for key, rec in sources.items()
+            if key and (key in wh or wh in key)
+        ]
+    # 模糊匹配必须唯一；多候选返回空，计入 unmapped_warehouses 门禁，禁止取 first。
+    return dict(candidates[0]) if len(candidates) == 1 else {}
 
 
 # ─────────────────────────── self 166 ───────────────────────────
@@ -380,15 +392,15 @@ def _build_self_rows(
         sale = _num(out.get("售价")) or 0.0
         cur = _text(detail.get("收款币种")).upper()
         rate = fx.get(cur)
-        if rate is None:
+        if rate is None or rate <= 0:
             implied = None
             cny = _num(out.get("售价(人民币)"))
             if cny is not None and sale:
                 implied = cny / sale
-            rate = implied if implied is not None else 1.0
+            rate = implied if implied is not None and implied > 0 else None
             fx_misses[cur or "(空)"] += 1
         out["汇率"] = _fmt(rate) if rate is not None else ""
-        sales_cny_fx = sale * (rate or 1.0) if rate is not None else None
+        sales_cny_fx = sale * rate if rate is not None else None
         out["售价*汇率"] = _fmt(sales_cny_fx)
 
         # 真实尾程：物流商运费（组内求和）
@@ -1234,6 +1246,45 @@ def build_order_tabs(
     add("成本恒等（1件=皮壳+绍兴二次+二次）", not self_checks,
         f"{len(self_rows)} 行；违例 {len(self_checks)}")
     assertions.extend(_cost_gates(self_stats, fba_stats))
+    # 上游独立断言必须进入最终发布结果，不能只看最终自洽
+    for a in getattr(shadow, "assertions", []):
+        if getattr(a, "status", "") == "fail":
+            assertions.append({"name": f"Phase1: {getattr(a, 'name', '')}",
+                               "status": "fail",
+                               "detail": getattr(a, "detail", "")})
+    for a in getattr(phase2, "assertions", []):
+        if getattr(a, "status", "") == "fail":
+            assertions.append({"name": f"Phase2: {getattr(a, 'name', '')}",
+                               "status": "fail",
+                               "detail": getattr(a, "detail", "")})
+    # 输入映射门禁：汇率/仓库/渠道账号缺失不能静默
+    add("汇率缺失=0", not self_stats.get("fx_misses"),
+        f"缺失币种/行数 {self_stats.get('fx_misses') or '无'}")
+    add("发货仓库映射完整=0", not self_stats.get("unmapped_warehouses"),
+        f"未映射仓库 {self_stats.get('unmapped_warehouses') or '无'}")
+    missing_account = sum(
+        1 for r in self_rows if not _text(r.get("渠道账号"))
+    )
+    add("渠道账号缺失=0", missing_account == 0, f"缺失 {missing_account} 行")
+    # 待确认：皮壳商品有成本但目的地加工=0（非 allowlist）
+    allow_path = root / "config" / "known_zero_processing_allowlist.csv"
+    allow = set()
+    if allow_path.exists():
+        for rec in _read_csv(allow_path).to_dict("records"):
+            allow.add(_text(rec.get("item_fg")))
+    zero_proc = [
+        r for r in self_rows
+        if _text(r.get("是否皮壳")) == "皮壳"
+        and not re.search(r"-(?:COVER|FOAM|PPCOTTON)", _text(r.get("通途SKU")), re.I)
+        and (_num(r.get("1件产品成本")) or 0) > 0
+        and (_num(r.get("二次加工成本")) or 0) == 0
+        and _text(r.get("品类尺寸面料编码")) not in allow
+    ]
+    assertions.append({
+        "name": "目的地加工缺失（待确认）",
+        "status": "warn" if zero_proc else "pass",
+        "detail": f"{len(zero_proc)} 行皮壳商品目的地 valuation=0；清单见 parity 报告",
+    })
     assertions.append({
         "name": "特殊订单清单已应用",
         "status": "pass" if special_stats["file"] else "warn",
@@ -1263,6 +1314,13 @@ def build_order_tabs(
              }.items()}}
     parity = _parity(month, out, self_rows, fba_rows, merged_rows)
 
+    def _sha(path: Path) -> str:
+        h = hashlib.sha256()
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
     manifest = {
         "month": month,
         "created_at": datetime.now(TZ_CN).isoformat(),
@@ -1272,6 +1330,7 @@ def build_order_tabs(
         "parity": parity,
         "recon_95_78_totals": recon_totals,
         "outputs": {"self": str(self_csv), "fba": str(fba_csv), "merged": str(merged_csv)},
+        "outputs_sha256": {"self": _sha(self_csv), "fba": _sha(fba_csv), "merged": _sha(merged_csv)},
     }
     (out_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2,

@@ -143,6 +143,20 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
   `DY-LAPW-25883` 丢件已理赔），build 自动应用清单后 202609 self **6,219** / merged **7,488**，
   GS 两个写回 ws 已同步替换（readback 0）；FBA 无变化。
 
+## 门禁（2026-11-18）
+
+构建和写回都不允许静默继续：
+
+- **构建**：`self/FBA 成本阻断=0`、`FBA shadow 已校验`、`汇率缺失=0`、`发货仓库映射完整=0`、
+  `渠道账号缺失=0`；Phase1/Phase2 的 fail 断言会汇总进最终结果。
+- **汇率**：`fx_<月>.csv` 必须唯一、有限且 >0；零/负/重复不一致直接报错，不再用隐含汇率或 `or 1.0`。
+- **仓库**：模糊匹配必须唯一，多候选按未映射计，禁止取 first。
+- **写回**：`gs_full_replace.py` 要求 manifest 存在、月份一致、无 fail 断言；
+  待写 CSV 的 sha256 必须与 manifest `outputs_sha256` 一致（`--local` 派生表除外）；
+  回读错误返回非零并停止后续表。
+- **待确认（warn，不阻断）**：皮壳非组件行有成本但目的地加工=0（默认排除 allowlist
+  `config/known_zero_processing_allowlist.csv`）。
+
 ## 已知缺口 / 后续
 
 - `品类` 现在是 EN 物料组，与旧 Colab 的叶子品类只有 13.5%（self）/ 22.2%（FBA）同名；
