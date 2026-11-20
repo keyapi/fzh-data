@@ -1266,6 +1266,22 @@ def build_order_tabs(
         1 for r in self_rows if not _text(r.get("渠道账号"))
     )
     add("渠道账号缺失=0", missing_account == 0, f"缺失 {missing_account} 行")
+    bad_keys = sum(
+        1 for r in self_rows
+        if not _text(r.get("订单号")) or not _text(r.get("通途SKU"))
+    )
+    add("订单号/通途SKU 空值=0", bad_keys == 0, f"空值 {bad_keys} 行")
+    bad_num = 0
+    for col in ("售价", "售价(人民币)", "发货数量", "物流商运费"):
+        if col in raw.columns:
+            vals = pd.to_numeric(raw[col], errors="coerce")
+            bad_num += int((~vals.map(lambda x: x is not None and math.isfinite(float(x)))).sum())
+    add("数值非有限=0", bad_num == 0, f"非有限/不可解析 {bad_num} 个")
+    assertions.append({
+        "name": "作废原单标记已加载",
+        "status": "pass" if flags.exists() else "warn",
+        "detail": str(flags) if flags.exists() else f"缺少 {flags}；拆单原单可能被重复计入",
+    })
     # 待确认：皮壳商品有成本但目的地加工=0（非 allowlist）
     allow_path = root / "config" / "known_zero_processing_allowlist.csv"
     allow = set()
