@@ -83,17 +83,44 @@ def main() -> None:
                     )
 
     plan = []
+    manual: list[dict] = []
+    names_by_folder: dict[str, set[str]] = {}
     for f in files:
-        new_name, why = propose_txt_name(f["name"], hint_ym=args.hint_ym)
+        folder = f["rel"].rsplit("/", 1)[0] if "/" in f["rel"] else ""
+        names_by_folder.setdefault(folder, set()).add(f["name"])
+    claimed: dict[str, set[str]] = {}
+    for f in files:
+        folder = f["rel"].rsplit("/", 1)[0] if "/" in f["rel"] else ""
+        claimed.setdefault(folder, set())
+        existing = names_by_folder[folder] | claimed[folder]
+        new_name, why = propose_txt_name(f["name"], hint_ym=args.hint_ym, existing=existing)
         rec = {**f, "new_name": new_name, "reason": why}
         if new_name and new_name != f["name"]:
             rec["action"] = "rename"
+            claimed[folder].add(new_name)
         else:
             rec["action"] = "skip"
+        if why == "目标已存在":
+            target, _ = propose_txt_name(f["name"], hint_ym=args.hint_ym)
+            rec["action"] = "skip_conflict"
+            rec["new_name"] = target
+            manual.append(
+                {
+                    "path": f.get("nas_path") or f.get("local"),
+                    "name": f["name"],
+                    "target": target,
+                    "reason": "目标名已存在，跳过重命名，人工确认后再处理",
+                }
+            )
         plan.append(rec)
 
     renames = [r for r in plan if r["action"] == "rename"]
-    print(f"bucket={args.bucket} txt={len(plan)} rename={len(renames)} apply={args.apply}")
+    print(
+        f"bucket={args.bucket} txt={len(plan)} rename={len(renames)} "
+        f"skip_conflict={len(manual)} apply={args.apply}"
+    )
+    for m in manual:
+        print("SKIP-CONFLICT", m["path"], "->", m["target"])
 
     applied = []
     if args.apply and renames:
@@ -115,6 +142,8 @@ def main() -> None:
         "hint_ym": args.hint_ym,
         "total_txt": len(plan),
         "rename_n": len(renames),
+        "skip_conflict_n": len(manual),
+        "manual": manual,
         "applied": args.apply,
         "plan": plan,
         "apply_log": applied,

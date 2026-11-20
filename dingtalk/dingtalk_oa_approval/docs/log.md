@@ -6,6 +6,26 @@ title: dingtalk_oa_approval 变更日志
 
 # 变更日志
 
+## 2026-11-19（账期管道审计修复）
+
+- **修（第二轮）**: 钉钉 aflow 导出表单已改名「收款确认单」；`select_form` 增加包含匹配与菜单项诊断。日期控件选择器仍待修，附件下载可走「裁剪已有导出表 → `--mode attachments --all-originators`」。
+- **发现**: 8 月 JohnaUS 8/11 附件上传的就是 7 月副本（内部结算号仍为 27080868331），真实 27171210801（752.64 USD）不在钉钉/ NAS，需从 Amazon 后台补下载。
+
+- **修**: `filter_export_by_period.py` 定稿导出漏审批过滤 —— 只按账期月 + 迟交键，已撤销/拒绝会混入。
+  现复用 `parse.keep_approval`（完成/审批中且非拒绝），输出分解 `in / period_rows / kept /
+  excluded_late / excluded_status`。2026-09 实跑旧 171 行 → 新 168 行（剔除 3 张已撤销）。
+  抽出 `filter_period_rows()` 便于测试。
+- **修**: `amz_txt_naming.settlement_date_from_stem` 补 MMDD 跨月：`AMZStruseryUS-0930.txt`
+  （账期月 2026-10）→ `2026-09-30`；跨年（解析月 > 账期月）归上一年。
+- **修**: `nas_normalize_amz_txt.py` 重命名前做目标碰撞检查：同目录目标已存在 → `skip_conflict`，
+  写 `manual` 清单，**不 rename、不覆盖**。
+- **修**: `channel_canonical` 快照读入打印 mtime + 行数，>30 天 WARN；别名映射冲突不再静默
+  last-wins：仅大小写不同保留第一条 + 醒目 WARN（与 Colab 一致），其它真歧义 `raise`。
+  支持 `CHANNEL_ACCOUNT_SNAPSHOT` 指向快照（测试用）。已重新导出快照（gitignore 的 out 文件）。
+- 新增测试：`test_filter_export_by_period.py`、`test_amz_txt_naming_cross_month.py`、
+  `test_channel_canonical.py`。详见
+  `docs/solutions/workflow-issues/amazon-period-pipeline-audit-fixes.md`。
+
 ## 2026-11-02（API 发起带附件的销售收款确认单）
 - **新增**: 本模块从「只读附件」扩展到**可以 API 发起**原生销售收款确认单。学习正文：`docs/solutions/integration-issues/dingtalk-oa-create-receipt-with-attachments.md`。
 - **权限**: 已有 `Workflow.Instance.Write` 只能读实例/拿审批钉盘 spaceId。带附件还要 `Storage.UploadInfo.Read` + `Storage.File.Write`，开完必须发布新版本。

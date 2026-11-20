@@ -111,8 +111,8 @@ def build_exploration_tables(
     out["FBA费用原始"] = df_fba
     rules = load_fba_rules(gc, bucket_name=bucket_name)
     rules_exec = rules.loc[rules["当月是否执行"] == "是"].copy()
-    if not df_fba.empty and not rules_exec.empty:
-        rules_exec = rules_exec.rename(columns={"平台SKU": "sku"})
+    if not df_fba.empty:
+        # 规则为空也输出"未调整"的原 FBA 行（不能返回空表冒充没有 FBA）。
         processed = process_fba_orders(rules_exec, df_fba)
         out["FBA费用扣减后"] = processed
         out["FBA费用扣减后分类汇总"] = fba_summary_df12(processed)

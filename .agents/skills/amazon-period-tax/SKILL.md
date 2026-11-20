@@ -17,6 +17,10 @@ description: >
 - `docs/solutions/workflow-issues/amazon-period-colab-export-keep-approval.md`
 - `docs/solutions/integration-issues/amazon-period-tax-fx-alias-multiplies.md`
 - `docs/solutions/workflow-issues/amazon-period-tax-rerun-without-agent.md`
+- `docs/solutions/workflow-issues/amazon-period-pipeline-audit-fixes.md`（审计修复 + verify 硬关卡）
+- `docs/solutions/workflow-issues/amazon-period-cross-bucket-attachment-misfile.md`（跨桶错放/结算号台账）
+- `docs/solutions/workflow-issues/amazon-period-source-corrections-and-e2e-gate.md`（源定稿修正/写前门禁/manifest）
+- `docs/solutions/integration-issues/amazon-settlement-v1-v2-flatfile.md`（V1/V2/XML 结算报告）
 - txt / 迟交惯例：`docs/solutions/conventions/amazon-period-file-reconcile.md`
 
 定稿输入：`dingtalk/dingtalk_oa_approval/export_colab_period.py`（须 `keep_approval`，可选 `--exclude-keys`）。

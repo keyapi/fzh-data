@@ -2,15 +2,28 @@
 """Colab「钉钉OA收款费用…」Phase3：OA 定稿 + 汇率 + 渠道账号 + 附加费/Tax → GSheet。"""
 from __future__ import annotations
 
+import hashlib
+import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
 
-from exchange_rate import load_exchange_rate_table, normalize_currency_label
+from amounts import is_blank, is_blank_value, parse_amounts_frame
+from correction_policy import (
+    CorrectionPolicy,
+    CorrectionProposal,
+    AuthorizationResult,
+    manifest_policy_fields,
+    write_gate_errors,
+)
+from exchange_rate import load_exchange_rate_table, normalize_currency_label, unique_rates_by_key
 from gsheet_tax import (
     additional_fee_worksheet_name_from_yyyymm,
     open_additional_fee_tax_spreadsheet,
@@ -27,6 +40,10 @@ from phase3_constants import (
     OPS_SPREADSHEET_ID,
 )
 from phase3_gsheet import phase3_spreadsheet_available, read_worksheet_df, write_worksheet_df
+
+_DING = Path(__file__).resolve().parents[1] / "dingtalk" / "dingtalk_oa_approval"
+if str(_DING) not in sys.path:
+    sys.path.insert(0, str(_DING))
 
 
 def set2after1(ls_cols: list, first_element: str, second_element: str) -> None:
@@ -72,8 +89,14 @@ def load_channel_accounts(gc, exchange_month: str) -> tuple[pd.DataFrame, pd.Dat
     if staff_col not in df_account.columns:
         raise KeyError(f"渠道账号表无列 {staff_col!r}")
     df_account = df_account.copy()
-    df_account["运营人员"] = df_account[staff_col].astype(str)
-    df_account["渠道账号"] = df_account["渠道账号"].astype(str)
+    # 运营人员保留 NA（不 astype(str) 变 'nan'）：否则「没填人员」会被当成一个人名进汇总。
+    df_account["运营人员"] = df_account[staff_col].map(
+        lambda v: pd.NA if is_blank_value(v) else str(v).strip()
+    )
+    df_account["渠道账号"] = df_account["渠道账号"].map(
+        lambda v: "" if is_blank_value(v) else str(v).strip()
+    )
+    df_account = df_account.loc[df_account["渠道账号"].ne("")].reset_index(drop=True)
     df_account["渠道账号别名"] = df_account["渠道账号别名"].fillna("").astype(str).str.replace("，", ",", regex=False)
     df_account["渠道账号别名"] = df_account["渠道账号"] + "," + df_account["渠道账号别名"]
     df_account["渠道账号别名"] = df_account["渠道账号别名"].str.split(",").apply(
@@ -81,13 +104,61 @@ def load_channel_accounts(gc, exchange_month: str) -> tuple[pd.DataFrame, pd.Dat
     )
     df_explode = df_account.explode("渠道账号别名")
     df_explode["渠道账号别名"] = df_explode["渠道账号别名"].str.strip()
-    df_explode = df_explode[["渠道", "渠道账号", "渠道账号别名", "运营人员"]].drop_duplicates(
-        subset=["渠道账号别名"], keep="first"
-    )
-    if df_explode["渠道账号别名"].duplicated().any():
-        dup = df_explode.loc[df_explode["渠道账号别名"].duplicated(), "渠道账号别名"].unique()
-        raise ValueError(f"渠道账号别名重复: {dup[:5]!r}")
-    return df_account[["渠道", "渠道账号", "运营人员"]].drop_duplicates("渠道账号"), df_explode
+    df_explode = df_explode[["渠道", "渠道账号", "渠道账号别名", "运营人员"]]
+    # M01：**先**查别名冲突，再做去重。旧实现先去重再去查 duplicated()，冲突被吞掉。
+    _assert_alias_conflicts(df_explode)
+    df_explode = df_explode.drop_duplicates(subset=["渠道账号别名"], keep="first")
+
+    acct_view = df_account[["渠道", "渠道账号", "运营人员"]]
+    dup_mask = acct_view["渠道账号"].duplicated(keep=False)
+    if dup_mask.any():
+        # dropna=False：一个人名 + 一个空人员也必须算冲突，不能被 nunique 默认忽略后 first-wins。
+        conflicts = acct_view.loc[dup_mask].groupby("渠道账号")[["渠道", "运营人员"]].nunique(dropna=False)
+        bad = conflicts.loc[(conflicts > 1).any(axis=1)].index.tolist()
+        if bad:
+            raise ValueError(f"渠道账号表重复账号且渠道/运营人员不一致（无法唯一合并）: {bad[:5]!r}")
+        acct_view = acct_view.drop_duplicates("渠道账号", keep="first")
+    return acct_view, df_explode
+
+
+def _assert_alias_conflicts(df_explode: pd.DataFrame) -> None:
+    """别名（大小写不敏感）→ 规范账号必须唯一。
+
+    - 同一别名指向**不同**规范账号 → 真歧义，直接 raise（否则 merge validate 看不出来）；
+    - 冲突的规范账号只是大小写不同（同一账号被维护了两遍）→ 保留第一条并 WARN，与
+      ``channel_canonical`` 的现规则一致。
+    """
+    if df_explode.empty:
+        return
+    key = df_explode["渠道账号别名"].astype(str).str.replace(r"\s+", "", regex=True).str.upper()
+    work = df_explode.assign(_alias_key=key)
+    work = work.loc[work["_alias_key"].ne("") & work["渠道账号"].notna()]
+    conflicts: dict[str, list[str]] = {}
+    for alias_key, group in work.groupby("_alias_key"):
+        canons = list(dict.fromkeys(group["渠道账号"].tolist()))
+        if len(canons) > 1:
+            conflicts[alias_key] = canons
+    if not conflicts:
+        return
+    hard: list[str] = []
+    case_only: list[str] = []
+    for alias_key, canons in conflicts.items():
+        label = f"{alias_key}: {canons}"
+        if len({c.upper() for c in canons}) == 1:
+            case_only.append(label)
+        else:
+            hard.append(label)
+    if case_only:
+        print(
+            "[WARN] 渠道账号别名冲突（仅大小写不同的同一账号，保留表上第一条）: "
+            + "; ".join(case_only[:10]),
+            file=sys.stderr,
+        )
+    if hard:
+        raise ValueError(
+            "渠道账号别名冲突（同一别名指向不同渠道账号，请先修「渠道账号」表）: "
+            + "; ".join(hard[:10])
+        )
 
 
 OA_HEADER_ANCHOR_COLS = ("新平台销售账户", "选择平台", "账期日期")
@@ -116,23 +187,32 @@ def read_dingtalk_oa_sheet(path: Path, sheet_name: str, dtype: dict) -> tuple[pd
     return df0, 0
 
 
-def load_oa_dataframe(path: Path) -> pd.DataFrame:
+def load_oa_dataframe(path: Path, failures_out: list[str] | None = None) -> pd.DataFrame:
+    """读 OA 导出 Excel。
+
+    sheet 读取异常不再静默 ``continue``：记录到 ``failures_out``（默认由调用方转 warnings，
+    ``--strict`` 时据此非 0），全部 sheet 都读不出才 raise。
+    """
     dtype = {"发起人工号": str, "关联审批单": str, "审批编号": str}
     xp = pd.ExcelFile(path)
     if "核算行" in xp.sheet_names:
         df = pd.read_excel(path, sheet_name="核算行", dtype=dtype)
         return df
     frames = []
+    failures: list[str] = []
     for sn in xp.sheet_names:
         try:
             df_s, _hdr = read_dingtalk_oa_sheet(path, sn, dtype)
-        except Exception:
+        except Exception as e:
+            failures.append(f"FAIL-SHEET {sn}: {e}")
             continue
         if not _dingtalk_oa_has_header_row(df_s):
             continue
         frames.append(df_s)
+    if failures_out is not None:
+        failures_out.extend(failures)
     if not frames:
-        raise ValueError(f"无法读取 OA Excel: {path}")
+        raise ValueError(f"无法读取 OA Excel: {path}；sheet 读取失败: {failures or '无可用表头'}")
     return pd.concat(frames, ignore_index=True)
 
 
@@ -212,18 +292,43 @@ def build_row_level_df(
     if "货币中文名" in df.columns:
         df["货币中文名"] = df["货币中文名"].map(normalize_currency_label)
     df.drop(columns=["收款币种", "汇率"], inplace=True, errors="ignore")
-    df = df.merge(df_rate_explode[["货币中文名", "收款币种", "汇率"]], how="left", on="货币中文名")
+    # T01/O03：空币种键禁止连接汇率（否则汇率 NaN → 人民币静默 0）。
+    if "货币中文名" in df.columns:
+        blank_ccy = is_blank(df["货币中文名"])
+        if blank_ccy.any():
+            keys = (
+                df.loc[blank_ccy, "审批编号"].astype(str).head(5).tolist()
+                if "审批编号" in df.columns
+                else blank_ccy.index[:5].tolist()
+            )
+            raise ValueError(f"OA 有 {int(blank_ccy.sum())} 行币种为空，无法配汇率: {keys!r}")
+    fx = unique_rates_by_key(
+        df_rate_explode, key="货币中文名", used_keys=df["货币中文名"], label="汇率表"
+    )
+    df = df.merge(
+        fx[["货币中文名", "收款币种", "汇率"]],
+        how="left",
+        on="货币中文名",
+        validate="many_to_one",
+    )
     df.loc[df["销售账户"] == "DLZ", "销售账户"] = "DLZPPL"
     df.loc[df["销售账户"] == "PPL", "销售账户"] = "DLZPPL"
-    df["销售账户"] = df["销售账户"].astype(str).str.strip()
+    sales_account = df["销售账户"].astype(str).str.strip()
+    # 判空统一走 is_blank：astype(str) 会把 NA 变成 'nan'，不能只比 == ""。
+    df["销售账户"] = sales_account.where(~is_blank(sales_account), pd.NA)
     df = df.merge(
         df_explode[["渠道账号", "渠道账号别名", "运营人员"]],
         how="left",
         left_on="销售账户",
         right_on="渠道账号别名",
+        validate="many_to_one",
     )
     numeric_cols = [c for c in LS_COL_NEED_NUMERIC if c in df.columns]
-    df[numeric_cols] = df[numeric_cols].replace(",", "", regex=True).apply(pd.to_numeric, errors="coerce")
+    # O06/R04：非空非法金额必须 FAIL（旧实现 coerce→0，把错数静默吞掉）。
+    # 允许空的是费用列（LS_COL_COST，空 → 0）；应收/销售只有**非空**时才要求可解析。
+    parsed = parse_amounts_frame(df, numeric_cols, label="OA 核算行")
+    for c in numeric_cols:
+        df[c] = parsed[c]
     df[numeric_cols] = df[numeric_cols].fillna(0)
     cost_cols = [c for c in LS_COL_COST if c in df.columns]
     df[COL_TOTAL_COST] = df[cost_cols].sum(axis=1)
@@ -242,6 +347,12 @@ def build_row_level_df(
             ),
         )
     approval_filter = (df["审批状态"].isin(["完成", "审批中"])) & (df["审批结果"] != "拒绝")
+    # Colab cell 8：只统计「完成/审批中且非拒绝」的单据，按渠道账号计数；未通过的行留空
+    df["渠道账号正确提交次数"] = np.nan
+    approved = df.loc[approval_filter]
+    if not approved.empty and "渠道账号" in approved.columns:
+        counts = approved.groupby("渠道账号")["渠道账号"].transform("count")
+        df.loc[approval_filter, "渠道账号正确提交次数"] = counts
     return df, approval_filter
 
 
@@ -285,11 +396,16 @@ def build_group_account_cost(
     )
     cost_cols = [c for c in LS_COL_COST if c in g.columns]
     g[COL_TOTAL_COST] = g[cost_cols].sum(axis=1)
-    fx = df_rate_explode.drop_duplicates(subset=["收款币种"], keep="first")[
-        ["货币中文名", "收款币种", "汇率"]
-    ]
-    g = g.merge(fx, how="left", on="收款币种")
-    g = g.merge(df_account[["渠道", "渠道账号", "运营人员"]], how="left", on="渠道账号")
+    fx = unique_rates_by_key(
+        df_rate_explode, key="收款币种", used_keys=g["收款币种"], label="汇率表"
+    )[["货币中文名", "收款币种", "汇率"]]
+    g = g.merge(fx, how="left", on="收款币种", validate="many_to_one")
+    g = g.merge(
+        df_account[["渠道", "渠道账号", "运营人员"]],
+        how="left",
+        on="渠道账号",
+        validate="many_to_one",
+    )
     g[COL_TOTAL_COST_RMB] = g[COL_TOTAL_COST] * g["汇率"]
     cols = g.columns.tolist()
     cols.insert(0, cols.pop(cols.index("选择平台")))
@@ -316,7 +432,10 @@ def build_group_account_cost(
 
 def build_rmb_by_account(df_group: pd.DataFrame) -> pd.DataFrame:
     cost_rmb = [f"{x}_人民币" for x in LS_COL_COST if f"{x}_人民币" in df_group.columns]
-    insert_cols = [COL_TOTAL_COST_RMB] + [c for c in cost_rmb if c != COL_TOTAL_COST_RMB]
+    lead_cols = [c for c in ("应收金额_人民币", "销售额_人民币") if c in df_group.columns]
+    insert_cols = lead_cols + [COL_TOTAL_COST_RMB] + [
+        c for c in cost_rmb if c not in (COL_TOTAL_COST_RMB, *lead_cols)
+    ]
     return (
         df_group.groupby(by=["渠道", "渠道账号", "运营人员"], dropna=False)[insert_cols]
         .sum()
@@ -324,44 +443,169 @@ def build_rmb_by_account(df_group: pd.DataFrame) -> pd.DataFrame:
     )
 
 
-def load_additional_fee_grouped(gc, exchange_month: str, df_explode: pd.DataFrame) -> pd.DataFrame:
+def _alias_resolver(df_explode: pd.DataFrame | None):
+    """返回 (resolve, known)：把附加费/Tax 表里的渠道账号别名归一到规范账号。"""
+    from channel_canonical import canonical_account
+
+    alias_map: dict[str, str] = {}
+    conflicts: dict[str, list[str]] = {}
+    if df_explode is not None and not df_explode.empty:
+        for canon, alias in zip(df_explode["渠道账号"], df_explode["渠道账号别名"]):
+            if is_blank_value(alias) or is_blank_value(canon):
+                continue
+            key = re.sub(r"\s+", "", str(alias)).upper()
+            canon_s = str(canon).strip()
+            prior = alias_map.get(key)
+            if prior is not None and prior != canon_s:
+                # upper 键大小写不敏感：'foo' 与 'FOO' 指向不同账号时不能 last-wins。
+                conflicts.setdefault(key, [prior]).append(canon_s)
+                continue
+            alias_map[key] = canon_s
+    known = {str(a).strip() for a in (df_explode["渠道账号"] if df_explode is not None else [])}
+
+    hard = [k for k, v in conflicts.items() if len({c.upper() for c in v}) > 1]
+    if hard:
+        raise ValueError(
+            "附加费/Tax 别名冲突（同一别名指向不同渠道账号）: "
+            + "; ".join(f"{k}: {sorted(set(conflicts[k]))}" for k in hard[:10])
+        )
+    if conflicts:
+        print(
+            "[WARN] 附加费/Tax 别名冲突（仅大小写不同的同一账号，保留第一条）: "
+            + "; ".join(f"{k}: {sorted(set(v))}" for k, v in list(conflicts.items())[:10]),
+            file=sys.stderr,
+        )
+
+    def resolve(value) -> str:
+        key = str(value).strip()
+        hit = alias_map.get(key.upper())
+        if hit:
+            return hit
+        canon = canonical_account(key)
+        return canon or key
+
+    return resolve, known
+
+
+def _read_fee_worksheet(gc, ws_name: str, *, allow_empty: bool) -> pd.DataFrame | None:
+    """读附加费&Tax 表某 ws；不存在时 allow_empty 返回 None，否则抛错。"""
+    sh = open_additional_fee_tax_spreadsheet(gc)
+    try:
+        rows = sh.worksheet(ws_name).get_all_values()
+    except Exception:
+        if allow_empty:
+            return None
+        raise
+    if not rows:
+        if allow_empty:
+            return None
+        raise ValueError(f"工作表 {ws_name} 为空")
+    return pd.DataFrame(rows[1:], columns=rows[0]).replace("", pd.NA)
+
+
+def load_additional_fee_grouped(
+    gc,
+    exchange_month: str,
+    df_explode: pd.DataFrame,
+    *,
+    allow_empty: bool = False,
+) -> tuple[pd.DataFrame, list[str]]:
+    """读「附加费{YYYYMM}」并按别名归一化渠道账号后求和。
+
+    必需列：``渠道账号`` + 至少一列附加费金额（``附加费累加人民币`` 缺失时用各分量列求和）。
+    缺必需列默认 ``raise``（不再静默返回空表让 Phase3 少算）；``allow_empty=True`` 才允许空。
+    返回 (df, 未匹配别名列表)；未匹配账号进 Phase3 warnings。
+    """
     ws_name = additional_fee_worksheet_name_from_yyyymm(exchange_month)
-    sh = open_additional_fee_tax_spreadsheet(gc)
-    rows = sh.worksheet(ws_name).get_all_values()
-    raw = pd.DataFrame(rows[1:], columns=rows[0]).replace("", pd.NA)
-    if "运营人员" in raw.columns:
-        raw["运营人员"] = raw["运营人员"].fillna("")
-    keep_cols = ["渠道账号"] + [c for c in ADDITIONAL_FEE_COLS if c in raw.columns]
-    raw = raw[[c for c in keep_cols if c in raw.columns]]
-    fee_cols = [c for c in ADDITIONAL_FEE_COLS if c in raw.columns and c != "附加费累加人民币"]
-    for c in raw.columns:
-        if c == "渠道账号":
-            continue
-        raw[c] = raw[c].astype(str).str.replace(",", "", regex=False)
-        raw[c] = pd.to_numeric(raw[c], errors="coerce").fillna(0)
-    if fee_cols and "附加费累加人民币" not in raw.columns:
-        raw["附加费累加人民币"] = raw[fee_cols].sum(axis=1)
-    sum_cols = ["附加费累加人民币"] + fee_cols
-    if "渠道账号" in raw.columns:
-        return raw.groupby("渠道账号")[sum_cols].sum().reset_index()
-    raw = raw.rename(columns={"渠道账号": "渠道账号别名"})
-    raw = raw.merge(df_explode[["渠道账号", "渠道账号别名"]], how="left", on="渠道账号别名")
-    raw = raw.drop(columns=["渠道账号别名"], errors="ignore")
-    return raw.groupby("渠道账号")[sum_cols].sum().reset_index()
+    raw = _read_fee_worksheet(gc, ws_name, allow_empty=allow_empty)
+    empty_cols = ["渠道账号", "附加费累加人民币"]
+    if raw is None:
+        return pd.DataFrame(columns=empty_cols), []
+    amount_cols = [c for c in ADDITIONAL_FEE_COLS if c in raw.columns]
+    if "渠道账号" not in raw.columns or not amount_cols:
+        detail = []
+        if "渠道账号" not in raw.columns:
+            detail.append("渠道账号")
+        if not amount_cols:
+            detail.append("附加费金额列（附加费累加人民币或分量列）")
+        if allow_empty:
+            return pd.DataFrame(columns=empty_cols), []
+        raise ValueError(
+            f"附加费工作表 {ws_name} 缺必需列 {detail}；现有列={list(raw.columns)[:12]}"
+        )
+
+    raw = raw[["渠道账号"] + amount_cols].copy()
+    for c in amount_cols:
+        raw[c] = pd.to_numeric(
+            raw[c].astype(str).str.replace(",", "", regex=False), errors="coerce"
+        ).fillna(0)
+    comp_cols = [c for c in amount_cols if c != "附加费累加人民币"]
+    if "附加费累加人民币" not in raw.columns:
+        raw["附加费累加人民币"] = raw[comp_cols].sum(axis=1) if comp_cols else 0.0
+    sum_cols = ["附加费累加人民币", *comp_cols]
+
+    resolve, known = _alias_resolver(df_explode)
+    raw = _drop_blank_accounts(raw, amount_cols, label=f"附加费工作表 {ws_name}")
+    raw["渠道账号"] = raw["渠道账号"].map(resolve)
+    unmatched = sorted({a for a in raw["渠道账号"] if a not in known})
+    out = raw.groupby("渠道账号", as_index=False)[sum_cols].sum()
+    return out, unmatched
 
 
-def load_tax_grouped(gc, bucket: str) -> pd.DataFrame:
+def load_tax_grouped(
+    gc,
+    bucket: str,
+    df_explode: pd.DataFrame | None = None,
+    *,
+    allow_empty: bool = False,
+) -> tuple[pd.DataFrame, list[str]]:
+    """读 Tax{YYYYMM} 并按别名归一化渠道账号后求和。
+
+    与 Colab cell 31-32 一致：Tax 表的「渠道账号」可能是别名，先按（大写化后的）别名映射回
+    规范渠道账号；映射不到的再用 ``channel_canonical`` 静态快照兜底。返回 (df, 未匹配别名列表)。
+    缺 ``渠道账号`` / ``Tax amount人民币`` 列默认 ``raise``（不再静默变空表），
+    只有 ``allow_empty=True`` 才允许。
+    """
     ws_name = tax_worksheet_name(bucket)
-    sh = open_additional_fee_tax_spreadsheet(gc)
-    rows = sh.worksheet(ws_name).get_all_values()
-    raw = pd.DataFrame(rows[1:], columns=rows[0]).replace("", pd.NA)
-    if "渠道账号" not in raw.columns or "Tax amount人民币" not in raw.columns:
-        return pd.DataFrame(columns=["渠道账号", "Tax amount人民币"])
+    raw = _read_fee_worksheet(gc, ws_name, allow_empty=allow_empty)
+    empty_cols = ["渠道账号", "Tax amount人民币"]
+    if raw is None:
+        return pd.DataFrame(columns=empty_cols), []
+    missing = [c for c in empty_cols if c not in raw.columns]
+    if missing:
+        if allow_empty:
+            return pd.DataFrame(columns=empty_cols), []
+        raise ValueError(f"Tax 工作表 {ws_name} 缺必需列 {missing}；现有列={list(raw.columns)[:12]}")
     raw["Tax amount人民币"] = pd.to_numeric(
         raw["Tax amount人民币"].astype(str).str.replace(",", "", regex=False),
         errors="coerce",
     ).fillna(0)
-    return raw.groupby("渠道账号")["Tax amount人民币"].sum().reset_index()
+    resolve, known = _alias_resolver(df_explode)
+    raw = _drop_blank_accounts(raw, ["Tax amount人民币"], label=f"Tax 工作表 {ws_name}")
+    raw["渠道账号"] = raw["渠道账号"].map(resolve)
+    unmatched = sorted({a for a in raw["渠道账号"] if a not in known})
+    return raw.groupby("渠道账号")["Tax amount人民币"].sum().reset_index(), unmatched
+
+
+def _drop_blank_accounts(raw: pd.DataFrame, amount_cols: list[str], *, label: str) -> pd.DataFrame:
+    """丢掉账号为空（NA/空串/``nan``/``None``/``null`` 哨兵）的行；**有金额则拒绝**。
+
+    空账号行的金额无法归属（O09）：静默丢弃等于丢钱，所以非零金额必须报错，让维护人去表里修。
+    """
+    out = raw.copy()
+    out["渠道账号"] = out["渠道账号"].map(lambda v: "" if is_blank_value(v) else str(v).strip())
+    blank = out["渠道账号"].eq("")
+    if blank.any():
+        cols = [c for c in amount_cols if c in out.columns]
+        nonzero = out.loc[blank, cols].apply(pd.to_numeric, errors="coerce").abs().fillna(0).sum(axis=1)
+        bad = out.loc[blank].loc[nonzero > 0]
+        if not bad.empty:
+            raise ValueError(
+                f"{label} 有 {len(bad)} 行渠道账号为空但金额非零，无法归属: "
+                f"{bad[['渠道账号', *cols]].head(5).to_dict('records')!r}"
+            )
+        out = out.loc[~blank].reset_index(drop=True)
+    return out
 
 
 def merge_rmb_tax_additional(
@@ -370,22 +614,59 @@ def merge_rmb_tax_additional(
     df_sep: pd.DataFrame,
     df_tax: pd.DataFrame,
     df_account: pd.DataFrame,
+    stats_out: dict | None = None,
 ) -> pd.DataFrame:
+    """按渠道账号外连接人民币/附加费/Tax/账号表。
+
+    连接前断言各表 ``渠道账号`` 唯一；外连接新增的账号（只存在于附加费/Tax/账号表）
+    收集进 ``stats_out['outer_only_accounts']``，作为行数差异的明确清单。
+    """
+    stats = {"outer_only_accounts": []}
+
+    def _assert_unique(df: pd.DataFrame, label: str) -> None:
+        if "渠道账号" not in df.columns:
+            raise ValueError(f"{label} 缺渠道账号列")
+        dup = df.loc[df["渠道账号"].duplicated(keep=False), "渠道账号"]
+        if not dup.empty:
+            raise ValueError(f"{label} 渠道账号重复，无法唯一合并: {sorted(set(dup))[:5]!r}")
+
     base = df_rmb.drop(columns=["渠道", "运营人员"], errors="ignore")
-    out = base.merge(df_sep, how="outer", on="渠道账号")
-    if not df_tax.empty:
-        out = out.merge(df_tax, how="outer", on="渠道账号")
-    out = out.merge(df_account[["渠道", "渠道账号", "运营人员"]], how="outer", on="渠道账号")
+    _assert_unique(base, "人民币按账号表")
+    out = base
+    for other, label in ((df_sep, "附加费"), (df_tax, "Tax")):
+        if other is None or other.empty:
+            continue
+        _assert_unique(other, label)
+        before = set(out["渠道账号"])
+        out = out.merge(other, how="outer", on="渠道账号", validate="one_to_one")
+        added = sorted(set(out["渠道账号"]) - before)
+        stats["outer_only_accounts"].extend([f"{label}:{a}" for a in added])
+    _assert_unique(df_account, "渠道账号表")
+    before = set(out["渠道账号"])
+    out = out.merge(
+        df_account[["渠道", "渠道账号", "运营人员"]],
+        how="outer",
+        on="渠道账号",
+        validate="one_to_one",
+    )
+    added = sorted(set(out["渠道账号"]) - before)
+    stats["outer_only_accounts"].extend([f"账号表:{a}" for a in added])
+    if out["渠道账号"].duplicated().any():
+        raise ValueError("合并后渠道账号重复（外连接产生了重复账号）")
     cols = out.columns.tolist()
     cols.insert(0, cols.pop(cols.index("渠道")))
     for a, b in [
         ("渠道", "渠道账号"),
         ("渠道账号", "运营人员"),
-        ("运营人员", COL_TOTAL_COST_RMB),
+        ("运营人员", "应收金额_人民币"),
+        ("应收金额_人民币", "销售额_人民币"),
+        ("销售额_人民币", COL_TOTAL_COST_RMB),
         (COL_TOTAL_COST_RMB, "Tax amount人民币"),
     ]:
         if a in cols and b in cols:
             set2after1(cols, a, b)
+    if stats_out is not None:
+        stats_out.update(stats)
     return out[cols]
 
 
@@ -397,39 +678,371 @@ def collection_rate_by_receipt(df_group: pd.DataFrame) -> pd.DataFrame:
 
 
 def collection_rate_by_staff(df_group: pd.DataFrame) -> pd.DataFrame:
-    rmb_cols = [c for c in df_group.columns if c.endswith("_人民币")]
+    """Colab cell 17：按运营人员汇总人民币列，比例列插在其源列右侧。
+
+    列序（202608 实表）：运营人员, 销售额_人民币, 应收金额_人民币, 应收金额_比例,
+    客户退货至平台运费_人民币, … 每个 ``_人民币`` 后面紧跟 ``_比例``；最后把
+    销售额_人民币 挪到运营人员右侧。旧实现把比例列全追加到末尾，与 notebook 不一致。
+    """
+    rmb_cols = [f"{c}_人民币" for c in LS_COL_NEED_NUMERIC if f"{c}_人民币" in df_group.columns]
     g = df_group.groupby("运营人员")[rmb_cols].sum()
-    out = g.copy()
-    if "销售额_人民币" in out.columns:
+    if "销售额_人民币" in g.columns:
         for col in rmb_cols:
-            if col != "销售额_人民币":
-                new_name = col.replace("_人民币", "_比例")
-                ratio = out[col] / out["销售额_人民币"]
-                ratio = ratio.replace([np.inf, -np.inf], np.nan).fillna(1.0)
-                out[new_name] = ratio
-    return out.reset_index()
+            if col == "销售额_人民币":
+                continue
+            new_name = col.replace("_人民币", "_比例")
+            ratio = (g[col] / g["销售额_人民币"]).replace([np.inf, -np.inf], np.nan).fillna(1.0)
+            g.insert(g.columns.get_loc(col) + 1, new_name, ratio)
+    g = g.reset_index()
+    if "销售额_人民币" in g.columns:
+        sales_rmb = g.pop("销售额_人民币")
+        g.insert(g.columns.get_loc("运营人员") + 1, "销售额_人民币", sales_rmb)
+    return g
+
+
+FBA_COL = "FBA费用_人民币"
+FBA_ADD_RECEIVE = "加上FBA费用_应收金额_人民币"
+FBA_MINUS_COMMISSION = "扣减FBA费用_佣金_人民币"
+FBA_SUMMARY_SUFFIX = "FBA费用扣减后分类汇总"
+FBA_STAFF_SUFFIX = "FBA费用扣减后收款比例运营人员"
+FBA_DELTA_RMB = "调整前-后amount人民币"
+FBA_TOL = 0.01
+
+
+def fba_source_hash(fba_summary: pd.DataFrame) -> str:
+    """分类汇总的账号→差额指纹：分组表与人员表必须用同一个（F07）。"""
+    fb = fba_account_deltas(fba_summary)
+    items = sorted(
+        (str(a), round(float(v), 6))
+        for a, v in zip(fb["渠道账号"], fb[FBA_DELTA_RMB])
+    )
+    return hashlib.sha256(json.dumps(items, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def assert_same_fba_source(group_hash: str | None, staff_hash: str | None) -> None:
+    """分组表与人员表必须用同一份 FBA 分类汇总（同一 hash），不能一新一旧（F07）。"""
+    if group_hash != staff_hash:
+        raise ValueError(
+            f"FBA 分组表与人员表来源 hash 不一致（group={group_hash} staff={staff_hash}）"
+        )
+
+
+def fba_account_deltas(fba_summary: pd.DataFrame | None) -> pd.DataFrame:
+    """分类汇总 → 每账号差额（人民币）。空账号/非数值/非有限直接 ValueError。
+
+    ``None`` 与"空表"必须区分：``None`` 表示**没有生成结果**，绝不能被当成 0 差额
+    继续（F03），这里直接报错。
+    """
+    if fba_summary is None:
+        raise ValueError("FBA 分类汇总缺失（None）：不能当作 0 差额继续")
+    if fba_summary.empty:
+        return pd.DataFrame({"渠道账号": [], FBA_DELTA_RMB: []})
+    if "渠道账号" not in fba_summary.columns:
+        raise ValueError("FBA 分类汇总缺 渠道账号 列")
+    if FBA_DELTA_RMB not in fba_summary.columns:
+        raise ValueError(f"FBA 分类汇总缺 {FBA_DELTA_RMB} 列")
+    work = fba_summary.copy()
+    work["渠道账号"] = work["渠道账号"].map(lambda v: "" if is_blank_value(v) else str(v).strip())
+    blank = work["渠道账号"].eq("")
+    if blank.any():
+        raise ValueError(f"FBA 分类汇总有 {int(blank.sum())} 行渠道账号为空（无法挂到账号级）")
+    vals = pd.to_numeric(
+        work[FBA_DELTA_RMB].astype(str).str.replace(",", "", regex=False), errors="coerce"
+    )
+    bad = vals.isna() | ~np.isfinite(vals)
+    if bad.any():
+        raise ValueError(f"FBA 分类汇总有 {int(bad.sum())} 行差额非数值/非有限")
+    work[FBA_DELTA_RMB] = vals
+    return work.groupby("渠道账号", as_index=False)[FBA_DELTA_RMB].sum()
+
+
+def assert_fba_attachable(
+    df_group: pd.DataFrame,
+    fb: pd.DataFrame,
+    *,
+    label: str = "FBA",
+) -> None:
+    """账号级差额能否唯一挂到分组表（F05/F06 共用同一套检查）。
+
+    - 分组表同账号多行且差额 ≠0 → 拒绝（逐行各加一份 = 5 变 10）。
+    - 差额非零但分组表完全没有该账号 → 拒绝（孤儿无处挂，不能静默丢）。
+    - 差额为 0 的多行账号放行（加 0 不会放大）。
+    """
+    if fb is None or fb.empty:
+        return
+    if "渠道账号" not in df_group.columns:
+        raise ValueError(f"{label}：分组表缺 渠道账号 列")
+    accounts = df_group["渠道账号"].map(lambda v: "" if is_blank_value(v) else str(v).strip())
+    known = set(accounts)
+    multi = set(accounts[accounts.duplicated(keep=False)])
+    nonzero = fb.loc[fb[FBA_DELTA_RMB].abs() > FBA_TOL]
+    if nonzero.empty:
+        return
+    bad_multi = sorted(set(nonzero["渠道账号"]) & multi)
+    if bad_multi:
+        raise ValueError(
+            f"{label} 账号级差额无法唯一挂到分组表：{bad_multi[:5]!r} 在分组表有多行且差额≠0，"
+            "逐行相加会放大金额（需财务先确定分摊口径，不得自选权重）"
+        )
+    orphan = sorted(set(nonzero["渠道账号"]) - known)
+    if orphan:
+        raise ValueError(
+            f"{label} 有 {len(orphan)} 个账号在源分类汇总非零差额但分组表没有对应行"
+            f"（孤儿差额无处挂）: {orphan[:5]!r}"
+        )
+
+
+def assert_fba_account_conservation(
+    df_group: pd.DataFrame,
+    merged: pd.DataFrame,
+    fb: pd.DataFrame,
+    *,
+    col: str = FBA_COL,
+    label: str = "FBA",
+) -> None:
+    """逐账号 ``Σ组表 FBA == -Σ账号差额`` 且整表相等（F05/F07：不能只查总和）。"""
+    if fb is None or fb.empty or merged.empty:
+        return
+    exp = fb.set_index("渠道账号")[FBA_DELTA_RMB].astype(float) * -1
+    got = merged.groupby("渠道账号")[col].sum()
+    expected = exp.reindex(got.index).fillna(0.0)
+    diff = (got.astype(float) - expected.astype(float)).abs()
+    bad = diff[diff > FBA_TOL]
+    if not bad.empty:
+        keys = [(str(k), round(float(bad[k]), 6)) for k in bad.index[:5]]
+        raise ValueError(f"{label} 逐账号守恒失败（组表≠-账号差额）: {keys}")
+    total_diff = abs(float(got.sum()) - float(expected.sum()))
+    if total_diff > FBA_TOL:
+        raise ValueError(f"{label} 合计守恒失败：组表={float(got.sum()):.2f} 账号={float(expected.sum()):.2f}")
+
+
+def build_fba_summary(
+    gc,
+    *,
+    bucket: str,
+    bucket_dir: Path,
+    df_exchange_rate: pd.DataFrame,
+    repair_dir: Path | None = None,
+    write_repairs: bool = True,
+    df_account: pd.DataFrame | None = None,
+    approve_account_scope: bool = False,
+) -> tuple[pd.DataFrame | None, dict]:
+    """用本地 FBA 管道生成 ``{期}FBA费用扣减后分类汇总``（只算不写）。
+
+    与 Colab 分类汇总同口径：结算 txt 中的 FBA 费用行 → 特例规则 → 扣减后按
+    父文件夹/子文件夹/渠道账号/币种/汇率汇总。返回 ``(summary, info)``：
+
+    - ``summary is None``：**没有生成有效结果**（读桶不闭合、缺 FX、金额非法、
+      规则非法…），``info["errors"]`` 给出结构化原因；调用方不得当成 0 继续（F03/F04）。
+    - ``summary`` 为空表且 ``info["reason"] == "no-fba-rows"``：源里确实没有 FBA 行。
+    - 当期规则为空：输出**未调整**的原 FBA 行（``调整前-后amount`` 全 0），
+      不返回空表冒充"没有 FBA"。
+    """
+    from fba_adjust import (
+        FBA_DESCRIPTIONS,
+        FbaRuleError,
+        fba_summary_df12,
+        load_fba_rules,
+        process_fba_orders,
+    )
+    from read_amz_txt import read_bucket_amz_txts
+    from tax_aggregate import enrich_with_fx
+
+    info: dict = {
+        "bucket_dir": str(bucket_dir),
+        "read_stats": {},
+        "rule_rows": 0,
+        "fba_rows": 0,
+        "errors": [],
+    }
+    errors: list[str] = info["errors"]
+    df_raw, reports = read_bucket_amz_txts(
+        bucket_dir, repair_dir=repair_dir, stats_out=info["read_stats"], write_repairs=write_repairs
+    )
+    info["read_reports"] = reports
+    for blocker in info["read_stats"].get("publish_blockers") or []:
+        errors.append(f"源文件总账未闭合: {blocker}")
+    if df_raw.empty:
+        errors.append("FBA 源 txt 为空（没有可用结算文件）")
+        return None, info
+
+    try:
+        df = enrich_with_fx(df_raw, df_exchange_rate)
+    except ValueError as e:  # 空币种键/金额非法等：结构化进 errors，不当 warning
+        errors.append(f"FBA 源数值/汇率异常: {e}")
+        return None, info
+    df_fba = df[df["amount-description"].isin(FBA_DESCRIPTIONS)].copy()
+    info["fba_rows"] = int(len(df_fba))
+    if df_fba.empty:
+        info["reason"] = "no-fba-rows"
+        return pd.DataFrame(), info
+
+    amount = pd.to_numeric(df_fba["amount"], errors="coerce")
+    bad_amount = int((amount.isna() | ~np.isfinite(amount)).sum())
+    if bad_amount:
+        errors.append(f"FBA 明细 amount 有 {bad_amount} 行空/非数值/非有限")
+    fx = pd.to_numeric(df_fba["汇率"], errors="coerce")
+    bad_fx = int((fx.isna() | ~np.isfinite(fx)).sum())
+    if bad_fx:
+        labels = sorted({str(x) for x in df_fba.loc[fx.isna(), "currency"].dropna().unique()})
+        errors.append(f"FBA 明细缺汇率 {bad_fx} 行（币种={labels[:5]}）")
+    if df_account is not None and not df_account.empty and "渠道账号" in df_account.columns:
+        master = {str(x).strip() for x in df_account["渠道账号"].dropna()}
+        unknown = sorted({str(x).strip() for x in df_fba["渠道账号"].dropna()} - master)
+        if unknown:
+            errors.append(f"FBA 渠道账号不在当期主表 {len(unknown)} 个: {unknown[:5]}")
+    if errors:
+        return None, info
+
+    try:
+        rules = load_fba_rules(
+            gc, bucket_name=bucket, approve_account_scope=approve_account_scope
+        )
+        rules_exec = rules.loc[rules["当月是否执行"] == "是"].copy()
+        info["rule_rows"] = int(len(rules_exec))
+        info["rule_deduped"] = int(rules.attrs.get("deduped", 0) or 0)
+        processed = process_fba_orders(
+            rules_exec, df_fba, approve_account_scope=approve_account_scope
+        )
+    except FbaRuleError as e:
+        errors.append(f"FBA 规则/明细: {e}")
+        return None, info
+
+    hits = processed.attrs.get("rule_hits")
+    if hits is not None and not hits.empty:
+        info["rule_hits"] = hits.to_dict("records")
+        zero = hits.loc[hits["hit_rows"] == 0]
+        if not zero.empty:
+            samples = [
+                f"{row['渠道账号']}/{row['sku'] or '<账号级>'}"
+                for row in zero.head(5).to_dict("records")
+            ]
+            errors.append(f"FBA 有 {len(zero)} 条当期规则 0 命中（需财务审定）: {samples}")
+    summary = fba_summary_df12(processed)
+    info["summary_rows"] = int(len(summary))
+    info["adjusted_rows"] = int((processed["调整前-后amount"].abs() > 0).sum())
+    return summary, info
+
+
+def _staff_rmb_base_columns(df: pd.DataFrame) -> list[str]:
+    return [f"{c}_人民币" for c in LS_COL_NEED_NUMERIC if f"{c}_人民币" in df.columns]
+
+
+def build_fba_staff(
+    df_group: pd.DataFrame,
+    fba_summary: pd.DataFrame,
+) -> pd.DataFrame:
+    """Colab cell 45-47：``{期}FBA费用扣减后收款比例运营人员``（只算不写）。
+
+    F06/F07 门禁：
+    - 与 :func:`apply_fba_to_group` 共用同一套账号级检查（多组非零/孤儿 → 拒绝），
+      绝不把账号级差额给同账号每行各加一份（历史 5→10 放大）。
+    - 人员表的基础应收/销售/佣金等来自同批 ``df_group``，与普通人员表合计必须一致。
+    - 返回表的 ``attrs['fba_source_hash']`` 是分类汇总指纹，分组表那边必须相同。
+    """
+    if df_group.empty:
+        return pd.DataFrame()
+    fb = fba_account_deltas(fba_summary)
+    assert_fba_attachable(df_group, fb, label="FBA 人员表")
+    # 丢人员：有金额却缺运营人员的行会被 groupby 静默丢掉，必须先拒绝。
+    if "运营人员" in df_group.columns:
+        blank_staff = df_group["运营人员"].map(is_blank_value)
+        if blank_staff.any():
+            amount_col = "应收金额_人民币"
+            if amount_col in df_group.columns:
+                has_amount = pd.to_numeric(df_group[amount_col], errors="coerce").fillna(0).abs() > FBA_TOL
+            else:
+                has_amount = pd.Series(False, index=df_group.index)
+            lost = int((blank_staff & has_amount).sum())
+            if lost:
+                raise ValueError(f"FBA 人员表：{lost} 行有金额但运营人员为空（汇总会丢人员）")
+
+    merged = df_group.merge(fb, how="left", on="渠道账号", validate="many_to_one")
+    merged[FBA_DELTA_RMB] = pd.to_numeric(merged[FBA_DELTA_RMB], errors="coerce").fillna(0.0)
+    merged = merged.rename(columns={FBA_DELTA_RMB: FBA_COL})
+    merged[FBA_COL] = merged[FBA_COL] * -1
+    # 逐账号守恒：多行账号若被各加一份，会在这里立刻暴露（不是只看总和）。
+    assert_fba_account_conservation(df_group, merged, fb, label="FBA 人员表")
+    merged[FBA_ADD_RECEIVE] = merged["应收金额_人民币"] + merged[FBA_COL]
+    merged[FBA_MINUS_COMMISSION] = merged["佣金_人民币"] - merged[FBA_COL]
+
+    cols = [f"{c}_人民币" for c in LS_COL_NEED_NUMERIC if f"{c}_人民币" in merged.columns]
+    cols += [FBA_COL, FBA_ADD_RECEIVE, FBA_MINUS_COMMISSION]
+    g = merged.groupby("运营人员")[cols].sum()
+    for col in cols:
+        if col == "销售额_人民币":
+            continue
+        new_name = col.replace("_人民币", "_比例")
+        ratio = (g[col] / g["销售额_人民币"]).replace([np.inf, -np.inf], np.nan).fillna(1.0)
+        g.insert(g.columns.get_loc(col) + 1, new_name, ratio)
+
+    g = g.reset_index()
+    if "销售额_人民币" in g.columns:
+        sales_rmb = g.pop("销售额_人民币")
+        g.insert(g.columns.get_loc("运营人员") + 1, "销售额_人民币", sales_rmb)
+    move = [
+        FBA_COL,
+        FBA_COL.replace("_人民币", "_比例"),
+        FBA_ADD_RECEIVE,
+        FBA_ADD_RECEIVE.replace("_人民币", "_比例"),
+    ]
+    move = [c for c in move if c in g.columns]
+    anchor = "应收金额_比例"
+    if anchor in g.columns and move:
+        order = [c for c in g.columns if c not in move]
+        pos = order.index(anchor) + 1
+        order[pos:pos] = move
+        g = g[order]
+
+    # 人员基础字段必须与同批普通人员表一致（不能一份取本批、一份取旧表）。
+    plain = collection_rate_by_staff(df_group).set_index("运营人员")
+    check = g.set_index("运营人员")
+    for col in _staff_rmb_base_columns(df_group):
+        if col not in check.columns or col not in plain.columns:
+            continue
+        diff = (check[col].astype(float) - plain[col].astype(float)).abs()
+        if float(diff.max()) > FBA_TOL:
+            raise ValueError(f"FBA 人员表 {col} 与同批普通人员表不一致: {diff.to_dict()}")
+    g.attrs["fba_source_hash"] = fba_source_hash(fba_summary)
+    return g
 
 
 def apply_fba_to_group(
     df_group: pd.DataFrame,
     gc,
     period_range: str,
+    *,
+    fba_summary: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, bool]:
-    ws_name = f"{period_range}FBA费用扣减后分类汇总"
-    df_fba = read_worksheet_df(gc, ws_name)
-    if df_fba.empty or "渠道账号" not in df_fba.columns:
+    """把 ``{期}FBA费用扣减后分类汇总`` 按渠道账号挂到分组表。
+
+    账号级 FBA 是**账号总量**；若同一 ``渠道账号`` 在分组表有多行（不同收款归属/币种），
+    逐行各加一份会把 FBA 放大成本（N 行 × 账号差额）。多组非零差额、源里有非零但
+    组表没有该账号（孤儿）一律 raise —— 宁可暴露，也不静默复制或丢弃（F05/F06）。
+
+    ``fba_summary`` 传入时用**同批本地结果**（F07：分组表与人员表必须同源）；
+    不传才退回读现有工作表（旧路径，仅供诊断，不得作为发布结果）。
+    """
+    if fba_summary is None:
+        ws_name = f"{period_range}{FBA_SUMMARY_SUFFIX}"
+        df_fba = read_worksheet_df(gc, ws_name)
+    else:
+        df_fba = fba_summary
+    if df_fba is None or df_fba.empty or "渠道账号" not in df_fba.columns:
         return df_group, False
-    for c in ("amount", "amount人民币", "调整前-后amount", "调整前-后amount人民币"):
-        if c in df_fba.columns:
-            df_fba[c] = pd.to_numeric(df_fba[c], errors="coerce").fillna(0)
-    fb = df_fba.groupby("渠道账号").agg({"调整前-后amount人民币": "sum"}).reset_index()
-    merged = df_group.merge(fb, how="left", on="渠道账号")
-    merged["调整前-后amount人民币"] = merged["调整前-后amount人民币"].fillna(0.0)
-    col_fba = "FBA费用_人民币"
-    merged = merged.rename(columns={"调整前-后amount人民币": col_fba})
+    col_fba = FBA_COL
+    fb = fba_account_deltas(df_fba)
+    assert_fba_attachable(df_group, fb, label="FBA 分组表")
+
+    merged = df_group.merge(fb, how="left", on="渠道账号", validate="many_to_one")
+    merged[FBA_DELTA_RMB] = pd.to_numeric(merged[FBA_DELTA_RMB], errors="coerce").fillna(0.0)
+    merged = merged.rename(columns={FBA_DELTA_RMB: col_fba})
     merged[col_fba] = merged[col_fba] * -1
-    merged["加上FBA费用_应收金额_人民币"] = merged["应收金额_人民币"] + merged[col_fba]
-    merged["扣减FBA费用_佣金_人民币"] = merged["佣金_人民币"] - merged[col_fba]
+
+    assert_fba_account_conservation(df_group, merged, fb, col=col_fba, label="FBA 分组表")
+    merged[FBA_ADD_RECEIVE] = merged["应收金额_人民币"] + merged[col_fba]
+    merged[FBA_MINUS_COMMISSION] = merged["佣金_人民币"] - merged[col_fba]
+    merged.attrs["fba_source_hash"] = fba_source_hash(df_fba)
     return merged, True
 
 
@@ -446,8 +1059,160 @@ class Phase3Report:
     unmatched_sales_account_rows: int = 0
     april_dropped: int = 0
     tax_sum_rmb: float | None = None
+    tax_unmatched_accounts: list[str] = field(default_factory=list)
+    additional_fee_unmatched_accounts: list[str] = field(default_factory=list)
+    outer_only_accounts: list[str] = field(default_factory=list)
+    oa_sheet_failures: list[str] = field(default_factory=list)
+    allow_empty_tax: bool = False
+    fba_summary_rows: int | None = None
+    fba_staff_rows: int | None = None
+    fba_source: str = ""
     warnings: list[str] = field(default_factory=list)
     worksheets_written: list[str] = field(default_factory=list)
+    manifest_path: str | None = None
+
+
+AMOUNT_ROW_DIM_COLS = ("销售账户", "渠道账号", "运营人员", "收款归属", "选择平台")
+
+
+def amount_row_mask(df: pd.DataFrame) -> pd.Series:
+    """有金额行：任一金额列绝对值之和 > 0（退款与销售抵消也要算有金额）。"""
+    cols = [c for c in LS_COL_NEED_NUMERIC if c in df.columns]
+    if not cols:
+        return pd.Series(False, index=df.index)
+    return df[cols].apply(pd.to_numeric, errors="coerce").abs().fillna(0).sum(axis=1) > 0
+
+
+def blank_dimension_problems(df: pd.DataFrame) -> list[str]:
+    """A1/O04：有金额行的 销售账户/渠道账号/运营人员/收款归属/选择平台 任一为空 → 问题。
+
+    零金额行（以及只在附加费/Tax/主表出现的 outer-only 账号）不在行级 df 里，自动豁免。
+    """
+    problems: list[str] = []
+    if df.empty:
+        return problems
+    mask = amount_row_mask(df)
+    if not mask.any():
+        return problems
+    for col in AMOUNT_ROW_DIM_COLS:
+        if col not in df.columns:
+            problems.append(f"行级表缺列 {col}（无法校验有金额行维度）")
+            continue
+        blank = is_blank(df[col]) & mask
+        if blank.any():
+            keys = (
+                df.loc[blank, "审批编号"].astype(str).head(5).tolist()
+                if "审批编号" in df.columns
+                else blank.index[:5].tolist()
+            )
+            problems.append(f"{col} 有金额行判空 {int(blank.sum())} 行（示例 {keys}）")
+    return problems
+
+
+def tax_account_problems(
+    df_tax: pd.DataFrame,
+    df_account: pd.DataFrame,
+    *,
+    only_nonzero: bool = True,
+) -> list[str]:
+    """A3/T03：Tax 账号必须在 live 渠道主表，且当期运营人员非空。
+
+    ``only_nonzero=True`` 时只查 Tax 金额 ≠ 0 的账号（Phase3 写前门禁口径）；
+    ``False`` 时查全部账号（run_period_tax 发布 df6_gsheet 的口径）。
+    """
+    problems: list[str] = []
+    if df_tax is None or df_tax.empty or "渠道账号" not in df_tax.columns:
+        return problems
+    if "渠道账号" not in df_account.columns:
+        return ["渠道主表缺 渠道账号 列"]
+    work = df_tax.copy()
+    work["渠道账号"] = work["渠道账号"].map(lambda v: "" if is_blank_value(v) else str(v).strip())
+    if only_nonzero and "Tax amount人民币" in work.columns:
+        amounts = pd.to_numeric(work["Tax amount人民币"], errors="coerce").fillna(0)
+        work = work.loc[amounts.abs() > 0]
+    if work.empty:
+        return problems
+    blank_acct = work.loc[work["渠道账号"].eq("")]
+    if not blank_acct.empty:
+        problems.append(f"Tax 有 {len(blank_acct)} 个空白渠道账号（不能发布）")
+    master = (
+        df_account.dropna(subset=["渠道账号"])
+        .drop_duplicates("渠道账号", keep="first")
+        .set_index("渠道账号")["运营人员"]
+        .to_dict()
+    )
+    accounts = [a for a in work["渠道账号"].tolist() if a]
+    unknown = sorted({a for a in accounts if a not in master})
+    if unknown:
+        problems.append(f"Tax 渠道账号不在渠道主表 {len(unknown)} 个: {unknown[:10]}")
+    blank_staff = sorted({a for a in accounts if a in master and is_blank_value(master.get(a))})
+    if blank_staff:
+        problems.append(f"Tax 渠道账号的当期运营人员为空 {len(blank_staff)} 个: {blank_staff[:10]}")
+    return problems
+
+
+def preflight_write_errors(
+    df: pd.DataFrame,
+    *,
+    df_group: pd.DataFrame,
+    df_merged: pd.DataFrame,
+    df_tax: pd.DataFrame,
+    df_sep: pd.DataFrame,
+    df_account: pd.DataFrame,
+    approval_filter: pd.Series,
+    fba_errors: list[str] | None = None,
+    correction_policy: CorrectionPolicy | None = None,
+    correction_proposals: Sequence[CorrectionProposal] = (),
+    authorization_results: Sequence[AuthorizationResult] | None = None,
+    correction_period: str = "",
+    now=None,
+) -> list[str]:
+    """Phase3 写前硬门禁（不写任何表，只返回问题清单）。
+
+    ``fba_errors`` 来自本批 FBA 生成（读桶不闭合 / 缺 FX / 金额非法 / 规则非法 /
+    0 命中 / 生成失败）。错误默认阻断所有正式写动作（F03/F04），不是 warning。
+
+    F 批：``correction_policy`` + ``correction_proposals``（+ 已存 ``authorization_results``）
+    交给 ``correction_policy.write_gate_errors``——未授权 T2、政策过期、proposal/policy
+    hash 变化都在写前 FAIL，与 CLI ``--strict`` 无关。没有修正提案时不改变现有行为。
+    """
+    problems: list[str] = []
+    fx_missing = find_unmatched_currency(df)
+    if not fx_missing.empty:
+        problems.append(f"币种未匹配汇率 {len(fx_missing)} 行")
+    problems.extend(blank_dimension_problems(df))
+    raw_ok = df.loc[approval_filter]
+    for c in ("应收金额_人民币", "销售额_人民币", COL_TOTAL_COST_RMB):
+        if c in df_group.columns and c in raw_ok.columns:
+            if abs(float(df_group[c].fillna(0).sum()) - float(raw_ok[c].fillna(0).sum())) > 0.01:
+                problems.append(f"分组合计 {c} 不平")
+    if not df_tax.empty and "Tax amount人民币" in df_merged.columns:
+        if abs(
+            float(df_merged["Tax amount人民币"].fillna(0).sum())
+            - float(df_tax["Tax amount人民币"].sum())
+        ) > 0.01:
+            problems.append("Tax 合计不平")
+    if not df_sep.empty and "附加费累加人民币" in df_merged.columns:
+        if abs(
+            float(df_merged["附加费累加人民币"].fillna(0).sum())
+            - float(df_sep["附加费累加人民币"].sum())
+        ) > 0.01:
+            problems.append("附加费合计不平")
+    problems.extend(tax_account_problems(df_tax, df_account, only_nonzero=True))
+    for err in fba_errors or []:
+        problems.append(f"FBA: {err}")
+    if correction_proposals:
+        period = correction_period or str(correction_proposals[0].period or "")
+        problems.extend(
+            write_gate_errors(
+                period=period,
+                policy=correction_policy,
+                proposals=list(correction_proposals),
+                results=authorization_results,
+                now=now,
+            )
+        )
+    return problems
 
 
 def run_phase3(
@@ -456,14 +1221,22 @@ def run_phase3(
     input_xlsx: Path,
     bucket: str,
     exchange_month: str,
+    bucket_dir: Path | None = None,
+    repair_dir: Path | None = None,
     write_gsheet: bool = False,
+    write_gsheet_fba: bool = False,
+    allow_empty_tax: bool = False,
+    write_repairs: bool = True,
+    correction_policy: CorrectionPolicy | None = None,
+    correction_proposals: Sequence[CorrectionProposal] = (),
 ) -> tuple[Phase3Report, dict[str, pd.DataFrame]]:
     period_range = period_range_from_bucket(bucket)
     yyyymm = exchange_month.strip()
     if yyyymm != accounting_yyyymm_from_bucket(bucket):
         raise ValueError(f"--exchange-month {yyyymm} 与桶 {bucket} 不一致")
 
-    df_orig = load_oa_dataframe(input_xlsx)
+    oa_failures: list[str] = []
+    df_orig = load_oa_dataframe(input_xlsx, failures_out=oa_failures)
     df_orig, april_n = drop_april_resubmit_rows(df_orig, yyyymm)
     df_rate, df_rate_explode = load_exchange_rate_table(gc, month_col=yyyymm)
     df_account, df_explode = load_channel_accounts(gc, yyyymm)
@@ -471,15 +1244,22 @@ def run_phase3(
     df, approval_filter = build_row_level_df(
         df_orig, df_exchange_rate=df_rate, df_explode=df_explode, df_rate_explode=df_rate_explode
     )
-    unmatched = int(((df["渠道账号"].isna()) | (df["渠道账号"] == "")).sum())
+    unmatched = int(is_blank(df["渠道账号"]).sum())
     fx_missing = find_unmatched_currency(df)
     df_group = build_group_account_cost(
         df, approval_filter, df_rate_explode=df_rate_explode, df_account=df_account
     )
     df_rmb = build_rmb_by_account(df_group)
-    df_sep = load_additional_fee_grouped(gc, yyyymm, df_explode)
-    df_tax = load_tax_grouped(gc, bucket)
-    df_merged = merge_rmb_tax_additional(df_rmb, df_sep=df_sep, df_tax=df_tax, df_account=df_account)
+    df_sep, sep_unmatched = load_additional_fee_grouped(
+        gc, yyyymm, df_explode, allow_empty=allow_empty_tax
+    )
+    df_tax, tax_unmatched = load_tax_grouped(
+        gc, bucket, df_explode, allow_empty=allow_empty_tax
+    )
+    merge_stats: dict = {}
+    df_merged = merge_rmb_tax_additional(
+        df_rmb, df_sep=df_sep, df_tax=df_tax, df_account=df_account, stats_out=merge_stats
+    )
 
     rep = Phase3Report(
         bucket=bucket,
@@ -493,9 +1273,28 @@ def run_phase3(
         unmatched_sales_account_rows=unmatched,
         april_dropped=april_n,
         tax_sum_rmb=float(df_tax["Tax amount人民币"].sum()) if not df_tax.empty else None,
+        tax_unmatched_accounts=tax_unmatched,
+        additional_fee_unmatched_accounts=sep_unmatched,
+        outer_only_accounts=list(merge_stats.get("outer_only_accounts", [])),
+        oa_sheet_failures=oa_failures,
+        allow_empty_tax=allow_empty_tax,
     )
+    for f in oa_failures:
+        rep.warnings.append(f"OA sheet 读取失败: {f}")
     if unmatched:
         rep.warnings.append(f"渠道账号未匹配 {unmatched} 行（销售账户→别名表）")
+    if tax_unmatched:
+        rep.warnings.append(f"Tax 有 {len(tax_unmatched)} 个渠道账号未在别名表/快照中: {tax_unmatched[:5]}")
+    if sep_unmatched:
+        rep.warnings.append(
+            f"附加费有 {len(sep_unmatched)} 个渠道账号未在别名表/快照中: {sep_unmatched[:5]}"
+        )
+    if rep.outer_only_accounts:
+        print("[INFO] 外连接新增账号（仅附加费/Tax/账号表）:", rep.outer_only_accounts[:10], file=sys.stderr)
+    if allow_empty_tax and df_tax.empty:
+        rep.warnings.append("Tax 表为空（显式 --allow-empty-tax，人民币 Tax 将按 0 处理）")
+    if allow_empty_tax and df_sep.empty:
+        rep.warnings.append("附加费表为空（显式 --allow-empty-tax）")
     if not fx_missing.empty:
         labels = sorted({str(x) for x in fx_missing["货币中文名"].dropna().unique()})
         rep.warnings.append(
@@ -515,13 +1314,97 @@ def run_phase3(
         "collection_rate_staff": collection_rate_by_staff(df_group),
     }
 
-    df_group_fba, has_fba = df_group, False
-    if phase3_spreadsheet_available(gc):
-        df_group_fba, has_fba = apply_fba_to_group(df_group, gc, period_range)
+    # Colab 39-47：FBA 分类汇总 + FBA 扣减后收款比例运营人员（本地生成，只算不写）
+    # 顺序很重要：先用同批源文件生成分类汇总，再用**同一帧**挂分组表和人员表（F07）。
+    fba_summary: pd.DataFrame | None = None
+    fba_info: dict = {}
+    fba_errors: list[str] = []
+    if bucket_dir is not None:
+        try:
+            fba_summary, fba_info = build_fba_summary(
+                gc,
+                bucket=bucket,
+                bucket_dir=Path(bucket_dir),
+                df_exchange_rate=df_rate,
+                repair_dir=repair_dir,
+                write_repairs=write_repairs,
+                df_account=df_account,
+            )
+        except Exception as e:  # F03：生成失败必须阻断发布，不能 warning 后继续写
+            fba_errors.append(f"FBA 表生成失败: {e}")
+            fba_summary = None
+        fba_errors.extend(list(fba_info.get("errors") or []))
+        if fba_summary is not None:
+            frames["fba_summary"] = fba_summary
+            rep.fba_summary_rows = int(len(fba_summary))
+            rep.fba_source = "local-txt" if not fba_summary.empty else ""
+    elif phase3_spreadsheet_available(gc):
+        # 不给桶目录时退回读现有分类汇总（Colab 手工复制的场景）：只能诊断，不能发布。
+        existing = read_worksheet_df(gc, f"{period_range}{FBA_SUMMARY_SUFFIX}")
+        fba_summary = existing if existing is not None else pd.DataFrame()
+        frames["fba_summary"] = fba_summary
+        rep.fba_summary_rows = int(len(fba_summary))
+        rep.fba_source = "existing-sheet" if not fba_summary.empty else ""
+        if write_gsheet_fba:
+            fba_errors.append(
+                "未提供 --bucket-dir：FBA 只能读旧表，不能作为本次发布结果"
+                "（禁止留旧表冒充成功）"
+            )
     else:
         rep.warnings.append("Phase3 目标 GSheet 当前不可读，已跳过 FBA 工作表合并")
-    if has_fba:
-        frames["group_account_fba"] = df_group_fba
+
+    df_group_fba, has_fba = df_group, False
+    if fba_summary is not None:
+        try:
+            df_group_fba, has_fba = apply_fba_to_group(
+                df_group, gc, period_range, fba_summary=fba_summary
+            )
+        except Exception as e:
+            fba_errors.append(f"FBA 挂分组表失败: {e}")
+        if has_fba:
+            frames["group_account_fba"] = df_group_fba
+        try:
+            frames["fba_staff"] = build_fba_staff(df_group, fba_summary)
+            rep.fba_staff_rows = int(len(frames["fba_staff"]))
+        except Exception as e:
+            fba_errors.append(f"FBA 人员表失败: {e}")
+        if write_gsheet_fba and fba_summary.empty:
+            fba_errors.append("请求写 FBA 但源里没有 FBA 行（拒绝写空表/保留旧表冒充成功）")
+
+    # F07：分组表与人员表必须用同一份分类汇总（同一 hash），不能一新一旧。
+    if has_fba and "fba_staff" in frames:
+        try:
+            assert_same_fba_source(
+                df_group_fba.attrs.get("fba_source_hash"),
+                frames["fba_staff"].attrs.get("fba_source_hash"),
+            )
+        except ValueError as e:
+            fba_errors.append(str(e))
+    for err in fba_errors:
+        print(f"[ERROR] {err}", file=sys.stderr)
+
+
+    def _md5(path) -> str | None:
+        p = Path(path)
+        return hashlib.md5(p.read_bytes()).hexdigest() if p.is_file() else None
+
+    # 写前硬门禁：任何一项不过都必须在此之前抛错，不能先写后报。
+    if write_gsheet or write_gsheet_fba:
+        problems = preflight_write_errors(
+            df,
+            df_group=df_group,
+            df_merged=df_merged,
+            df_tax=df_tax,
+            df_sep=df_sep,
+            df_account=df_account,
+            approval_filter=approval_filter,
+            fba_errors=fba_errors,
+            correction_policy=correction_policy,
+            correction_proposals=correction_proposals,
+            correction_period=yyyymm,
+        )
+        if problems:
+            raise RuntimeError("写前门禁失败，已拒绝写入: " + "; ".join(problems))
 
     if write_gsheet:
         if not phase3_spreadsheet_available(gc):
@@ -543,5 +1426,66 @@ def run_phase3(
         from phase3_gsheet import sort_phase3_tabs
 
         sort_phase3_tabs(gc, pin_worksheet=ws_main)
+
+    if write_gsheet_fba:
+        if not phase3_spreadsheet_available(gc):
+            raise PermissionError("Phase3 表不可读，无法写 FBA 工作表")
+        if frames.get("fba_summary") is not None and not frames["fba_summary"].empty:
+            ws_fba_summary = f"{period_range}{FBA_SUMMARY_SUFFIX}"
+            write_worksheet_df(gc, frames["fba_summary"], worksheet=ws_fba_summary)
+            rep.worksheets_written.append(ws_fba_summary)
+        if frames.get("fba_staff") is not None and not frames["fba_staff"].empty:
+            ws_fba_staff = f"{period_range}{FBA_STAFF_SUFFIX}"
+            write_worksheet_df(gc, frames["fba_staff"], worksheet=ws_fba_staff)
+            rep.worksheets_written.append(ws_fba_staff)
+        from phase3_gsheet import sort_phase3_tabs
+
+        sort_phase3_tabs(gc, pin_worksheet=period_range)
+
+    if write_gsheet or write_gsheet_fba:
+        manifest_dir = Path(
+            os.environ.get("PERIOD_WRITE_MANIFEST_DIR", str(Path.cwd() / "reports" / "_write_runs"))
+        )
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + period_range
+        alias_snap = Path("channel_account_sync/out/channel_account_gsheet.json")
+        nas_root_raw = os.environ.get("LOCAL_NAS_PERIOD_ROOT", "").strip()
+        whitelist = (
+            Path(nas_root_raw) / "_period_exceptions" / f"账期{period_range}.txt"
+            if nas_root_raw
+            else None
+        )
+
+        def _sum(df_, col) -> float | None:
+            return round(float(df_[col].fillna(0).sum()), 6) if col in df_.columns else None
+
+        manifest = {
+            "run_id": run_id,
+            "created_at": datetime.now().isoformat(timespec="seconds"),
+            "period": period_range,
+            "bucket": bucket,
+            "exchange_month": yyyymm,
+            "input_xlsx": str(input_xlsx),
+            "input_md5": _md5(input_xlsx),
+            "alias_snapshot_md5": _md5(alias_snap),
+            "out_of_period_whitelist_md5": _md5(whitelist) if whitelist else None,
+            "rows": {"row_level": len(df), "group": len(df_group), "merged": len(df_merged)},
+            "totals": {
+                "应收金额_人民币": _sum(df_group, "应收金额_人民币"),
+                "销售额_人民币": _sum(df_group, "销售额_人民币"),
+                "收款费用累加人民币": _sum(df_group, COL_TOTAL_COST_RMB),
+                "Tax amount人民币": _sum(df_merged, "Tax amount人民币"),
+                "附加费累加人民币": _sum(df_merged, "附加费累加人民币"),
+            },
+            "worksheets_written": rep.worksheets_written,
+            "warnings": rep.warnings,
+        }
+        # F：发布清单绑定 policy/proposal/逐条 correction/证据 hash；任一变化旧 PASS 失效。
+        manifest.update(
+            manifest_policy_fields(policy=correction_policy, proposals=correction_proposals)
+        )
+        mp = manifest_dir / f"{run_id}.json"
+        mp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        rep.manifest_path = str(mp)
 
     return rep, frames

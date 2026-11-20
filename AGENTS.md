@@ -140,7 +140,6 @@ uv sync
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
 | `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（419 端点）+ 连通性测试 |
 | `sellfox-amazon-settlement` | `sellfox_settlement/` | 赛狐结算中心V2 + 紫鸟列式报表自动取回 Amazon 账期；钉钉迟交/错位审计；店名↔渠道账号 |
-| `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（443 端点）+ 连通性测试 |
 | `sellfox-combo-create` | `SELLFOX_API/` | EN 套件 Product Bundle ↔ 赛狐组合商品：sync-combos 对账/创建/回读断言 |
 | `sellfox-cover-inventory` | `sellfox_cover_inventory/` | 三角类皮壳共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建/对账 |
 | `sellfox-shipping` | `sellfox_shipping/` | 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构 |
@@ -155,7 +154,6 @@ uv sync
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + **API 带附件发起** + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
 | `amazon-period-tax` | `amazon_period_tax/` | NAS 账期 txt → 附加费&Tax/Phase3 gsheet 本地管道（Colab 税账期 + 钉钉OA收款费用多平台） |
-| `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
 | `dingtalk-group-harvest` | `dingtalk/dingtalk_group_harvest/` | 钉钉 AI 项目群：DWS 个人身份增量采集群消息/附件/文档 + 周报（数据落仓库外） |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
@@ -188,7 +186,6 @@ uv sync
 | `design-md` | `.agents/skills/design-md/` | 创建/管理 DESIGN.md（设计方向、tokens、视觉规则单一事实源） |
 | `design-review` | `.agents/skills/design-review/` | 视觉审查 → 原子提交修复 + 前后对比截图（上线前收紧 UI） |
 | `dingtalk-robot` | `.agents/skills/dingtalk-robot/` | 钉钉自定义机器人通知 + 文件附件（经 ERPNext 中转，ActionCard 推送下载链接） |
-| `dingtalk-group-harvest` | `.agents/skills/dingtalk-group-harvest/` | 钉钉 AI 项目群消息/文件/文档增量采集 + 周报（DWS 个人身份，数据落仓库外） |
 | `ecommerce-image-workflow` | `.agents/skills/ecommerce-image-workflow/` | 参考商品图 → 紧凑电商图片集（主图/特性图/场景图） |
 | `erpnext-item-create` | `.agents/skills/erpnext-item-create/` | EN 物料/变体创建（值表→属性→模板→变体→配套物料） |
 | `frontend-design` | `.agents/skills/frontend-design/` | 有辨识度的生产级前端界面（网页/落地页/仪表盘/组件） |
@@ -266,18 +263,19 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 
 ### 经验库路由（`docs/solutions/`）
 
-**动手前先查这里有没有现成结论**——踩过的坑基本都在。139 篇按 category 分 8 类，每类一份 `index.md`：
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。144 篇按 category 分 8 类，每类一份 `index.md`：
 
 | 类别 | 篇数 | 什么时候读 |
 |------|-----|-----------|
-| `workflow-issues/` | 37 | 账期对账、迟交/错位、跨期结算、批处理流程 |
-| `integration-issues/` | 29 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
+| `workflow-issues/` | 40 | 账期对账、迟交/错位、跨期结算、批处理流程 |
+| `integration-issues/` | 30 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
 | `architecture-patterns/` | 21 | 「这个管道/系统为什么这样设计」 |
 | `tooling-decisions/` | 15 | 脚本、工具选型、产出校验 |
-| `developer-experience/` | 14 | Windows / worktree / MCP / Colab 等本机环境坑 |
+| `developer-experience/` | 15 | Windows / worktree / MCP / Colab 等本机环境坑 |
 | `conventions/` | 11 | 团队约定（配对、命名、SOP） |
 | `best-practices/` | 9 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
 | `documentation-gaps/` | 3 | 文档与断言的缺口 |
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。144 篇按 category 分 8 类，每类一份 `index.md`：
 
 定位单篇：`grep -rl "^module: <模块名>" docs/solutions/`（frontmatter 有 `module` / `tags` / `problem_type`）。
 全量平表：`docs/solutions/index.md`（由 `scripts/check_solutions_health.py --fix` 生成）。

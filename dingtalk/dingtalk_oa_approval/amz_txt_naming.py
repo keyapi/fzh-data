@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -24,9 +25,21 @@ def preprocess_stem(stem: str) -> str:
 
 
 def _pad_ymd(y: int, mo: int, d: int) -> str | None:
-    if not (1 <= mo <= 12 and 1 <= d <= 31):
+    """真实日历校验：2026-02-31 / 平年 02-29 等非法日期返回 None（不再只看 1..31）。"""
+    try:
+        return date(y, mo, d).isoformat()
+    except ValueError:
         return None
-    return f"{y:04d}-{mo:02d}-{d:02d}"
+
+
+def _year_for_mmdd(mm: int, y_hint: int, mo_hint: int | None) -> int:
+    """只有 MMDD 时补年份：跨年（解析月 > 账期月）归上一年。
+
+    例：hint=2026-10, `-0930` → 2026-09-30；hint=2026-01, `-1231` → 2025-12-31。
+    """
+    if mo_hint and mm > mo_hint:
+        return y_hint - 1
+    return y_hint
 
 
 def settlement_date_from_stem(stem: str, hint_ym: str = "") -> str | None:
@@ -46,16 +59,14 @@ def settlement_date_from_stem(stem: str, hint_ym: str = "") -> str | None:
     m = re.search(r"-(\d{4})$", s)
     if m:
         mm, dd = int(m.group(1)[:2]), int(m.group(1)[2:])
-        if mo_hint and mm != mo_hint:
-            pass
-        else:
-            hit = _pad_ymd(y_hint, mm, dd)
-            if hit:
-                return hit
+        hit = _pad_ymd(_year_for_mmdd(mm, y_hint, mo_hint), mm, dd)
+        if hit:
+            return hit
 
     m = re.search(r"-(\d{1,2})[.\-](\d{1,2})$", s)
     if m:
-        return _pad_ymd(y_hint, int(m.group(1)), int(m.group(2)))
+        mm, dd = int(m.group(1)), int(m.group(2))
+        return _pad_ymd(_year_for_mmdd(mm, y_hint, mo_hint), mm, dd)
 
     amz = parse_amz_channel(s + ".txt")
     if amz and amz.get("date_raw"):
@@ -65,7 +76,8 @@ def settlement_date_from_stem(stem: str, hint_ym: str = "") -> str | None:
             return _pad_ymd(int(m.group(1)), int(m.group(2)), int(m.group(3)))
         m = re.search(r"(\d{1,2})[.\-](\d{1,2})", dr)
         if m:
-            return _pad_ymd(y_hint, int(m.group(1)), int(m.group(2)))
+            mm, dd = int(m.group(1)), int(m.group(2))
+            return _pad_ymd(_year_for_mmdd(mm, y_hint, mo_hint), mm, dd)
     return None
 
 
@@ -81,8 +93,14 @@ def account_prefix_from_stem(stem: str) -> str:
     return s
 
 
-def propose_txt_name(old_name: str, hint_ym: str = "") -> tuple[str | None, str]:
-    """返回 (规范文件名或 None, 说明)。"""
+def propose_txt_name(
+    old_name: str, hint_ym: str = "", existing: set[str] | None = None
+) -> tuple[str | None, str]:
+    """返回 (规范文件名或 None, 说明)。
+
+    ``existing``：同目录下已有文件名集合（含即将被占用的目标名）。目标已存在时返回
+    ``(None, "目标已存在")`` —— 绝不覆盖别人已归档的同名 txt。
+    """
     if not (old_name or "").lower().endswith(".txt"):
         return None, "非txt"
     stem = Path(old_name).stem
@@ -98,4 +116,6 @@ def propose_txt_name(old_name: str, hint_ym: str = "") -> tuple[str | None, str]
     new_name = f"{canon}-{dt}.txt"
     if new_name == old_name:
         return new_name, "已规范"
+    if existing and new_name.casefold() in {n.casefold() for n in existing}:
+        return None, "目标已存在"
     return new_name, "需重命名"

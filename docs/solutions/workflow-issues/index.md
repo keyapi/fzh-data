@@ -9,6 +9,9 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [amazon-period-source-corrections-and-e2e-gate.md](amazon-period-source-corrections-and-e2e-gate.md) | E2E 复核发现源定稿错数/错账号；修正凭据 + corrected 副本、写前硬门禁、run manifest、人民币补列 |
+| [amazon-period-cross-bucket-attachment-misfile.md](amazon-period-cross-bucket-attachment-misfile.md) | 同一结算 txt 被放进另一账期桶（JohnaUS 7 月副本混入 8 月）；按结算号 + 内部区间拦截、跨桶台账 |
+| [amazon-period-pipeline-audit-fixes.md](amazon-period-pipeline-audit-fixes.md) | 账期管道审计修复：txt md5 去重（少算 1,933.63）、FBA 过滤键（多扣 68,340.24）、Tax 别名、审批过滤、RAW 写表、verify 硬关卡 |
 | [amazon-period-tax-rerun-without-agent.md](amazon-period-tax-rerun-without-agent.md) | 自己重跑 Tax：只改桶名和汇率列；脚本不补 txt；别名读本地 JSON 快照 |
 | [amazon-period-colab-export-keep-approval.md](amazon-period-colab-export-keep-approval.md) | 核算定稿须 `keep_approval` + 可选迟交 `--exclude-keys`；旧定稿易多行 |
 | [dingtalk-attendance-export-runbook.md](dingtalk-attendance-export-runbook.md) | 钉钉管理后台考勤导出：入口、权限、考勤组范围、单月限制、下载与核对 |
