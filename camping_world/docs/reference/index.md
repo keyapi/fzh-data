@@ -1,0 +1,22 @@
+---
+okf: v0.1
+type: Index
+title: Camping World 参考资料索引
+tags: [campingworld, reference, index]
+---
+# 参考资料索引
+
+| 文件 | 内容 |
+|---|---|
+| [cw-onboarding-checklist.md](cw-onboarding-checklist.md) | 入驻要求全表：商务条款、文件责任、EDI 时限、运输、保险、罚款 |
+| [cw-reply-draft.md](cw-reply-draft.md) | 回复 Tracy 的英文邮件草稿 |
+| [cw-entity-dossier.md](cw-entity-dossier.md) | Centrade Inc / Daneey LLC 主体对照与方案代价 |
+| [cw-assortment-pricing.md](cw-assortment-pricing.md) | 市场锚点、报价表、成本模型、首批 SKU、试价 |
+| [cw-order-ops.md](cw-order-ops.md) | 订单 SOP：855/846/856/810、FedEx 选路、标签方案 |
+| [cw-forms-and-docs.md](cw-forms-and-docs.md) | COI / W-9 / ACH 要求与提交顺序 |
+
+## 外部资源
+
+- CW EDI 规格：https://community.spscommerce.com/camping-world/
+- CW 供应商 wiki：https://supplierwiki.supplypike.com/supplier-site/camping-world-oso
+- CW EDI 操作指南：https://community.spscommerce.com/wp-content/uploads/2024/02/Camping-WorldEDIOperationsGuide.pdf
