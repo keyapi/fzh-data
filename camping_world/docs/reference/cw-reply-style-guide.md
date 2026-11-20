@@ -84,6 +84,8 @@ timestamp: 2026-11-20
 
 - Tracy 是中间人，不是 CW 员工：**问题要写成她能直接转给 Kara 的形式**。
 - 不要在给 Tracy 的信里评价 CW 的流程"麻烦/复杂"。
+- **不主动提电话/视频会议。** 这类细节业务走邮件；PB 合作期间没有 call 过，
+  和 Tracy 的视频会议也很少。邮件是默认渠道。
 - 涉及主体（Centrade vs Daneey）时，只说"internal confirmation in progress"，
   不解释内部矛盾。
 - 涉及价格时，先问 CW 的零售价带，再谈我们的供货价；不要先报底价。

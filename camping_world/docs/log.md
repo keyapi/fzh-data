@@ -8,6 +8,12 @@ tags: [campingworld, cw, changelog]
 
 # 变更日志
 
+## 2026-11-20（第五轮：去掉 call 提议）
+
+- 回信删除 "A short call may be the quickest way…"。
+- 风格指南补充：**这类细节业务走邮件，不主动提电话/视频会议**；
+  PB 合作期间没有 call，和 Tracy 的视频会议也很少。
+
 ## 2026-11-20（第四轮：对等语气）
 
 - 删除 "we are happy to follow whichever process CW recommends" 这类低位表达；

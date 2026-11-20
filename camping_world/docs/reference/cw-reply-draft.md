@@ -46,8 +46,6 @@ We can complete the Vendor Information Form, ACH authorization and Item Set-Up S
 skip the New Store Contribution Agreement as advised for dropship. Once we have CW's guidance,
 we will send the completed documents and begin the SPS onboarding.
 
-A short call may be the quickest way to close these points; we are available this week if useful.
-
 Best regards,
 Key
 
@@ -66,6 +64,8 @@ Key
 - **不承诺时间表。** 只说"拿到 guidance 后发文件、启动 SPS"。
 - **主体部分不解释内部矛盾。** 只说 "confirming internally and will revert shortly"。
 - **不确定语气的句子直接删。** 宁可少一句，也不写让自己显得没底气的话。
+- **不主动提电话/视频会议。** 这类细节业务走邮件即可；PB 合作期间也没有 call 过，
+  和 Tracy 的视频会议很少。
 
 **发送前还要确认：**
 
