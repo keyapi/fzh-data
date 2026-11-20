@@ -26,7 +26,8 @@ timestamp: 2026-11-20
 ## 文档
 
 - [入驻评估清单](docs/reference/cw-onboarding-checklist.md)
-- [回复 Tracy 邮件草稿](docs/reference/cw-reply-draft.md)
+- [回复 Tracy 邮件草稿](docs/reference/cw-reply-draft.md)（暂不发送）
+- [美国商业回信风格指南](docs/reference/cw-reply-style-guide.md)
 - [主体资料对照](docs/reference/cw-entity-dossier.md)
 - [选品与定价](docs/reference/cw-assortment-pricing.md)
 - [订单操作 SOP](docs/reference/cw-order-ops.md)（SPS 优先）

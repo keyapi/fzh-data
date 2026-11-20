@@ -9,7 +9,8 @@ tags: [campingworld, reference, index]
 | 文件 | 内容 |
 |---|---|
 | [cw-onboarding-checklist.md](cw-onboarding-checklist.md) | 入驻要求全表：商务条款、文件责任、EDI 时限、运输、保险、罚款 |
-| [cw-reply-draft.md](cw-reply-draft.md) | 回复 Tracy 的英文邮件草稿 |
+| [cw-reply-draft.md](cw-reply-draft.md) | 回复 Tracy 的英文邮件草稿（先问后述，暂不发送） |
+| [cw-reply-style-guide.md](cw-reply-style-guide.md) | 美国商业回信风格与措辞对照（含来源） |
 | [cw-entity-dossier.md](cw-entity-dossier.md) | Centrade Inc / Daneey LLC 主体对照与方案代价 |
 | [cw-assortment-pricing.md](cw-assortment-pricing.md) | 市场锚点、报价表、成本模型、首批 SKU、试价 |
 | [cw-order-ops.md](cw-order-ops.md) | 订单 SOP：855/846/856/810、FedEx 选路、**SPS 优先**的标签链路 |

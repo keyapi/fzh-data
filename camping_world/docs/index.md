@@ -17,6 +17,7 @@ tags: [campingworld, cw, onboarding, index]
 | 怎么跑脚本 | [`../README.md`](../README.md) |
 | 每份要交什么、谁负责、罚款项 | [reference/cw-onboarding-checklist.md](reference/cw-onboarding-checklist.md) |
 | 回 Tracy 的邮件 | [reference/cw-reply-draft.md](reference/cw-reply-draft.md) |
+| 回信怎么写才像有经验 | [reference/cw-reply-style-guide.md](reference/cw-reply-style-guide.md) |
 | 签约主体怎么选 | [reference/cw-entity-dossier.md](reference/cw-entity-dossier.md) |
 | 选品、报价、毛利 | [reference/cw-assortment-pricing.md](reference/cw-assortment-pricing.md) |
 | 订单怎么处理（EDI/标签） | [reference/cw-order-ops.md](reference/cw-order-ops.md) |

@@ -8,6 +8,14 @@ tags: [campingworld, cw, changelog]
 
 # 变更日志
 
+## 2026-11-20（第三轮：回信语气与措辞）
+
+- **重写回信**：按"先问对方有哪些方式，再说明我们现状"的结构；删除 "We strongly prefer" /
+  "we will only" 这类强立场表达，改为 "happy to follow whichever process CW recommends"。
+- **新增** `reference/cw-reply-style-guide.md`：美国商业回信六条原则、措辞对照表、
+  文化细节与来源（Levitate / Proton / Talaera / Grammarly / Indeed 等）。
+- 回信仍标记为**暂不发送**。
+
 ## 2026-11-20（第二轮：口径调整）
 
 - **SPS 优先**：标签链路改为 SPS Fulfillment 首选，FedEx 后台/API 仅作兜底；
