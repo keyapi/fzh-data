@@ -9,6 +9,7 @@ tags: [best-practices, index]
 
 | 你需要... | 读这个 |
 |----------|--------|
+| 通途订单 E2E 门禁：把静默 fallback 变成可解释的失败 | [tongtu-e2e-gates-silent-failures.md](tongtu-e2e-gates-silent-failures.md) |
 | 知识库越积越多，怕某篇再也找不到 / 索引与磁盘漂移 | [knowledge-base-anti-rot.md](knowledge-base-anti-rot.md) |
 | 写/改靠通配符扫目录取输入的脚本，怕文件被静默漏掉 | [scanner-silent-data-loss-guard.md](scanner-silent-data-loss-guard.md) |
 | ERPNext 工单生产数据异常怎么排查（方法论） | [erpnext-work-order-investigation-methodology.md](erpnext-work-order-investigation-methodology.md) |

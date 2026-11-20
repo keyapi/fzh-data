@@ -233,6 +233,8 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
   （默认 dry-run；`--book` 可写 `通途订单YYYYMM-特殊规则`）。
 - 详细说明：`docs/reference/build-order-tabs.md`。
 
+- **E2E 门禁（2026-11-18）**：汇率必须唯一/有限/>0；仓库模糊匹配唯一；渠道账号空值、订单号/SKU 空值、数值非有限、FBA 国家未知 → fail；写回要求 manifest + 输入/输出 sha256 + 特殊订单/flags；回读错误停止。见 `docs/reference/build-order-tabs.md` 与 `docs/solutions/best-practices/tongtu-e2e-gates-silent-failures.md`。
+
 ### 202607 重算与美国本地成本（2026-11-12）
 
 - **202607**：self 9,552 / FBA 1,653 / merged 11,205；self 总成本 2,750,957.10、利润 2,707,801.37。

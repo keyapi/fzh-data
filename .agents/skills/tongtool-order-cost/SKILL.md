@@ -61,6 +61,7 @@ metadata:
 
 踩过的坑与设计取舍，动手前先读：
 
+- `docs/solutions/best-practices/tongtu-e2e-gates-silent-failures.md` —— 通途 E2E 门禁：汇率/仓库/渠道/FBA 国家/空键/非有限值/输入输出哈希/回读
 - `docs/solutions/architecture-patterns/tongtu-branch-processing-cost-and-coefficients.md` —— 分公司国外加工理论值、财务系数 1.0/1.2/1.6、GS 基础列 vs `*系数` 列、美国本地/整套组件口径
 - `docs/solutions/workflow-issues/tongtu-multicolor-cover-shared-foam-attribution.md` —— 多色 Cover + 共享 Foam 的产品归属修复
 - `docs/solutions/workflow-issues/tongtool-sku-rename-gsheet-remap.md` —— 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet

@@ -9,6 +9,7 @@ tags: [solutions, log]
 
 ## 2026-11-18
 
+- **新增**: `best-practices/tongtu-e2e-gates-silent-failures.md` —— 通途 E2E 门禁：静默 fallback 清单、fail/warn 分级、输入输出哈希与写回回读。
 - **新增**: `architecture-patterns/tongtu-branch-processing-cost-and-coefficients.md` —— 分公司国外加工理论值（1104 BOM）、财务系数 1.0/1.2/1.6、GS 基础列/*系数列、美国本地成本与整套/组件关系。
 - **新增**: `workflow-issues/tongtu-multicolor-cover-shared-foam-attribution.md` —— 多色 Cover + 共享 Foam 的产品归属修复。
 - **更正**: `integration-issues/tongtool-erp2-mcp-shared-rate-limit.md` —— 业务取数改直连 open API，MCP 仅作历史/限流证据。
