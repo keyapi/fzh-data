@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pandas as pd
 
-from exchange_rate import normalize_currency_label
+from amounts import is_blank, parse_amounts_frame
+from exchange_rate import normalize_currency_label, unique_rates_by_key
 
 
 def enrich_with_fx(df: pd.DataFrame, df_exchange_rate: pd.DataFrame) -> pd.DataFrame:
@@ -13,15 +14,34 @@ def enrich_with_fx(df: pd.DataFrame, df_exchange_rate: pd.DataFrame) -> pd.DataF
     结算 txt 里的 currency 与汇率表的「收款币种」都是 3 位代码，但可能带零宽字符/全角字符
     （见 docs/solutions/integration-issues/amazon-period-fx-currency-label-invisible-chars.md），
     不归一化会出现静默的无汇率 → amount人民币 全 0。
+
+    门禁（T01）：空币种键禁止连接；汇率表同币种多汇率报错；被用到的汇率必须有限且 >0；
+    join 用 ``validate="many_to_one"``；amount 严格解析，非空非法不再静默变 NaN。
     """
     out = df.copy()
+    if "currency" not in out.columns:
+        raise ValueError("enrich_with_fx: 数据缺 currency 列，无法补汇率")
     out["currency"] = out["currency"].map(normalize_currency_label)
+    blank = is_blank(out["currency"])
+    if blank.any():
+        raise ValueError(f"enrich_with_fx: {int(blank.sum())} 行币种为空，禁止连接汇率（空币种键）")
 
-    rates = df_exchange_rate[["收款币种", "汇率"]].copy()
-    rates["currency"] = rates["收款币种"].map(normalize_currency_label)
-    rates = rates.drop_duplicates(subset=["currency"], keep="first")
-    out = out.merge(rates, how="left", on="currency")
-    out["amount"] = pd.to_numeric(out["amount"], errors="coerce")
+    if "amount" not in out.columns:
+        raise ValueError("enrich_with_fx: 数据缺 amount 列")
+    out["amount"] = parse_amounts_frame(
+        out, ["amount"], label="enrich_with_fx", row_key="settlement-id" if "settlement-id" in out.columns else "文件名"
+    )["amount"]
+
+    rates = (
+        unique_rates_by_key(
+            df_exchange_rate,
+            key="收款币种",
+            used_keys=set(out["currency"]),
+            label="汇率表",
+        )[["收款币种", "汇率"]]
+        .rename(columns={"收款币种": "currency"})
+    )
+    out = out.merge(rates, how="left", on="currency", validate="many_to_one")
     out["amount人民币"] = out["amount"] * out["汇率"]
     return out
 

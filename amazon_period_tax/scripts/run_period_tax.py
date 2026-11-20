@@ -24,6 +24,7 @@ from exchange_rate import load_exchange_rate_table  # noqa: E402
 from explore_tables import build_exploration_tables  # noqa: E402
 from gsheet_tax import sort_additional_fee_tax_tabs, tax_worksheet_name, write_df_to_gsheet  # noqa: E402
 from normalize_dates import normalize_posted_dates  # noqa: E402
+from phase3_merge import load_channel_accounts, tax_account_problems  # noqa: E402
 from read_amz_txt import read_bucket_amz_txts  # noqa: E402
 from tax_aggregate import enrich_with_fx, tax_summary_df6, tax_summary_for_gsheet  # noqa: E402
 
@@ -88,6 +89,27 @@ def collect_strict_failures(
     if gsheet_rows != n_accounts:
         failures.append(f"gsheet_rows={gsheet_rows}!=accounts={n_accounts}")
     return failures
+
+
+def enforce_write_gate(
+    *,
+    strict: bool,
+    strict_failures: list[str],
+    master_problems: list[str],
+    publish_requested: bool,
+) -> None:
+    """写前生效的硬门禁（A3/T03 + A4/T04）。
+
+    - ``strict_failures`` 非空且 ``--strict``：**任何写入之前**退出，不再先写后返回 1。
+    - ``master_problems`` 非空且请求发布（--write-gsheet / --upload-nas）：无论是否 strict 都拒绝，
+      未知账号/缺人员的 Tax 不得原样发布。
+    """
+    if strict and strict_failures:
+        raise SystemExit(f"STRICT 检查未通过（写前拒绝）: {'; '.join(strict_failures)}")
+    if publish_requested and master_problems:
+        raise SystemExit(
+            "Tax 账号/人员主数据校验未通过（拒绝发布）: " + "; ".join(master_problems)
+        )
 
 
 def main() -> None:
@@ -191,6 +213,16 @@ def main() -> None:
     if len(df6_gsheet) != n_acct_files:
         print(f"WARN: gsheet 行数 {len(df6_gsheet)} != 渠道账号数 {n_acct_files}")
 
+    # A3/T03：发布前用 **live** 渠道主表核对每个渠道账号 + 当期运营人员（不能原样发布 unknown）。
+    master_problems: list[str] = []
+    try:
+        _acct_view, _ = load_channel_accounts(gc, args.exchange_month)
+        master_problems = tax_account_problems(df6_gsheet, _acct_view, only_nonzero=False)
+    except Exception as e:  # 主表读不到/缺当期列 = 主数据不可校验，同样是门禁失败
+        master_problems = [f"渠道主表校验失败: {e}"]
+    if master_problems:
+        print("MASTER 主数据校验未通过:", "; ".join(master_problems))
+
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     xlsx_name = f"合并Amazon_{bucket_name}_{ts}.xlsx"
     xlsx_path = bucket_dir / xlsx_name
@@ -234,6 +266,7 @@ def main() -> None:
         n_accounts=n_acct_files,
     )
     report["strict_failures"] = strict_failures
+    report["master_problems"] = master_problems
     if strict_failures:
         print("STRICT 检查未通过:", "; ".join(strict_failures))
         for ln in report["issue_files"][:20]:
@@ -241,9 +274,17 @@ def main() -> None:
 
     if args.dry_run:
         print(json.dumps({k: report[k] for k in report if k != "files"}, ensure_ascii=False, indent=2))
-        if args.strict and strict_failures:
+        if (args.strict and strict_failures) or master_problems:
             raise SystemExit(1)
         return
+
+    # A4/T04：strict 失败必须在**任何写入**（xlsx / GSheet / NAS）之前生效。
+    enforce_write_gate(
+        strict=args.strict,
+        strict_failures=strict_failures,
+        master_problems=master_problems,
+        publish_requested=bool(args.write_gsheet or args.upload_nas),
+    )
 
     write_excel_sheets(xlsx_path, sheets)
     print("wrote", xlsx_path)
@@ -303,8 +344,6 @@ def main() -> None:
     rep_path = rep_dir / f"run_{bucket_name}_{ts}.json"
     rep_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print("report", rep_path)
-    if args.strict and strict_failures:
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":

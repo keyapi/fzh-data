@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 
+import numpy as np
 import pandas as pd
 
 # 和财务部共享 — 避免 Drive 按标题搜索（易 SSL/限流）
@@ -15,9 +16,11 @@ _INVISIBLE = re.compile(r"[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff]"
 
 
 def normalize_currency_label(value) -> str:
-    """统一币种写法：去零宽字符，全角转半角（NFKC），去首尾空白。
+    """统一币种写法：去零宽字符，全角转半角（NFKC），纯 ASCII 统一大写，去首尾空白。
 
     例：'\\u200c匈牙利福林（HUF）' → '匈牙利福林(HUF)'，才能和汇率表别名对上。
+    纯 ASCII 代码 ``usd`` → ``USD``（否则与汇率表 ``USD`` 是两个键，记账会多一行空汇率）。
+    中文/混合写法不受大写影响。
     """
     if value is None:
         return ""
@@ -27,8 +30,52 @@ def normalize_currency_label(value) -> str:
     except (TypeError, ValueError):
         pass
     s = _INVISIBLE.sub("", str(value))
-    s = unicodedata.normalize("NFKC", s)
-    return s.strip()
+    s = unicodedata.normalize("NFKC", s).strip()
+    if s and s.isascii():
+        s = s.upper()
+    return s
+
+
+def unique_rates_by_key(
+    df_rates: pd.DataFrame,
+    *,
+    key: str,
+    used_keys: "pd.Series | set | None" = None,
+    label: str = "汇率表",
+) -> pd.DataFrame:
+    """按 ``key`` 归一/校验后返回唯一汇率表（保留原列，``key`` 已归一，``汇率`` 已转数值）。
+
+    门禁（T01）：
+    - ``key`` 为空的汇率行不允许参与连接（空币种键禁止连接）；
+    - 同一 ``key`` 指向不同汇率 → 报错，不能 ``keep-first`` 掩盖冲突；
+    - 被用到的 ``key``：汇率必须存在时有限且 > 0（缺失留给 missing_fx 报告，不在这里吞）。
+    """
+    if key not in df_rates.columns or "汇率" not in df_rates.columns:
+        raise KeyError(f"{label} 缺列 {key!r}/'汇率'")
+    rates = df_rates.copy()
+    rates[key] = rates[key].map(normalize_currency_label)
+    rates["汇率"] = pd.to_numeric(rates["汇率"], errors="coerce")
+    blank = rates[key].eq("")
+    if (blank & rates["汇率"].notna()).any():
+        bad = rates.loc[blank & rates["汇率"].notna(), "汇率"].head(5).tolist()
+        raise ValueError(f"{label} 存在空币种键但带汇率的行: {bad!r}")
+    rates = rates.loc[~blank]
+    numeric = rates.loc[rates["汇率"].notna()]
+    conflicts = numeric.groupby(key)["汇率"].nunique()
+    bad_keys = conflicts[conflicts > 1].index.tolist()
+    if bad_keys:
+        raise ValueError(f"{label} 同一 {key} 对应多个汇率（必须唯一）: {bad_keys[:10]!r}")
+    rates = numeric.drop_duplicates(subset=[key], keep="first")
+    if used_keys is not None:
+        used = {normalize_currency_label(x) for x in used_keys if normalize_currency_label(x)}
+        hit = rates.loc[rates[key].isin(used)]
+        invalid = hit.loc[~np.isfinite(hit["汇率"]) | (hit["汇率"] <= 0)]
+        if not invalid.empty:
+            raise ValueError(
+                f"{label} 汇率必须有限且 >0: "
+                f"{invalid[[key, '汇率']].head(10).to_dict('records')!r}"
+            )
+    return rates
 
 
 def load_exchange_rate_table(

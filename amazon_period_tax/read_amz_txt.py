@@ -17,6 +17,7 @@ for _p in (_PKG, _DING):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+from amounts import infer_decimal_format, parse_amount_strict  # noqa: E402
 from amz_txt_naming import account_prefix_from_stem, preprocess_stem  # noqa: E402
 from bucket_meta import bucket_period_range  # noqa: E402
 from channel_canonical import canonical_account  # noqa: E402
@@ -298,13 +299,23 @@ def read_amz_txt_file(
 
     df = pd.read_csv(file_path, sep="\t")
     df = _normalize_v1_schema(df)
-    for col in ("total-amount", "amount"):
-        if col in df.columns:
-            df[col] = df[col].map(
-                lambda x: float(str(x).replace(",", "."))
-                if isinstance(x, str) and "," in str(x)
-                else (float(x) if pd.notna(x) and str(x).strip() != "" else x)
-            )
+    amount_cols = [c for c in ("total-amount", "amount") if c in df.columns]
+    raw_amounts = {c: df[c].tolist() for c in amount_cols}
+    # 区域格式按**单元格**判定（Amazon 欧洲站同一文件会混用 0,04 与 -16.64）。
+    for col, raws in raw_amounts.items():
+        parsed: list[float | None] = []
+        problems: list[str] = []
+        for pos, raw in enumerate(raws):
+            try:
+                parsed.append(parse_amount_strict(raw, decimal_separator="auto"))
+            except ValueError as e:
+                problems.append(f"行{pos + 2} 原值={raw!r}: {e}")
+        if problems:
+            head = "; ".join(problems[:5])
+            more = f"（另有 {len(problems) - 5} 处）" if len(problems) > 5 else ""
+            raise ValueError(f"{file_name} [{col}] 金额解析失败 {len(problems)} 处: {head}{more}")
+        df[col] = pd.Series(parsed, index=df.index, dtype="float64")
+    amount_format = infer_decimal_format(v for raws in raw_amounts.values() for v in raws)
     if "currency" in df.columns and df["currency"].notnull().any():
         df["currency"] = df["currency"].ffill()
 
@@ -322,6 +333,8 @@ def read_amz_txt_file(
     df.insert(1, "子文件夹名", sub_folder)
     df.insert(2, "文件名", file_name)
     df.insert(3, "渠道账号", account)
+    df.attrs["amount_format"] = amount_format
+    df.attrs["amount_cols"] = amount_cols
     return df
 
 
@@ -455,7 +468,10 @@ def read_bucket_amz_txts(
                 dfs.append(df)
                 stats["files_used"] += 1
                 stats["rows_total"] += len(df)
-                reports.append(f"OK {rel} rows={len(df)} acct={df['渠道账号'].iloc[0]}")
+                reports.append(
+                    f"OK {rel} rows={len(df)} acct={df['渠道账号'].iloc[0]} "
+                    f"fmt={df.attrs.get('amount_format', '?')}"
+                )
 
     reports.append(
         "SUMMARY files={files_total} used={files_used} dup={files_dup} failed={files_failed} "
