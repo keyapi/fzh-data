@@ -1,0 +1,7 @@
+{
+  "groups": [
+    {"name": "运营2部AI项目沟通群", "openConversationId": "", "enabled": true, "backfillDays": 60},
+    {"name": "运营3部AI项目沟通群", "openConversationId": "", "enabled": true, "backfillDays": 60},
+    {"name": "运营4部AI项目沟通群", "openConversationId": "", "enabled": true, "backfillDays": 60}
+  ]
+}

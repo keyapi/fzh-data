@@ -6,11 +6,18 @@ title: 集成问题 — 变更日志
 
 # 变更日志
 
+## 2026-11-09
+- **更新**: 通途SKU↔EN物料 权威映射 — 补「登记位置与组件多对多」：唯一登记位置是 Item 子表 `customer_items.ref_code`（不是主表 `Item.customer_code`）；同一 Item 可同时有整件与 `-Cover/-Foam`；组件 SKU 多对多（共享皮壳/填充物），完整 SKU 才唯一；配套 `work_order_task#4`（校验放宽）与 `tongtool_integration#22`（同步不要 LIMIT 1）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
+
+## 2026-10-17
+- **新增**: 通途SKU↔EN物料 权威映射（EN `Item Customer Detail.ref_code` / `importBOMCostList.客户物料号`）+ 「直连优先、旧键兜底」。两个通用坑：改 gsheet 前分清 IMPORTRANGE 源/显示层；覆盖率结论前必反证（自算的 11% 实为前缀过滤丢数据的 bug，真值 99.9%）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
+
 | 日期 | 操作 | 文档 | 说明 |
 |------|------|------|------|
 | 2026-11-11 | 新增 | [amazon-period-tax-fx-alias-multiplies.md](amazon-period-tax-fx-alias-multiplies.md) | Tax 合并汇率须用每个收款币种一行；别名拆开表按收款币种 merge 会把税额乘多遍。已重写 Tax202608/09/10 |
 | 2026-11-09 | 新增 | [amazon-period-phase3-gsheet-not-colab-id.md](amazon-period-phase3-gsheet-not-colab-id.md) | Phase3 `PHASE3_SPREADSHEET_ID` 是 spreadsheet 非 Colab notebook；400 先查 ID；SA 日常写表 |
 | 2026-11-02 | 新增 | [dingtalk-oa-create-receipt-with-attachments.md](dingtalk-oa-create-receipt-with-attachments.md) | 原生销售收款确认单可用 API 带附件发起：除 Workflow.Instance.Write 外要 `Storage.UploadInfo.Read` + `Storage.File.Write`（开完必须发新版）；OSS PUT 不能用 urllib 默认 Content-Type；unionId 走旧 topapi user/get |
+| 2026-11-06 | 新增 | [email-domain-expiry-gmail-550-5-7-26.md](email-domain-expiry-gmail-550-5-7-26.md) | 域名到期后阿里云把注册局 NS 切到过期停放组，SPF/MX/DKIM 全部停止解析 → Gmail 550-5.7.26 硬拒。要害：① **续费≠恢复**——RDAP 已显示续到 2027-11-03，但 NS 仍在停放组、权威 NS 对 TXT/MX 只回 NODATA；② **注册商（阿里云）≠ DNS 托管（DNSPod；主域 vilavi.cn 在 Cloudflare）**，改记录前先看 NS；③ 腾讯企业邮的 DKIM selector 是随机自定义串（`sjnr2306` / `evhe2306`），只用 `dkim`/`s1`/`s2` 等常见名探测会误判“没有 DKIM”，必须从企业邮后台「查看配置」取；④ 恢复后补 DMARC `v=DMARC1; p=none`、把两条同优先级 5 的 MX 改成 5/10；⑤ 记录 TTL 600、否定缓存按 SOA minimum、NS 委派最长 24–48h，改完立即重试失败不代表没生效。 |
 | 2026-09-23 | 新增 | [grokbot-ssh-via-shanghai-jump-symmetric-nat.md](grokbot-ssh-via-shanghai-jump-symmetric-nat.md) | grok-bot（美东，Tailscale `100.106.238.40`）SSH 接入。要害三条：① 对端**对称 NAT**（`MappingVariesByDestIP: true`、无 `PortMapping`、对 Vultr/上海出口各不同且端口会变）⇒ 本机↔对端**结构性打不成直连**，只能中继；② 四条通路实测里 **Vultr 跳板 299+60≈359ms 与 DERP 373ms 基本持平（原设想是绕远路）**，真正有收益的是**上海跳板 30+205≈235ms**——反直觉点在于**上海→美东 205ms 比北京办公室直连美东 299ms 还快**（阿里云骨干优于办公室出口+DERP）；③ **DERP / Peer Relays / ProxyJump 三者都只改传输、不改认证**，Tailscale SSH 的 check 模式（默认 12h、**按发起设备计**）走跳板时变成要单独验跳板机 ⇒ 真正的免验证做法是**关掉 `tailscale set --ssh=false`，改走对端本就跑着的系统 sshd + 公钥**（对端无 systemd，tailscaled 只占 tailnet 地址的 22）；切换后必须 `ssh-keygen -R` 清旧主机密钥。peer relay（上海做中继，全协议）暂缓，若启用 `src` 只 scope `fzhpc13`。 |
 | 2026-09-22 | 新增 | [redirect-307-replays-post-405.md](redirect-307-replays-post-405.md) | `RedirectResponse` 默认 **307 会保留请求方法**，退出登录是 POST，于是浏览器拿 POST 去请求只接受 GET 的首页、再被闸门用 307 拦到只接受 GET 的登录路由——最终 `{"detail":"Method Not Allowed"}`。修法：凡「跳页面」的重定向一律显式 303。**只断言 Location 的用例抓不到它**，要断言状态码本身。由使用者实测发现 |
 | 2026-09-22 | 新增 | [reverse-proxy-prefix-return-to.md](reverse-proxy-prefix-return-to.md) | 前缀化反代（`proxy_pass .../` 剥前缀）下，用 `request.url.path` 当 `return_to` 会把登录后的用户送到**域名根路径**（那是隔壁服务）。修法：回写浏览器的 URL 一律补前缀，并让 `safe_return_to` 只允许落在本前缀之下；测试补 StripPrefix 中间件模拟反代。由使用者实际登录时发现 |
@@ -28,3 +35,6 @@ title: 集成问题 — 变更日志
 | 2026-08-13 | 新增 | [tongtool-erp2-mcp-shared-rate-limit.md](tongtool-erp2-mcp-shared-rate-limit.md) | 通途 ERP2 MCP 接入、细粒度授权探测和双 App 共享五次每分钟限流验证 |
 | 2026-08-05 | 新增 | [chatgpt-edu-cliproxyapi-429-rate-limit.md](chatgpt-edu-cliproxyapi-429-rate-limit.md) | ChatGPT Edu 单账号 CLIProxyAPI 429 限流调研，含限流机制分析、事件还原、定价确认、缓解方案 |
 | 2026-06-26 | 新增 | [dingtalk-sso-new-api-oidc-bridge.md](dingtalk-sso-new-api-oidc-bridge.md) | 钉钉 SSO + OIDC Bridge 桥接 new-api 方案 |
+
+## 2026-11-05
+- **新增**: FBA SKU 别名归一化、KS0001 优先与 EN 客户物料号登记 — 去空格/连字符/下划线后匹配；同款有无扣优先 KS0001；单候选强依据才自动；disabled BOM 快照；33 条别名登记带旧值乐观锁/回读。 → `tongtu-fba-alias-normalization-registration.md`

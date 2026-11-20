@@ -15,6 +15,8 @@ tags: [integration, solutions, index]
 | 2026-11-11 | 账期 Tax 必须用「每个收款币种一行」的汇率表，别名拆开表会把税额乘多遍 | [amazon-period-tax-fx-alias-multiplies.md](amazon-period-tax-fx-alias-multiplies.md) |
 | 2026-11-09 | Amazon 账期 Phase3 写表须用 Spreadsheet ID，勿与 Colab notebook 文件 ID 混用 | [amazon-period-phase3-gsheet-not-colab-id.md](amazon-period-phase3-gsheet-not-colab-id.md) |
 | 2026-11-02 | 钉钉原生「销售收款确认单」可用 API 带附件发起 | [dingtalk-oa-create-receipt-with-attachments.md](dingtalk-oa-create-receipt-with-attachments.md) |
+| 2026-11-06 | 邮件域名到期 → Gmail 550-5.7.26 拒收：续费≠恢复，注册商≠DNS 托管商；含 RDAP → 权威 NS → 真实 zone 三层排查与自定义 DKIM selector | [email-domain-expiry-gmail-550-5-7-26.md](email-domain-expiry-gmail-550-5-7-26.md) |
+| 2026-11-05 | git push 报 `Permission denied (publickey)` —— 密钥没问题，是 GitHub SSH 链路间歇性阻断；含三步判定法与一键 HTTPS 回退 | [github-ssh-intermittent-publickey-denied.md](github-ssh-intermittent-publickey-denied.md) |
 | 2026-10-08 | 布局类字段带 in_list_view=1 会让整个 DocType 的元数据写不进去（现象是「每次登录都弹窗」） | [layout-field-in-list-view-breaks-metadata-writes.md](layout-field-in-list-view-breaks-metadata-writes.md) |
 | 2026-09-23 | grok-bot（美东）SSH 接入——对称 NAT 下打不成直连，只有经上海跳板有收益（235ms vs DERP 373ms），Vultr 跳板实为绕远路 | [grokbot-ssh-via-shanghai-jump-symmetric-nat.md](grokbot-ssh-via-shanghai-jump-symmetric-nat.md) |
 | 2026-09-22 | 重定向用 307 会让浏览器重放 POST —— 退出登录报 405 | [redirect-307-replays-post-405.md](redirect-307-replays-post-405.md) |
@@ -36,3 +38,5 @@ tags: [integration, solutions, index]
 | 2026-07-24 | FZH 统一 AI 接入方案 — 选型结论 | [fzh-unified-ai-access-conclusion.md](fzh-unified-ai-access-conclusion.md) |
 | ChatGPT Edu 账号 CLIProxyAPI 429 限流机制调研 | [chatgpt-edu-cliproxyapi-429-rate-limit.md](chatgpt-edu-cliproxyapi-429-rate-limit.md) |
 | 钉钉 SSO 登录 new-api（OIDC Bridge 桥接方案） | [dingtalk-sso-new-api-oidc-bridge.md](dingtalk-sso-new-api-oidc-bridge.md) |
+| 2026-10-17（2026-11-09 补） | 通途SKU↔EN物料 权威映射（子表 customer_items.ref_code；组件多对多、完整 SKU 唯一）+ gsheet 源头修正 | [tongtu-en-item-mapping-and-gsheet-source-fix.md](tongtu-en-item-mapping-and-gsheet-source-fix.md) |
+| 2026-11-05 | FBA SKU 别名归一化、KS0001 优先与 EN 客户物料号登记 | [tongtu-fba-alias-normalization-registration.md](tongtu-fba-alias-normalization-registration.md) |

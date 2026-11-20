@@ -140,7 +140,6 @@ uv sync
 | `other-outbound` | `other_outbound/` | 赛狐库存明细 → 其他出库清零 |
 | `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（419 端点）+ 连通性测试 |
 | `sellfox-amazon-settlement` | `sellfox_settlement/` | 赛狐结算中心V2 + 紫鸟列式报表自动取回 Amazon 账期；钉钉迟交/错位审计；店名↔渠道账号 |
-| `sellfox-api` | `SELLFOX_API/` | 赛狐 OpenAPI 文档镜像（443 端点）+ 连通性测试 |
 | `sellfox-combo-create` | `SELLFOX_API/` | EN 套件 Product Bundle ↔ 赛狐组合商品：sync-combos 对账/创建/回读断言 |
 | `sellfox-cover-inventory` | `sellfox_cover_inventory/` | 三角类皮壳共享库存代理：KS 库存池 + PK# 组合 + cover_combo_ops 创建/对账 |
 | `sellfox-shipping` | `sellfox_shipping/` | 赛狐尾程打单（订单获取→承运人标签→追踪回写）三界面架构 |
@@ -155,6 +154,7 @@ uv sync
 | `nas-access` | `NAS_API/` | 群晖多域名访问、QC 选路、OpenWrt ACME+反代、DSM 第二张证 |
 | `dingtalk-oa-approval` | `dingtalk/dingtalk_oa_approval/` | 钉钉 OA 销售收款确认单：API 附件 + **API 带附件发起** + aflow 浏览器导出 + 账期月过滤 + NAS 归档（不改本地同步） |
 | `amazon-period-tax` | `amazon_period_tax/` | NAS 账期 txt → 附加费&Tax/Phase3 gsheet 本地管道（Colab 税账期 + 钉钉OA收款费用多平台） |
+| `dingtalk-group-harvest` | `dingtalk/dingtalk_group_harvest/` | 钉钉 AI 项目群：DWS 个人身份增量采集群消息/附件/文档 + 周报（数据落仓库外） |
 | `us-openai-api-proxy` | `us_openai_api_proxy/` | US Vultr Tailscale + CLIProxyAPI → ChatGPT API 共享 |
 | `new-api-deployment` | `new-api-deployment/` | new-api 部署（上海阿里云）+ 订阅/配额管理 |
 | `new-api-dingtalk-oidc` | `new-api-dingtalk-oidc/` | 钉钉 OAuth → OIDC 桥接代理（FastAPI） |
@@ -263,18 +263,19 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 
 ### 经验库路由（`docs/solutions/`）
 
-**动手前先查这里有没有现成结论**——踩过的坑基本都在。119 篇按 category 分 8 类，每类一份 `index.md`：
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。144 篇按 category 分 8 类，每类一份 `index.md`：
 
 | 类别 | 篇数 | 什么时候读 |
 |------|-----|-----------|
-| `workflow-issues/` | 36 | 账期对账、迟交/错位、跨期结算、批处理流程 |
-| `integration-issues/` | 26 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
-| `architecture-patterns/` | 18 | 「这个管道/系统为什么这样设计」 |
-| `tooling-decisions/` | 13 | 脚本、工具选型、产出校验 |
-| `developer-experience/` | 11 | Windows / worktree / MCP / Colab 等本机环境坑 |
-| `conventions/` | 10 | 团队约定（配对、命名、SOP） |
-| `best-practices/` | 8 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
-| `documentation-gaps/` | 2 | 文档与断言的缺口 |
+| `workflow-issues/` | 40 | 账期对账、迟交/错位、跨期结算、批处理流程 |
+| `integration-issues/` | 30 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
+| `architecture-patterns/` | 21 | 「这个管道/系统为什么这样设计」 |
+| `tooling-decisions/` | 15 | 脚本、工具选型、产出校验 |
+| `developer-experience/` | 15 | Windows / worktree / MCP / Colab 等本机环境坑 |
+| `conventions/` | 11 | 团队约定（配对、命名、SOP） |
+| `best-practices/` | 9 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
+| `documentation-gaps/` | 3 | 文档与断言的缺口 |
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。144 篇按 category 分 8 类，每类一份 `index.md`：
 
 定位单篇：`grep -rl "^module: <模块名>" docs/solutions/`（frontmatter 有 `module` / `tags` / `problem_type`）。
 全量平表：`docs/solutions/index.md`（由 `scripts/check_solutions_health.py --fix` 生成）。

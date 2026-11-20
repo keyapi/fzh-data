@@ -111,6 +111,7 @@ npm install -g @playwright/mcp && npx playwright install chromium
 | 改了配置没反应 | 改错文件（3P vs 普通），或没完全退出 | 确认路径；**托盘 Quit** 再开 |
 | `not a valid MCP server` / server 不出现 | 远程 MCP 没走 `mcp-remote` | 见 §三 |
 | `Server disconnected` | OAuth 未完成 | 删 `~/.mcp-auth` → 重启重试 |
+| `Server disconnected`，日志里有 `will be installed` + `TAR_ENTRY_ERROR` / `MODULE_NOT_FOUND` | `npx @latest` 自动升级时装包被打断，入口文件缺失 | 再开一次会话或删 `_npx/<hash>` 重装；详见 [solutions/developer-experience/claude-desktop-mcp-server-disconnected-npx.md](solutions/developer-experience/claude-desktop-mcp-server-disconnected-npx.md) |
 | `EADDRINUSE` | mcp-remote 回调端口冲突 | `taskkill /F /IM node.exe` → 删 `~/.mcp-auth` → 重启 |
 | 连接器在，但工具列不出来 | MCP 工具**只在会话创建时**加载 | **开新对话** |
 | 浏览器没弹 | mcp-remote 没拉起浏览器 | 日志里找 `Please authorize this client by visiting:` 链接手动访问 |
