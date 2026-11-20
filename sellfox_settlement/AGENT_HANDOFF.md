@@ -105,3 +105,12 @@ uv run python sellfox_settlement/reconcile_amazon.py reconcile --settlement data
 - **中国报税**：申报用 Date Range/Transaction（订单/发货、全额销售额）；Settlement 做回款/费用凭证。
 - **运营业绩**：用**结算期贡献** = `accountNetIncome（剔预留） − 订单明细匹配的产品/头程/尾程 − 其他`，**不用打款 transferAmount**。
 - 详见 `docs/solutions/integration-issues/amazon-settlement-v2-original-currency-and-order-identity.md` 与 `docs/solutions/workflow-issues/amazon-settlement-period-cost-and-tax-decisions.md`；研究报告在 `docs/research/2026-11-10-*.md`。
+
+## 13. 账期业绩报表与全链路门禁（2026-11-20）
+- **目标表**：每月 `通途订单YYYYMM` 的 `账号-按应收`（25 列，放 `账号` 紧左边）；7/8/9 普通簿与 `-特殊规则` 簿均已产出。
+- **公式**：`应收业绩 = 应收金额_人民币 − 通途成本合计 − 附加费 − Tax`；`剔预留业绩 = 销售额_人民币 − 收款费用累加人民币 − 通途成本合计 − 附加费 − Tax`。通途成本 = 皮壳*系数*数量 + 绍兴二次加工*系数*数量 + 二次加工*系数*数量 + 头程*数量 + 海外仓*数量 + 运费。
+- **期间**：收入 = OA 账期 `YYYYMMDD-YYYYMMDD`（04–03）；成本 = 当月 `写回`（自发货按发货日、FBA 按付款/销售日）；不按 04–03 二次过滤。
+- **1.7.0**：只读 `和财务部共享/黄-特殊规则-订单改销售额成本`（Jeck 过时）；Colab cell22 只改内存，需另建 `特殊规则-写回YYYY年M月FBA订单和非FBA订单`，原 `写回` 不动；旧下划线 `特殊规则_写回…` 是旧快照，禁用。FX 必须先做 ISO+月份唯一（否则规则重复执行；同汇率时金额不变）。
+- **坑**：新别名 `WFUS-Daneey→WFDANEEYUS`（202607 3 行、约 681.98）；AllegroHU 原始币种名含 U+200C+全角括号 → 汇率/RMB=0，需 NFKC+去 Cf；8 月 Tax corrected 394,575.92（旧 396,601.69 重复附件）；202609 成本差 56,431.88/业绩差 56,431.86 是逐账号舍入。
+- **门禁**：`validate_account_period.py`（账号覆盖/别名/merge 基数/运营/币种 FX/成本恒等/预留/Tax 附加费/黄表/过滤列；FAIL 退出 1）+ `validate_ingest.py`（附件 hash/期间/V1V2/100 倍）；三个 GS writer 已改为 clear 前强制校验。六组基线 FAIL 0 / WARN 4。
+- 详见 `docs/solutions/workflow-issues/amazon-period-performance-report-pipeline.md` 与 `docs/solutions/best-practices/account-period-data-gates.md`；验证目录（仓库外）`D:/Work/张晶/国内报税/Amazon账期非V2/技术验证/20261118/out_0708/`。

@@ -20,6 +20,8 @@ tags: [sellfox, amazon, settlement, okf, index]
 | 2026-09 试点测试方法与断言（可复跑） | [reference/how-we-tested-2026-09.md](reference/how-we-tested-2026-09.md) |
 | 踩坑清单 | [lessons/lessons-learned.md](lessons/lessons-learned.md) |
 | 知识沉淀+交接（两报表取舍/风险/后续） | [../docs/solutions/tooling-decisions/amazon-settlement-autofetch-sellfox.md](../docs/solutions/tooling-decisions/amazon-settlement-autofetch-sellfox.md) |
+| 账期业绩（应收−通途成本−Tax±附加费）月度报表与 1.7.0 特殊规则 | [../docs/solutions/workflow-issues/amazon-period-performance-report-pipeline.md](../docs/solutions/workflow-issues/amazon-period-performance-report-pipeline.md) |
+| 账期/成本全链路门禁（账号/币种/金额/merge/期间） | [../docs/solutions/best-practices/account-period-data-gates.md](../docs/solutions/best-practices/account-period-data-gates.md) |
 | 账期「提交异常/迟交」审计方法与规则 | [../docs/solutions/workflow-issues/amazon-account-period-late-submission-audit.md](../docs/solutions/workflow-issues/amazon-account-period-late-submission-audit.md) |
 | Google 表访问 + 「渠道账号」表规范 & 别名规则 | [reference/gsheet-access-and-channel-account.md](reference/gsheet-access-and-channel-account.md) |
 | 变更历史 | [log.md](log.md) |

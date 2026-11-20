@@ -9,6 +9,7 @@ tags: [best-practices, index]
 
 | 你需要... | 读这个 |
 |----------|--------|
+| 账期/成本 join 静默出错：账号/币种/金额/merge/期间门禁 | [account-period-data-gates.md](account-period-data-gates.md) |
 | 知识库越积越多，怕某篇再也找不到 / 索引与磁盘漂移 | [knowledge-base-anti-rot.md](knowledge-base-anti-rot.md) |
 | 写/改靠通配符扫目录取输入的脚本，怕文件被静默漏掉 | [scanner-silent-data-loss-guard.md](scanner-silent-data-loss-guard.md) |
 | ERPNext 工单生产数据异常怎么排查（方法论） | [erpnext-work-order-investigation-methodology.md](erpnext-work-order-investigation-methodology.md) |

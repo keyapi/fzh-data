@@ -13,6 +13,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-20 | 账期业绩月度报表（应收−通途成本−Tax±附加费）落地口径 | [workflow-issues/amazon-period-performance-report-pipeline.md](workflow-issues/amazon-period-performance-report-pipeline.md) |
+| 2026-11-20 | 账期/成本全链路门禁：账号、币种、金额、merge、期间 | [best-practices/account-period-data-gates.md](best-practices/account-period-data-gates.md) |
 | 2026-11-10 | Amazon 结算口径与成本的四个决策（期间/退款/成本/税务） | [workflow-issues/amazon-settlement-period-cost-and-tax-decisions.md](workflow-issues/amazon-settlement-period-cost-and-tax-decisions.md) |
 | 2026-11-10 | Amazon 结算 V2 原币取数与订单身份归一（踩坑） | [integration-issues/amazon-settlement-v2-original-currency-and-order-identity.md](integration-issues/amazon-settlement-v2-original-currency-and-order-identity.md) |
 | 2026-10-10 | 把问卷交给非 AI 同事填写：单份仓库 MD + Notion 通道 | [conventions/external-questionnaire-via-notion.md](conventions/external-questionnaire-via-notion.md) |

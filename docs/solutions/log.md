@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-20（账期业绩报表 + 全链路门禁）
+- **新增**: `workflow-issues/amazon-period-performance-report-pipeline.md` —— 账期业绩=应收−通途四段成本−附加费−Tax；收入=OA 账期 04–03、成本=当月订单（自发货按发货日、FBA 按付款/销售日）；25 列 `账号-按应收` 放 `账号` 左边；1.7.0 只认 `黄-特殊规则-订单改销售额成本`，特殊成本写 `特殊规则-写回…`、原 `写回` 不动；FX 先做 ISO+月份唯一；`WFUS-Daneey→WFDANEEYUS`、AllegroHU 零宽/全角币种坑；逐账号舍入 0.02–0.05 尾差同层比较。
+- **新增**: `best-practices/account-period-data-gates.md` —— 账号覆盖/别名唯一/merge 基数/运营人员/币种 FX/金额尺度/成本恒等/预留恒等/Tax 附加费/源新鲜度/规则版本/期间/写前基线 13 类门禁；含 WFDANEEYUS、AllegroHU、JohnaSE 100 倍、8 月 Tax 重复附件、账号 vs 写回 −556,373、旧特殊写回等事故对照；`validate_account_period.py` 六组基线 FAIL 0 / WARN 4。
+- **更新**: `tongtool_order_cost/engine_170.py` —— 1.7.0 混合模式与 Colab cell22 对齐：系数与参考值同时存在时参考值优先，不再判 `invalid_mixed`。
+
 ## 2026-11-10（Amazon 结算 V2 → 成本/利润的口径踩坑）
 - **新增**: `integration-issues/amazon-settlement-v2-original-currency-and-order-identity.md` —— 赛狐 Settlement V2 原币与订单身份：`currency` 是**折算目标币种**（默认 CNY），原币要按结算组原生币种取 identity 值；通途 `订单号` **各账号前缀不同**（`CUS-`/`BJRYECLTUS-`/`BNKCUS-`/`DANEEYUS-`…），须提取内嵌 3-7-7，否则误报 80% 缺失；单月发货只覆盖 57%、**补 9 月到 99.4%**；FBA 走 EN，`item_cost` 全 0 改用 BOM。
 - **新增**: `workflow-issues/amazon-settlement-period-cost-and-tax-decisions.md` —— 结算/记账/履约三轴与**预留=资产负债表**；退款**可售才冲 COGS**（需退货报告 `detailedDisposition`+`status`，赛狐 API 已实调）；EN 成本字段（`商品成本`=行合计、`绍兴发货成本`=单价，标准 `尾程前成本=绍兴+头程+加工`）；中国报税用 **Date Range 申报、Settlement 做回款凭证**；运营业绩用**结算期净额（accountNetIncome，剔预留）− 订单明细成本**，不要用打款。
