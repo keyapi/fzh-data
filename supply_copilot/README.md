@@ -58,7 +58,7 @@ uv run python -m supply_copilot decide --branch USNJ   # 用 live 供给重算�
 
 `decide` 报告开头会给出 **可执行性（是/否）** 和原因。当前默认口径下通常是「否」，因为：
 
-- 需求仍来自 D6 包 q95（as_of 2026-11-13），不是本次刷新；
+- 需求仍来自 D6 历史包（95% 档，as_of 2026-11-13），不是本次刷新；
 - PO 多落在物料仓/未映射 SKU，未按通途 `purchaseOrderQuery` 接入；
 - CG 抵扣未按实时 WayfairCG 库存重算；
 - 需要日/下单日沿用 D6 包，已过的日期会标 `past_due`。
@@ -77,8 +77,8 @@ uv run python -m supply_copilot decide --branch USNJ --forecast-root <root>/rebu
 ```
 
 - `rebuild` 在本地跑：订单 → 需求表 → 预测；约几分钟（AutoETS），不写 EN、不动线上包。
-- 预测窗口只有 p10/p50/p90；报告里的 q95 由 p50/p90 **派生**（未校准尾部），会标注。
-- 未覆盖的 SKU 退回 D6 q95 并计数，不会静默当成已刷新。
+- 预测只给「中位（p50）」和「保守（p90，约 90% 情形）」；**不再派生 q95**；D6 历史包仍是 95% 档，只作对照。
+- 未覆盖的 SKU 退回 D6 历史 95% 档并计数，不会静默当成已刷新。
 - 需要 `sku_map.tsv`（`pull` 提供）和 `item_uom_cache.parquet`（`pull-history` 提供）；
   也可用 `--sku-map/--uom-cache` 指定。
 

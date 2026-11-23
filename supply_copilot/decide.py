@@ -5,7 +5,7 @@
 
 - **需求**：默认取 D6 包 q95（``supply_copilot.recommend`` 回放读取）。
   若给了 ``forecast_root``，优先用 ``en-demand-forecast-v1`` 的刷新预测
-  （同一 SKU×仓×UOM 的 p50 合计）替换 D6 需求；预测不可用只警告，不阻塞。
+  （同一 SKU×仓×UOM 的 p90，约 90% 情形）替换 D6 需求；预测不可用只警告，不阻塞。
 - **供给**：现场读取 live 库存快照（stock parquet/csv）、未履约 SO
   （backlog csv/parquet）、开放 PO（tsv 或 ``purchaseOrderQuery`` JSONL），
   以及库存快照里的 ``WayfairCG-*`` 仓作为 CG 抵扣。
@@ -428,7 +428,7 @@ def _forecast_demand(forecast_root, *, lead_days, lookup, branch_prefix):
         return None, f"预测未接入（{exc}）；需求回退 D6 包 q95"
 
     demand = {}
-    derived_q95 = 0
+    p90_rows = 0
     excluded = dict(ineligible=0, identity=0, uom=0, quantity=0, out_of_branch=0)
     for row in frame.itertuples(index=False):
         if not _truthy(row.netting_eligible):
@@ -447,14 +447,14 @@ def _forecast_demand(forecast_root, *, lead_days, lookup, branch_prefix):
             excluded["out_of_branch"] += 1
             continue
         qty = _num(row.p50)
+        p90 = _num(getattr(row, "p90", None))
+        if p90 is not None and (qty is None or p90 >= qty):
+            # 业务默认用 90% 服务档（经验分位，未做覆盖率回测）；不再派生 q95
+            qty = p90
+            p90_rows += 1
         if qty is None or qty < 0:
             excluded["quantity"] += 1
             continue
-        p90 = _num(getattr(row, "p90", None))
-        if p90 is not None and p90 >= qty:
-            # 正态近似：q95 由 p50/p90 派生（p90 是 80% 区间上界）
-            qty = qty + (p90 - qty) * (1.6449 / 1.2816)
-            derived_q95 += 1
         key = (item, canonical, uom)
         demand[key] = demand.get(key, 0.0) + qty
 
@@ -465,9 +465,9 @@ def _forecast_demand(forecast_root, *, lead_days, lookup, branch_prefix):
                 window_start=str(frame["window_start"].min()),
                 window_end=str(frame["window_end"].max()),
                 rows_in=int(len(frame)), keys=int(len(demand)), excluded=excluded,
-                quantile=("derived_q95_from_p50_p90" if derived_q95 else "p50"),
-                quantile_rows=derived_q95,
-                allocation="窗口分位合计；q95 由 p50/p90 正态近似派生（未校准尾部）")
+                quantile=("p90_service90" if p90_rows else "p50_fallback"),
+                quantile_rows=p90_rows,
+                allocation="窗口 p90（约90%情形）合计；p90 为经验分位，未做覆盖率回测")
     return demand, meta
 
 
@@ -559,7 +559,7 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             new_qty = max(0, int(math.ceil(total_demand - supply_expected)))
             lower = max(0, int(math.ceil(total_demand - supply_proven)))
             if new_qty > 0:
-                reasons.append(f"q95 {total_demand:g} > 已知供给 {supply_expected:g}")
+                reasons.append(f"需求 {total_demand:g} > 已知供给 {supply_expected:g}")
             else:
                 reasons.append(f"已知供给 {supply_expected:g} 覆盖需求 {total_demand:g}")
             if lower > new_qty:
@@ -596,7 +596,7 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             demand_qty=None if demand_qty is None else float(demand_qty),
             d6_q95=q95, demand_source=demand_source,
             demand_evidence=("D6 q95" if demand_source == "d6_pack_q95"
-                             else "forecast window derived q95 (p50/p90)"),
+                             else "forecast window p90 (~90% service)"),
             supply_opening=_num(opening), supply_intransit=_num(intransit),
             supply_po=_num(po_qty), supply_cg=_num(cg_qty),
             supply_so=_num(so_qty), supply_expected=_num(supply_expected),
@@ -835,8 +835,6 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         executable_reasons.append(f"{fallback_rows} 行预测未覆盖，退回 D6 q95")
     if demand_source != "forecast_refresh":
         executable_reasons.append("需求未刷新：仍为 D6 包 q95（历史时点）")
-    elif (forecast_meta or {}).get("quantile") == "derived_q95_from_p50_p90":
-        executable_reasons.append("预测 q95 由 p50/p90 派生，未校准尾部")
     if not so_known:
         executable_reasons.append("SO 未接入")
     if not po_known or (po_evidence.get("rows") and
