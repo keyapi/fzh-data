@@ -44,7 +44,8 @@ DEMO_BANNER = (
     "演示模式：数据为内嵌快照，页面不发起网络请求。运营协同页签的提案只保存在"
     "本浏览器（localStorage 键 <code>supply-workbench:proposals:v1</code>）："
     "刷新保留；清理浏览器数据或换浏览器看不到本浏览器的提案；"
-    "不上传、不审批、不写 EN。"
+    "不上传、不审批、不写 EN。本页面不区分身份；同一浏览器/同账号共享本地演示数据，"
+    "仅用于演示。"
 )
 
 CSP_STATIC = (
@@ -57,6 +58,108 @@ def csp_hash(text: str) -> str:
     """CSP sha256 source for an inline script's exact text content."""
     digest = hashlib.sha256(text.encode("utf-8")).digest()
     return "'sha256-" + base64.b64encode(digest).decode("ascii") + "'"
+
+
+# Pure, DOM-free JS extracted as one block so tests can execute it under Node.
+# The page embeds it verbatim through the /*__COLLAB_LIB__*/ placeholder.
+COLLAB_LIB = """
+  var KINDS = ['delta', 'total', 'percent', 'event_only'];
+  var STATUSES = ['submitted', 'approved', 'rejected'];
+  var STATUS_LABELS = {submitted: '待模拟审核', approved: '模拟通过', rejected: '模拟驳回'};
+  var MIN_PERCENT = -100;
+  var MIN_TOTAL = 0;
+  var STORAGE_DISABLED_MSG = '浏览器已禁用本地存储，提案表单已停用；页面其余内容仍可浏览。';
+  var STORAGE_CORRUPT_MSG = '本地提案数据损坏，已丢弃；不影响查看与重新提交。';
+
+  function isPlainObject(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+
+  function isValidProposal(p) {
+    if (!isPlainObject(p)) return false;
+    if (typeof p.id !== 'string' || !p.id) return false;
+    if (typeof p.row_id !== 'string' || !p.row_id) return false;
+    if (KINDS.indexOf(p.kind) < 0) return false;
+    if (!(p.value === null || (typeof p.value === 'number' && isFinite(p.value)))) return false;
+    if (typeof p.start !== 'string' || typeof p.end !== 'string') return false;
+    if (typeof p.event_id !== 'string' || !p.event_id) return false;
+    if (typeof p.reason !== 'string' || !p.reason) return false;
+    if (typeof p.evidence !== 'string') return false;
+    if (typeof p.created_at !== 'string' || !p.created_at) return false;
+    if (STATUSES.indexOf(p.status) < 0) return false;
+    return true;
+  }
+
+  function parseProposals(raw) {
+    if (raw === null || raw === undefined || raw === '') return {corrupted: false, list: []};
+    var parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      return {corrupted: true, list: []};
+    }
+    if (!Array.isArray(parsed)) return {corrupted: true, list: []};
+    for (var i = 0; i < parsed.length; i++) {
+      if (!isValidProposal(parsed[i])) return {corrupted: true, list: []};
+    }
+    return {corrupted: false, list: parsed};
+  }
+
+  function readStorage(storage, key) {
+    var raw;
+    try {
+      raw = storage.getItem(key);
+    } catch (e) {
+      return {available: false, list: [], corrupted: false, message: STORAGE_DISABLED_MSG};
+    }
+    var parsed = parseProposals(raw);
+    if (parsed.corrupted) {
+      try { storage.removeItem(key); } catch (e) { /* ignore */ }
+      return {available: true, list: [], corrupted: true, message: STORAGE_CORRUPT_MSG};
+    }
+    return {available: true, list: parsed.list, corrupted: false, message: ''};
+  }
+
+  function writeStorage(storage, key, list) {
+    try {
+      storage.setItem(key, JSON.stringify(list));
+      return {ok: true, available: true, message: ''};
+    } catch (e) {
+      return {ok: false, available: false, message: STORAGE_DISABLED_MSG};
+    }
+  }
+
+  function probeStorageAvailable(storage, key) {
+    try {
+      storage.setItem(key + ':probe', '1');
+      storage.removeItem(key + ':probe');
+      return {available: true, message: ''};
+    } catch (e) {
+      return {available: false, message: STORAGE_DISABLED_MSG};
+    }
+  }
+
+  function validateInput(kind, rawValue, eventId, reason, start, end) {
+    eventId = String(eventId === null || eventId === undefined ? '' : eventId).trim();
+    reason = String(reason === null || reason === undefined ? '' : reason).trim();
+    if (!eventId) return {error: '请填写业务事件 ID。'};
+    if (!reason) return {error: '请填写调整原因。'};
+    if (!start || !end) return {error: '请填写事件开始与结束日期。'};
+    if (end < start) return {error: '事件结束日期不能早于开始日期。'};
+    if (kind === 'event_only') return {value: null};
+    if (KINDS.indexOf(kind) < 0) return {error: '未知的调整方式。'};
+    if (rawValue === '' || rawValue === null || rawValue === undefined) {
+      return {error: '请填写数值。'};
+    }
+    var value = Number(rawValue);
+    if (!isFinite(value)) return {error: '数值必须是数字。'};
+    if (kind === 'percent' && value < MIN_PERCENT) {
+      return {error: '比例调整不能低于 ' + MIN_PERCENT + '%。'};
+    }
+    if (kind === 'total' && value < MIN_TOTAL) {
+      return {error: '调整为总量不能小于 ' + MIN_TOTAL + '。'};
+    }
+    return {value: value};
+  }
+"""
 
 
 def embed_json(obj) -> str:
@@ -140,16 +243,13 @@ _COLLAB_JS = """
 (function () {
   'use strict';
 
+  /*__COLLAB_LIB__*/
+
   var STORAGE_KEY = 'supply-workbench:proposals:v1';
-  var KINDS = ['delta', 'total', 'percent', 'event_only'];
   var KIND_LABELS = {
     delta: '增减数量', total: '调整为总量',
     percent: '按比例调整', event_only: '仅记录事件'
   };
-  var MIN_PERCENT = -100;
-  var MIN_TOTAL = 0;
-  var STATUSES = ['submitted', 'approved', 'rejected'];
-  var STATUS_LABELS = {submitted: '待审核', approved: '模拟通过', rejected: '模拟驳回'};
   var storageState = {available: true, message: ''};
 
   var dataEl = document.getElementById('supply-workbench-baseline');
@@ -200,74 +300,29 @@ _COLLAB_JS = """
     el.textContent = text;
   }
   function probeStorage() {
-    try {
-      var probe = STORAGE_KEY + ':probe';
-      window.localStorage.setItem(probe, '1');
-      window.localStorage.removeItem(probe);
-      storageState.available = true;
-      storageState.message = '';
-    } catch (e) {
-      storageState.available = false;
-      storageState.message = '浏览器已禁用本地存储，提案表单已停用；页面其余内容仍可浏览。';
-    }
-  }
-  function isPlainObject(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
-  function isValidProposal(p) {
-    if (!isPlainObject(p)) return false;
-    if (typeof p.id !== 'string' || !p.id) return false;
-    if (typeof p.row_id !== 'string' || !p.row_id) return false;
-    if (KINDS.indexOf(p.kind) < 0) return false;
-    if (!(p.value === null || (typeof p.value === 'number' && isFinite(p.value)))) return false;
-    if (typeof p.start !== 'string' || typeof p.end !== 'string') return false;
-    if (typeof p.event_id !== 'string' || !p.event_id) return false;
-    if (typeof p.reason !== 'string' || !p.reason) return false;
-    if (typeof p.evidence !== 'string') return false;
-    if (typeof p.created_at !== 'string' || !p.created_at) return false;
-    if (STATUSES.indexOf(p.status) < 0) return false;
-    return true;
-  }
-  function discardCorrupted() {
-    try { window.localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
-    storageState.message = '本地提案数据损坏，已丢弃；不影响查看与重新提交。';
-    showStorageNotice(storageState.message);
-    return [];
+    var res = probeStorageAvailable(window.localStorage, STORAGE_KEY);
+    storageState.available = res.available;
+    storageState.message = res.message;
   }
   function readProposals() {
-    if (!storageState.available) return [];
-    var raw;
-    try {
-      raw = window.localStorage.getItem(STORAGE_KEY);
-    } catch (e) {
+    var res = readStorage(window.localStorage, STORAGE_KEY);
+    if (!res.available) {
       storageState.available = false;
-      storageState.message = '浏览器已禁用本地存储，提案表单已停用；页面其余内容仍可浏览。';
-      showStorageNotice(storageState.message);
-      return [];
+      storageState.message = res.message;
     }
-    if (!raw) return [];
-    var parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      return discardCorrupted();
-    }
-    if (!Array.isArray(parsed)) return discardCorrupted();
-    for (var i = 0; i < parsed.length; i++) {
-      if (!isValidProposal(parsed[i])) return discardCorrupted();
-    }
-    return parsed;
+    if (res.message) showStorageNotice(res.message);
+    return res.list;
   }
   function writeProposals(list) {
     if (!storageState.available) return false;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-      return true;
-    } catch (e) {
+    var res = writeStorage(window.localStorage, STORAGE_KEY, list);
+    if (!res.ok) {
       storageState.available = false;
-      storageState.message = '浏览器已禁用本地存储，提案表单已停用；页面其余内容仍可浏览。';
-      showStorageNotice(storageState.message);
+      storageState.message = res.message;
+      showStorageNotice(res.message);
       if (selectedId) renderDetail();
-      return false;
     }
+    return res.ok;
   }
 
   function renderSummary() {
@@ -278,7 +333,7 @@ _COLLAB_JS = """
     if (el) {
       el.textContent = 'D5 整期需求基准 ' + ROWS.length + ' 行 · USNJ 补货建议 ' +
         (BASELINE.recommendation_rows || 0) + ' 行 · 本地提案 ' + proposals.length +
-        '（待审核 ' + pending + ' / 模拟通过 ' + approved + '）';
+        '（待模拟审核 ' + pending + ' / 模拟通过 ' + approved + '）';
     }
     var count = byId('collab-proposal-count');
     if (count) count.textContent = proposals.length ? '（' + proposals.length + ' 条）' : '（0 条）';
@@ -412,24 +467,14 @@ _COLLAB_JS = """
 
   function collectProposal(r) {
     var kind = byId('wb-kind').value;
-    var rawValue = byId('wb-value').value;
     var eventId = byId('wb-event-id').value.trim();
     var reason = byId('wb-reason').value.trim();
     var evidence = byId('wb-evidence').value.trim();
     var start = byId('wb-start').value;
     var end = byId('wb-end').value;
-    if (!eventId) return {error: '请填写业务事件 ID。'};
-    if (!reason) return {error: '请填写调整原因。'};
-    if (!start || !end) return {error: '请填写事件开始与结束日期。'};
-    if (end < start) return {error: '事件结束日期不能早于开始日期。'};
-    var value = null;
-    if (kind !== 'event_only') {
-      if (rawValue === '') return {error: '请填写数值。'};
-      value = Number(rawValue);
-      if (!isFinite(value)) return {error: '数值必须是数字。'};
-      if (kind === 'percent' && value < MIN_PERCENT) return {error: '比例调整不能低于 ' + MIN_PERCENT + '%。'};
-      if (kind === 'total' && value < MIN_TOTAL) return {error: '调整为总量不能小于 ' + MIN_TOTAL + '。'};
-    }
+    var check = validateInput(kind, byId('wb-value').value, eventId, reason, start, end);
+    if (check.error) return {error: check.error};
+    var value = check.value;
     return {proposal: {
       id: newId(), row_id: r.id, kind: kind, value: value,
       start: start, end: end, event_id: eventId, reason: reason,
@@ -572,7 +617,7 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
         "window.scrollTo(0, 0)})});"
     )
     data_text = embed_json(payload)
-    main_js = tab_js + _COLLAB_JS
+    main_js = tab_js + _COLLAB_JS.replace("/*__COLLAB_LIB__*/", COLLAB_LIB)
     csp = CSP_STATIC + "; script-src " + csp_hash(main_js) + " " + csp_hash(data_text)
 
     nav = "".join(

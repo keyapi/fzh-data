@@ -4,10 +4,13 @@ import csv
 import hashlib
 import json
 import re
+import shutil
+import subprocess
 
 import pytest
 
 from supply_copilot.workbench_page import (
+    COLLAB_LIB,
     STORAGE_KEY,
     TABS,
     build,
@@ -183,6 +186,9 @@ def test_copy_and_semantic_separation(inputs):
     assert "<dt>D5 整期需求基准</dt>" in html
     assert "仅演示需求提案，不修改 USNJ 补货建议，不进入采购" in html
     assert "不相加、不替代" in html
+    assert "本页面不区分身份；同一浏览器/同账号共享本地演示数据，仅用于演示" in html
+    assert "待模拟审核" in html
+    assert "待审核" not in html
 
 
 def test_data_is_html_escaped(inputs):
@@ -293,11 +299,13 @@ def test_storage_corruption_and_disabled_handling(inputs):
     snap_path, base_path, _ = inputs
     html = build(snap_path, base_path)
     assert STORAGE_KEY == "supply-workbench:proposals:v1"
-    assert "window.localStorage.setItem(STORAGE_KEY" in html
-    assert "window.localStorage.getItem(STORAGE_KEY" in html
+    assert "readStorage(window.localStorage, STORAGE_KEY)" in html
+    assert "writeStorage(window.localStorage, STORAGE_KEY, list)" in html
+    assert "probeStorageAvailable(window.localStorage, STORAGE_KEY)" in html
     assert "Array.isArray(parsed)" in html
     assert "isValidProposal" in html
-    assert "window.localStorage.removeItem(STORAGE_KEY)" in html
+    assert "parseProposals" in html
+    assert "storage.removeItem(key)" in html
     assert "本地提案数据损坏，已丢弃" in html
     assert "浏览器已禁用本地存储" in html
     assert "probeStorage" in html
@@ -357,3 +365,104 @@ def test_cli_writes_single_file(tmp_path, inputs):
     main(["--snapshot", str(snap_path), "--baseline", str(base_path), "--out", str(out)])
     assert out.is_file()
     assert out.read_text(encoding="utf-8").startswith("<!doctype html>")
+
+
+def _run_node(tmp_path, body):
+    """Execute the page's pure JS library under Node and parse its JSON output."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node.js 不可用，跳过执行级 JS 测试")
+    script = tmp_path / "collab_lib_test.js"
+    script.write_text(COLLAB_LIB + "\n" + body, encoding="utf-8")
+    proc = subprocess.run(
+        [node, str(script)], capture_output=True, text=True, encoding="utf-8", timeout=30
+    )
+    assert proc.returncode == 0, proc.stderr
+    return json.loads(proc.stdout)
+
+
+def test_form_boundaries_execute_in_node(tmp_path):
+    out = _run_node(tmp_path, """
+const out = {};
+out.percentBelow = validateInput('percent', '-101', 'EV', 'R', '2026-01-01', '2026-01-02');
+out.percentEdge = validateInput('percent', '-100', 'EV', 'R', '2026-01-01', '2026-01-02');
+out.totalNegative = validateInput('total', '-1', 'EV', 'R', '2026-01-01', '2026-01-02');
+out.totalZero = validateInput('total', '0', 'EV', 'R', '2026-01-01', '2026-01-02');
+out.missingEvent = validateInput('delta', '5', '', 'R', '2026-01-01', '2026-01-02');
+out.missingReason = validateInput('delta', '5', 'EV', '   ', '2026-01-01', '2026-01-02');
+out.missingDate = validateInput('delta', '5', 'EV', 'R', '', '2026-01-02');
+out.eventOnlyBlank = validateInput('event_only', '', 'EV', 'R', '2026-01-01', '2026-01-02');
+out.eventOnlyValue = validateInput('event_only', '999', 'EV', 'R', '2026-01-01', '2026-01-02');
+out.deltaNegative = validateInput('delta', '-5', 'EV', 'R', '2026-01-01', '2026-01-02');
+console.log(JSON.stringify(out));
+""")
+    assert "error" in out["percentBelow"]
+    assert out["percentEdge"] == {"value": -100}
+    assert "error" in out["totalNegative"]
+    assert out["totalZero"] == {"value": 0}
+    assert "error" in out["missingEvent"]
+    assert "error" in out["missingReason"]
+    assert "error" in out["missingDate"]
+    assert out["eventOnlyBlank"] == {"value": None}
+    assert out["eventOnlyValue"] == {"value": None}
+    assert out["deltaNegative"] == {"value": -5}
+
+
+def test_storage_exception_branches_execute_in_node(tmp_path):
+    out = _run_node(tmp_path, """
+const out = {};
+out.getItemThrows = readStorage({
+  getItem: function () { throw new Error('denied'); },
+  removeItem: function () {}
+}, 'k');
+out.setItemThrows = writeStorage({
+  setItem: function () { throw new Error('quota'); }
+}, 'k', []);
+out.probeThrows = probeStorageAvailable({
+  setItem: function () { throw new Error('denied'); },
+  removeItem: function () {}
+}, 'k');
+let removed = 0;
+out.corrupt = readStorage({
+  getItem: function () { return '{not json'; },
+  removeItem: function () { removed++; }
+}, 'k');
+out.corruptRemoved = removed;
+out.notArray = readStorage({
+  getItem: function () { return '{"a":1}'; },
+  removeItem: function () {}
+}, 'k');
+out.validEmpty = readStorage({
+  getItem: function () { return null; },
+  removeItem: function () {}
+}, 'k');
+const good = {
+  id: 'p1', row_id: 'r1', kind: 'delta', value: 5,
+  start: '2026-01-01', end: '2026-01-02', event_id: 'EV',
+  reason: 'R', evidence: '', created_at: '2026-01-01T00:00:00Z',
+  status: 'submitted'
+};
+out.validList = readStorage({
+  getItem: function () { return JSON.stringify([good]); },
+  removeItem: function () {}
+}, 'k');
+out.badElement = readStorage({
+  getItem: function () { return JSON.stringify([{id: 'x'}]); },
+  removeItem: function () {}
+}, 'k');
+console.log(JSON.stringify(out));
+""")
+    assert out["getItemThrows"]["available"] is False
+    assert out["getItemThrows"]["list"] == []
+    assert "禁用本地存储" in out["getItemThrows"]["message"]
+    assert out["setItemThrows"]["ok"] is False
+    assert out["setItemThrows"]["available"] is False
+    assert "禁用本地存储" in out["setItemThrows"]["message"]
+    assert out["probeThrows"]["available"] is False
+    assert out["corrupt"]["corrupted"] is True
+    assert out["corrupt"]["list"] == []
+    assert out["corruptRemoved"] == 1
+    assert out["notArray"]["corrupted"] is True
+    assert out["validEmpty"]["list"] == []
+    assert [p["id"] for p in out["validList"]["list"]] == ["p1"]
+    assert out["badElement"]["corrupted"] is True

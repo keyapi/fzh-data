@@ -90,37 +90,44 @@ fi
 3. **放入 Desk Page**：把 `supply_workbench/` 目录复制到
    `key_test/page/supply_workbench/`。
 
-4. **按顺序刷新**（先 reload-doc，再清缓存，必要时才重启）：
+4. **按顺序刷新**（只做文件落盘 + reload-doc + clear-cache，**不以全量 migrate 收尾**）：
 
    ```bash
-   bench --site <site> reload-doc key_test page supply_workbench
-   bench --site <site> clear-cache
-   # 仅当 JS 未生效或长时间 long worker 撞车时才重启，并避开高峰期
-   bench restart
+   # Page 记录变更后：重载该 Page
+   bench --site erpnext.vilavi.cn reload-doc key_test page supply_workbench
+   bench --site erpnext.vilavi.cn clear-cache
+
+   # 仅当新增 Python 模块需要加载（白名单方法未被识别）时才重启 web：
+   sudo supervisorctl restart frappe-bench-web:frappe-bench-frappe-web
    ```
+
+   普通 Page/静态 HTML 部署不需要 `bench migrate`，也不要跑全量 `bench migrate`。
 
 5. 用 System Manager 账号打开 `/app/supply-workbench`，确认 8 页签、运营协同
    左右联动、演示横幅与 CSP 均正常（浏览器控制台无 CSP 拒绝记录）。
 
 6. 测试站验证通过后，按项目发布链路合并到生产 app 仓库再部署生产
-   （测试分支 → main → 生产 `git pull upstream` → migrate → clear-cache → restart）。
+   （测试分支 → main → 生产 `git pull upstream` → 放入新增文件 →
+   `reload-doc` + `clear-cache`；仅新增 Python 模块需要加载时才用
+   `sudo supervisorctl restart frappe-bench-web:frappe-bench-frappe-web`；
+   不以全量 `bench migrate` 收尾）。
 
 ## 权限
 
 `get_html()` 仅对 System Manager 开放；未登录或权限不足抛 `PermissionError`；
 `private/supply_workbench.html` 不存在时抛 `NotFoundError`。方法不接受任何路径参数。
 
-## 回滚（只撤新增项）
+## 回滚（恢复同名旧记录/旧文件，禁止整库回滚）
 
-1. 删除新增 Page doc：
-   `bench --site <site> execute frappe.delete_doc --args '["Page","supply-workbench"]'`，
-   或在 Desk Page 列表中删除。
-2. 删除新增 app 文件：`key_test/page/supply_workbench/` 与
-   `key_test/demand_collaboration/supply_workbench_static.py`。
-3. 删除新增私有文件：`sites/<site>/private/supply_workbench.html`。
-4. `bench --site <site> clear-cache`；仅在需要时 `bench restart`。
-5. 恢复 `key_test` 到备份的 HEAD（仅当部署过程改动过 app 文件）：
-   `cd apps/key_test && git checkout <备份 HEAD>`。
-
-回滚不得触碰 `usnj-supply-copilot`、测试站 `demand-collaboration` 或其它既有
-Page/接口；回滚后再打开这两页确认行为与部署前一致。
+1. 恢复同名旧 Page 记录：若部署前备份过同名 Page JSON，用其恢复；若原本不存在，
+   则删除本次新增的 Page：
+   `bench --site erpnext.vilavi.cn execute frappe.delete_doc --args '["Page","supply-workbench"]'`。
+2. 恢复同名旧文件：把 `private/supply_workbench.html`、`key_test/page/supply_workbench/`、
+   `key_test/demand_collaboration/supply_workbench_static.py` 恢复为备份内容；备份为
+   `not-present` 的则删除对应新增文件。不得改动其它既有文件。
+3. `bench --site erpnext.vilavi.cn clear-cache`；仅当 Python 模块需要重新加载时才
+   `sudo supervisorctl restart frappe-bench-web:frappe-bench-frappe-web`。
+4. **明确禁止**：整库还原（数据库备份恢复）、对整个 bench 或 app 做 git checkout、
+   用全量 `bench migrate` 作为回滚手段。回滚只能逐项恢复同名记录/文件。
+5. 回滚后再打开 `usnj-supply-copilot` 与测试站 `demand-collaboration`，确认两页
+   行为与部署前一致。
