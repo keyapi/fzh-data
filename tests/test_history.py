@@ -68,3 +68,17 @@ def test_status_reports_missing_and_mismatch(tmp_path):
     assert result["status"] == "incomplete"
     assert result["sha_mismatch"] == ["en_orders.parquet"]
     assert result["missing"] == ["demand_netting.parquet"]
+
+
+def test_pull_orders_uses_orders_dir(tmp_path, monkeypatch):
+    mpath, payloads = make_manifest(tmp_path)
+    manifest = json.loads(mpath.read_text(encoding="utf-8"))
+    manifest["version"] = "orders-2026-11-22.1"
+    monkeypatch.setattr(history, "token_headers", lambda env_file=None: {})
+    monkeypatch.setattr(history.requests, "get",
+                        lambda url, headers=None, timeout=None: Resp(payloads[url.split("name=")[-1]]))
+    root = tmp_path / "root"
+    info = history.pull_orders(root, manifest=manifest)
+    assert len(info["downloaded"]) == 2
+    assert (root / "orders" / manifest["version"] / "en_orders.parquet").exists()
+    assert history.orders_status(root, manifest=manifest)["status"] == "ok"

@@ -26,6 +26,8 @@ uv run python -m supply_copilot supply --branch USNJ     # 实时库存/开放SO
 uv run python -m supply_copilot decide --branch USNJ     # 当天候选 + 可执行性
 uv run python -m supply_copilot history                  # 历史 parquet 状态
 uv run python -m supply_copilot pull-history             # 从 EN 私有目录取历史 parquet
+uv run python -m supply_copilot pull-orders              # 最新订单明细（到 2026-11-22）
+uv run python -m supply_copilot orders                    # 最新订单是否齐/哈希
 ```
 
 `recommend` = replay（pack as_of 固定）。`refresh` = EN 实时库存 + 复用 pack 的 D5 预测重算缺口；**不是 D5 重新训练**。

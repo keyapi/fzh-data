@@ -1,0 +1,17 @@
+{
+  "version": "orders-2026-11-22.1",
+  "as_of": "2026-11-22",
+  "generated_at": "2026-11-23T16:45:00+08:00",
+  "source": "EN DB direct export (tabTongtool Order/Item) 2026-11-10..2026-11-22 + orders_unified_20261111_v2",
+  "files": [
+    {
+      "name": "orders_unified.parquet",
+      "sha256": "f5a841a8d797f23030a2bab8c43d049f3edd463e2c3909774e10216a6a479144",
+      "bytes": 17274338,
+      "rows": 421291,
+      "date_min": "2022-12-20",
+      "date_max": "2026-11-22"
+    }
+  ],
+  "notes": "最新订单明细（含历史 GS + EN 增量）；用于分析与预测，不直接下单。"
+}

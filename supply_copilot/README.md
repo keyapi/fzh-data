@@ -39,6 +39,7 @@ uv run python -m supply_copilot doctor     # 期望 status=ok, missing_files=[]
 | 现在实时库存多少？按实时库存净需求变多少？ | `refresh --branch USNJ --sku <SKU>`（仅换库存） |
 | 按实时库存+开放 SO/PO 重算今天要不要补 | `supply --branch USNJ` → `decide --branch USNJ`（见下） |
 | 历史订单 parquet 在哪、齐不齐 | `history` / `pull-history`（EN 私有，不打包） |
+| 我要自己用最新订单分析/预测 | `pull-orders` → `<root>/orders/<version>/orders_unified.parquet` |
 | 换一套决策口径（v6.24）看看 | `recommend --d6-version v6_24 ...` |
 | 精确匹配还是模糊搜 SKU | 默认精确；`--like` 才模糊（防 KS100 误配 KS1000） |
 | 这份数据是什么时点、是否完整可信 | `doctor` + 包版本/as_of/sha256 |
@@ -66,11 +67,10 @@ uv run python -m supply_copilot decide --branch USNJ   # 用 live 供给重算�
 
 ## 历史订单数据（不在公共仓库）
 
-- 历史订单/需求是 **parquet 快照**，不是每次拉 EN；最新完整快照截止 **2026-10-26**。
-- 文件放在 EN 私有目录 `private/supply-history/<version>/`，通过登录 API 取：
-  `uv run python -m supply_copilot pull-history`（校验 sha256 后落到本地）。
-- 决策回放/实时决策**不需要**历史包；只有重训预测或复核明细时才需要。
-- 定时更新是运维任务（增量拉取 + 重建），不在每个 Agent 里跑。
+- **最新订单明细**：`pull-orders` → `orders_unified.parquet`，当前版本 **orders-2026-11-22.1**（数据到 2026-11-22；含历史 GS + EN 增量）。给想自己用 Excel/Pandas 分析或自建预测的人用，不强制用我们的模型。
+- **需求/预测重建输入**：`pull-history` 的 parquet 快照（截止 **2026-10-26**），只在重训预测/复核明细时需要。
+- 文件放在 EN 私有目录 `private/supply-history/<version>/`，登录 API 取，**不打包、不分卷**；`pull-orders`/`pull-history` 都会校验 sha256。
+- 定时更新是运维任务（服务器端直接读数据库导出，不走 REST 全量翻页），不在每个 Agent 里跑。
 
 ## A/B/C/D/E 是什么
 
