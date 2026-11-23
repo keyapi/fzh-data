@@ -117,7 +117,7 @@ def test_token_headers_use_standard_env_only(monkeypatch):
     assert token_headers(None) == {"Authorization": "token mykey:mysecret"}
 
 
-def test_pull_403_reports_system_manager_hint(tmp_path, monkeypatch):
+def test_pull_403_reports_login_hint(tmp_path, monkeypatch):
     from supply_copilot import download
     monkeypatch.setenv("ERP_API_KEY", "k")
     monkeypatch.setenv("ERP_API_SECRET", "s")
@@ -131,6 +131,14 @@ def test_pull_403_reports_system_manager_hint(tmp_path, monkeypatch):
     try:
         download.pull(manifest, tmp_path)
     except SystemExit as exc:
-        assert "System Manager" in str(exc)
+        assert "EN 登录账号" in str(exc)
     else:
         raise AssertionError("expected SystemExit")
+
+
+def test_pull_uses_login_gated_method_url(monkeypatch):
+    from supply_copilot.download import _part_url
+    monkeypatch.delenv("FZH_PACK_METHOD", raising=False)
+    url = _part_url("https://erpnext.vilavi.cn", "supply-copilot-pack-x.part000")
+    assert "/api/method/key_test.demand_collaboration.pack_download.get_part" in url
+    assert "name=supply-copilot-pack-x.part000" in url

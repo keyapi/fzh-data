@@ -12,9 +12,8 @@ uv run python -m supply_copilot refresh --branch USNJ --sku KS0001-XMMBS-194-HEM
 ```
 
 - **凭证：只有 `ERP_API_KEY` / `ERP_API_SECRET`，没有也不需要 `ADMIN_ERP_API_KEY`。**
-  用你自己的 EN 账号（System Manager 角色）生成；不要用别人的 key。
-  `pull` 下载私有 File 时，Frappe 只认上传者本人或挂靠单据的可读角色——
-  数据包已挂靠到 System Manager 专属的 `usnj-supply-copilot` Page，所以你的 System Manager 账号可直接拉取。
+  用你自己的 EN 登录账号生成即可；**当前策略：任何能登录 EN 的用户（含 API Key 调用）都能拉包**，
+  匿名 403；后续如需收紧，在服务端下载方法里加角色判断即可，客户端不用改。
 - `doctor` / `recommend` / `batch` 只用已下载的包，不需要凭证；`pull` / `refresh` 需要。
 - `recommend`：回放 pack（as_of 固定）。
 - `refresh`：拉 EN 实时库存、复用 pack 的 D5 预测重算；**不重训 D5**，报告标 `forecast reused`。
@@ -23,8 +22,7 @@ uv run python -m supply_copilot refresh --branch USNJ --sku KS0001-XMMBS-194-HEM
 
 ## 数据包管理（管理员）
 
-1. zip 分卷上传到 EN `File`（`is_private=1`），得到 `/private/files/...` 地址；
-2. 把每个分卷 File 的 `attached_to_doctype` / `attached_to_name` 设为
-   `Page` / `usnj-supply-copilot`（该 Page 只授予 System Manager 读取）；
-3. 之后任何 System Manager 用自己的 API Key 都能 `pull`；未挂靠时只有上传者本人能拉。
-   （Page fixture 见 key_test 仓库；部署前先确认页面存在。）
+1. zip 分卷放在站点 `private/files/`（文件名固定 `supply-copilot-pack-<version>.partNNN`）；
+2. 由 `key_test` 的 `key_test.demand_collaboration.pack_download.get_part` 下发：
+   登录即可下载、匿名 403、只允许该前缀的分卷；
+3. 客户端 `pull` 通过 `FZH_PACK_METHOD`（默认上述方法）取分卷；换部署时改这个变量即可。
