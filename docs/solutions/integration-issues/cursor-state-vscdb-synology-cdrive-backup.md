@@ -3,7 +3,7 @@ okf: v0.1
 type: Reference
 title: Cursor state.vscdb 膨胀 + Synology Drive 连续备份吃光 C 盘
 date: 2026-09-01
-last_updated: 2026-09-01
+last_updated: 2026-11-20
 category: integration-issues
 module: cursor-agent-environment
 problem_type: integration_issue
@@ -118,6 +118,49 @@ powershell "New-Item -ItemType Junction -Path 'C:\Users\zhang\AppData\Roaming\Cu
 - **Cursor GC 的认知纠偏**：它只清孤儿数据，全 live 的库删不动；大库压缩需要 2~3 倍空间。别指望 GC 收缩一个活跃使用的库。
 - **junction 移除要非递归**：`[System.IO.Directory]::Delete(path, $false)` 只删链接不碰目标，`rm -rf` 会跟进目标。
 - **Git Bash 里调 robocopy/cmd 有 MSYS 路径转换坑**（`/E` 变 `E:\`），要用 PowerShell 包装或用 `//`。
+
+## 2026-11-20 复发：这次是缓存累积，不是 Synology
+
+C 盘再次降到 **7.32GB 空闲**。Synology 暂存目录已不存在，`cloud-drive-daemon` 也没有在写盘 —— **上次的修复仍然有效**，这次是长期累积的缓存与闲置软件。
+
+### 构成（清理前）
+
+| 项目 | 占用 | 处置 |
+|---|---|---|
+| `state.vscdb` | 30.69GB | **刻意保留**（用户决定不删聊天记录） |
+| `anysphere.cursor-agent-worker` | 4.40GB | 保留 |
+| `AppData\Local\uv` | 7.21GB | `uv cache clean --force` |
+| `AppData\Local\npm-cache` | 3.84GB | `npm cache clean --force` |
+| `AppData\Local\ms-playwright` + `-mcp` | 7.21GB | 仅删 2026-10-01 前的旧构建（-5.56GB） |
+| `AppData\Local\Temp` | 1.66GB | 清空（占用中的跳过） |
+| `Roaming\Tencent\xwechat\update` | 3.62GB | 删除安装包缓存 |
+| `C:\Users\zhang\anaconda3` | 9.17GB | 删除（环境清单存 `D:\Archive\anaconda-envs.txt`） |
+| `Roaming\DingTalk\2812433953_v2` | 7.89GB | 移到 `D:\Archive\DingTalk-2812433953_v2` |
+
+结果：**6.75GB → ~39GB 空闲**。体检脚本仍报 `state.vscdb > 20GB`，属预期。
+
+### 最容易误判的一点：worktree 的 `.venv` 与 uv 缓存是硬链接
+
+`C:\Users\zhang\orca\workspaces\Cursor`（38 个 worktree）+ `.codex\worktrees`（5 个）逻辑大小合计 **25GB**，每个约 0.6GB，看起来是头号目标。但用 `fsutil hardlink list` 抽查任意一个 `.pymupdf/*.dll`，会列出 **近 40 个路径**——它们与 `AppData\Local\uv\cache\archive-v0` 是同一份物理数据。
+
+**结论：删 `.venv` 而不清 uv 缓存，一个字节也释放不出来。** 本次只清 uv 缓存就回收了 7.2GB，且不破坏任何 worktree（分支与代码完全没动）。
+
+### 新坑：anaconda 自带的 `node.exe` 被 Agent 进程占着
+
+删 `anaconda3` 时约 0.11GB 文件报"拒绝访问"。排查发现 **27 个 `node.exe` 和 1 个 `python.exe` 正从 `C:\Users\zhang\anaconda3\` 运行**——Orca / Codex / Claude Code 这些 Agent 进程因为 anaconda 在 PATH 最前面，全都用上了 anaconda 版的 Node。**不要强杀这些进程**（可能包含当前会话）。
+
+正确顺序：
+1. 确认有独立 Node（本机 `C:\Program Files\nodejs\node.exe` 24.15.0，`Get-Command node -All` 可见）。
+2. 重启所有 Agent / Orca 进程后，从**用户 PATH** 移除 `C:\Users\zhang\anaconda3`、`...\Scripts`、`...\Library\bin` 三条。
+3. 再删残留目录，换独立 Node 启动。
+
+同理：删除任何"很久没动的"开发工具目录前，先跑一遍
+`Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like "*<目录>*" }`。
+
+### 本次未做（有意为之）
+
+- `state.vscdb` 30.69GB：GC 清不动、搬 D 盘会因机械硬盘变慢，用户选择保留。
+- 38+5 个 worktree 本体：包含若干未提交改动，`git worktree remove` 有丢失风险，未动。
 
 ## Related
 
