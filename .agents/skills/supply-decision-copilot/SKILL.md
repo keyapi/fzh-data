@@ -11,7 +11,8 @@ description: >
 只读回放，不直接下单。公共仓库只有代码；客户数据在 EN 私有包。
 
 ## Prerequisites
-- EN API key/secret (`ERP_API_KEY`, `ERP_API_SECRET`)
+- EN API key/secret (`ERP_API_KEY`, `ERP_API_SECRET`) —— **自己的 EN 登录账号**；
+  当前任何登录用户都可 `pull`（匿名 403），后续可收紧；不存在也不需要 `ADMIN_ERP_API_KEY`。
 - Private data root `FZH_DATA_ROOT`
 - `uv sync`
 

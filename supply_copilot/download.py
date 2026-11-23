@@ -8,6 +8,12 @@ import requests
 
 DEFAULT_ENV = None
 DEFAULT_BASE = "https://erpnext.vilavi.cn"
+DEFAULT_METHOD = "key_test.demand_collaboration.pack_download.get_part"
+
+
+def _part_url(base, name):
+    method = os.environ.get("FZH_PACK_METHOD") or DEFAULT_METHOD
+    return f"{base.rstrip('/')}/api/method/{method}?name={quote(name)}"
 
 
 def _env(path):
@@ -41,8 +47,13 @@ def pull(manifest, root, env_file=None, base=DEFAULT_BASE):
     header = token_headers(env_file)
     chunks = []
     for part in manifest["parts"]:
-        url = base.rstrip("/") + part["file_url"]
+        url = _part_url(base, part["name"])
         response = requests.get(url, headers=header, timeout=300)
+        if response.status_code == 403:
+            raise SystemExit(
+                f"下载被拒（403）{part['name']}：请使用你自己的 EN 登录账号 API Key/Secret；"
+                "匿名或失效凭证会被拒绝。"
+            )
         if response.status_code != 200:
             raise SystemExit(f"下载失败 {part['name']}: HTTP {response.status_code}")
         if _sha(response.content) != part["sha256"]:
