@@ -123,7 +123,7 @@ def login():
     # 填入账号密码
     print("填入账号密码...")
     fill_field('input[name="username"]', USERNAME)
-    fill_field('input[name="password"]', PASSWORD)
+    fill_field('input[type="password"]', PASSWORD)
     time.sleep(1)
 
     # 最多尝试 5 次验证码
@@ -158,7 +158,7 @@ def login():
         if "check" in url and "captcha" not in url.lower():
             print("  验证码错误，重试...")
             # 重新填密码（可能被清空）
-            fill_field('input[name="password"]', PASSWORD)
+            fill_field('input[type="password"]', PASSWORD)
             time.sleep(1)
         else:
             print("  可能登录成功，检查中...")

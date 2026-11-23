@@ -40,6 +40,10 @@ tags: [parcel-track, dingtalk, scheduling, windows-task-scheduler, unattended]
 范围固定避开今天（通途不接受截止为当天）。**取数失败不会中断**：它会先推一条失败告警，
 再退回用 `parcel_track_input/` 里已有的表照常出报表——否则无人值守时会「什么都没发生」。
 
+> **稳定性加固（2026-11-17）**：取数失败会**先等 60 秒重试一次**，两次都失败才告警/退回。
+> 退回旧输入时**不会冒充当天**：比对输入表实际区间与期望区间，不符则输出名加 `_stale`、
+> 卡片标题写明真实数据区间并标「今日取数失败」。
+
 ```bash
 uv run python parcel_track/scripts/daily_fetch_and_report.py --notify            # 取数+出表+推送
 uv run python parcel_track/scripts/daily_fetch_and_report.py --skip-fetch --notify  # 复用已有输入
@@ -119,6 +123,12 @@ schtasks /Query /TN FZH-ParcelTrack-daily /V /FO LIST
 日志：`parcel_track_output/logs/parcel_track-daily.log`；产出：`parcel_track_output/ops_<YYYYMMDD>.xlsx`。
 
 ## 已知问题（2026-09-18）
+
+- **通途登录页密码框改版（2026-10-20 起取数连续失败，2026-11-05 修复）**：登录页可见密码框变为
+  `id="password"`（**没有 `name`**），而 `name="password"` 指向隐藏的 `passwordMd5`。原选择器
+  `input[name="password"]` 命中隐藏框 → 永远等不到 visible → 15s 超时。已改为
+  `input[type="password"]`（`tongtu_login_ocr.py` / `tongtu_export_ocr.py`）。同期还加了：
+  登录前先判会话是否仍有效（passport 已跳回 `erp102` 则跳过登录页）；登录页等待 15s→30s，超时优雅返回。
 
 - **本机 bundled chromium 有头模式起不来**：`spawn UNKNOWN`；chromium-1228 换报沙箱
   `拒绝访问 0x5`。headless 模式正常、系统 Chrome（`channel="chrome"`）有头也正常。

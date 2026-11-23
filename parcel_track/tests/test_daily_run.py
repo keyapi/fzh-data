@@ -10,6 +10,7 @@ from openpyxl import Workbook
 from parcel_track.scripts.daily_fetch_and_report import (
     date_range,
     extract_newest_xlsx,
+    input_range,
     newest,
     newest_xlsx,
 )
@@ -88,3 +89,21 @@ def test_extract_rejects_zip_without_xlsx(tmp_path: Path):
 
     with pytest.raises(ValueError, match="没有 xlsx"):
         extract_newest_xlsx(zpath, tmp_path / "input", "x.xlsx")
+
+
+def test_input_range_parses_dates_from_filename():
+    """导出按 `_起_止` 命名——直接在文件名上就能判定数据新鲜度。"""
+    p = Path("通途订单详情统计_2026-10-13_2026-10-19.xlsx")
+    assert input_range(p) == ("2026-10-13", "2026-10-19")
+
+
+def test_input_range_falls_back_to_sheet_dates(tmp_path: Path):
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["跟踪号", "发货日期", "邮寄方式", "渠道", "订单号", "包裹号"])
+    ws.append(["1Z999AA10123456784", "2026-10-13", "UPS", "Amazon US", "A1", "P1"])
+    ws.append(["1Z999AA10123456785", "2026-10-15", "UPS", "Amazon US", "A2", "P2"])
+    p = tmp_path / "export.xlsx"
+    wb.save(p)
+
+    assert input_range(p) == ("2026-10-13", "2026-10-15")

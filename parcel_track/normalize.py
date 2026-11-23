@@ -41,6 +41,17 @@ SHEET = {
     "not_found": "取消·其他",
 }
 
+# 推送按发货仓所在区域分块；区域 = 发货仓库第一个 '-' 之前的前缀。
+# 不在这三个里的仓（如 WayfairCG-Cranbury、退货商品仓）归「其他」，不丢单。
+REGION_ORDER = ("美东", "美中", "波兰")
+OTHER_REGION = "其他"
+
+
+def region_of(warehouse: str) -> str:
+    """`美东-CENTRADE` → 美东；`WayfairCG-Cranbury仓` → 其他。"""
+    head = str(warehouse or "").split("-", 1)[0].strip()
+    return head if head in REGION_ORDER else OTHER_REGION
+
 
 def ups_record_to_summaries(rec: Any) -> list[dict]:
     row = rec.to_summary_row()

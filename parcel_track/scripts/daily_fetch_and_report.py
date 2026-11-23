@@ -17,8 +17,10 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import os
+import re
 import subprocess
 import sys
+import time
 import zipfile
 from pathlib import Path
 
@@ -27,6 +29,10 @@ WEB_ROOT = REPO_ROOT / "web_automation"
 DOWNLOADS_DIR = WEB_ROOT / "downloads"
 INPUT_DIR = REPO_ROOT / "parcel_track_input"
 DAYS_BACK = 7
+# 登录页偶发 15s 内渲染不出来（实测 2026-11-05 09:07 一次）——失败后等一会重试一次，
+# 避免一次瞬时故障就让当天退回旧数据。
+FETCH_ATTEMPTS = 2
+FETCH_RETRY_WAIT_SECS = 60
 
 # 本机 bundled chromium 有头模式起不来（详见 web_automation/docs/reference/browser-launch.md）；
 # 定时包装里会设这个变量切系统 Chrome。这里只读，不擅自默认。
@@ -50,6 +56,28 @@ def newest_zip(downloads_dir: Path = DOWNLOADS_DIR) -> Path | None:
 
 def newest_xlsx(folder: Path) -> Path | None:
     return newest(folder.glob("*.xlsx")) if folder.is_dir() else None
+
+
+def input_range(path: Path) -> tuple[str, str] | None:
+    """输入表实际覆盖的发货日期区间。先看文件名（导出按 `_起_止` 命名），读不到再读表。"""
+    m = re.search(r"(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})", path.stem)
+    if m:
+        return m.group(1), m.group(2)
+    try:
+        import pandas as pd
+
+        from parcel_track.ingest import read_tongtu_sheet
+
+        df = read_tongtu_sheet(str(path))
+        col = next((c for c in df.columns if "发货日期" in str(c)), None)
+        if col is None:
+            return None
+        s = pd.to_datetime(df[col], errors="coerce")
+        if s.notna().any():
+            return s.min().date().isoformat(), s.max().date().isoformat()
+    except Exception:
+        return None
+    return None
 
 
 def extract_newest_xlsx(zip_path: Path, dest_dir: Path, name: str) -> Path:
@@ -102,28 +130,61 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", help="输出 Excel，默认 parcel_track_output/ops_<起>_<止>.xlsx")
     args = ap.parse_args(argv)
 
+    # 取数失败时 _alert 也要能发钉钉；.env 必须在取数/告警之前加载
+    # （原先只在 report_main 里加载，导致告警 KeyError: 'DINGTALK_SECRET'）。
+    from parcel_track.cli import _load_env, main as report_main
+
+    _load_env()
+
     input_dir = Path(args.input_dir)
     start, end = date_range()
     if not args.skip_fetch:
-        try:
-            fetch(start, end, input_dir)
-        except Exception as exc:
+        last_exc: Exception | None = None
+        for attempt in range(1, FETCH_ATTEMPTS + 1):
+            try:
+                fetch(start, end, input_dir)
+                last_exc = None
+                break
+            except Exception as exc:
+                last_exc = exc
+                if attempt < FETCH_ATTEMPTS:
+                    print(
+                        f"[取数] 第 {attempt} 次失败：{type(exc).__name__}: {exc}；"
+                        f"{FETCH_RETRY_WAIT_SECS}s 后重试",
+                        file=sys.stderr,
+                    )
+                    time.sleep(FETCH_RETRY_WAIT_SECS)
+        if last_exc is not None:
             hint = (
                 " 若本机 bundled chromium 有头模式不可用，"
                 f"请设 {CHANNEL_ENV}=chrome（见 web_automation/docs/reference/browser-launch.md）"
             )
-            _alert(f"{type(exc).__name__}: {exc}\n{hint}")
+            _alert(f"{type(last_exc).__name__}: {last_exc}\n{hint}")
 
     # 取数失败也要继续：用输入目录里已有的表照常出报表并推送，
     # 否则无人值守时会「什么都没发生」。
-    if newest_xlsx(input_dir) is None:
+    chosen = newest_xlsx(input_dir)
+    if chosen is None:
         print(f"[中止] {input_dir} 下没有任何 xlsx，无表可出", file=sys.stderr)
         return 1
 
-    from parcel_track.cli import main as report_main
+    # 新鲜度闸门：取数失败会退回旧输入，绝不能让它冒充当天数据。
+    # 区间不符时，输出名与卡片标题都写明**真实**数据区间。
+    got = input_range(chosen)
+    if got == (start, end):
+        out = args.out or str(REPO_ROOT / "parcel_track_output" / f"ops_{start}_{end}.xlsx")
+        extra: list[str] = []
+    else:
+        got_label = f"{got[0]}~{got[1]}" if got else "未知"
+        print(f"[陈旧] 最新输入 {chosen.name} 覆盖 {got_label}，期望 {start}~{end}", file=sys.stderr)
+        suffix = f"{got[0]}_{got[1]}_stale" if got else "stale"
+        out = args.out or str(REPO_ROOT / "parcel_track_output" / f"ops_{suffix}.xlsx")
+        extra = [
+            "--title",
+            f"尾程运营异常 · {_dt.date.today().isoformat()} ｜ ⚠️ 数据区间 {got_label}（今日取数失败）",
+        ]
 
-    out = args.out or str(REPO_ROOT / "parcel_track_output" / f"ops_{start}_{end}.xlsx")
-    cmd = ["report", "--tt", str(input_dir), "--out", out]
+    cmd = ["report", "--tt", str(chosen), "--out", out, *extra]
     if args.notify:
         cmd.append("--notify")
     return report_main(cmd)

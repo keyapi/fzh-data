@@ -56,7 +56,11 @@ python -m pytest parcel_track/tests fedex_track/tests/test_ops_report.py gls_tra
 ## 推送口径
 
 - 推文正文由 `notify.summarize()` 渲染，**钉钉 markdown 不渲染表格**，所以用列表
-- 分类按待办优先级排：漏发/未交接 → 卡件 → 迟发 → 承运延误（`carrier_slow`/`fedex_slow` 合并一行）→ 数据异常/查无；计数取自 `run_report()` 返回的 `counts`
+- **按发货仓区域分块**：美东 / 美中 / 波兰（`normalize.region_of()` 取 `发货仓库` 第一个 `-` 前的前缀），其余仓归「其他」。每区显示「总单数（已查 X · 停放 Y）」+ 待办分类，末尾附合计
+  - **「已查」只含 UPS/FedEx/GLS**；停放（GOFO/TikTok/USPS 等）不查询但计入总数——**不能把区域票数当成一周订单量**
+  - 全停放的仓照样列出（`- 全部停放，未查询` + 仓名），不丢单
+  - 分类按待办优先级排：漏发/未交接 → 卡件 → 迟发 → 承运延误（`carrier_slow`/`fedex_slow` 合并一行）→ 数据异常/查无；计数取自 `run_report()` 返回的 `by_region[*].counts`
+  - 同一跟踪号多单只按号计一次，故「分类票数合计」可能略小于「已查」
 - `--dry-run` 不发网络、不需凭证，可离线看正文
 - 钉钉自定义机器人限 **20 条/分钟**
 
