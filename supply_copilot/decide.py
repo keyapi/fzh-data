@@ -67,6 +67,7 @@ COLUMNS = [
     "branch", "sku", "warehouse", "uom", "pool", "physical_form",
     "action", "new_qty", "new_qty_if_conditional_late", "expedite_qty",
     "need_date", "order_date", "date_source",
+    "need_date_status", "order_date_status",
     "demand_qty", "d6_q95", "demand_source", "demand_evidence",
     "supply_opening", "supply_intransit", "supply_po", "supply_cg",
     "supply_so", "supply_expected", "supply_proven",
@@ -476,8 +477,9 @@ def _truthy(value) -> bool:
 # --------------------------------------------------------------------------- #
 def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
                  so_known, po_known, *, branch, stock_meta, forecast_meta,
-                 file_meta):
+                 file_meta, as_of_dt):
     wh = POOL_WAREHOUSE[branch]
+    as_of_date = as_of_dt.date()
     rows = []
     for record in d6_rows.to_dict("records"):
         sku = str(record["product_id"])
@@ -485,6 +487,8 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         key = (sku, wh, uom)
         needs_date = _date_str(record.get("需要日"))
         order_date = _date_str(record.get("下单日"))
+        need_status = _date_status(needs_date, as_of_date)
+        order_status = _date_status(order_date, as_of_date)
         q95 = _num(record.get("q95"))
         forecast_qty = demand_map.get(key) if demand_map is not None else None
         if demand_source == "forecast_refresh":
@@ -548,6 +552,10 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             warnings.append("预测未覆盖该键，需求退回 D6 q95")
         if cg_source == "d6_pack":
             warnings.append("CG 用 D6 包值，不是 live WayfairCG 仓重算")
+        if need_status == "past_due":
+            warnings.append(f"需要日 {needs_date} 已过（D6 包计划），需按路线交期重排")
+        if order_status == "past_due":
+            warnings.append(f"下单日 {order_date} 已过（D6 包计划），不可直接执行；需重排")
         if intransit or po_qty:
             warnings.append("在途/无 ETA 的 PO 计入 expected，但未证明按时到")
 
@@ -557,6 +565,7 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             action=action, new_qty=new_qty, new_qty_if_conditional_late=lower,
             expedite_qty=_num(record.get("催已有量")),
             need_date=needs_date, order_date=order_date, date_source="d6_pack",
+            need_date_status=need_status, order_date_status=order_status,
             demand_qty=None if demand_qty is None else float(demand_qty),
             d6_q95=q95, demand_source=demand_source,
             demand_evidence=("D6 q95" if demand_source == "d6_pack_q95"
@@ -632,6 +641,17 @@ def _date_str(value):
     return text
 
 
+def _date_status(value, as_of_date):
+    """D6 包日期相对决策日：future / past_due / None。"""
+    text = _date_str(value)
+    if not text:
+        return None
+    try:
+        return "past_due" if datetime.fromisoformat(text).date() < as_of_date else "future"
+    except ValueError:
+        return None
+
+
 # --------------------------------------------------------------------------- #
 # 入口
 # --------------------------------------------------------------------------- #
@@ -672,6 +692,7 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                     demand_netting=_file_meta(demand_netting),
                     cg=dict(source="d6_pack"),
                     demand_source="d6_pack_q95", warnings=warnings,
+                    executable=False, executable_reasons=["live 库存不可用，仅回放"],
                     totals=dict(rows=int(len(frame)), suggest=int((frame["action"] == "补").sum())),
                     limits=["历史回放，未用 live 库存/SO/PO/CG 重算",
                             "未知数量保持 null，不写 0"])
@@ -726,7 +747,7 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
     frame = _decide_live(
         d6_rows, demand_map, demand_source, supply, cg, so, po,
         so_known, po_known, branch=pool, stock_meta=stock_meta,
-        forecast_meta=forecast_meta, file_meta=file_meta)
+        forecast_meta=forecast_meta, file_meta=file_meta, as_of_dt=as_of_dt)
 
     warnings = []
     if demand_source == "d6_pack_q95":
@@ -750,6 +771,22 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                     "库存按分公司仓前缀汇总，可用供给可能与净额引擎有差")
     warnings.append("需要日/下单日/催已有量沿用 D6 包计划，未按 live 供给重算")
 
+    executable_reasons = []
+    if demand_source != "forecast_refresh":
+        executable_reasons.append("需求未刷新：仍为 D6 包 q95（历史时点）")
+    if not so_known:
+        executable_reasons.append("SO 未接入")
+    if not po_known or (po_evidence.get("rows") and
+                        po_evidence.get("identity_missing", 0)
+                        + po_evidence.get("uom_missing", 0)
+                        + po_evidence.get("warehouse_out_of_branch", 0)
+                        == po_evidence["rows"]):
+        executable_reasons.append("PO 未映射到本分公司仓")
+    if (frame["order_date_status"] == "past_due").any():
+        executable_reasons.append("存在已过下单日（D6 包计划）")
+    if (frame["cg_source"] == "d6_pack").any():
+        executable_reasons.append("CG 未按实时库存重算")
+
     meta = dict(
         mode="live", branch=pool, as_of=as_of_dt.isoformat(),
         demand_source=demand_source, pack=pack_meta,
@@ -759,9 +796,12 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         cg=dict(source=("live_stock.cg" if cg else "d6_pack"),
                 items=int(len(cg)), quantity=round(float(sum(cg.values())), 6)),
         supply_evidence=supply_evidence,
+        executable=not executable_reasons,
+        executable_reasons=executable_reasons,
         totals=dict(rows=int(len(frame)),
                     suggest=int((frame["action"] == "补").sum()),
-                    unknown=int((frame["qty_status"] != "measured").sum())),
+                    unknown=int((frame["qty_status"] != "measured").sum()),
+                    past_due=int((frame["order_date_status"] == "past_due").sum())),
         warnings=warnings,
         limits=["缺口是 D6 q95/预测窗口总量口径，不是某一天的精确缺货日",
                 "在途与无 ETA 的 PO 计入 expected；最坏情况见 "
@@ -784,6 +824,10 @@ def to_report(frame, meta, limit=None) -> str:
              + (f"（D6 包 as_of {meta.get('pack', {}).get('as_of')}）"
                 if meta.get("demand_source") == "d6_pack_q95" else ""),
              f"- 显示 {len(shown)} / {len(frame)} 行；未静默截断", ""]
+    executable = bool(meta.get("executable"))
+    reasons = "；".join(meta.get("executable_reasons") or [])
+    lines.append(f"- 可执行性：**{'是' if executable else '否'}**"
+                 + (f"（{reasons}）" if not executable and reasons else ""))
     stock = meta.get("stock") or {}
     if stock.get("path"):
         lines.append(f"- 供给来源：库存 {stock.get('path')}（snapshot_at "
