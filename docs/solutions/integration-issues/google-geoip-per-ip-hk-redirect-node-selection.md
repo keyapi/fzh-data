@@ -23,7 +23,7 @@ related_components: [us_openai_api_proxy, openwrt]
 
 要区分两件事：**搜索跳 .hk 是线路/节点 IP 问题；Google One 买不了是账号付款国家问题**。
 
-## 实测（直连光猫 + 本地 Clash Verge v1.19.29，逐节点切换）
+## 实测（直连光猫 + 本地 Clash Verge v1.19.29，逐节点切换；下表为 2026-11-23 某一时刻快照）
 判据：经代理 `curl -D - -o NUL https://www.google.com/`，看是否 `302 ... google.com.hk / hkredirect`。**不看 ipinfo**。
 
 | 节点 | 出口 IP | ipinfo 国家 | ASN | Google 判定 |
@@ -38,6 +38,8 @@ related_components: [us_openai_api_proxy, openwrt]
 | 美国2 | 64.118.152.45 | US | AS138997 | HK |
 | 美国3/4 | 5.34.217.8 / .26 | US | AS38136 Akari | **干净（200，不跳）** |
 
+> ⚠️ **节点名 ≠ 固定出口 IP（必须按 IP 复测）**：上表只是 2026-11-23 某一时刻的快照。BoostNet 这类机场节点会**共用/轮换一小组出口 IP**——同一个「日本07」上周可能出口 `.178`（Google 判港），这周出口 `.221`（Google 认干净）；曾有记录称「日本04 不跳 .hk」，同样只对当时的出口 IP 成立。所以**别把某个节点名当永久干净**，每次按**当前出口 IP** 复测（`curl ipinfo.io/json` + `curl google.com` 看 hkredirect）。
+
 ## 根因
 不是「整个运营商被判香港」。**同一个 AS138997 的 `.221` Google 认作干净，`.178/.222/.223/.53/.45` 才判香港** —— 是**具体 IP** 在 Google 自家 GeoIP 库里的归属不同，与第三方库也常不一致（本例 ifconfig.co 甚至把该段误报 US/WINDSTREAM）。所以「IP 查是东京」不能证明 Google 也认为是东京。
 
@@ -45,7 +47,7 @@ AS138997（Eons Data Communications）注册在香港，这解释了这批 IP �
 
 ## Guidance
 1. **判地区用 Google 自己的反应，别用 ipinfo**：`curl -D - -o NUL https://www.google.com/`，出现 `google.com.hk`/`hkredirect` 即「Google 认为你在港/中」，200 无跳转即「干净」。
-2. **换到干净节点**：本例 日本 6/7/8（`64.118.148.221`）或 美国 3/4（`5.34.217.x` Akari）。办公室 OpenClash 的 `自动选择` 落在 日本4(.178) = 脏 IP，是 .hk 的直接原因。
+2. **选节点要按当前出口 IP 实测，别记节点名**：节点名→出口 IP 会轮换（见上「节点名 ≠ 固定 IP」）。同一时刻，出口 `.221` 干净、`.178/.222/.223` 判港；选到哪个就现测哪个，不要背节点名。
 3. **本地隔离测试**：办公室 FZH-5G 经 OpenClash，叠加本地 Clash Verge 会二次代理；实测境外 TLS `SSL_ERROR_SYSCALL`（exit 35），国内正常。要在 **直连光猫** 的网络上用本地 Clash Verge 测。
 4. **Google One 资格另说**：买不买得到看账号/付款资料国家，换节点无效（见 Constraints）。
 
@@ -69,4 +71,5 @@ Clash Verge 默认 `external-controller: ''`，走 named pipe `\\.\pipe\verge-mi
 - `us_openai_api_proxy/docs/operations.md` — AI 出口按国家分组（香港出口 ChatGPT 打不开）。
 
 ## 本次记录
-- 2026-11-23：直连光猫 + 本地 Clash Verge 逐 12 节点实测；找到干净节点 日本6/7/8、美国3/4；测得办公室自动选择落在脏 IP `64.118.149.178`。未改共用 OpenClash。调研中确认该记录原先只存在于另一分支、主分支无——本篇补上。
+- 2026-11-23：直连光猫 + 本地 Clash Verge 逐 12 节点实测；当天快照里干净的是出口 `.221`（日本6/7/8）与 Akari `5.34.217.x`（美国3/4），办公室自动选择当时落在脏 IP `64.118.149.178`。未改共用 OpenClash。调研中确认该记录原先只存在于另一分支、主分支无——本篇补上。
+- 2026-11-23（FZH-5G 复测）：办公室 `自动选择=日本07` 当天出口 `64.118.148.221`、google.com 200 不跳；但用户反馈上周同一「日本07」仍跳 .hk —— 印证「节点名→出口 IP 会变」，判定须按当前 IP 复测。
