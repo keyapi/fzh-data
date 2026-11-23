@@ -263,19 +263,19 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 
 ### 经验库路由（`docs/solutions/`）
 
-**动手前先查这里有没有现成结论**——踩过的坑基本都在。144 篇按 category 分 8 类，每类一份 `index.md`：
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。145 篇按 category 分 8 类，每类一份 `index.md`：
 
 | 类别 | 篇数 | 什么时候读 |
 |------|-----|-----------|
 | `workflow-issues/` | 40 | 账期对账、迟交/错位、跨期结算、批处理流程 |
-| `integration-issues/` | 30 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
+| `integration-issues/` | 31 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
 | `architecture-patterns/` | 21 | 「这个管道/系统为什么这样设计」 |
 | `tooling-decisions/` | 15 | 脚本、工具选型、产出校验 |
 | `developer-experience/` | 15 | Windows / worktree / MCP / Colab 等本机环境坑 |
 | `conventions/` | 11 | 团队约定（配对、命名、SOP） |
 | `best-practices/` | 9 | 通用工程做法（防漏数、知识库防腐、先搜再造、安全加固） |
 | `documentation-gaps/` | 3 | 文档与断言的缺口 |
-**动手前先查这里有没有现成结论**——踩过的坑基本都在。144 篇按 category 分 8 类，每类一份 `index.md`：
+**动手前先查这里有没有现成结论**——踩过的坑基本都在。145 篇按 category 分 8 类，每类一份 `index.md`：
 
 定位单篇：`grep -rl "^module: <模块名>" docs/solutions/`（frontmatter 有 `module` / `tags` / `problem_type`）。
 全量平表：`docs/solutions/index.md`（由 `scripts/check_solutions_health.py --fix` 生成）。

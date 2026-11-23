@@ -15,3 +15,4 @@ docs/solutions/best-practices/server-exposure-audit-and-hardening.md  # 服务�
 docs/solutions/integration-issues/cursor-state-vscdb-synology-cdrive-backup.md  # 本机开发环境（Cursor state.vscdb + Synology 备份吃盘），非业务模块
 docs/solutions/tooling-decisions/github-gitee-mirror-sync.md  # 仓库基础设施（GitHub Actions 镜像同步），非业务模块
 docs/solutions/documentation-gaps/agent-system-access-documentation-gap.md  # 文档缺口记录；AGENTS.md 现已写明 EN_API/ERPNext 访问方式，待复核是否作废
+docs/solutions/integration-issues/google-geoip-per-ip-hk-redirect-node-selection.md  # 办公室 OpenClash/代理节点地区判定排障，跨模块网络运维，无单一 skill 直接路由

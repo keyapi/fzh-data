@@ -6,6 +6,9 @@ title: 集成问题 — 变更日志
 
 # 变更日志
 
+## 2026-11-23
+- **新增**: Google 按「具体 IP」判地区 — 日本节点仍跳 google.com.hk；同一 AS138997 的 `.221` 干净、`.178/.222/.223` 判港 ⇒ 判据用 `curl google.com` 而非 ipinfo，换到 日本6/7/8 或美国3/4(Akari) 才解决；Google One 资格另看账号付款国家。 → `google-geoip-per-ip-hk-redirect-node-selection.md`
+
 ## 2026-11-09
 - **更新**: 通途SKU↔EN物料 权威映射 — 补「登记位置与组件多对多」：唯一登记位置是 Item 子表 `customer_items.ref_code`（不是主表 `Item.customer_code`）；同一 Item 可同时有整件与 `-Cover/-Foam`；组件 SKU 多对多（共享皮壳/填充物），完整 SKU 才唯一；配套 `work_order_task#4`（校验放宽）与 `tongtool_integration#22`（同步不要 LIMIT 1）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
 
