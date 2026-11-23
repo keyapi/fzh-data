@@ -20,7 +20,10 @@ description: >
 uv run python -m supply_copilot doctor
 uv run python -m supply_copilot pull
 uv run python -m supply_copilot recommend --branch USNJ --sku <SKU> [--json]
+uv run python -m supply_copilot refresh --branch USNJ --sku <SKU>
 ```
+
+`recommend` = replay（pack as_of 固定）。`refresh` = EN 实时库存 + 复用 pack 的 D5 预测重算缺口；**不是 D5 重新训练**，输出会明确标注。
 
 ## Explainability contract
 1. 结论：补/催已有/不补/暂不能判断。
