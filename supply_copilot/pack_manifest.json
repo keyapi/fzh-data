@@ -1,0 +1,98 @@
+{
+  "schema": "supply-copilot-pack/v1",
+  "version": "2026-11-13.1",
+  "as_of": "2026-11-13",
+  "files": [
+    {
+      "path": "data/D3b_v3_11.xlsx",
+      "sha256": "4ada176ddce6161182d7d53f4f69cfd8d584a867021424dc07ba16efa49abe81",
+      "size": 6210260
+    },
+    {
+      "path": "data/D5_v6_8.xlsx",
+      "sha256": "d6446fe7066b5a00c22113bebebb124ae91f3757a691ef0634892b4025e78d83",
+      "size": 1120128
+    },
+    {
+      "path": "data/D6_v6_22.xlsx",
+      "sha256": "980d3c292e013ae24a1b024d705c9dd8f84e8cc3961d643e757de63335793501",
+      "size": 718291
+    },
+    {
+      "path": "data/D6_v6_24.xlsx",
+      "sha256": "af7e7622bf32e107c80e003bd21d8c8db7d3d7f5d022c186e806b6bd4c87fd96",
+      "size": 852205
+    },
+    {
+      "path": "data/E_nodes.parquet",
+      "sha256": "4c21842320d5f93e1f5192b46ec27d5c23a60c759dbdec4247ad0bea31e9ad70",
+      "size": 2001843
+    },
+    {
+      "path": "data/E_lifecycle.parquet",
+      "sha256": "4d3bfb4477a4c0e98a68ff5cc10289b8374d7334a2dabcb62f908d5c3cda3525",
+      "size": 43313
+    },
+    {
+      "path": "data/C14.xlsx",
+      "sha256": "b27b6ed163adbb46011cf81773300bb4540ad0c63d3c711c50e72404ef9d9234",
+      "size": 1951670
+    },
+    {
+      "path": "data/CNY_v13.xlsx",
+      "sha256": "5a5188871df1a52fc0a76520467de4a275001aaa706d45073ad7018d5f376ac4",
+      "size": 61335
+    },
+    {
+      "path": "data/traj_v13.xlsx",
+      "sha256": "fea6e9488f85d3a18eebf628ecc303fd96c5df1debe3c1f20bd286caf2254021",
+      "size": 2198840
+    },
+    {
+      "path": "data/W1_SO.jsonl",
+      "sha256": "dc6b97bd99096e016c90d2a7c7c957b3d394c284d9635f97292586d3439d0803",
+      "size": 13831659
+    },
+    {
+      "path": "data/sku_map.tsv",
+      "sha256": "7da3dfd62969c2c06f5b01ce752ccd1bc8d26c46c693eaca22cacaad4d13d42e",
+      "size": 204002
+    },
+    {
+      "path": "data/USNJ_recommend.csv",
+      "sha256": "5116faaa112edccc17795f67e0e7aebe435048190cd4b88481b61a588713d4ee",
+      "size": 246486
+    },
+    {
+      "path": "data/boss_v5.5.xlsx",
+      "sha256": "6f5f6f28d679c36618a62871dc4b0c30ad7de2e60ec9f3ef7eb81387a0ee5f5a",
+      "size": 492878
+    },
+    {
+      "path": "data/DEMAND_TREND.csv",
+      "sha256": "12f06561468c94a51859a3e118f98887ee822b71004a583fb536f956c721eb3f",
+      "size": 109955
+    },
+    {
+      "path": "data/service_policy.csv",
+      "sha256": "131a00e772dba7a22c0e4299264fca791d3a3e41bb4ec9804a6571ad8ca24879",
+      "size": 327633
+    }
+  ],
+  "parts": [
+    {
+      "name": "supply-copilot-pack-2026-11-13.1.part000",
+      "sha256": "9bc792f77813ee173558e6dc121509caf7ffd6a8eee959684c1d764b99787b7b",
+      "size": 8500000,
+      "file_url": "/private/files/supply-copilot-pack-2026-11-13.1.part000"
+    },
+    {
+      "name": "supply-copilot-pack-2026-11-13.1.part001",
+      "sha256": "472cda05c1c4bd45e42f88f72891d0b078872b401931255812b6097211304353",
+      "size": 5846785,
+      "file_url": "/private/files/supply-copilot-pack-2026-11-13.1.part001"
+    }
+  ],
+  "combined_sha256": "220aa130eae0e2f0f128b28c34307e873d584585d5c4ac1500cae74023311032",
+  "zip_size": 14346785
+}
