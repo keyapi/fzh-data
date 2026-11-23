@@ -51,7 +51,7 @@ def pull(manifest, root, env_file=None, base=DEFAULT_BASE):
         response = requests.get(url, headers=header, timeout=300)
         if response.status_code == 403:
             raise SystemExit(
-                f"下载被拒（403）{part['name']}：请使用你自己的 EN 登录账号 API Key/Secret；"
+                f"下载被拒（403）{part['name']}：请使用你自己的 EN 内部账号（System User）API Key/Secret；"
                 "匿名或失效凭证会被拒绝。"
             )
         if response.status_code != 200:

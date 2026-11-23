@@ -131,7 +131,7 @@ def test_pull_403_reports_login_hint(tmp_path, monkeypatch):
     try:
         download.pull(manifest, tmp_path)
     except SystemExit as exc:
-        assert "EN 登录账号" in str(exc)
+        assert "EN 内部账号" in str(exc)
     else:
         raise AssertionError("expected SystemExit")
 
