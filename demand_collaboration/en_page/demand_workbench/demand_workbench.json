@@ -1,0 +1,14 @@
+{
+ "doctype": "Page",
+ "name": "demand-workbench",
+ "page_name": "demand-workbench",
+ "title": "订货协同工作台（演示）",
+ "module": "key_test",
+ "standard": "Yes",
+ "roles": [
+  {
+   "role": "System Manager"
+  }
+ ],
+ "idx": 0
+}

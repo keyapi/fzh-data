@@ -1,0 +1,14 @@
+{
+ "doctype": "Page",
+ "name": "supply-workbench",
+ "page_name": "supply-workbench",
+ "title": "USNJ 补货协同工作台",
+ "module": "key_test",
+ "standard": "Yes",
+ "roles": [
+  {
+   "role": "System Manager"
+  }
+ ],
+ "idx": 0
+}
