@@ -4,6 +4,7 @@ from pathlib import Path
 from .paths import data_root, load_manifest
 from .download import pull
 from .recommend import recommend, to_report, meta
+from .refresh import refresh_sku
 
 
 def doctor(args):
@@ -42,7 +43,7 @@ def command_recommend(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="supply_copilot", description="供应链 A/B/C/D/E 决策 Copilot（只读回放）")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("doctor", "pull", "recommend", "batch"):
+    for name in ("doctor", "pull", "recommend", "batch", "refresh"):
         p = sub.add_parser(name)
         p.add_argument("--data-root", default=None)
         p.add_argument("--manifest", default=None)
@@ -59,9 +60,20 @@ def main(argv=None):
             p.add_argument("--json", action="store_true")
         if name == "batch":
             p.add_argument("--branch", required=True)
+        if name == "refresh":
+            p.add_argument("--branch", required=True)
+            p.add_argument("--sku", required=True)
+            p.add_argument("--env-file", default=None)
     args = parser.parse_args(argv)
     return {"doctor": doctor, "pull": command_pull, "recommend": command_recommend,
-            "batch": command_batch}[args.command](args)
+            "batch": command_batch, "refresh": command_refresh}[args.command](args)
+
+
+def command_refresh(args):
+    root = data_root(args.data_root)
+    rows = refresh_sku(root, args.branch, args.sku, env_file=args.env_file)
+    print(json.dumps(rows, ensure_ascii=False, indent=2))
+    return 0
 
 
 def command_batch(args):
