@@ -43,6 +43,12 @@ def pull(manifest, root, env_file=None, base=DEFAULT_BASE):
     for part in manifest["parts"]:
         url = base.rstrip("/") + part["file_url"]
         response = requests.get(url, headers=header, timeout=300)
+        if response.status_code == 403:
+            raise SystemExit(
+                f"下载被拒（403）{part['name']}：当前 ERP_API_KEY 用户无权读取私有数据包。"
+                "请使用你自己的 EN 账号（System Manager 角色）的 API Key/Secret；"
+                "不要使用他人的 key。"
+            )
         if response.status_code != 200:
             raise SystemExit(f"下载失败 {part['name']}: HTTP {response.status_code}")
         if _sha(response.content) != part["sha256"]:

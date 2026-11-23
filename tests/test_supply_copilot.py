@@ -106,3 +106,31 @@ def test_refresh_partial_alias_is_unknown(tmp_path, monkeypatch):
     rows = refresh.refresh_sku(tmp_path, "USNJ", "KS1")
     assert rows[0]["refresh_action"] == "暂不能判断"
     assert rows[0]["live_status"] == "partial"
+
+
+def test_token_headers_use_standard_env_only(monkeypatch):
+    from supply_copilot.download import token_headers
+    monkeypatch.setenv("ERP_API_KEY", "mykey")
+    monkeypatch.setenv("ERP_API_SECRET", "mysecret")
+    monkeypatch.setenv("ADMIN_ERP_API_KEY", "someone-else")
+    monkeypatch.setenv("ADMIN_ERP_API_SECRET", "someone-else")
+    assert token_headers(None) == {"Authorization": "token mykey:mysecret"}
+
+
+def test_pull_403_reports_system_manager_hint(tmp_path, monkeypatch):
+    from supply_copilot import download
+    monkeypatch.setenv("ERP_API_KEY", "k")
+    monkeypatch.setenv("ERP_API_SECRET", "s")
+
+    class Resp:
+        status_code = 403
+        content = b""
+
+    monkeypatch.setattr(download.requests, "get", lambda *a, **k: Resp())
+    manifest = {"parts": [{"name": "p0", "file_url": "/private/files/x", "sha256": "0" * 64}]}
+    try:
+        download.pull(manifest, tmp_path)
+    except SystemExit as exc:
+        assert "System Manager" in str(exc)
+    else:
+        raise AssertionError("expected SystemExit")
