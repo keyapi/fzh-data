@@ -19,6 +19,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import json
 from pathlib import Path
 
@@ -40,9 +42,21 @@ TABS = [
 
 DEMO_BANNER = (
     "演示模式：数据为内嵌快照，页面不发起网络请求。运营协同页签的提案只保存在"
-    "本浏览器（localStorage 键 <code>supply-workbench:proposals:v1</code>），"
-    "刷新或换浏览器会丢失，不上传、不审批、不写 EN。"
+    "本浏览器（localStorage 键 <code>supply-workbench:proposals:v1</code>）："
+    "刷新保留；清理浏览器数据或换浏览器看不到本浏览器的提案；"
+    "不上传、不审批、不写 EN。"
 )
+
+CSP_STATIC = (
+    "default-src 'none'; style-src 'unsafe-inline'; "
+    "connect-src 'none'; form-action 'none'; base-uri 'none'; img-src data:"
+)
+
+
+def csp_hash(text: str) -> str:
+    """CSP sha256 source for an inline script's exact text content."""
+    digest = hashlib.sha256(text.encode("utf-8")).digest()
+    return "'sha256-" + base64.b64encode(digest).decode("ascii") + "'"
 
 
 def embed_json(obj) -> str:
@@ -134,7 +148,9 @@ _COLLAB_JS = """
   };
   var MIN_PERCENT = -100;
   var MIN_TOTAL = 0;
-  var STATUS_LABELS = {submitted: '待审核', approved: '已通过', rejected: '已驳回'};
+  var STATUSES = ['submitted', 'approved', 'rejected'];
+  var STATUS_LABELS = {submitted: '待审核', approved: '模拟通过', rejected: '模拟驳回'};
+  var storageState = {available: true, message: ''};
 
   var dataEl = document.getElementById('supply-workbench-baseline');
   var BASELINE = {rows: [], version: null, as_of: null};
@@ -144,7 +160,6 @@ _COLLAB_JS = """
   var ROWS = Array.isArray(BASELINE.rows) ? BASELINE.rows : [];
   var ROW_INDEX = {};
   ROWS.forEach(function (r) { ROW_INDEX[String(r.id)] = r; });
-  var memoryProposals = [];
   var selectedId = null;
   var view = 'operator';
 
@@ -177,21 +192,80 @@ _COLLAB_JS = """
     el.className = isError ? 'form-message error' : 'form-message';
   }
 
-  function readProposals() {
+  function showStorageNotice(text) {
+    var el = byId('collab-storage-notice');
+    if (!el) return;
+    if (!text) { el.hidden = true; el.textContent = ''; return; }
+    el.hidden = false;
+    el.textContent = text;
+  }
+  function probeStorage() {
     try {
-      var raw = window.localStorage.getItem(STORAGE_KEY);
-      var list = raw ? JSON.parse(raw) : [];
-      return Array.isArray(list) ? list : [];
+      var probe = STORAGE_KEY + ':probe';
+      window.localStorage.setItem(probe, '1');
+      window.localStorage.removeItem(probe);
+      storageState.available = true;
+      storageState.message = '';
     } catch (e) {
-      return memoryProposals.slice();
+      storageState.available = false;
+      storageState.message = '浏览器已禁用本地存储，提案表单已停用；页面其余内容仍可浏览。';
     }
   }
+  function isPlainObject(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function isValidProposal(p) {
+    if (!isPlainObject(p)) return false;
+    if (typeof p.id !== 'string' || !p.id) return false;
+    if (typeof p.row_id !== 'string' || !p.row_id) return false;
+    if (KINDS.indexOf(p.kind) < 0) return false;
+    if (!(p.value === null || (typeof p.value === 'number' && isFinite(p.value)))) return false;
+    if (typeof p.start !== 'string' || typeof p.end !== 'string') return false;
+    if (typeof p.event_id !== 'string' || !p.event_id) return false;
+    if (typeof p.reason !== 'string' || !p.reason) return false;
+    if (typeof p.evidence !== 'string') return false;
+    if (typeof p.created_at !== 'string' || !p.created_at) return false;
+    if (STATUSES.indexOf(p.status) < 0) return false;
+    return true;
+  }
+  function discardCorrupted() {
+    try { window.localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+    storageState.message = '本地提案数据损坏，已丢弃；不影响查看与重新提交。';
+    showStorageNotice(storageState.message);
+    return [];
+  }
+  function readProposals() {
+    if (!storageState.available) return [];
+    var raw;
+    try {
+      raw = window.localStorage.getItem(STORAGE_KEY);
+    } catch (e) {
+      storageState.available = false;
+      storageState.message = '浏览器已禁用本地存储，提案表单已停用；页面其余内容仍可浏览。';
+      showStorageNotice(storageState.message);
+      return [];
+    }
+    if (!raw) return [];
+    var parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      return discardCorrupted();
+    }
+    if (!Array.isArray(parsed)) return discardCorrupted();
+    for (var i = 0; i < parsed.length; i++) {
+      if (!isValidProposal(parsed[i])) return discardCorrupted();
+    }
+    return parsed;
+  }
   function writeProposals(list) {
+    if (!storageState.available) return false;
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
       return true;
     } catch (e) {
-      memoryProposals = list.slice();
+      storageState.available = false;
+      storageState.message = '浏览器已禁用本地存储，提案表单已停用；页面其余内容仍可浏览。';
+      showStorageNotice(storageState.message);
+      if (selectedId) renderDetail();
       return false;
     }
   }
@@ -202,8 +276,9 @@ _COLLAB_JS = """
     var approved = proposals.filter(function (p) { return p.status === 'approved'; }).length;
     var el = byId('collab-summary');
     if (el) {
-      el.textContent = '需求基准 ' + ROWS.length + ' 行 · 建议 ' + (BASELINE.recommendation_rows || 0) +
-        ' 行 · 本地提案 ' + proposals.length + '（待审核 ' + pending + ' / 已通过 ' + approved + '）';
+      el.textContent = 'D5 整期需求基准 ' + ROWS.length + ' 行 · USNJ 补货建议 ' +
+        (BASELINE.recommendation_rows || 0) + ' 行 · 本地提案 ' + proposals.length +
+        '（待审核 ' + pending + ' / 模拟通过 ' + approved + '）';
     }
     var count = byId('collab-proposal-count');
     if (count) count.textContent = proposals.length ? '（' + proposals.length + ' 条）' : '（0 条）';
@@ -232,7 +307,7 @@ _COLLAB_JS = """
         '<td class="num">' + num(r.baseline_qty) + '</td></tr>';
     }).join('');
     Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-row-id]'), function (tr) {
-      tr.onclick = function () { selectRow(tr.getAttribute('data-row-id')); };
+      tr.addEventListener('click', function () { selectRow(tr.getAttribute('data-row-id')); });
     });
   }
 
@@ -240,6 +315,15 @@ _COLLAB_JS = """
     selectedId = String(id);
     renderTable();
     renderDetail();
+  }
+
+  function setFormEnabled(enabled) {
+    var form = byId('collab-form');
+    if (!form) return;
+    Array.prototype.forEach.call(
+      form.querySelectorAll('input, select, textarea, button'),
+      function (el) { el.disabled = !enabled; }
+    );
   }
 
   function renderDetail() {
@@ -260,7 +344,7 @@ _COLLAB_JS = """
       '<p class="hint">' + esc(r.sku || '') + ' · ' + esc(r.physical_form || '—') + ' · ' + esc(r.unit || '—') + '</p></div>' +
       '<dl class="kv">' +
       '<div><dt>期间</dt><dd>' + esc(period(r)) + '</dd></div>' +
-      '<div><dt>系统预计</dt><dd>' + num(r.baseline_qty) + ' ' + esc(r.unit || '') + '</dd></div>' +
+      '<div><dt>D5 整期需求基准</dt><dd>' + num(r.baseline_qty) + ' ' + esc(r.unit || '') + '</dd></div>' +
       '<div><dt>当前库存</dt><dd>' + inventory + '</dd></div>' +
       '</dl>' +
       '<p class="note">' + esc(r.supply_note || '暂无供应补充说明。') + '</p>' +
@@ -285,13 +369,18 @@ _COLLAB_JS = """
       '<textarea id="wb-reason" placeholder="说明活动、渠道变化或异常，以及数量判断依据"></textarea>' +
       '<label for="wb-evidence">证据或补充说明</label>' +
       '<input id="wb-evidence" placeholder="活动编号或可核对的信息">' +
-      '<div class="submitline"><span class="hint">仅写入本浏览器，不写 EN。</span>' +
-      '<button class="btn accent" id="wb-submit" type="submit">保存本地提案</button></div>' +
-      '</form>';
-    byId('wb-kind').onchange = updatePreview;
-    byId('wb-value').oninput = updatePreview;
-    byId('collab-form').onsubmit = submitProposal;
+      '<div class="submitline"><span class="hint">仅写入本浏览器，不上传、不审批、不写 EN。</span>' +
+      '<button class="btn accent" id="wb-submit" type="submit">保存本地演示提案</button></div>' +
+      '</form>' +
+      '<p class="form-note">仅演示需求提案，不修改 USNJ 补货建议，不进入采购。</p>';
+    byId('wb-kind').addEventListener('change', updatePreview);
+    byId('wb-value').addEventListener('input', updatePreview);
+    byId('collab-form').addEventListener('submit', submitProposal);
     updatePreview();
+    if (!storageState.available) {
+      setFormEnabled(false);
+      message(storageState.message, true);
+    }
   }
 
   function updatePreview() {
@@ -350,6 +439,10 @@ _COLLAB_JS = """
 
   function submitProposal(event) {
     event.preventDefault();
+    if (!storageState.available) {
+      message('浏览器已禁用本地存储，无法保存提案。', true);
+      return;
+    }
     var r = ROW_INDEX[selectedId];
     if (!r) { message('请先在左侧选择需求行。', true); return; }
     var out = collectProposal(r);
@@ -359,8 +452,9 @@ _COLLAB_JS = """
     var ok = writeProposals(list);
     renderSummary();
     renderProposals();
-    message(ok ? '提案已保存在本浏览器（演示模式，不上传、不审批、不写 EN）。'
-               : '浏览器存储不可用，提案仅临时保存在本页内存。', !ok);
+    if (ok) showStorageNotice('');
+    message(ok ? '提案已保存在本浏览器（刷新仍保留；仅演示，不上传、不审批、不写 EN）。'
+               : '浏览器已禁用本地存储，无法保存提案。', !ok);
   }
 
   function renderProposals() {
@@ -378,8 +472,8 @@ _COLLAB_JS = """
       var actions = '';
       if (view === 'reviewer' && p.status === 'submitted') {
         actions = '<div class="actions">' +
-          '<button class="btn small" data-decision="approved" data-id="' + esc(p.id) + '">通过</button>' +
-          '<button class="btn small" data-decision="rejected" data-id="' + esc(p.id) + '">驳回</button>' +
+          '<button class="btn small" data-decision="approved" data-id="' + esc(p.id) + '">模拟通过</button>' +
+          '<button class="btn small" data-decision="rejected" data-id="' + esc(p.id) + '">模拟驳回</button>' +
           '</div>';
       }
       return '<article class="proposal">' +
@@ -394,9 +488,9 @@ _COLLAB_JS = """
         '</article>';
     }).join('');
     Array.prototype.forEach.call(host.querySelectorAll('[data-decision]'), function (btn) {
-      btn.onclick = function () {
+      btn.addEventListener('click', function () {
         setStatus(btn.getAttribute('data-id'), btn.getAttribute('data-decision'));
-      };
+      });
     });
   }
 
@@ -413,23 +507,29 @@ _COLLAB_JS = """
 
   function bindViewSwitch() {
     Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function (btn) {
-      btn.onclick = function () {
+      btn.addEventListener('click', function () {
         view = btn.getAttribute('data-view');
         Array.prototype.forEach.call(document.querySelectorAll('[data-view]'), function (x) {
           x.classList.toggle('active', x === btn);
         });
         renderProposals();
-      };
+      });
     });
   }
 
   function init() {
-    bindViewSwitch();
-    var search = byId('collab-search');
-    if (search) search.oninput = renderTable;
-    renderSummary();
-    renderTable();
-    renderProposals();
+    try {
+      probeStorage();
+      bindViewSwitch();
+      var search = byId('collab-search');
+      if (search) search.addEventListener('input', renderTable);
+      renderSummary();
+      renderTable();
+      renderProposals();
+      if (!storageState.available) showStorageNotice(storageState.message);
+    } catch (e) {
+      showStorageNotice('页面初始化失败：' + (e && e.message ? e.message : String(e)));
+    }
   }
 
   if (document.readyState === 'loading') {
@@ -462,6 +562,19 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
         "rows": baseline_rows,
     }
 
+    tab_js = (
+        "document.querySelectorAll('nav button').forEach(function (b) {"
+        "b.addEventListener('click', function () {"
+        "document.querySelectorAll('nav button').forEach(function (x) {x.classList.remove('active')});"
+        "b.classList.add('active');"
+        "document.querySelectorAll('main > section').forEach(function (s) {s.classList.remove('active')});"
+        "var t = document.getElementById(b.dataset.t);if (t) {t.classList.add('active')}"
+        "window.scrollTo(0, 0)})});"
+    )
+    data_text = embed_json(payload)
+    main_js = tab_js + _COLLAB_JS
+    csp = CSP_STATIC + "; script-src " + csp_hash(main_js) + " " + csp_hash(data_text)
+
     nav = "".join(
         "<button%s data-t='%s'>%s</button>" % (
             " class='active'" if key == "home" else "", key, esc(title))
@@ -469,6 +582,7 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     )
 
     doc = "<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'>"
+    doc += f"<meta http-equiv=\"Content-Security-Policy\" content=\"{csp}\">"
     doc += "<meta name='viewport' content='width=device-width, initial-scale=1'>"
     doc += "<title>USNJ 补货协同工作台（只读演示）</title><style>"
     doc += "body{font-family:'Microsoft YaHei',Arial,sans-serif;margin:0;background:#f4f7f9;color:#16324a}"
@@ -482,6 +596,9 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     doc += ".b.red{background:#fde8e8;color:#a12}.b.warn{background:#fff1d6;color:#8a5a00}.b.purple{background:#efe6ff;color:#5b2b9a}.b.gray{background:#e8edf0;color:#456}.small{font-size:12px}.muted{color:#6b7f8c}details summary{cursor:pointer;color:#19a08c;margin:4px 0}"
     doc += ".demo-banner{background:#fff1d6;color:#7a4b00;border:1px solid #f0d49a;border-radius:8px;padding:10px 14px;margin:0 0 14px;font-size:13px;line-height:1.6}"
     doc += ".demo-banner code{background:#fff;border:1px solid #f0d49a;border-radius:4px;padding:1px 5px;font-size:12px}"
+    doc += ".datachips{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.datachips .chip{border:1px solid #2f5871;border-radius:20px;padding:4px 12px;font-size:12px;color:#dceaf2}.datachips .chip.alt{border-color:#19a08c;color:#a9e4da}"
+    doc += ".form-note{background:#eef5f8;border-left:3px solid #19a08c;padding:8px 10px;font-size:12px;color:#345;margin:8px 0 0}"
+    doc += ".storage-notice{background:#fde8e8;color:#a12;border:1px solid #f0b3b3;border-radius:6px;padding:8px 12px;font-size:12px;margin:8px 0}"
     doc += ".collab-toolbar{display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px}"
     doc += ".viewswitch button{border:1px solid #cbd8df;background:#eef5f8;padding:7px 14px;border-radius:6px;cursor:pointer}.viewswitch button.active{background:#16324a;color:#fff;border-color:#16324a}"
     doc += ".collab-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px}@media(max-width:980px){.collab-grid{grid-template-columns:1fr}}"
@@ -504,16 +621,18 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     doc += "</style></head><body>"
 
     doc += "<header><h1>USNJ 补货协同工作台（只读演示）</h1>"
-    doc += f"<p>数据包 {esc(snap.get('version') or snap.get('source_name'))} · as_of {esc(snap.get('as_of'))} · "
-    doc += f"建议 {len(rows)} 行 · 需求基准 {len(baseline_rows)} 行 · 不直接下单；采购/运营需复核</p></header>"
+    doc += f"<p>数据包 {esc(snap.get('version') or snap.get('source_name'))} · as_of {esc(snap.get('as_of'))} · 不直接下单；采购/运营需复核</p>"
+    doc += "<div class='datachips'>"
+    doc += f"<span class='chip'>USNJ 补货建议（{len(rows)} 行，只读）</span>"
+    doc += f"<span class='chip alt'>D5 整期需求基准（{len(baseline_rows)} 行，仅 USNJ）</span></div></header>"
     doc += "<main>"
     doc += f"<div class='demo-banner' role='note'>{DEMO_BANNER}</div>"
     doc += (f"<div class='cards'><div class='card'><b>{summary['needs_decision']}</b>需拍板</div>"
             f"<div class='card'><b>{summary['low_confidence']}</b>低置信</div>"
             f"<div class='card'><b>{summary['special']}</b>特殊品</div>"
             f"<div class='card'><b>{summary['ownership_pending']}</b>归属待确认</div>"
-            f"<div class='card'><b>{len(rows)}</b>建议行</div>"
-            f"<div class='card'><b>{len(baseline_rows)}</b>需求基准行</div></div>")
+            f"<div class='card'><b>{len(rows)}</b>USNJ 建议行</div>"
+            f"<div class='card'><b>{len(baseline_rows)}</b>D5 需求基准行</div></div>")
     doc += f"<nav>{nav}</nav>"
 
     doc += "<section id='home' class='active'><table><thead><tr><th>SKU / 客户 / 形态</th><th>建议</th><th>覆盖</th><th>原因</th><th>标记</th></tr></thead><tbody>"
@@ -546,19 +665,21 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
             "<li>SO 是 EN 分公司生产/交付单；通途 PO 是 DN 后采购入库；两者不能相加替代。</li>"
             "<li>SO 管线未加入建议量；生产/DN/通途 PO 尚未接入。</li>"
             "<li>缺失=未知，不补 0；无改量、审批、下单入口。</li>"
-            "<li>运营协同页签的提案只保存在本浏览器 localStorage，刷新或换浏览器即丢失，不上传、不审批、不写 EN。</li>"
+            "<li>USNJ 补货建议（只读）与 D5 整期需求基准（仅 USNJ）是两类不同数据：不相加、不替代。</li>"
+            "<li>运营协同页签的提案只保存在本浏览器 localStorage：刷新保留，清理浏览器数据或换浏览器看不到本浏览器的提案；不上传、不审批、不写 EN。</li>"
             "</ul></section>")
 
     doc += "<section id='collab'>"
     doc += f"<div class='demo-banner' role='note'>{DEMO_BANNER}</div>"
     doc += "<div class='collab-toolbar'><div class='viewswitch' role='group' aria-label='本地视角'>"
     doc += "<button type='button' class='active' data-view='operator'>运营视角</button>"
-    doc += "<button type='button' data-view='reviewer'>审核视角</button></div>"
-    doc += f"<span class='muted' id='collab-summary'>需求基准 {len(baseline_rows)} 行 · 建议 {len(rows)} 行</span></div>"
+    doc += "<button type='button' data-view='reviewer'>审核视角（模拟）</button></div>"
+    doc += f"<span class='muted' id='collab-summary'>D5 整期需求基准 {len(baseline_rows)} 行 · USNJ 补货建议 {len(rows)} 行</span></div>"
+    doc += "<p class='storage-notice' id='collab-storage-notice' role='alert' hidden></p>"
     doc += "<div class='collab-grid'><div class='collab-left'>"
     doc += "<input id='collab-search' type='search' placeholder='搜索商品 / SKU' autocomplete='off'>"
     doc += "<div class='table-scroll'><table class='small' id='collab-table'>"
-    doc += "<thead><tr><th>商品 / SKU</th><th>形态</th><th>单位</th><th>预测期</th><th>系统预计</th></tr></thead>"
+    doc += "<thead><tr><th>商品 / SKU</th><th>形态</th><th>单位</th><th>预测期</th><th>D5 整期需求基准</th></tr></thead>"
     doc += "<tbody id='collab-rows'><tr><td colspan='5' class='muted'>正在载入…</td></tr></tbody></table></div></div>"
     doc += "<div class='collab-right' id='collab-detail'><p class='muted'>选择左侧需求行，查看明细并补充业务判断。</p></div></div>"
     doc += "<h3>本浏览器中的提案 <span id='collab-proposal-count' class='muted'>（0 条）</span></h3>"
@@ -566,16 +687,8 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     doc += "<p class='form-message' id='collab-message' aria-live='polite'></p>"
     doc += "</section></main>"
 
-    doc += f"<script type='application/json' id='supply-workbench-baseline'>{embed_json(payload)}</script>"
-    doc += "<script>"
-    doc += ("document.querySelectorAll('nav button').forEach(function(b){b.onclick=function(){"
-            "document.querySelectorAll('nav button').forEach(function(x){x.classList.remove('active')});"
-            "b.classList.add('active');"
-            "document.querySelectorAll('main > section').forEach(function(s){s.classList.remove('active')});"
-            "var t=document.getElementById(b.dataset.t);if(t){t.classList.add('active')}"
-            "window.scrollTo(0,0)}});")
-    doc += _COLLAB_JS
-    doc += "</script></body></html>"
+    doc += f"<script type='application/json' id='supply-workbench-baseline'>{data_text}</script>"
+    doc += "<script>" + main_js + "</script></body></html>"
     return doc
 
 
