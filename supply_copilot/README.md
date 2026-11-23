@@ -12,7 +12,7 @@ uv run python -m supply_copilot refresh --branch USNJ --sku KS0001-XMMBS-194-HEM
 ```
 
 - **凭证：只有 `ERP_API_KEY` / `ERP_API_SECRET`，没有也不需要 `ADMIN_ERP_API_KEY`。**
-  用你自己的 EN 登录账号生成即可；**当前策略：任何能登录 EN 的用户（含 API Key 调用）都能拉包**，
+  用你自己的 EN 内部账号（System User）生成即可；**当前策略：EN 内部账号都能拉包（含 API Key 调用）**，
   匿名 403；后续如需收紧，在服务端下载方法里加角色判断即可，客户端不用改。
 - `doctor` / `recommend` / `batch` 只用已下载的包，不需要凭证；`pull` / `refresh` 需要。
 - `recommend`：回放 pack（as_of 固定）。
