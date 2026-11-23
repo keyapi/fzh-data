@@ -23,9 +23,13 @@ def _need_columns(frame, cols, name):
         raise SystemExit(f"{name} 缺少列：{missing}")
 
 
-def recommend(data_root, branch, sku=None, limit=50):
+D6_FILES = {"v6_22": "D6_v6_22.xlsx", "v6_24": "D6_v6_24.xlsx"}
+
+
+def recommend(data_root, branch, sku=None, limit=None, d6_version="v6_22", like=False):
     pool = BRANCH.get(str(branch), str(branch))
-    d6 = pd.read_excel(_path(data_root, "D6_v6_22.xlsx"), sheet_name="1_全量动作")
+    d6_name = D6_FILES.get(d6_version, D6_FILES["v6_22"])
+    d6 = pd.read_excel(_path(data_root, d6_name), sheet_name="1_全量动作")
     d5 = pd.read_excel(_path(data_root, "D5_v6_8.xlsx"), sheet_name="1_预测")
     d3 = pd.read_excel(_path(data_root, "D3b_v3_11.xlsx"), sheet_name="3_分类")
     _need_columns(d6, ["product_id", "池", "形态", "UOM", "q95", "C可发供给",
@@ -34,9 +38,13 @@ def recommend(data_root, branch, sku=None, limit=50):
                        "需要日", "下单日", "路线状态"], "D6")
     rows = d6[d6["池"].astype(str) == pool].copy()
     if sku:
-        rows = rows[rows["product_id"].astype(str).str.contains(str(sku), case=False, na=False)]
+        if like:
+            rows = rows[rows["product_id"].astype(str).str.contains(str(sku), case=False, na=False)]
+        else:
+            rows = rows[rows["product_id"].astype(str).str.upper() == str(sku).upper()]
+    total = len(rows)
     if rows.empty:
-        raise SystemExit(f"D6 未找到 {pool} / {sku or '全部'}")
+        raise SystemExit(f"D6 未找到 {pool} / {sku or '全部'}（精确匹配；如确需模糊用 --like）")
     d5 = d5[d5["horizon"].astype(str) == "97"][["product_id", "pool", "physical_form",
                                                 "canonical_uom", "p50", "q90", "q95", "model"]]
     d5 = d5.rename(columns={"pool": "池", "physical_form": "形态", "canonical_uom": "UOM",
@@ -49,7 +57,11 @@ def recommend(data_root, branch, sku=None, limit=50):
             columns={"pool": "池", "physical_form": "形态", "canonical_uom": "UOM",
                      "adopted_model": "adopted_model", "holdout_wape": "holdout_wape"})
         rows = rows.merge(d3, on=["product_id", "池", "形态", "UOM"], how="left")
-    rows = rows.head(limit)
+    if limit is not None:
+        rows = rows.head(limit)
+    rows = rows.copy()
+    rows.attrs["total"] = total
+    rows.attrs["d6_file"] = d6_name
     return rows
 
 
@@ -61,9 +73,16 @@ def _i(value):
 
 
 def to_report(frame, branch, as_of, pack_version):
+    sources = frame.attrs.get("d6_file", "D6_v6_22.xlsx")
+    total = frame.attrs.get("total", len(frame))
     lines = [f"# 补货决策复核 — {branch}", "",
-             f"- 数据包版本：{pack_version}；as_of：{as_of}",
+             f"- 模式：**历史回放（replay）**；数据包版本：{pack_version}；as_of：{as_of}",
+             f"- 实际消费：{sources} + D5_v6_8.xlsx + D3b_v3_11.xlsx；"
+             f"E v2/v6.24 未参与本次建议",
+             f"- 显示 {len(frame)} / {total} 行；未静默截断",
              "- 口径：D6 q95 需求 − C/EN/PO/SO/CG → 净需求；催已有与新补分开；未知不补 0。", ""]
+    if as_of < "2026-11-23":
+        lines += ["> ⚠️ 这是历史回放，不是今天（2026-11-23）的可执行采购建议；刷新/重算入口尚未打通。", ""]
     for _, r in frame.iterrows():
         action = str(r.get("建议动作"))
         new = _i(r.get("新补数量"))

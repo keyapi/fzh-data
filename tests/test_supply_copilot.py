@@ -54,3 +54,30 @@ def test_unknown_branch_fails(tmp_path):
         assert "未找到" in str(exc)
     else:
         raise AssertionError("expected SystemExit")
+
+
+def test_exact_sku_does_not_match_prefix(tmp_path):
+    make_pack(tmp_path)
+    # replace D6 with KS100 and KS1000 rows
+    data = tmp_path / "data"
+    d6 = pd.read_excel(data / "D6_v6_22.xlsx")
+    extra = d6.copy(); extra["product_id"] = "KS1000"
+    both = pd.concat([d6.assign(product_id="KS100"), extra], ignore_index=True)
+    with pd.ExcelWriter(data / "D6_v6_22.xlsx") as w:
+        both.to_excel(w, sheet_name="1_全量动作", index=False)
+    exact = recommend(tmp_path, "USNJ", "KS100")
+    assert list(exact["product_id"]) == ["KS100"]
+    pref = recommend(tmp_path, "USNJ", "KS100", like=True)
+    assert set(pref["product_id"]) == {"KS100", "KS1000"}
+
+
+def test_no_silent_50_row_truncation(tmp_path):
+    make_pack(tmp_path)
+    data = tmp_path / "data"
+    d6 = pd.read_excel(data / "D6_v6_22.xlsx")
+    rows = pd.concat([d6.assign(product_id=f"KS{i:03d}") for i in range(60)], ignore_index=True)
+    with pd.ExcelWriter(data / "D6_v6_22.xlsx") as w:
+        rows.to_excel(w, sheet_name="1_全量动作", index=False)
+    all_rows = recommend(tmp_path, "USNJ")
+    assert len(all_rows) == 60
+    assert all_rows.attrs["total"] == 60

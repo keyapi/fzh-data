@@ -1,19 +1,19 @@
 """Download split private pack from EN File with the caller's EN API token."""
 from __future__ import annotations
-import hashlib, json, os, tempfile, zipfile
+import hashlib, json, os, shutil, tempfile, uuid, zipfile
 from pathlib import Path
 from urllib.parse import quote
 
 import requests
 
-DEFAULT_ENV = "D:/Work/赛狐/Cursor/EN_API/.env"
+DEFAULT_ENV = None
 DEFAULT_BASE = "https://erpnext.vilavi.cn"
 
 
 def _env(path):
     values = {}
-    p = Path(path or os.environ.get("EN_API_ENV", DEFAULT_ENV))
-    if p.exists():
+    p = Path(path or os.environ.get("EN_API_ENV") or DEFAULT_ENV) if (path or os.environ.get("EN_API_ENV") or DEFAULT_ENV) else None
+    if p and p.exists():
         for raw in p.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
             line = raw.strip()
             if line and not line.startswith("#") and "=" in line:
@@ -54,14 +54,26 @@ def pull(manifest, root, env_file=None, base=DEFAULT_BASE):
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as handle:
         handle.write(combined)
         temp = Path(handle.name)
+    staging = root / (".staging-" + uuid.uuid4().hex)
     try:
         with zipfile.ZipFile(temp) as archive:
-            archive.extractall(root)
+            archive.extractall(staging)
+        for item in manifest["files"]:
+            path = staging / item["path"]
+            if not path.exists() or _sha(path.read_bytes()) != item["sha256"]:
+                raise SystemExit(f"包文件校验失败：{item['path']}")
+        target = root / "data"
+        if target.exists():
+            backup = root / "data.prev"
+            if backup.exists():
+                shutil.rmtree(backup)
+            target.rename(backup)
+        (staging / "data").rename(target)
+        (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
     finally:
         temp.unlink(missing_ok=True)
-    for item in manifest["files"]:
-        path = root / item["path"]
-        if not path.exists() or _sha(path.read_bytes()) != item["sha256"]:
-            raise SystemExit(f"包文件校验失败：{item['path']}")
-    (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        shutil.rmtree(staging, ignore_errors=True)
     return root
