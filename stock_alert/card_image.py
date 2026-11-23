@@ -132,9 +132,8 @@ def render_low_stock(result, path: str | Path, *, when: _dt.date | None = None,
     y = MARGIN + 200 + GAP + 8
     for wh in result.warehouses:
         draw.text((MARGIN + PAD, y + 4), _fit(draw, wh.warehouse, _font(26, bold=True),
-                                              WIDTH - 2 * MARGIN - 2 * PAD - 230),
+                                              WIDTH - 2 * MARGIN - 2 * PAD),
                   font=_font(26, bold=True), fill=TEXT)
-        _right(draw, WIDTH - MARGIN - PAD, y + 4, f"{wh.count} 个 SKU", _font(26, bold=True), TEAL)
         if wh.baseline_missing:
             draw.text((MARGIN + PAD, y + 38), "昨日基线缺失，无法判断今日新增", font=_font(17), fill=MUTED)
             y += 62
