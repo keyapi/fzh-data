@@ -36,14 +36,41 @@ uv run python -m supply_copilot doctor     # 期望 status=ok, missing_files=[]
 | 这个建议的 q50/q90/q95、C/EN/PO/SO/CG、净需求、需要日/下单日 | `recommend` 报告与 `--json` |
 | 这个分公司逐 SKU 的全部明细（不截断） | `recommend --branch USNJ --json` |
 | 用的什么预测模型？回测怎么样？趋势如何？ | D5/D3b 证据（模型、holdout、趋势） |
-| 现在实时库存多少？按实时库存净需求变多少？ | `refresh --branch USNJ --sku <SKU>`（复用 D5，不重训） |
+| 现在实时库存多少？按实时库存净需求变多少？ | `refresh --branch USNJ --sku <SKU>`（仅换库存） |
+| 按实时库存+开放 SO/PO 重算今天要不要补 | `supply --branch USNJ` → `decide --branch USNJ`（见下） |
+| 历史订单 parquet 在哪、齐不齐 | `history` / `pull-history`（EN 私有，不打包） |
 | 换一套决策口径（v6.24）看看 | `recommend --d6-version v6_24 ...` |
 | 精确匹配还是模糊搜 SKU | 默认精确；`--like` 才模糊（防 KS100 误配 KS1000） |
 | 这份数据是什么时点、是否完整可信 | `doctor` + 包版本/as_of/sha256 |
 
 分公司编码：`USNJ`（美东）、`USTX`（美中）、`PL`（波兰）。
 
-注意：结论是**历史回放**（显示 `as_of`，例如 2026-11-13），不是今天的执行建议；未知一律不补 0。
+注意：`recommend/batch` 是**历史回放**（显示 `as_of`），不是今天的执行建议；未知一律不补 0。
+
+## 实时决策（live）与可执行性
+
+```bash
+uv run python -m supply_copilot supply --branch USNJ   # 抓实时库存 + 开放 SO + 开放 PO → <root>/live/
+uv run python -m supply_copilot decide --branch USNJ   # 用 live 供给重算，输出报告
+```
+
+`decide` 报告开头会给出 **可执行性（是/否）** 和原因。当前默认口径下通常是「否」，因为：
+
+- 需求仍来自 D6 包 q95（as_of 2026-11-13），不是本次刷新；
+- PO 多落在物料仓/未映射 SKU，未按通途 `purchaseOrderQuery` 接入；
+- CG 抵扣未按实时 WayfairCG 库存重算；
+- 需要日/下单日沿用 D6 包，已过的日期会标 `past_due`。
+
+它给的是**当天候选**（补/不补/待核 + 数量 + 证据），不是可直接下单的指令。
+只有上述原因补齐、`可执行性=是` 时，才允许作为采购建议。
+
+## 历史订单数据（不在公共仓库）
+
+- 历史订单/需求是 **parquet 快照**，不是每次拉 EN；最新完整快照截止 **2026-10-26**。
+- 文件放在 EN 私有目录 `private/supply-history/<version>/`，通过登录 API 取：
+  `uv run python -m supply_copilot pull-history`（校验 sha256 后落到本地）。
+- 决策回放/实时决策**不需要**历史包；只有重训预测或复核明细时才需要。
+- 定时更新是运维任务（增量拉取 + 重建），不在每个 Agent 里跑。
 
 ## A/B/C/D/E 是什么
 

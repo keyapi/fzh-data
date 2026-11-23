@@ -36,6 +36,8 @@ dependencies = [
     "redis>=5.0",
     "rq>=2.0",
     "dateparser>=1.4.3",
+    "pyarrow>=25.0.1",
+    "statsforecast==2.1.1",
 ]
 
 [tool.hatch.build.targets.wheel]
