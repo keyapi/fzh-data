@@ -3,6 +3,7 @@ import argparse, json, os, sys
 from pathlib import Path
 from .paths import data_root, load_manifest
 from .download import pull
+from .history import pull_history, status as history_status
 from .recommend import recommend, to_report, meta
 from .refresh import refresh_sku
 
@@ -43,13 +44,18 @@ def command_recommend(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="supply_copilot", description="供应链 A/B/C/D/E 决策 Copilot（只读回放）")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("doctor", "pull", "recommend", "batch", "refresh"):
+    for name in ("doctor", "pull", "recommend", "batch", "refresh", "history", "pull-history"):
         p = sub.add_parser(name)
         p.add_argument("--data-root", default=None)
         p.add_argument("--manifest", default=None)
         if name == "pull":
             p.add_argument("--env-file", default=None)
             p.add_argument("--base", default="https://erpnext.vilavi.cn")
+        if name == "pull-history":
+            p.add_argument("--env-file", default=None)
+            p.add_argument("--base", default="https://erpnext.vilavi.cn")
+            p.add_argument("--version", default=None)
+            p.add_argument("--names", default=None, help="逗号分隔，只取部分文件")
         if name == "recommend":
             p.add_argument("--branch", required=True)
             p.add_argument("--sku", default=None)
@@ -66,7 +72,9 @@ def main(argv=None):
             p.add_argument("--env-file", default=None)
     args = parser.parse_args(argv)
     return {"doctor": doctor, "pull": command_pull, "recommend": command_recommend,
-            "batch": command_batch, "refresh": command_refresh}[args.command](args)
+            "batch": command_batch, "refresh": command_refresh,
+            "history": command_history,
+            "pull-history": command_pull_history}[args.command](args)
 
 
 def command_refresh(args):
@@ -87,4 +95,20 @@ def command_batch(args):
                                           催已有=("催已有量", "sum")).reset_index()
     print(counts.to_string(index=False))
     print(f"总计 {len(frame)} 行（全部返回，未截断）")
+    return 0
+
+
+def command_history(args):
+    root = data_root(args.data_root)
+    info = history_status(root)
+    print(json.dumps(info, ensure_ascii=False, indent=2))
+    return 0 if info["status"] == "ok" else 1
+
+
+def command_pull_history(args):
+    root = data_root(args.data_root, create=True)
+    names = [x.strip() for x in (args.names or "").split(",") if x.strip()] or None
+    info = pull_history(root, version=args.version, env_file=args.env_file,
+                        base=args.base, names=names)
+    print(json.dumps(info, ensure_ascii=False, indent=2))
     return 0

@@ -1,0 +1,75 @@
+{
+  "version": "2026-10-26.1",
+  "as_of": "2026-10-26",
+  "generated_at": "2026-11-23T16:00:00+08:00",
+  "source": "en-demand-v1 legacy-adopt-20261027T131556",
+  "files": [
+    {
+      "name": "en_orders.parquet",
+      "sha256": "04c2310aedc5f4ce2cf692724f5d04390e29742f2d5cc1710e89dd51f24b421c",
+      "bytes": 3228277,
+      "rows": 27503
+    },
+    {
+      "name": "en_order_lines.parquet",
+      "sha256": "054e6ba838854a9c2681d274e22922981ac160c3e9b129ac6488a4fbfb50f4f4",
+      "bytes": 1687052,
+      "rows": 28823
+    },
+    {
+      "name": "en_order_packages.parquet",
+      "sha256": "c7e957ee56c774ded0cf8dc84fd80ab5818503738357543e3d36f3f35f1e78f9",
+      "bytes": 572797,
+      "rows": 24323
+    },
+    {
+      "name": "en_order_events.parquet",
+      "sha256": "5f94a587751dee005b678e674fa16c7451e9843e26eb6b1af215d8ff735b5e73",
+      "bytes": 559292,
+      "rows": 27503
+    },
+    {
+      "name": "demand_line_disposition.parquet",
+      "sha256": "b459b4c442e1ad80a6e1bbcafee9e24df461bc45179910ec9655fa5790d40792",
+      "bytes": 21727697,
+      "rows": 413561
+    },
+    {
+      "name": "demand_netting.parquet",
+      "sha256": "fb82d894c5532c62ccdf647059210fe2f1cceda84a01024e70bc92fc49b9b232",
+      "bytes": 554991,
+      "rows": 191701
+    },
+    {
+      "name": "demand_blocked.parquet",
+      "sha256": "8096e8bca1440e8e0d1fb510599db1ded5c09e7bae2392c1b829c57b6f63e4ed",
+      "bytes": 177061,
+      "rows": 57088
+    },
+    {
+      "name": "sku_coverage.parquet",
+      "sha256": "c333dd40b83cbf87aa3c50029e2d22fcb6e92b2c2aeb1eb0c407c5272a3b9066",
+      "bytes": 77875,
+      "rows": 2568
+    },
+    {
+      "name": "item_uom_cache.parquet",
+      "sha256": "055b9a92ab251a55923e50c5e7b244b3c879c821d20535b8a3ff64f3cad9eaef",
+      "bytes": 45099,
+      "rows": 1627
+    },
+    {
+      "name": "demand_lines.parquet",
+      "sha256": "29ac83c982c592d6a6935b677975986b0cb3d031c200226109976f7e0c388118",
+      "bytes": 667635,
+      "rows": 10823
+    },
+    {
+      "name": "demand_by_day_sku_warehouse.parquet",
+      "sha256": "fc601d73bdfb4fedd8c84f8a9c61f7f694e75e4c572592a0d78de01efcb77b8c",
+      "bytes": 32516,
+      "rows": 7243
+    }
+  ],
+  "notes": "EN Tongtool Order 历史快照；非实时，更新为运维增量任务"
+}
