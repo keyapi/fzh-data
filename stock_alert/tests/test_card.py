@@ -59,8 +59,9 @@ def test_low_stock_params_are_strings_and_have_buttons():
     )
     assert params["title"] == "通途低库存提醒"
     assert params["subtitle"] == "2026-11-17"
-    assert "共 **1** 个 SKU" in params["overview"]
+    assert "今日新增 **1** 个" in params["overview"]
     assert "美中-FZH-DANEEY" in params["body"]
+    assert "低库存：" not in params["body"]
     assert params["btn1Title"] == "下载新增" and params["btn1Url"] == "https://x/new"
     assert params["btn2Title"] == "下载全部" and params["btn2Url"] == "https://x/all"
     assert all(isinstance(v, str) for v in params.values())

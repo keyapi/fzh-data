@@ -24,7 +24,9 @@ def test_run_mock_dry_run_shows_single_warehouse_summary(capsys):
     assert "通途低库存提醒" in out
     assert "### 美中-FZH-DANEEY" in out
     assert "### 美东-CENTRADE" in out
-    assert "低库存：**1**" in out
+    assert "今日新增：**2**" in out
+    assert "今日新增：**1**" in out
+    assert "低库存：" not in out
     assert out.count("## 通途低库存提醒") == 1
     assert "波兰-FZHPoland-covers" not in out  # 只传了两仓
 
@@ -46,7 +48,7 @@ def test_threshold_changes_result(capsys):
     out = capsys.readouterr().out
     # 合成行：available = -1 / 0 / 10；阈值 0 时只有 -1 < 0 命中（0/0 仍被排除）
     assert "可用库存 < 0" in out
-    assert "共 **1** 个 SKU" in out
+    assert "今日新增：**1**" in out
 
 
 def test_inbound_mock_dry_run_defaults_to_yesterday(capsys):

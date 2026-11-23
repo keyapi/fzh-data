@@ -60,8 +60,8 @@ DINGTALK_INBOUND_TEMPLATE_ID=...
 |---|---|---|
 | `title` | 卡片标题（模板里设置居中） | 通途低库存提醒 |
 | `subtitle` | 日期 | 2026-11-17 |
-| `overview` | 概览（可放统计框） | 共 **411** 个 SKU 可用库存 < 5 · 今日新增 **18** 个 |
-| `body` | 分仓明细 Markdown | `### 美中-FZH-DANEEY\n\n低库存：**155** 个 SKU · 新增 **6** 个 · 在途 **2723** 件` |
+| `overview` | 概览（可放统计框） | 今日新增 **18** 个 |
+| `body` | 分仓明细 Markdown | `### 美中-FZH-DANEEY\n\n今日新增 **6** 个 · 在途 **2723** 件` |
 | `btn1Title` | 按钮 1 文案 | 下载今日新增（18） |
 | `btn1Url` | 按钮 1 链接 | https://erpnext.vilavi.cn/files/...xlsx |
 | `btn2Title` | 按钮 2 文案 | 下载全部低库存（411） |

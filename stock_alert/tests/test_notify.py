@@ -49,15 +49,13 @@ def test_large_low_stock_is_one_compact_warehouse_card():
     messages = build_low_stock_messages(result(411), when=dt.date(2026, 11, 17), new_count=1)
     assert len(messages) == 1
     body = messages[0]
-    assert '共 **411** 个 SKU' in body
+    assert '今日新增：**1**' in body
     assert '### 美中-FZH-DANEEY' in body
     assert '### 美东-CENTRADE' in body
-    assert '低库存：**411**' in body
-    assert '今日新增：**1**' in body
     assert '在途合计：**1233**' in body
     assert '\n\n###' in body
     assert '第1/' not in body and 'S410' not in body
-    assert '底部' in body
+    assert '低库存：**411**' not in body
     assert len(body.encode()) < DINGTALK_MAX_BYTES
 
 def fake_senders(monkeypatch, *, upload_fails=False, image_upload_fails=False):
@@ -89,7 +87,7 @@ def test_low_stock_single_card_contains_both_downloads(monkeypatch, tmp_path):
     resp = notify_low_stock(result(), out_xlsx=tmp_path / 'new.xlsx')
     assert resp['errcode'] == 0
     assert len(posts) == 1 and posts[0][0] == 'card'
-    assert [b['title'] for b in posts[0][2]] == ['下载今日新增（1）', '下载全部低库存（2）']
+    assert [b['title'] for b in posts[0][2]] == ['下载今日新增（1）', '下载全部低库存']
     assert len(uploads) == 2
     counts = []
     for p in uploads:
@@ -98,14 +96,13 @@ def test_low_stock_single_card_contains_both_downloads(monkeypatch, tmp_path):
         wb.close()
     assert counts == [1, 2]
 
-def test_no_new_stock_has_only_full_download(monkeypatch, tmp_path):
-    posts, _ = fake_senders(monkeypatch)
+def test_no_new_stock_skips_push(monkeypatch, tmp_path):
+    posts, uploads = fake_senders(monkeypatch)
     r = result()
     mark_new(r, {'美中-FZH-DANEEY': {'S0': 1, 'S1': 1}})
-    assert notify_low_stock(r, out_xlsx=tmp_path / 'new.xlsx')['errcode'] == 0
-    assert len(posts) == 1
-    assert len(posts[0][2]) == 1
-    assert '全部低库存' in posts[0][2][0]['title']
+    resp = notify_low_stock(r, out_xlsx=tmp_path / 'new.xlsx')
+    assert resp['skipped'] == 'no_new_low_stock'
+    assert not posts and not uploads
 
 def test_upload_failure_still_sends_one_summary(monkeypatch, tmp_path):
     posts, _ = fake_senders(monkeypatch, upload_fails=True)
@@ -133,12 +130,12 @@ def test_file_write_failure_still_sends_exactly_one_summary(monkeypatch, tmp_pat
     assert len(posts) == 1 and (not uploads)
     assert '生成失败' in posts[0][1]
 
-def test_zero_low_stock_sends_one_message_without_files(monkeypatch):
+def test_zero_low_stock_skips_push(monkeypatch):
     posts, uploads = fake_senders(monkeypatch)
     r = scan({'W': [StockRow('W', 'A', 9, 0)]})
-    assert notify_low_stock(r)['errcode'] == 0
-    assert len(posts) == 1 and (not uploads)
-    assert '无 SKU 可用库存低于阈值' in posts[0][1]
+    resp = notify_low_stock(r)
+    assert resp['skipped'] == 'no_new_low_stock'
+    assert not posts and not uploads
 
 def inbound(n=1):
     return aggregate({'美中-FZH-DANEEY': [{'sku': f'A{i}', 'voucher_type': '02', 'available_increase': 45} for i in range(n)], '美东-CENTRADE': []}, names={f'A{i}': '产品甲' for i in range(n)}, day=dt.date(2026, 11, 16))

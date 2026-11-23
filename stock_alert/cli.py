@@ -215,6 +215,11 @@ def cmd_run(args) -> int:
         except Exception as exc:  # noqa: BLE001 - 拿不到 EN 就不标记新增
             print(f"[warn] 无法读取昨日基线，跳过今日新增：{type(exc).__name__}: {exc}", file=sys.stderr)
     mark_new(result, baseline, threshold=args.threshold)
+    if args.mock:
+        # 离线样例没有基线；把样例低库存全部当作“今日新增”，便于预览卡片
+        for wh in result.warehouses:
+            for item in wh.low:
+                item.is_new = True
 
     new_count = sum(1 for wh in result.warehouses for item in wh.low if item.is_new)
     print(json.dumps({"mode": "low_stock", "input_rows": sum(len(rows) for rows in rows_by_wh.values()),

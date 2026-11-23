@@ -54,21 +54,17 @@ def _card_mode() -> str:
 def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None,
                              new_count: int = 0) -> list[str]:
     day = when or _dt.date.today()
+    title = f"通途低库存提醒 · {day.isoformat()}"
+    if new_count == 0:
+        return [f"## {title}\n\n今日无新增低库存。"]
     threshold = _fmt_num(result.threshold)
-    parts = [f"## 通途低库存提醒 · {day.isoformat()}",
-             f"**库存概览**  ·  共 **{result.total_low}** 个 SKU 可用库存 < {threshold}",
-             f"今日新增：**{new_count}** 个"]
-    if not result.total_low:
-        parts.append("无 SKU 可用库存低于阈值。")
+    parts = [f"## {title}", f"今日新增：**{new_count}** 个"]
     for wh in result.warehouses:
         parts.extend([f"### {_clean(wh.warehouse)}",
-                      f"低库存：**{wh.count}** 个 SKU",
                       f"今日新增：**{sum(item.is_new for item in wh.low)}** 个",
                       f"在途合计：**{_fmt_num(wh.intransit_total)}** 件"])
         if wh.baseline_missing and wh.count:
-            parts.append("> 昨日基线缺失，本仓按全量低库存导出，不代表已确认新增。")
-    if result.total_low:
-        parts.append("完整 SKU、产品名称和库存明细，请使用本卡片底部下载按钮。")
+            parts.append("> 昨日基线缺失，无法判断今日新增。")
     parts.append(f"> 口径：可用库存 < {threshold}，排除可用=0且在途=0。")
     return [_check_body("\n\n".join(parts))]
 
@@ -246,15 +242,17 @@ def notify_low_stock(result: ScanResult, *, when: _dt.date | None = None,
 
     day = when or _dt.date.today()
     new_count = sum(item.is_new for wh in result.warehouses for item in wh.low)
+    if new_count == 0:
+        # 今日无新增低库存：不推送（也不生成图片/Excel）
+        return {"errcode": 0, "skipped": "no_new_low_stock", "sent": 0, "total": 0,
+                "messages": [], "files": [], "file_errors": []}
     body = build_low_stock_messages(result, when=day, new_count=new_count)[0]
     new_path = Path(out_xlsx or default_new_out_path(day))
     full_path = (new_path.with_name(new_path.stem + "_全部" + new_path.suffix) if out_xlsx
                  else _OUT_DIR / f"通途低库存明细_{day:%Y%m%d}.xlsx")
-    exports = []
-    if new_count:
-        exports.append((f"下载今日新增（{new_count}）", new_path, True))
+    exports = [(f"下载今日新增（{new_count}）", new_path, True)]
     if result.total_low:
-        exports.append((f"下载全部低库存（{result.total_low}）", full_path, False))
+        exports.append(("下载全部低库存", full_path, False))
     files, errors = [], []
     for title, path, newly_only in exports:
         try:

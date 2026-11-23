@@ -128,9 +128,7 @@ def render_low_stock(result, path: str | Path, *, when: _dt.date | None = None,
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle([MARGIN, MARGIN, WIDTH - MARGIN, height - MARGIN], radius=28, fill=CARD)
     _header(draw, 200, "通途低库存提醒", day.isoformat())
-    _center(draw, MARGIN + 134,
-            f"低库存商品 {result.total_low} 个 SKU  ·  今日新增 {new_count} 个",
-            _font(20), "#E6EEF6")
+    _center(draw, MARGIN + 134, f"今日新增 {new_count} 个", _font(20), "#E6EEF6")
     y = MARGIN + 200 + GAP + 8
     for wh in result.warehouses:
         draw.text((MARGIN + PAD, y + 4), _fit(draw, wh.warehouse, _font(26, bold=True),
