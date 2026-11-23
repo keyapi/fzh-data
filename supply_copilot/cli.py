@@ -3,7 +3,7 @@ import argparse, json, os, sys
 from pathlib import Path
 from .paths import data_root, load_manifest
 from .download import pull
-from .recommend import recommend, to_report
+from .recommend import recommend, to_report, meta
 
 
 def doctor(args):
@@ -30,7 +30,10 @@ def command_recommend(args):
     frame = recommend(root, args.branch, args.sku, args.limit,
                       d6_version=args.d6_version, like=args.like)
     if args.json:
-        print(frame.to_json(orient="records", force_ascii=False, indent=2))
+        print(json.dumps({"meta": meta(frame, args.branch, manifest.get("as_of"),
+                                      manifest.get("version")),
+                          "rows": json.loads(frame.to_json(orient="records", force_ascii=False))},
+                         ensure_ascii=False, indent=2))
     else:
         print(to_report(frame, args.branch, manifest.get("as_of"), manifest.get("version")))
     return 0
@@ -64,6 +67,9 @@ def main(argv=None):
 def command_batch(args):
     root = data_root(args.data_root)
     frame = recommend(root, args.branch, None, None)
+    info = meta(frame, args.branch, load_manifest(args.manifest).get("as_of"),
+                load_manifest(args.manifest).get("version"))
+    print(json.dumps(info, ensure_ascii=False))
     counts = frame.groupby("建议动作").agg(键数=("product_id", "count"),
                                           新补=("新补数量", "sum"),
                                           催已有=("催已有量", "sum")).reset_index()

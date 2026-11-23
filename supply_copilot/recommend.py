@@ -1,6 +1,7 @@
 """Explainable replay of D6/D5/D3b/E decisions for one SKU × branch."""
 from __future__ import annotations
 import json
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -72,6 +73,16 @@ def _i(value):
         return None
 
 
+def meta(frame, branch, as_of, pack_version):
+    return {"mode": "replay", "branch": branch, "as_of": as_of,
+            "pack_version": pack_version,
+            "sources": [frame.attrs.get("d6_file", "D6_v6_22.xlsx"),
+                        "D5_v6_8.xlsx", "D3b_v3_11.xlsx"],
+            "total": frame.attrs.get("total", len(frame)),
+            "shown": len(frame),
+            "warning": ("历史回放，不是今日可执行建议" if as_of < date.today().isoformat() else None)}
+
+
 def to_report(frame, branch, as_of, pack_version):
     sources = frame.attrs.get("d6_file", "D6_v6_22.xlsx")
     total = frame.attrs.get("total", len(frame))
@@ -81,8 +92,9 @@ def to_report(frame, branch, as_of, pack_version):
              f"E v2/v6.24 未参与本次建议",
              f"- 显示 {len(frame)} / {total} 行；未静默截断",
              "- 口径：D6 q95 需求 − C/EN/PO/SO/CG → 净需求；催已有与新补分开；未知不补 0。", ""]
-    if as_of < "2026-11-23":
-        lines += ["> ⚠️ 这是历史回放，不是今天（2026-11-23）的可执行采购建议；刷新/重算入口尚未打通。", ""]
+    today = date.today().isoformat()
+    if as_of < today:
+        lines += [f"> ⚠️ 这是历史回放，不是今天（{today}）的可执行采购建议；刷新/重算入口尚未打通。", ""]
     for _, r in frame.iterrows():
         action = str(r.get("建议动作"))
         new = _i(r.get("新补数量"))

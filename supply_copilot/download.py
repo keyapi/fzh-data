@@ -63,12 +63,19 @@ def pull(manifest, root, env_file=None, base=DEFAULT_BASE):
             if not path.exists() or _sha(path.read_bytes()) != item["sha256"]:
                 raise SystemExit(f"包文件校验失败：{item['path']}")
         target = root / "data"
+        backup = root / "data.prev"
+        moved = False
         if target.exists():
-            backup = root / "data.prev"
             if backup.exists():
                 shutil.rmtree(backup)
             target.rename(backup)
-        (staging / "data").rename(target)
+            moved = True
+        try:
+            (staging / "data").rename(target)
+        except Exception:
+            if moved and backup.exists() and not target.exists():
+                backup.rename(target)
+            raise
         (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
