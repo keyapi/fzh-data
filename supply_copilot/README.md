@@ -32,13 +32,16 @@ uv run python -m supply_copilot doctor     # 期望 status=ok, missing_files=[]
 | 你可以问 Agent | 对应命令 / 依据 |
 |---|---|
 | 某 SKU 给某分公司要不要补、补多少、什么时候补、为什么 | `recommend --branch USNJ --sku <SKU>` |
-| 这个分公司全部 SKU 的补货建议（不截断） | `batch --branch USNJ` |
+| 这个分公司各类动作的数量/数量合计（汇总） | `batch --branch USNJ` |
 | 这个建议的 q50/q90/q95、C/EN/PO/SO/CG、净需求、需要日/下单日 | `recommend` 报告与 `--json` |
+| 这个分公司逐 SKU 的全部明细（不截断） | `recommend --branch USNJ --json` |
 | 用的什么预测模型？回测怎么样？趋势如何？ | D5/D3b 证据（模型、holdout、趋势） |
 | 现在实时库存多少？按实时库存净需求变多少？ | `refresh --branch USNJ --sku <SKU>`（复用 D5，不重训） |
 | 换一套决策口径（v6.24）看看 | `recommend --d6-version v6_24 ...` |
 | 精确匹配还是模糊搜 SKU | 默认精确；`--like` 才模糊（防 KS100 误配 KS1000） |
 | 这份数据是什么时点、是否完整可信 | `doctor` + 包版本/as_of/sha256 |
+
+分公司编码：`USNJ`（美东）、`USTX`（美中）、`PL`（波兰）。
 
 注意：结论是**历史回放**（显示 `as_of`，例如 2026-11-13），不是今天的执行建议；未知一律不补 0。
 
