@@ -81,3 +81,28 @@ def test_no_silent_50_row_truncation(tmp_path):
     all_rows = recommend(tmp_path, "USNJ")
     assert len(all_rows) == 60
     assert all_rows.attrs["total"] == 60
+
+
+def test_refresh_unavailable_returns_cannot_judge(tmp_path, monkeypatch):
+    from supply_copilot import refresh
+    make_pack(tmp_path)
+    monkeypatch.setattr(refresh, "_tt_skus", lambda root: {"KS1": ["TT1"]})
+    monkeypatch.setattr(refresh, "_live_stock", lambda *a, **k: {"status": "unavailable"})
+    rows = refresh.refresh_sku(tmp_path, "USNJ", "KS1")
+    assert rows[0]["refresh_action"] == "暂不能判断"
+    assert "未用旧快照" in rows[0]["reason"]
+
+
+def test_refresh_partial_alias_is_unknown(tmp_path, monkeypatch):
+    from supply_copilot import refresh
+    make_pack(tmp_path)
+    monkeypatch.setattr(refresh, "_tt_skus", lambda root: {"KS1": ["TT1", "TT2"]})
+    def live(root, sku, warehouse, env_file=None):
+        if sku == "TT2":
+            return {"status": "not_found"}
+        return {"status": "matched", "available": 10, "intransit": 0,
+                "waiting_shipment": 0, "defects": 0}
+    monkeypatch.setattr(refresh, "_live_stock", live)
+    rows = refresh.refresh_sku(tmp_path, "USNJ", "KS1")
+    assert rows[0]["refresh_action"] == "暂不能判断"
+    assert rows[0]["live_status"] == "partial"

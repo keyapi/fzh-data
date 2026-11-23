@@ -59,19 +59,39 @@ def refresh_sku(data_root, branch, sku, env_file=None):
     for _, r in rows.iterrows():
         warehouse = {"美东USNJ": "美东-CENTRADE", "美中USTX": "美中-FZH-DANEEY",
                      "波兰": "波兰-FZHPoland-covers"}.get(pool)
-        live = {"status": "skipped", "rows": []}
-        for alias in tt:
+        matches, partial = [], False
+        for alias in sorted(set(tt)):
             live = _live_stock(data_root, alias, warehouse, env_file)
             if live["status"] == "matched":
-                break
+                matches.append(live)
+            else:
+                partial = True
+        if not matches:
+            out.append({"sku": sku, "branch": pool, "warehouse": warehouse,
+                        "refresh_action": "暂不能判断",
+                        "reason": "EN 实时库存不可用/未匹配；未用旧快照冒充当前",
+                        "live_status": "unavailable", "as_of": date.today().isoformat()})
+            continue
+        if len(matches) > 1:
+            partial = True
+        fields = {}
+        for field in ("available", "intransit", "waiting_shipment", "defects"):
+            vals = [m.get(field) for m in matches]
+            fields[field] = None if partial or any(v is None for v in vals) else sum(vals)
+        if partial or any(fields[f] is None for f in ("available", "intransit", "waiting_shipment")):
+            out.append({"sku": sku, "branch": pool, "warehouse": warehouse,
+                        "refresh_action": "暂不能判断", "reason": "实时库存字段未知/多别名",
+                        "live_status": "partial", "live_stock": matches,
+                        "as_of": date.today().isoformat()})
+            continue
         q95 = float(r.get("q95d5") or r.get("q95") or 0)
-        c_live = live.get("available")
-        intransit = live.get("intransit") or 0
-        waiting = live.get("waiting_shipment") or 0
+        c_live = fields["available"]
+        intransit = fields["intransit"]
+        waiting = fields["waiting_shipment"]
         po = float(r.get("PO追加(去重)") or 0)
         so = float(r.get("SO已下") or 0)
         cg = float(r.get("CG可调拨抵扣") or 0)
-        supply = (c_live if c_live is not None else float(r.get("C可发供给") or 0)) + intransit + po + so - cg
+        supply = c_live + intransit + po + so - cg
         net = max(0.0, q95 - supply)
         action = "补" if net > 0 and waiting <= 0 else ("催已有/待核" if net > 0 else "不补")
         out.append({
@@ -79,7 +99,7 @@ def refresh_sku(data_root, branch, sku, env_file=None):
             "forecast_source": "D5_v6_8 (reused, not retrained)",
             "q50": r.get("p50d5"), "q90": r.get("q90d5"), "q95": q95,
             "replay_action": r.get("建议动作"), "replay_new": r.get("新补数量"),
-            "live_stock": live, "C_live": c_live, "intransit": intransit,
+            "live_stock": matches, "C_live": c_live, "intransit": intransit,
             "waiting": waiting, "PO": po, "SO": so, "CG": cg,
             "net_refresh": net, "refresh_action": action,
             "warning": "forecast reused from pack; stock refreshed from EN; not a full D5 recompute",
