@@ -45,6 +45,7 @@ import pandas as pd
 
 from .paths import load_manifest
 from .recommend import recommend
+from .live_rules import recalc_dates
 
 BRANCH_POOL = {"USNJ": "美东USNJ", "USTX": "美中USTX", "PL": "波兰"}
 POOL_WAREHOUSE = {"美东USNJ": "美东-CENTRADE",
@@ -427,6 +428,7 @@ def _forecast_demand(forecast_root, *, lead_days, lookup, branch_prefix):
         return None, f"预测未接入（{exc}）；需求回退 D6 包 q95"
 
     demand = {}
+    derived_q95 = 0
     excluded = dict(ineligible=0, identity=0, uom=0, quantity=0, out_of_branch=0)
     for row in frame.itertuples(index=False):
         if not _truthy(row.netting_eligible):
@@ -448,6 +450,11 @@ def _forecast_demand(forecast_root, *, lead_days, lookup, branch_prefix):
         if qty is None or qty < 0:
             excluded["quantity"] += 1
             continue
+        p90 = _num(getattr(row, "p90", None))
+        if p90 is not None and p90 >= qty:
+            # 正态近似：q95 由 p50/p90 派生（p90 是 80% 区间上界）
+            qty = qty + (p90 - qty) * (1.6449 / 1.2816)
+            derived_q95 += 1
         key = (item, canonical, uom)
         demand[key] = demand.get(key, 0.0) + qty
 
@@ -458,7 +465,9 @@ def _forecast_demand(forecast_root, *, lead_days, lookup, branch_prefix):
                 window_start=str(frame["window_start"].min()),
                 window_end=str(frame["window_end"].max()),
                 rows_in=int(len(frame)), keys=int(len(demand)), excluded=excluded,
-                allocation="窗口 p50 合计；未做逐桶摊派/提前期重算（未接入）")
+                quantile=("derived_q95_from_p50_p90" if derived_q95 else "p50"),
+                quantile_rows=derived_q95,
+                allocation="窗口分位合计；q95 由 p50/p90 正态近似派生（未校准尾部）")
     return demand, meta
 
 
@@ -477,9 +486,10 @@ def _truthy(value) -> bool:
 # --------------------------------------------------------------------------- #
 def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
                  so_known, po_known, *, branch, stock_meta, forecast_meta,
-                 file_meta, as_of_dt):
+                 file_meta, as_of_dt, lead_by_sku=None):
     wh = POOL_WAREHOUSE[branch]
     as_of_date = as_of_dt.date()
+    lead_by_sku = lead_by_sku or {}
     rows = []
     for record in d6_rows.to_dict("records"):
         sku = str(record["product_id"])
@@ -489,6 +499,14 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         order_date = _date_str(record.get("下单日"))
         need_status = _date_status(needs_date, as_of_date)
         order_status = _date_status(order_date, as_of_date)
+        date_source = "d6_pack"
+        lead_days = lead_by_sku.get(sku)
+        if lead_days and needs_date and need_status != "past_due":
+            calc = recalc_dates(needs_date, as_of_date, lead_days)
+            if calc.get("order_date"):
+                order_date = calc["order_date"]
+                order_status = calc["status"]
+                date_source = "d6_need_minus_d6_lead"
         q95 = _num(record.get("q95"))
         forecast_qty = demand_map.get(key) if demand_map is not None else None
         if demand_source == "forecast_refresh":
@@ -504,8 +522,17 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         so_qty = so.get(key, 0.0) if so is not None else None
         po_qty = po.get(key + ("po",), 0.0) if po is not None else None
         po_on_time = po.get(key + ("po_on_time",), 0.0) if po is not None else None
-        cg_qty = cg.get(sku) if cg.get(sku) is not None else _num(record.get("CG可调拨抵扣"))
-        cg_source = "live_stock.cg" if sku in cg else "d6_pack"
+        d6_cg = _num(record.get("CG可调拨抵扣"))
+        live_cg = cg.get(sku)
+        if live_cg is not None and d6_cg is not None:
+            cg_qty = min(live_cg, d6_cg)
+            cg_source = "live_capped_by_d6"
+        elif live_cg is not None:
+            cg_qty = 0.0
+            cg_source = "live_no_policy"
+        else:
+            cg_qty = d6_cg
+            cg_source = "d6_pack"
 
         reasons, warnings = [], []
         missing = []
@@ -564,12 +591,12 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             pool=record.get("池"), physical_form=record.get("形态"),
             action=action, new_qty=new_qty, new_qty_if_conditional_late=lower,
             expedite_qty=_num(record.get("催已有量")),
-            need_date=needs_date, order_date=order_date, date_source="d6_pack",
+            need_date=needs_date, order_date=order_date, date_source=date_source,
             need_date_status=need_status, order_date_status=order_status,
             demand_qty=None if demand_qty is None else float(demand_qty),
             d6_q95=q95, demand_source=demand_source,
             demand_evidence=("D6 q95" if demand_source == "d6_pack_q95"
-                             else "forecast window p50"),
+                             else "forecast window derived q95 (p50/p90)"),
             supply_opening=_num(opening), supply_intransit=_num(intransit),
             supply_po=_num(po_qty), supply_cg=_num(cg_qty),
             supply_so=_num(so_qty), supply_expected=_num(supply_expected),
@@ -744,10 +771,25 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         forecast_warning = None
         demand_source = "forecast_refresh"
 
+    lead_by_sku = {}
+    for rec in d6_rows.to_dict("records"):
+        need = _date_str(rec.get("需要日"))
+        order = _date_str(rec.get("下单日"))
+        if not need or not order:
+            continue
+        try:
+            days = (datetime.fromisoformat(need).date()
+                    - datetime.fromisoformat(order).date()).days
+        except ValueError:
+            continue
+        if 0 < days < 400:
+            lead_by_sku[str(rec["product_id"])] = days
+
     frame = _decide_live(
         d6_rows, demand_map, demand_source, supply, cg, so, po,
         so_known, po_known, branch=pool, stock_meta=stock_meta,
-        forecast_meta=forecast_meta, file_meta=file_meta, as_of_dt=as_of_dt)
+        forecast_meta=forecast_meta, file_meta=file_meta, as_of_dt=as_of_dt,
+        lead_by_sku=lead_by_sku)
 
     warnings = []
     if demand_source == "d6_pack_q95":
@@ -769,11 +811,16 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         warnings.append("service_policy.csv 缺失：单位取自 D6 行，供给单位证据偏弱")
     warnings.append("未接入 supply_netting 的批次去重/跨阶段同批/FBA 分配等 gate；"
                     "库存按分公司仓前缀汇总，可用供给可能与净额引擎有差")
-    warnings.append("需要日/下单日/催已有量沿用 D6 包计划，未按 live 供给重算")
+    warnings.append("部分需要日/下单日沿用 D6 包；有交期可算的已按 D6 计划交期倒排（非实际路线交期）")
 
     executable_reasons = []
+    fallback_rows = int(frame["warnings"].fillna("").str.contains("预测未覆盖").sum())
+    if fallback_rows:
+        executable_reasons.append(f"{fallback_rows} 行预测未覆盖，退回 D6 q95")
     if demand_source != "forecast_refresh":
         executable_reasons.append("需求未刷新：仍为 D6 包 q95（历史时点）")
+    elif (forecast_meta or {}).get("quantile") == "derived_q95_from_p50_p90":
+        executable_reasons.append("预测 q95 由 p50/p90 派生，未校准尾部")
     if not so_known:
         executable_reasons.append("SO 未接入")
     if not po_known or (po_evidence.get("rows") and
@@ -783,9 +830,9 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                         == po_evidence["rows"]):
         executable_reasons.append("PO 未映射到本分公司仓")
     if (frame["order_date_status"] == "past_due").any():
-        executable_reasons.append("存在已过下单日（D6 包计划）")
-    if (frame["cg_source"] == "d6_pack").any():
-        executable_reasons.append("CG 未按实时库存重算")
+        executable_reasons.append("存在已过下单日")
+    if (frame["cg_source"].isin(["d6_pack", "live_no_policy"])).any():
+        executable_reasons.append("CG 抵扣规则未确认（仅 D6 上限/实时封顶）")
 
     meta = dict(
         mode="live", branch=pool, as_of=as_of_dt.isoformat(),

@@ -65,6 +65,22 @@ uv run python -m supply_copilot decide --branch USNJ   # 用 live 供给重算�
 它给的是**当天候选**（补/不补/待核 + 数量 + 证据），不是可直接下单的指令。
 只有上述原因补齐、`可执行性=是` 时，才允许作为采购建议。
 
+## 自己重算需求/预测（不依赖我们）
+
+```bash
+uv run python -m supply_copilot pull-orders
+uv run python -m supply_copilot rebuild \
+  --orders <root>/orders/orders-2026-11-22.1/orders_unified.parquet \
+  --out <root>/rebuild/2026-11-23
+uv run python -m supply_copilot decide --branch USNJ --forecast-root <root>/rebuild/2026-11-23/forecast
+```
+
+- `rebuild` 在本地跑：订单 → 需求表 → 预测；约几分钟（AutoETS），不写 EN、不动线上包。
+- 预测窗口只有 p10/p50/p90；报告里的 q95 由 p50/p90 **派生**（未校准尾部），会标注。
+- 未覆盖的 SKU 退回 D6 q95 并计数，不会静默当成已刷新。
+- 需要 `sku_map.tsv`（`pull` 提供）和 `item_uom_cache.parquet`（`pull-history` 提供）；
+  也可用 `--sku-map/--uom-cache` 指定。
+
 ## 历史订单数据（不在公共仓库）
 
 - **最新订单明细**：`pull-orders` → `orders_unified.parquet`，当前版本 **orders-2026-11-22.1**（数据到 2026-11-22；含历史 GS + EN 增量）。给想自己用 Excel/Pandas 分析或自建预测的人用，不强制用我们的模型。

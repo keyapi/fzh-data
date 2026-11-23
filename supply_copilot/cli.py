@@ -1,6 +1,6 @@
 from __future__ import annotations
 import argparse, json, os, sys
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from .paths import data_root, load_manifest
 from .download import pull
@@ -49,7 +49,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="supply_copilot", description="供应链 A/B/C/D/E 决策 Copilot（只读回放）")
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("doctor", "pull", "recommend", "batch", "refresh", "history", "pull-history",
-                 "orders", "pull-orders", "supply", "decide"):
+                 "orders", "pull-orders", "supply", "decide", "rebuild"):
         p = sub.add_parser(name)
         p.add_argument("--data-root", default=None)
         p.add_argument("--manifest", default=None)
@@ -57,6 +57,15 @@ def main(argv=None):
             p.add_argument("--branch", required=True)
         if name == "supply":
             p.add_argument("--out", default=None)
+        if name == "rebuild":
+            p.add_argument("--orders", default=None)
+            p.add_argument("--out", default=None)
+            p.add_argument("--sku-map", default=None)
+            p.add_argument("--uom-cache", default=None)
+            p.add_argument("--as-of", default=None)
+            p.add_argument("--decision-date", default=None)
+            p.add_argument("--lead-days", type=int, default=90)
+            p.add_argument("--no-statsforecast", action="store_true")
         if name == "pull-orders":
             p.add_argument("--env-file", default=None)
             p.add_argument("--base", default="https://erpnext.vilavi.cn")
@@ -102,7 +111,8 @@ def main(argv=None):
             "orders": command_orders,
             "pull-orders": command_pull_orders,
             "supply": command_supply,
-            "decide": command_decide}[args.command](args)
+            "decide": command_decide,
+            "rebuild": command_rebuild}[args.command](args)
 
 
 def command_refresh(args):
@@ -213,4 +223,48 @@ def command_decide(args):
                          ensure_ascii=False, indent=2))
     else:
         print(decide_mod.to_report(frame, info))
+    return 0
+
+
+def _latest_file(root: Path, pattern: str, name: str, version_glob: str = "*"):
+    candidates = sorted(Path(root).glob(pattern), key=lambda p: p.stat().st_mtime, reverse=True)
+    for cand in candidates:
+        path = cand / name if cand.is_dir() else cand
+        if path.exists():
+            return path
+    return None
+
+
+def command_rebuild(args):
+    """用最新订单 parquet 重算需求/预测（本地，不写 EN）。"""
+    root = data_root(args.data_root, create=True)
+    orders = Path(args.orders) if args.orders else _latest_file(
+        root, f"orders/{args.version if hasattr(args, 'version') else '*'}",
+        "orders_unified.parquet")
+    if orders is None or not Path(orders).exists():
+        raise SystemExit("找不到订单 parquet：先 pull-orders 或传 --orders")
+    out = Path(args.out) if args.out else Path(root) / "rebuild" / date.today().isoformat()
+    sku_map = args.sku_map or next(
+        (p for p in (Path(root) / "data" / "sku_map.tsv", Path(root) / "sku_map.tsv") if p.exists()),
+        None)
+    if sku_map is None:
+        raise SystemExit("缺少 sku_map.tsv：先 pull")
+    uom_cache = args.uom_cache or _latest_file(root, "history/*", "item_uom_cache.parquet")
+    if uom_cache is None:
+        raise SystemExit("缺少 item_uom_cache.parquet：先 pull-history 或传 --uom-cache")
+    aliases = Path(__file__).resolve().parent.parent / "self_fulfilled_demand" / "warehouse_aliases.json"
+    from .rebuild import rebuild as do_rebuild
+    manifest = do_rebuild(
+        orders, out,
+        sku_map_path=sku_map,
+        warehouse_aliases=aliases,
+        uom_cache_path=uom_cache,
+        as_of=args.as_of,
+        decision_date=args.decision_date or date.today().isoformat(),
+        lead_days=args.lead_days,
+        no_statsforecast=args.no_statsforecast,
+    )
+    run_dir = Path(manifest["forecast"]["run_dir"])
+    (run_dir.parent / "CURRENT").write_text(run_dir.name, encoding="utf-8")
+    print(json.dumps(manifest, ensure_ascii=False, indent=2))
     return 0
