@@ -813,7 +813,23 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                     "库存按分公司仓前缀汇总，可用供给可能与净额引擎有差")
     warnings.append("部分需要日/下单日沿用 D6 包；有交期可算的已按 D6 计划交期倒排（非实际路线交期）")
 
+    stock_age_hours = None
+    if stock_meta.get("snapshot_at"):
+        try:
+            snap = datetime.fromisoformat(str(stock_meta["snapshot_at"]).replace("Z", "+00:00"))
+            if snap.tzinfo is not None:
+                delta = as_of_dt - snap
+            else:
+                delta = as_of_dt.replace(tzinfo=None) - snap
+            stock_age_hours = round(delta.total_seconds() / 3600, 1)
+        except ValueError:
+            stock_age_hours = None
+    if stock_age_hours is not None and stock_age_hours > 12:
+        warnings.append(f"库存快照已过去 {stock_age_hours} 小时，可能不是最新")
+
     executable_reasons = []
+    if stock_age_hours is not None and stock_age_hours > 12:
+        executable_reasons.append(f"库存快照超过 12 小时（{stock_age_hours}h）")
     fallback_rows = int(frame["warnings"].fillna("").str.contains("预测未覆盖").sum())
     if fallback_rows:
         executable_reasons.append(f"{fallback_rows} 行预测未覆盖，退回 D6 q95")
@@ -845,6 +861,7 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         supply_evidence=supply_evidence,
         executable=not executable_reasons,
         executable_reasons=executable_reasons,
+        stock_age_hours=stock_age_hours,
         totals=dict(rows=int(len(frame)),
                     suggest=int((frame["action"] == "补").sum()),
                     unknown=int((frame["qty_status"] != "measured").sum()),
