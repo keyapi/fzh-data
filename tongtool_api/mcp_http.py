@@ -97,6 +97,13 @@ class McpClient:
         self.request_id += 1
         return self.request_id
 
+    def list_tools(self) -> dict:
+        """JSON-RPC tools/list —— 返回原始响应，用于查看工具入参/出参 schema。"""
+        resp, _ = self._post(
+            {"jsonrpc": "2.0", "id": self.next_id(), "method": "tools/list", "params": {}}
+        )
+        return resp
+
     def call(self, name: str, arguments: dict) -> dict:
         resp, _ = self._post(
             {
