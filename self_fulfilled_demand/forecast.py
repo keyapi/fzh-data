@@ -16,12 +16,21 @@
 - 默认 **AutoETS**（statsforecast 2.1.1），规则来自 T5 / 工程裁定 A；
   T20 guard：``len<3 → naive 末值``、``3<=len<7 → MA3``、``len>=7 → AutoETS``；
   AutoETS 抛错（如 tiny datasets）→ **MA3 回退**，逐 SKU 写原因。
+- 可选 ``model_policy="classified"``（默认关闭）：按 ``--model-map`` 的
+  ``adopted_model`` 为每个 SKU 选模型（AutoETS / SeasonalNaive / Naive / MA3 /
+  SBA / TSB / Croston 对照）；map 缺失或模型名不认识 → 按 ``demand_pattern``
+  回退（smooth→AutoETS、intermittent→SBA、lumpy/obsolescent→TSB、
+  new/short→MA3、no_demand→不拟合）；仍失败 → 现有 AutoETS 守卫。
+  每 SKU 记录 ``selected_model`` / ``selection_source`` / ``model_failure_reason``。
 - 回测：滚动原点、一步预测，报告所选方法的 WAPE / 偏差 / 原点数；
   同时并列 MA3 / naive / seasonal_naive 的 WAPE 作对照。
   选型**不**按回测结果切换（DECISIONS D19：没有干净留出块，现有证据不支持
   「选择流程 / AutoETS 更好」）；回测只用于透明度和区间尺度。
 - 区间：滚动原点**有符号残差**的经验下/上分位（own >= 3 个原点），
   否则用池化相对误差系数（截顶 3×）；**不是已标定分位**，不承诺覆盖率。
+- 分位：p10/p50/p90 之外新增 **q85/q90/q95**（窗口 + 月表），由同一批滚动
+  有符号需求残差的上分位估计；样本不足用池化系数并标 ``quantile_method=pooled``。
+  构造上保证 q85<=q90<=q95、p50<=q90，并由 ``validate_frames`` 断言。
 - 仓库分配：SKU 级预测按该 SKU 最近 3 个完整月（2026-07..09）各 canonical 仓
   销量占比分配；无近 3 月销量时分配写 null（未知），不写 0。
 
@@ -56,6 +65,8 @@ from .store import now_iso
 
 SCHEMA_VERSION = "en-demand-forecast-v1"
 MODEL_RULE_VERSION = "autoets_m3_naive@t5+t20-2026-10-27"
+# classified 选型只影响 ``model_policy="classified"``；默认 autoets 的行为与旧版逐字一致
+MODEL_POLICY_VERSION = "classified-map+pattern@d5v6.8-2026-11-24"
 
 DEFAULT_DISPOSITION = (
     "D:/Work/fzh-order-store/en-demand-v1/canonical/demand_line_disposition.parquet"
@@ -82,6 +93,11 @@ STATUS_OK = {
     "ok_fallback_ma3",
     "ok_short_ma3",
     "ok_short_naive",
+    # classified 选型（新增，向后兼容：旧状态一个都不删）
+    "ok_classified",
+    "ok_classified_pattern",
+    "ok_classified_no_demand",
+    "ok_classified_fallback",
 }
 STATUS_NOT_FORECASTABLE = "not_forecastable"
 STATUS_NO_HISTORY = "not_forecastable_no_complete_month"
@@ -90,6 +106,72 @@ INTERVAL_LEVEL = 0.80
 INTERVAL_MAX_COEF = 3.0
 
 RECENT_SHARE_MONTHS = 3
+
+# --------------------------------------------------------------------------- #
+# 分型选型（classified policy）
+# --------------------------------------------------------------------------- #
+MODEL_POLICY_AUTOETS = "autoets"
+MODEL_POLICY_CLASSIFIED = "classified"
+MODEL_POLICIES = (MODEL_POLICY_AUTOETS, MODEL_POLICY_CLASSIFIED)
+
+# 模型池（规范化名）；croston 只作对照
+MODEL_POOL = ("autoets", "snaive", "naive", "ma3", "sba", "tsb", "croston")
+MODEL_LABELS = {
+    "autoets": "AutoETS",
+    "snaive": "SeasonalNaive",
+    "naive": "Naive",
+    "ma3": "MA3",
+    "sba": "SBA（CrostonSBA）",
+    "tsb": "TSB",
+    "croston": "Croston（对照）",
+    "none": "不拟合（no_demand）",
+}
+MODEL_ALIASES = {
+    "autoets": "autoets",
+    "ets": "autoets",
+    "ets_ann": "autoets",  # D5/D3b 的 adopted_model 旧名
+    "ets_aaa": "autoets",
+    "snaive": "snaive",
+    "seasonal_naive": "snaive",
+    "seasonalnaive": "snaive",
+    "naive": "naive",
+    "naive_last": "naive",
+    "last": "naive",
+    "ma3": "ma3",
+    "ma_3": "ma3",
+    "window_average3": "ma3",
+    "sba": "sba",
+    "croston_sba": "sba",
+    "crostonsba": "sba",
+    "tsb": "tsb",
+    "croston": "croston",
+    "croston_classic": "croston",
+    "crostonclassic": "croston",
+    "none": "none",
+}
+
+# demand_pattern → 模型；"new"/"short" 走短史规则（MA3，不足 3 个月由 guard 兜底）
+PATTERN_FALLBACK = {
+    "smooth": "autoets",
+    "intermittent": "sba",
+    "lumpy": "tsb",
+    "obsolescent": "tsb",
+    "new": "ma3",
+    "short": "ma3",
+    "no_demand": "none",
+}
+
+MODEL_MAP_REQUIRED = ("product_id", "adopted_model", "demand_pattern")
+MODEL_MAP_PREFERRED = ("pool", "physical_form", "canonical_uom")
+
+QUANTILE_LEVELS = (0.85, 0.90, 0.95)
+QUANTILE_OWN_MIN_ORIGINS = 3
+
+SELECTION_MAP = "map"
+SELECTION_PATTERN = "pattern"
+SELECTION_GUARD = "guard"
+SELECTION_FALLBACK = "fallback"
+SELECTION_DEFAULT = "default"
 
 
 # --------------------------------------------------------------------------- #
@@ -196,6 +278,215 @@ class ForecastConfig:
     censoring_flags_path: str | None = None
     stock_observations_path: str | None = None
     uom_cache_path: str | None = None
+    # 选型策略：autoets（默认，旧行为不变）| classified（按 model map + 分型选模型）
+    model_policy: str = MODEL_POLICY_AUTOETS
+    model_map_path: str | None = None
+
+
+# --------------------------------------------------------------------------- #
+# 分型选型：model map + demand_pattern 回退
+# --------------------------------------------------------------------------- #
+def normalize_model_name(value: Any) -> str | None:
+    """把 D5/D3b/自定义表里的模型名规范到 ``MODEL_POOL``；未知返回 None。"""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    key = str(value).strip().lower().replace(" ", "").replace("-", "_")
+    if not key:
+        return None
+    return MODEL_ALIASES.get(key)
+
+
+def normalize_pattern(value: Any) -> str:
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
+    key = str(value).strip().lower().replace(" ", "_").replace("-", "_")
+    return "new" if key in ("new_product", "newproduct") else key
+
+
+@dataclass(frozen=True)
+class ModelMapEntry:
+    """一个 product_id 的选型结果（多 pool/形态时已折叠成一条）。"""
+
+    product_id: str
+    model: str | None  # 规范化名；None = 表里的模型名不认识
+    raw_model: str
+    demand_pattern: str
+    pool: str = ""
+    physical_form: str = ""
+    canonical_uom: str = ""
+    candidates: int = 1
+    ambiguous: bool = False
+
+
+def _pick_model_map_row(g: pd.DataFrame) -> ModelMapEntry:
+    """同一 product_id 多行时选一条：已知模型 > 非 none > hist_avg_3y 大 > 原顺序。"""
+    if "hist_avg_3y" in g.columns:
+        hist = pd.to_numeric(g["hist_avg_3y"], errors="coerce")
+    else:
+        hist = pd.Series([float("nan")] * len(g), index=g.index)
+    known = g["_model"].notna() & (g["_model"] != "none")
+    order = pd.DataFrame(
+        {"_known": known.astype(int), "_hist": hist.values},
+        index=g.index,
+    ).sort_values(["_known", "_hist"], ascending=[False, False], kind="mergesort")
+    row = g.loc[order.index[0]]
+    distinct = set(g["_model"].dropna())
+    return ModelMapEntry(
+        product_id=str(row["product_id"]),
+        model=row["_model"] if pd.notna(row["_model"]) else None,
+        raw_model="" if pd.isna(row.get("adopted_model")) else str(row.get("adopted_model")),
+        demand_pattern=normalize_pattern(row.get("demand_pattern")),
+        pool="" if pd.isna(row.get("pool")) else str(row.get("pool")),
+        physical_form="" if pd.isna(row.get("physical_form")) else str(row.get("physical_form")),
+        canonical_uom="" if pd.isna(row.get("canonical_uom")) else str(row.get("canonical_uom")),
+        candidates=int(len(g)),
+        ambiguous=len(distinct) > 1,
+    )
+
+
+def load_model_map(path: str | Path) -> tuple[dict[str, ModelMapEntry], dict[str, Any]]:
+    """读 model map（parquet/csv），按 product_id 折叠；返回 (map, meta)。
+
+    必需列：``product_id`` / ``adopted_model`` / ``demand_pattern``；
+    ``pool`` / ``physical_form`` / ``canonical_uom`` 用于来源记录（缺失不报错）。
+    """
+    p = Path(path)
+    suffix = p.suffix.lower()
+    if suffix == ".parquet":
+        df = pd.read_parquet(p)
+    elif suffix in (".csv", ".txt"):
+        df = pd.read_csv(p)
+    else:
+        raise ValueError(f"model map 只支持 .parquet / .csv，收到 {p.suffix!r}")
+    missing = [c for c in MODEL_MAP_REQUIRED if c not in df.columns]
+    if missing:
+        raise ValueError(f"model map 缺必需列: {missing}")
+
+    df = df.copy()
+    df["product_id"] = df["product_id"].astype(str).str.strip()
+    df = df[~df["product_id"].isin(("", "nan", "None"))].copy()
+    df["_model"] = df["adopted_model"].map(normalize_model_name)
+    df["demand_pattern"] = df["demand_pattern"].map(normalize_pattern)
+
+    entries: dict[str, ModelMapEntry] = {}
+    for pid, g in df.groupby("product_id", sort=False):
+        entries[str(pid)] = _pick_model_map_row(g)
+
+    model_counts: dict[str, int] = {}
+    unknown = 0
+    for e in entries.values():
+        if e.model is None:
+            unknown += 1
+            model_counts[f"unknown:{e.raw_model}"] = model_counts.get(f"unknown:{e.raw_model}", 0) + 1
+        else:
+            model_counts[e.model] = model_counts.get(e.model, 0) + 1
+    meta = {
+        "path": str(p),
+        "sha256": _sha256(p),
+        "rows": int(len(df)),
+        "products": len(entries),
+        "unknown_model_products": unknown,
+        "ambiguous_products": int(sum(1 for e in entries.values() if e.ambiguous)),
+        "model_counts": dict(sorted(model_counts.items())),
+        "collapse_rule": "per product_id: known model > non-none > hist_avg_3y desc > first row",
+    }
+    return entries, meta
+
+
+def _pattern_model(
+    pattern: str, n_history: int, cfg: ForecastConfig
+) -> tuple[str | None, str]:
+    """按 demand_pattern 回退；返回 (模型或 None, 原因)。"""
+    p = normalize_pattern(pattern)
+    if not p:
+        return None, "无 demand_pattern"
+    target = PATTERN_FALLBACK.get(p)
+    if target is None:
+        return None, f"分型 {pattern!r} 无回退规则"
+    if target == "ma3" and n_history < cfg.min_ma3_len:
+        return "naive", f"分型 {p} → naive（历史 {n_history} 个 < {cfg.min_ma3_len}）"
+    return target, f"分型 {p} → {target}"
+
+
+@dataclass(frozen=True)
+class ModelChoice:
+    model: str
+    source: str
+    reason: str
+    pattern: str = ""
+    product_id: str = ""
+
+
+def choose_model(
+    n_history: int,
+    cfg: ForecastConfig,
+    model_map: dict[str, ModelMapEntry] | None = None,
+    product_id: str = "",
+) -> ModelChoice:
+    """选模型：map 优先，其次 demand_pattern，最后 T20/AutoETS 守卫。"""
+    if cfg.model_policy != MODEL_POLICY_CLASSIFIED:
+        return ModelChoice(
+            "autoets", SELECTION_DEFAULT, "AutoETS 默认（T5/T20 规则，policy=autoets）"
+        )
+
+    entry = (model_map or {}).get(product_id) if product_id else None
+    pattern = entry.demand_pattern if entry else ""
+
+    # T20 短史守卫优先于任何 map（少样本无法支撑季节/间歇模型）
+    if n_history < cfg.min_ma3_len:
+        return ModelChoice(
+            "naive",
+            SELECTION_GUARD,
+            f"完整月历史 {n_history} 个（<{cfg.min_ma3_len}）→ naive 末值（T20 guard）",
+            pattern,
+            product_id,
+        )
+    if n_history < cfg.min_autoets_len:
+        return ModelChoice(
+            "ma3",
+            SELECTION_GUARD,
+            f"完整月历史 {n_history} 个（{cfg.min_ma3_len}–{cfg.min_autoets_len - 1}）"
+            "→ MA3（T20 短史规则）",
+            pattern,
+            product_id,
+        )
+
+    if entry is not None and entry.model is not None:
+        why = (
+            f"model map 指定 {entry.raw_model}"
+            f"（pool={entry.pool or '?'} / {entry.physical_form or '?'}"
+            f"{'，多行已折叠' if entry.ambiguous else ''}）"
+        )
+        return ModelChoice(entry.model, SELECTION_MAP, why, pattern, product_id)
+
+    if entry is not None and entry.model is None:
+        model, pat_reason = _pattern_model(pattern, n_history, cfg)
+        if model is None:
+            return ModelChoice(
+                "autoets",
+                SELECTION_GUARD,
+                f"map 模型 {entry.raw_model!r} 不在模型池，且 {pat_reason} → AutoETS 守卫",
+                pattern,
+                product_id,
+            )
+        return ModelChoice(
+            model,
+            SELECTION_PATTERN,
+            f"map 模型 {entry.raw_model!r} 不在模型池 → {pat_reason}",
+            pattern,
+            product_id,
+        )
+
+    model, pat_reason = _pattern_model(pattern, n_history, cfg)
+    if model is None:
+        return ModelChoice(
+            "autoets",
+            SELECTION_GUARD,
+            f"无 model map（{pat_reason}）→ AutoETS 默认守卫",
+            pattern,
+            product_id,
+        )
+    return ModelChoice(model, SELECTION_PATTERN, f"无 model map → {pat_reason}", pattern, product_id)
 
 
 # --------------------------------------------------------------------------- #
@@ -240,15 +531,95 @@ def _ma3(y: np.ndarray) -> float:
     return float(np.mean(y[-k:])) if k else 0.0
 
 
+def _snaive(y: np.ndarray, h: int, season_length: int = 12) -> np.ndarray:
+    """季节 naive：重复上一个完整周期的末值；不足一个周期时退化为 naive。"""
+    sl = int(season_length) if len(y) >= season_length else 1
+    seq = np.asarray(y[-sl:], dtype=float)
+    reps = int(math.ceil(h / sl))
+    return np.tile(seq, reps)[:h]
+
+
+def _named_forecast(model: str, y: np.ndarray, h: int, season_length: int) -> np.ndarray:
+    """模型池里除 AutoETS 之外的模型。
+
+    naive / snaive / ma3 用本地实现（离线、确定性）；sba / tsb / croston 用
+    statsforecast 的 CrostonSBA / TSB / CrostonClassic（2.1.1）。
+    """
+    if model == "naive":
+        return np.repeat(float(y[-1]), h)
+    if model == "ma3":
+        return np.repeat(_ma3(y), h)
+    if model == "snaive":
+        return _snaive(y, h, season_length)
+    from statsforecast import models as sfm
+    if model == "sba":
+        obj = sfm.CrostonSBA()
+    elif model == "tsb":
+        # statsforecast 的 TSB 无默认参数；固定 0.1/0.1，与分类层口径一致
+        obj = sfm.TSB(alpha_d=0.1, alpha_p=0.1)
+    elif model == "croston":
+        obj = sfm.CrostonClassic()
+    else:  # pragma: no cover - 调用方已限制在模型池内
+        raise ValueError(f"未知模型 {model!r}")
+    obj.fit(np.asarray(y, dtype=np.float32))
+    pred = np.asarray(obj.predict(h=h)["mean"], dtype=float).reshape(-1)
+    if len(pred) != h:
+        raise ValueError(f"预测长度 {len(pred)} != {h}")
+    if not np.isfinite(pred).all():
+        raise ValueError("预测含 NaN/inf")
+    return pred
+
+
+def _autoets_predict(
+    y: np.ndarray, h: int, backend: Backend | None, cfg: ForecastConfig
+) -> tuple[np.ndarray, str, str, bool]:
+    """AutoETS 及其既有回退（T20）。返回 (pred, method, reason, clipped)。"""
+    n = len(y)
+    season_length = 12 if n >= cfg.season_long_from else 1
+    if backend is None:
+        return (
+            np.repeat(_ma3(y), h),
+            "ma3",
+            "statsforecast 不可用 → MA3 回退（T20 规则）",
+            False,
+        )
+    try:
+        pred = backend.forecast(y, h, season_length=season_length)
+        pred = np.asarray(pred, dtype=float).reshape(-1)
+        if len(pred) != h:
+            raise ValueError(f"预测长度 {len(pred)} != {h}")
+        reason = (
+            f"AutoETS（T5 规则默认，statsforecast {backend.version}，"
+            f"season_length={season_length}）"
+        )
+        clipped = bool((pred < 0).any())
+        if clipped:
+            pred = np.clip(pred, 0.0, None)
+            reason += "；负值已截零"
+        return pred, "autoets", reason, clipped
+    except Exception as exc:  # noqa: BLE001 - 逐 SKU 记录原因，不中断全表
+        msg = f"{type(exc).__name__}: {str(exc)[:80]}"
+        return (
+            np.repeat(_ma3(y), h),
+            "ma3",
+            f"AutoETS 不可用（{msg}）→ MA3 回退（T20 规则）",
+            False,
+        )
+
+
 def fit_predict_rule(
     y: np.ndarray,
     h: int,
     backend: Backend | None,
     cfg: ForecastConfig,
+    model: str = "autoets",
 ) -> tuple[np.ndarray | None, str, str, bool]:
     """按冻结规则出预测。
 
     返回 ``(pred, method, reason, negative_clipped)``。``pred`` 为 None 表示不可算。
+
+    ``model`` 只在 ``model_policy="classified"`` 时有意义；默认 ``autoets`` 时
+    行为与原实现逐字一致。T20 短史守卫对所有模型都先生效。
     """
     n = len(y)
     if n == 0:
@@ -259,30 +630,36 @@ def fit_predict_rule(
     if n < cfg.min_autoets_len:
         pred = np.repeat(_ma3(y), h)
         return pred, "ma3", f"完整月历史 {n} 个（{cfg.min_ma3_len}–{cfg.min_autoets_len - 1}）→ MA3（T20 短史规则）", False
-    if backend is None:
-        pred = np.repeat(_ma3(y), h)
-        return pred, "ma3", "statsforecast 不可用 → MA3 回退（T20 规则）", False
+
+    requested = normalize_model_name(model) or "autoets"
+    if requested == "none":
+        return np.zeros(h), "none", "no_demand 分型 → 预测 0（不拟合）", False
+    if requested == "autoets":
+        return _autoets_predict(y, h, backend, cfg)
+
+    season_length = 12 if n >= cfg.season_long_from else 1
     try:
-        pred = backend.forecast(
-            y, h, season_length=12 if n >= cfg.season_long_from else 1
-        )
-        pred = np.asarray(pred, dtype=float).reshape(-1)
-        if len(pred) != h:
-            raise ValueError(f"预测长度 {len(pred)} != {h}")
-        method = "autoets"
-        reason = (
-            f"AutoETS（T5 规则默认，statsforecast {backend.version}，"
-            f"season_length={12 if n >= cfg.season_long_from else 1}）"
-        )
+        pred = _named_forecast(requested, y, h, season_length)
         clipped = bool((pred < 0).any())
         if clipped:
             pred = np.clip(pred, 0.0, None)
+        reason = (
+            f"{MODEL_LABELS.get(requested, requested)}（classified 选型，"
+            f"season_length={season_length if requested in ('snaive', 'autoets') else 1}）"
+        )
+        if clipped:
             reason += "；负值已截零"
-        return pred, method, reason, clipped
+        return pred, requested, reason, clipped
     except Exception as exc:  # noqa: BLE001 - 逐 SKU 记录原因，不中断全表
-        pred = np.repeat(_ma3(y), h)
         msg = f"{type(exc).__name__}: {str(exc)[:80]}"
-        return pred, "ma3", f"AutoETS 不可用（{msg}）→ MA3 回退（T20 规则）", False
+        fb_pred, fb_method, fb_reason, fb_clipped = _autoets_predict(y, h, backend, cfg)
+        label = MODEL_LABELS.get(requested, requested)
+        return (
+            fb_pred,
+            fb_method,
+            f"{label} 不可用（{msg}）→ {fb_reason}",
+            fb_clipped,
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -424,6 +801,33 @@ def build_series(
     return series, wh_month, partial_monthly, meta
 
 
+def product_by_sku_map(df: pd.DataFrame) -> dict[str, str]:
+    """tongtool_sku → canonical_sku（= model map 的 product_id）。
+
+    每个 tongtool_sku 只取出现次数最多的 canonical_sku；``unmapped:`` 值保留，
+    自然不会命中 model map。
+    """
+    if "canonical_sku" not in df.columns:
+        return {}
+    sub = df[
+        df["canonical_sku"].notna()
+        & (df["canonical_sku"].astype(str).str.strip() != "")
+    ]
+    if not len(sub):
+        return {}
+    tmp = (
+        sub.groupby(["tongtool_sku", "canonical_sku"], dropna=False)
+        .size()
+        .reset_index(name="n")
+        .sort_values(["tongtool_sku", "n"], ascending=[True, False], kind="mergesort")
+        .drop_duplicates("tongtool_sku")
+    )
+    return {
+        str(r.tongtool_sku): str(r.canonical_sku)
+        for r in tmp.itertuples(index=False)
+    }
+
+
 # --------------------------------------------------------------------------- #
 # 回测与预测
 # --------------------------------------------------------------------------- #
@@ -466,6 +870,7 @@ def run_backtest(
     censoring_flags: dict[str, dict[str, Any]] | None = None,
     censoring_flags_by_origin: dict[str, dict[str, dict[str, Any]]] | None = None,
     censoring_mode: str = "conservative",
+    model: str = "autoets",
 ) -> BacktestResult:
     """滚动一步回测。
 
@@ -519,7 +924,7 @@ def run_backtest(
         else:
             train = y[:i]
         actual = float(actual_series[i])
-        pred, method, _, _ = fit_predict_rule(train, 1, backend, cfg)
+        pred, method, _, _ = fit_predict_rule(train, 1, backend, cfg, model=model)
         if pred is None:
             continue
         own_e.append(float(pred[0]) - actual)
@@ -582,6 +987,21 @@ class SkuForecast:
     zero_forecast: bool
     demand_residual_q10: float | None = None
     demand_residual_q90: float | None = None
+    # classified 选型溯源
+    selected_model: str = ""
+    selection_source: str = ""
+    selection_reason: str = ""
+    selected_pattern: str = ""
+    product_id: str = ""
+    model_failure_reason: str = ""
+    # q85/q90/q95：滚动回测有符号残差的上分位（不是已标定分位）
+    q85: np.ndarray | None = None
+    q90: np.ndarray | None = None
+    q95: np.ndarray | None = None
+    demand_residual_q85: float | None = None
+    demand_residual_upper_q90: float | None = None
+    demand_residual_q95: float | None = None
+    quantile_method: str = ""
 
 
 def _demand_residual_quantiles(
@@ -610,6 +1030,42 @@ def _interval_from_errors(
     return np.clip(p50 + lo, 0.0, None), p50 + hi
 
 
+def _upper_residual_quantile(errors: Sequence[float], level: float) -> float:
+    """需求残差 actual−pred 的单侧上分位，截到 >=0（保证 q>=p50）。"""
+    demand_residual = [-float(e) for e in errors]
+    return max(0.0, conformal_q(demand_residual, level))
+
+
+def _forecast_status(
+    cfg: ForecastConfig, choice: ModelChoice, method: str, n: int
+) -> str:
+    """状态枚举；autoets policy 的分支与原实现逐字一致。"""
+    if cfg.model_policy != MODEL_POLICY_CLASSIFIED:
+        if method == "autoets":
+            return "ok_autoets"
+        if method == "ma3" and n < cfg.min_autoets_len:
+            return "ok_short_ma3"
+        if method == "ma3":
+            return "ok_fallback_ma3"
+        return "ok_short_naive"
+
+    # naive_last 是 T20 对 1–2 个月历史的标准输出，等价于 naive 不算回退
+    effective = "naive" if method == "naive_last" else method
+    if choice.model != "none" and effective != choice.model:
+        return "ok_classified_fallback"
+    if choice.model == "none":
+        return "ok_classified_no_demand"
+    if choice.source == SELECTION_GUARD:
+        if n < cfg.min_ma3_len:
+            return "ok_short_naive"
+        if n < cfg.min_autoets_len:
+            return "ok_short_ma3"
+        return "ok_autoets"
+    if choice.source == SELECTION_MAP:
+        return "ok_classified"
+    return "ok_classified_pattern"
+
+
 def forecast_sku(
     s: SkuSeries,
     months: list[str],
@@ -620,6 +1076,8 @@ def forecast_sku(
     censoring_flags: dict[str, dict[str, Any]] | None = None,
     censoring_flags_by_origin: dict[str, dict[str, dict[str, Any]]] | None = None,
     censoring_mode: str = "conservative",
+    model_map: dict[str, ModelMapEntry] | None = None,
+    product_id: str = "",
 ) -> SkuForecast:
     n = len(s.y)
     if n == 0:
@@ -640,18 +1098,22 @@ def forecast_sku(
             p90=None,
             negative_clipped=False,
             zero_forecast=False,
+            selected_model="",
+            selection_source="",
+            selection_reason="无完整月历史 → 不选模型",
+            product_id=product_id,
         )
 
-    pred, method, reason, clipped = fit_predict_rule(s.y, len(months), backend, cfg)
+    choice = choose_model(n, cfg, model_map, product_id)
+    pred, method, reason, clipped = fit_predict_rule(
+        s.y, len(months), backend, cfg, model=choice.model
+    )
     assert pred is not None
-    if method == "autoets":
-        status = "ok_autoets"
-    elif method == "ma3" and n < cfg.min_autoets_len:
-        status = "ok_short_ma3"
-    elif method == "ma3":
-        status = "ok_fallback_ma3"
-    else:
-        status = "ok_short_naive"
+    status = _forecast_status(cfg, choice, method, n)
+    failure_reason = ""
+    effective_method = "naive" if method == "naive_last" else method
+    if choice.model != "none" and effective_method != choice.model:
+        failure_reason = reason
 
     bt = run_backtest(
         s.y,
@@ -664,6 +1126,7 @@ def forecast_sku(
         censoring_flags=censoring_flags,
         censoring_flags_by_origin=censoring_flags_by_origin,
         censoring_mode=censoring_mode,
+        model=choice.model,
     )
 
     return SkuForecast(
@@ -671,7 +1134,11 @@ def forecast_sku(
         status=status,
         method=method,
         reason=reason,
-        method_version=MODEL_RULE_VERSION,
+        method_version=(
+            MODEL_RULE_VERSION
+            if cfg.model_policy != MODEL_POLICY_CLASSIFIED
+            else f"{MODEL_RULE_VERSION}+{MODEL_POLICY_VERSION}"
+        ),
         history_months=n,
         history_start=s.months[0],
         history_end=s.months[-1],
@@ -683,6 +1150,12 @@ def forecast_sku(
         p90=None,
         negative_clipped=clipped,
         zero_forecast=bool(np.allclose(pred, 0.0)),
+        selected_model=choice.model,
+        selection_source=choice.source,
+        selection_reason=choice.reason,
+        selected_pattern=choice.pattern,
+        product_id=choice.product_id,
+        model_failure_reason=failure_reason,
     )
 
 
@@ -690,6 +1163,7 @@ def _allocate_interval(
     result: SkuForecast,
     pooled_coef: float | None,
     cfg: ForecastConfig,
+    pooled_quantile_coef: dict[float, float | None] | None = None,
 ) -> None:
     if result.p50 is None:
         return
@@ -701,9 +1175,33 @@ def _allocate_interval(
         result.demand_residual_q90 = hi
         result.p10 = np.clip(result.p50 + lo, 0.0, None)
         result.p90 = result.p50 + hi
+        result.quantile_method = "own_rolling_residual_quantile"
+        for level, arr_attr, val_attr in (
+            (0.85, "q85", "demand_residual_q85"),
+            (0.90, "q90", "demand_residual_upper_q90"),
+            (0.95, "q95", "demand_residual_q95"),
+        ):
+            upper = _upper_residual_quantile(result.backtest.errors, level)
+            setattr(result, val_attr, upper)
+            setattr(result, arr_attr, result.p50 + upper)
     elif pooled_coef is not None:
         result.p10 = np.clip(result.p50 * (1.0 - pooled_coef), 0.0, None)
         result.p90 = result.p50 * (1.0 + pooled_coef)
+        coefs = pooled_quantile_coef or {}
+        usable = [c for c in coefs.values() if c is not None]
+        result.quantile_method = "pooled" if usable else "insufficient_backtest"
+        for level, arr_attr, val_attr in (
+            (0.85, "q85", "demand_residual_q85"),
+            (0.90, "q90", "demand_residual_upper_q90"),
+            (0.95, "q95", "demand_residual_q95"),
+        ):
+            coef = coefs.get(level)
+            if coef is None:
+                continue
+            # 池化系数是相对误差，不冒充本 SKU 的残差分位 → 残差列保持 None
+            setattr(result, arr_attr, result.p50 * (1.0 + coef))
+    else:
+        result.quantile_method = "insufficient_backtest"
     # 都没有 → 保持 None（没有回测证据，不给假区间）
 
 
@@ -901,6 +1399,13 @@ def assemble(
             "forecast_method": r.method,
             "forecast_method_reason": r.reason,
             "model_rule_version": r.method_version,
+            "selected_model": r.selected_model,
+            "selection_source": r.selection_source,
+            "selection_reason": r.selection_reason,
+            "selected_demand_pattern": r.selected_pattern,
+            "model_map_product_id": r.product_id,
+            "model_failure_reason": r.model_failure_reason,
+            "quantile_method": r.quantile_method,
             "history_first_month": r.history_start,
             "history_last_month": r.history_end,
             "history_months": r.history_months,
@@ -930,6 +1435,17 @@ def assemble(
             ),
             "backtest_residual_q90": (
                 None if r.demand_residual_q90 is None else float(r.demand_residual_q90)
+            ),
+            "backtest_residual_upper_q85": (
+                None if r.demand_residual_q85 is None else float(r.demand_residual_q85)
+            ),
+            "backtest_residual_upper_q90": (
+                None
+                if r.demand_residual_upper_q90 is None
+                else float(r.demand_residual_upper_q90)
+            ),
+            "backtest_residual_upper_q95": (
+                None if r.demand_residual_q95 is None else float(r.demand_residual_q95)
             ),
             "canonical_uom": canonical_uom,
             "uom_status": uom_status,
@@ -972,15 +1488,22 @@ def assemble(
         }
 
         # 窗口预测
+        window_series = (
+            ("p50", r.p50),
+            ("p10", r.p10),
+            ("p90", r.p90),
+            ("q85", r.q85),
+            ("q90", r.q90),
+            ("q95", r.q95),
+        )
         for d in cfg.leads:
             if r.p50 is None:
-                row[f"p50_l{d}"] = None
-                row[f"p10_l{d}"] = None
-                row[f"p90_l{d}"] = None
+                for name, _ in window_series:
+                    row[f"{name}_l{d}"] = None
                 continue
             idxs = list(weights[d])
             vals = []
-            for name, arr in (("p50", r.p50), ("p10", r.p10), ("p90", r.p90)):
+            for name, arr in window_series:
                 if arr is None:
                     vals.append(None)
                     continue
@@ -999,18 +1522,22 @@ def assemble(
                     k = i - ym_index(forecast_start)
                     total += w * float(arr[k])
                 vals.append(round(total, 3))
-            row[f"p50_l{d}"], row[f"p10_l{d}"], row[f"p90_l{d}"] = vals
+            for (name, _), v in zip(window_series, vals):
+                row[f"{name}_l{d}"] = v
 
         summary_rows.append(row)
 
         # 月度预测
         for k, m in enumerate(months):
             if r.p50 is None:
-                p50 = p10 = p90 = None
+                p50 = p10 = p90 = q85 = q90 = q95 = None
             else:
                 p50 = round(float(r.p50[k]), 3)
                 p10 = None if r.p10 is None else round(float(r.p10[k]), 3)
                 p90 = None if r.p90 is None else round(float(r.p90[k]), 3)
+                q85 = None if r.q85 is None else round(float(r.q85[k]), 3)
+                q90 = None if r.q90 is None else round(float(r.q90[k]), 3)
+                q95 = None if r.q95 is None else round(float(r.q95[k]), 3)
             monthly_rows.append(
                 {
                     "schema_version": SCHEMA_VERSION,
@@ -1020,8 +1547,13 @@ def assemble(
                     "p50": p50,
                     "p10": p10,
                     "p90": p90,
+                    "q85": q85,
+                    "q90": q90,
+                    "q95": q95,
                     "forecast_method": r.method,
                     "forecast_status": r.status,
+                    "selected_model": r.selected_model,
+                    "selection_source": r.selection_source,
                     "canonical_uom": canonical_uom,
                     "uom_group": uom_group,
                     "uom_totals_allowed": uom_totals_allowed,
@@ -1050,8 +1582,14 @@ def assemble(
                     "p50": row.get(f"p50_l{d}"),
                     "p10": row.get(f"p10_l{d}"),
                     "p90": row.get(f"p90_l{d}"),
+                    "q85": row.get(f"q85_l{d}"),
+                    "q90": row.get(f"q90_l{d}"),
+                    "q95": row.get(f"q95_l{d}"),
                     "forecast_method": r.method,
                     "forecast_status": r.status,
+                    "selected_model": r.selected_model,
+                    "selection_source": r.selection_source,
+                    "quantile_method": r.quantile_method,
                     "canonical_uom": canonical_uom,
                     "uom_group": uom_group,
                     "uom_totals_allowed": uom_totals_allowed,
@@ -1083,11 +1621,14 @@ def assemble(
                 alloc_status = "no_recent_sales"
             for k, m in enumerate(months):
                 if r.p50 is None or share is None:
-                    p50 = p10 = p90 = None
+                    p50 = p10 = p90 = q85 = q90 = q95 = None
                 else:
                     p50 = round(float(r.p50[k]) * share, 3)
                     p10 = None if r.p10 is None else round(float(r.p10[k]) * share, 3)
                     p90 = None if r.p90 is None else round(float(r.p90[k]) * share, 3)
+                    q85 = None if r.q85 is None else round(float(r.q85[k]) * share, 3)
+                    q90 = None if r.q90 is None else round(float(r.q90[k]) * share, 3)
+                    q95 = None if r.q95 is None else round(float(r.q95[k]) * share, 3)
                 wh_month_rows.append(
                     {
                         "schema_version": SCHEMA_VERSION,
@@ -1097,6 +1638,9 @@ def assemble(
                         "p50": p50,
                         "p10": p10,
                         "p90": p90,
+                        "q85": q85,
+                        "q90": q90,
+                        "q95": q95,
                         "allocation_share": None if share is None else round(share, 6),
                         "allocation_basis": share_basis,
                         "allocation_status": alloc_status,
@@ -1112,6 +1656,9 @@ def assemble(
                 sp50 = row.get(f"p50_l{d}")
                 sp10 = row.get(f"p10_l{d}")
                 sp90 = row.get(f"p90_l{d}")
+                sq85 = row.get(f"q85_l{d}")
+                sq90 = row.get(f"q90_l{d}")
+                sq95 = row.get(f"q95_l{d}")
                 wh_window_rows.append(
                     {
                         "schema_version": SCHEMA_VERSION,
@@ -1123,6 +1670,9 @@ def assemble(
                         "p50": None if (sp50 is None or share is None) else round(sp50 * share, 3),
                         "p10": None if (sp10 is None or share is None) else round(sp10 * share, 3),
                         "p90": None if (sp90 is None or share is None) else round(sp90 * share, 3),
+                        "q85": None if (sq85 is None or share is None) else round(sq85 * share, 3),
+                        "q90": None if (sq90 is None or share is None) else round(sq90 * share, 3),
+                        "q95": None if (sq95 is None or share is None) else round(sq95 * share, 3),
                         "allocation_share": None if share is None else round(share, 6),
                         "allocation_status": alloc_status,
                         "forecast_status": r.status,
@@ -1167,6 +1717,9 @@ NUMERIC_COLUMNS = {
     "p50",
     "p10",
     "p90",
+    "q85",
+    "q90",
+    "q95",
     "allocation_share",
     "horizon_index",
     "lead_days",
@@ -1176,6 +1729,9 @@ NUMERIC_COLUMNS = {
     "netting_blocked_share_within_uom",
     "backtest_residual_q10",
     "backtest_residual_q90",
+    "backtest_residual_upper_q85",
+    "backtest_residual_upper_q90",
+    "backtest_residual_upper_q95",
 }
 
 
@@ -1185,7 +1741,9 @@ def _coerce_numeric(frames: dict[str, pd.DataFrame]) -> None:
         if name.startswith("_"):
             continue
         for col in df.columns:
-            if col in NUMERIC_COLUMNS or col.startswith(("p50_", "p10_", "p90_")):
+            if col in NUMERIC_COLUMNS or col.startswith(
+                ("p50_", "p10_", "p90_", "q85_", "q90_", "q95_")
+            ):
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
 
@@ -1232,6 +1790,58 @@ def validate_frames(frames: dict[str, pd.DataFrame], cfg: ForecastConfig) -> lis
                 raise ValidationError(f"p10_l{d} 出现负值")
     checks.append("interval_order")
 
+    # q85<=q90<=q95、p50<=q90：三张 SKU 级表都校验（旧产物无列时跳过）
+    def _check_quantile_order(df: pd.DataFrame, cols: tuple[str, ...], label: str) -> None:
+        if not all(c in df.columns for c in cols):
+            return
+        sub = df.dropna(subset=list(cols))
+        if not len(sub):
+            return
+        if (sub[cols[0]] > sub[cols[1]] + 1e-6).any():
+            raise ValidationError(f"{label}: {cols[0]} > {cols[1]}")
+        if (sub[cols[1]] > sub[cols[2]] + 1e-6).any():
+            raise ValidationError(f"{label}: {cols[1]} > {cols[2]}")
+        if "p50" in sub.columns and (sub["p50"] > sub[cols[1]] + 1e-6).any():
+            raise ValidationError(f"{label}: p50 > {cols[1]}")
+        if (sub[cols[0]] < -1e-9).any():
+            raise ValidationError(f"{label}: {cols[0]} 出现负值")
+
+    for d in cfg.leads:
+        _check_quantile_order(
+            summary, (f"q85_l{d}", f"q90_l{d}", f"q95_l{d}"), f"summary L{d}"
+        )
+    _check_quantile_order(monthly, ("q85", "q90", "q95"), "monthly")
+    _check_quantile_order(windows, ("q85", "q90", "q95"), "windows")
+    if "quantile_method" in summary.columns:
+        allowed_qm = {
+            "own_rolling_residual_quantile",
+            "pooled",
+            "insufficient_backtest",
+            "",
+        }
+        bad_qm = set(summary["quantile_method"].dropna()) - allowed_qm
+        if bad_qm:
+            raise ValidationError(f"未知 quantile_method: {bad_qm}")
+    if "selection_source" in summary.columns:
+        allowed_src = {
+            SELECTION_MAP,
+            SELECTION_PATTERN,
+            SELECTION_GUARD,
+            SELECTION_FALLBACK,
+            SELECTION_DEFAULT,
+            "",
+        }
+        bad_src = set(summary["selection_source"].dropna()) - allowed_src
+        if bad_src:
+            raise ValidationError(f"未知 selection_source: {bad_src}")
+    for d in cfg.leads:
+        pcol, qcol = f"p50_l{d}", f"q90_l{d}"
+        if pcol in summary.columns and qcol in summary.columns:
+            sub = summary.dropna(subset=[pcol, qcol])
+            if len(sub) and (sub[pcol] > sub[qcol] + 1e-6).any():
+                raise ValidationError(f"summary L{d}: p50 > q90")
+    checks.append("quantile_order")
+
     # 不足月不能出现在历史月里
     if len(summary):
         bad = summary[
@@ -1253,23 +1863,32 @@ def validate_frames(frames: dict[str, pd.DataFrame], cfg: ForecastConfig) -> lis
             raise ValidationError("allocation_share 出现负值")
     checks.append("warehouse_share_sums_to_one")
 
-    # 窗口 = 月度加权和（仅对有 SKU 级区间）
-    wcols = ["lead_days", "p50"]
+    # 窗口 = 月度加权和（点预测与 q90/q95 同口径）
     if len(windows):
-        m = monthly.dropna(subset=["p50"]).set_index(["tongtool_sku", "forecast_month"])["p50"]
-        for d in cfg.leads:
-            w = {index_ym(i): v for i, v in window_weights(cfg.decision_date, d).items()}
-            sub = windows[(windows["lead_days"] == d) & windows["p50"].notna()]
-            for rec in sub.itertuples(index=False):
-                total = 0.0
-                for ym, wt in w.items():
-                    key = (rec.tongtool_sku, ym)
-                    if key in m.index:
-                        total += wt * float(m.loc[key])
-                if abs(total - float(rec.p50)) > max(0.02, abs(total) * 1e-6):
-                    raise ValidationError(
-                        f"窗口不等于月度加权和: {rec.tongtool_sku} L{d}: {total} vs {rec.p50}"
-                    )
+        for value_col in ("p50", "q90", "q95"):
+            if value_col not in windows.columns or value_col not in monthly.columns:
+                continue
+            m = (
+                monthly.dropna(subset=[value_col])
+                .set_index(["tongtool_sku", "forecast_month"])[value_col]
+            )
+            for d in cfg.leads:
+                w = {index_ym(i): v for i, v in window_weights(cfg.decision_date, d).items()}
+                sub = windows[
+                    (windows["lead_days"] == d) & windows[value_col].notna()
+                ]
+                for rec in sub.itertuples(index=False):
+                    total = 0.0
+                    for ym, wt in w.items():
+                        key = (rec.tongtool_sku, ym)
+                        if key in m.index:
+                            total += wt * float(m.loc[key])
+                    got = float(getattr(rec, value_col))
+                    if abs(total - got) > max(0.02, abs(total) * 1e-6):
+                        raise ValidationError(
+                            f"窗口 {value_col} 不等于月度加权和: "
+                            f"{rec.tongtool_sku} L{d}: {total} vs {got}"
+                        )
     checks.append("windows_equal_weighted_months")
 
     # 区间方向：全部原点都低估时，需求上界必须高于点预测（高估同理下界）
@@ -1394,7 +2013,12 @@ def render_report(
         "autoets": "AutoETS（T5 规则默认）",
         "ma3": "MA3（短史或 AutoETS 回退）",
         "naive_last": "末值（<3 个完整月）",
-        "none": "不可算",
+        "naive": "Naive 末值（classified 选型）",
+        "snaive": "SeasonalNaive（classified 选型）",
+        "sba": "SBA / CrostonSBA（intermittent）",
+        "tsb": "TSB（lumpy / obsolescent）",
+        "croston": "Croston（对照）",
+        "none": "不拟合 / 不可算",
     }
     for m, n in by_method.items():
         lines.append(f"| `{m}` | {n:,} | {method_note.get(m, '')} |")
@@ -1408,12 +2032,60 @@ def render_report(
         "ok_fallback_ma3": "AutoETS 不可用 → MA3",
         "ok_short_ma3": "3–6 个完整月 → MA3",
         "ok_short_naive": "1–2 个完整月 → 末值",
+        "ok_classified": "classified：model map 指定模型成功",
+        "ok_classified_pattern": "classified：按 demand_pattern 回退成功",
+        "ok_classified_no_demand": "classified：no_demand → 预测 0（不拟合）",
+        "ok_classified_fallback": "classified：所选模型不可用 → 已回退（见 model_failure_reason）",
         "not_forecastable_no_complete_month": "没有完整月历史",
         "not_forecastable": "其他不可算",
     }
     for st, n in by_status.items():
         lines.append(f"| `{st}` | {n:,} | {status_note.get(st, '')} |")
     lines.append("")
+
+    if manifest.get("model", {}).get("policy") == MODEL_POLICY_CLASSIFIED:
+        mm = manifest["model"].get("model_map", {})
+        lines.append("### 选型溯源（classified）")
+        lines.append("")
+        if mm.get("provided"):
+            lines.append(
+                f"- model map：`{mm.get('path')}`（{mm.get('products', 0):,} 个 product_id / "
+                f"{mm.get('rows', 0):,} 行；sha256 `{str(mm.get('sha256', ''))[:12]}…`）。"
+            )
+            lines.append(
+                f"- SKU 命中：**{mm.get('matched_skus', 0):,}**；未命中 **{mm.get('unmatched_skus', 0):,}**；"
+                f"未知模型名 product **{mm.get('unknown_model_products', 0):,}**；"
+                f"多 pool/形态折叠 **{mm.get('ambiguous_products', 0):,}**。"
+            )
+            lines.append(f"- 折叠规则：{mm.get('collapse_rule', '')}。")
+        else:
+            lines.append(f"- 未提供 model map：{mm.get('note', '')}")
+        sel = s["selected_model"].replace("", "(none)").value_counts()
+        src = s["selection_source"].replace("", "(none)").value_counts()
+        lines.append("")
+        lines.append("| selected_model | SKU 数 | | selection_source | SKU 数 |")
+        lines.append("|---|---:|---|---|---:|")
+        sel_rows = list(sel.items())
+        src_rows = list(src.items())
+        for i in range(max(len(sel_rows), len(src_rows))):
+            a = f"`{sel_rows[i][0]}` | {sel_rows[i][1]:,}" if i < len(sel_rows) else " | "
+            b = f"`{src_rows[i][0]}` | {src_rows[i][1]:,}" if i < len(src_rows) else " | "
+            lines.append(f"| {a} | | {b} |")
+        fails = s[
+            s["model_failure_reason"].fillna("").astype(str).str.len() > 0
+        ]
+        lines.append("")
+        if len(fails):
+            lines.append(
+                f"- 所选模型不可用并已回退：**{len(fails):,}** 个 SKU（原因见 `model_failure_reason`）。"
+            )
+        else:
+            lines.append("- 所选模型全部执行成功，无回退。")
+        lines.append(
+            "- q85/q90/q95 来自滚动回测的**有符号需求残差**上分位；"
+            "`quantile_method=pooled` 表示样本不足、用池化系数，不是已校准分位。"
+        )
+        lines.append("")
     lines.append("## 2. 回测覆盖")
     lines.append("")
     if len(bt):
@@ -1675,6 +2347,10 @@ def run(
 ) -> Path:
     """跑一次完整预测并写产物；返回本次 run 目录。"""
     cfg = cfg or ForecastConfig()
+    if cfg.model_policy not in MODEL_POLICIES:
+        raise SystemExit(
+            f"未知 model_policy {cfg.model_policy!r}；允许 {list(MODEL_POLICIES)}"
+        )
     if backend is ...:  # 默认自动加载；显式传 None 表示禁用 AutoETS
         backend = load_backend()
 
@@ -1686,6 +2362,23 @@ def run(
     boundary = resolve_month_boundary(df)
     if not boundary["complete_months"]:
         raise SystemExit("没有完整月可用于建模（数据全部落在不足月）")
+
+    # classified 选型：model map（product_id = canonical_sku）+ 分型回退
+    model_map: dict[str, ModelMapEntry] = {}
+    product_by_sku: dict[str, str] = {}
+    model_map_meta: dict[str, Any] = {
+        "provided": False,
+        "policy": cfg.model_policy,
+    }
+    if cfg.model_policy == MODEL_POLICY_CLASSIFIED:
+        product_by_sku = product_by_sku_map(df)
+        if cfg.model_map_path:
+            model_map, stats = load_model_map(cfg.model_map_path)
+            model_map_meta = {"provided": True, **stats}
+        else:
+            model_map_meta["note"] = (
+                "未提供 --model-map：全部按 demand_pattern 回退；无分型 → AutoETS 守卫"
+            )
 
     series, wh_month, partial_monthly, series_meta = build_series(df, boundary)
     coverage = pd.read_parquet(coverage_path)
@@ -1810,6 +2503,8 @@ def run(
                 flags_by_origin_sku.get(sku) if cfg.censoring else None
             ),
             censoring_mode=cfg.censoring_mode,
+            model_map=model_map,
+            product_id=product_by_sku.get(sku, ""),
         )
 
     if cfg.censoring:
@@ -1831,8 +2526,25 @@ def run(
         if len(pooled_rel) >= 3
         else None
     )
+    # q85/q90/q95 的池化系数（样本不足时用；标注 quantile_method=pooled）
+    pooled_quantile_coef: dict[float, float | None] = {
+        lvl: (
+            min(INTERVAL_MAX_COEF, conformal_q(pooled_rel, lvl))
+            if len(pooled_rel) >= 3
+            else None
+        )
+        for lvl in QUANTILE_LEVELS
+    }
     for r in results.values():
-        _allocate_interval(r, pooled_coef, cfg)
+        _allocate_interval(r, pooled_coef, cfg, pooled_quantile_coef)
+
+    if cfg.model_policy == MODEL_POLICY_CLASSIFIED:
+        matched = sum(1 for sku in series if product_by_sku.get(sku) in model_map)
+        model_map_meta["matched_skus"] = matched
+        model_map_meta["unmatched_skus"] = len(series) - matched
+        model_map_meta["skus_with_product_id"] = sum(
+            1 for sku in series if product_by_sku.get(sku)
+        )
 
     frames = assemble(
         series, results, wh_month, boundary, cfg, coverage, censoring_stats
@@ -1933,6 +2645,15 @@ def run(
         },
         "model": {
             "rule_version": MODEL_RULE_VERSION,
+            "policy": cfg.model_policy,
+            "policy_version": (
+                MODEL_POLICY_VERSION
+                if cfg.model_policy == MODEL_POLICY_CLASSIFIED
+                else None
+            ),
+            "model_pool": list(MODEL_POOL),
+            "pattern_fallback": dict(PATTERN_FALLBACK),
+            "model_map": model_map_meta,
             "default": "AutoETS (statsforecast)",
             "guards": {
                 "naive_if_len_lt": cfg.min_ma3_len,
@@ -1954,6 +2675,19 @@ def run(
                 "note": (
                     "按需求残差 actual−pred 的经验下/上分位（run_backtest 存 pred−actual，"
                     "生成区间时取反）；滚动经验/共形式，不承诺有限样本覆盖率，不是已标定分位"
+                ),
+            },
+            "quantiles": {
+                "levels": list(QUANTILE_LEVELS),
+                "columns": ["q85", "q90", "q95"],
+                "own_min_origins": QUANTILE_OWN_MIN_ORIGINS,
+                "own_basis": "one_sided_upper_quantile_of_signed_demand_residual",
+                "pooled_fallback": "pooled_relative_error_quantile_clipped_3x",
+                "calibrated": False,
+                "monotonic_asserted": True,
+                "note": (
+                    "q85<=q90<=q95 且 p50<=q90 由构造与校验保证；"
+                    "样本不足时 quantile_method=pooled，只是尺度参考，不是已校准分位"
                 ),
             },
             "uom_policy": {
@@ -2030,6 +2764,35 @@ def run(
             "sku_warehouse_monthly_rows": int(len(frames["forecast_sku_warehouse_monthly"])),
             "sku_warehouse_window_rows": int(len(frames["forecast_sku_warehouse_windows"])),
             "uom_total_rows": int(len(frames["forecast_uom_totals"])),
+            "selected_model_counts": {
+                str(k): int(v)
+                for k, v in frames["forecast_sku_summary"]["selected_model"]
+                .replace("", "(none)")
+                .value_counts()
+                .items()
+            },
+            "selection_source_counts": {
+                str(k): int(v)
+                for k, v in frames["forecast_sku_summary"]["selection_source"]
+                .replace("", "(none)")
+                .value_counts()
+                .items()
+            },
+            "executed_method_counts": {
+                str(k): int(v)
+                for k, v in frames["forecast_sku_summary"]["forecast_method"]
+                .value_counts()
+                .items()
+            },
+            "model_failure_skus": int(
+                (
+                    frames["forecast_sku_summary"]["model_failure_reason"]
+                    .fillna("")
+                    .astype(str)
+                    .str.len()
+                    > 0
+                ).sum()
+            ),
         },
         "reconciliation": {
             "input_main_rows": input_meta["main_rows"],
@@ -2131,6 +2894,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument("--censoring-flags", default=None)
     parser.add_argument("--no-current", action="store_true", help="不更新 CURRENT（独立验证 run）")
+    parser.add_argument(
+        "--model-policy",
+        choices=list(MODEL_POLICIES),
+        default=MODEL_POLICY_AUTOETS,
+        help="autoets=旧行为（默认）；classified=按 model map + demand_pattern 选模型",
+    )
+    parser.add_argument(
+        "--model-map",
+        default=None,
+        help="classified 选型的模型映射（parquet/csv，product_id 列 = canonical_sku）",
+    )
     parser.add_argument("--validate-only", default=None, help="只校验已存在的 run 目录")
     args = parser.parse_args(argv)
 
@@ -2161,6 +2935,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         censoring=args.censoring,
         censoring_mode=args.censoring_mode,
         censoring_flags_path=args.censoring_flags,
+        model_policy=args.model_policy,
+        model_map_path=args.model_map,
     )
     backend: Backend | None = None if args.no_statsforecast else load_backend()
     out_dir = run(

@@ -2,9 +2,9 @@
 okf: v0.1
 type: Reference
 title: 需求预测接口 — 决策包消费 schema（en-demand-forecast-v1）
-description: 2026-10-29 补货决策包所需的 SKU/仓库级预测产物、字段语义、未知与不足月口径
+description: 2026-10-29 补货决策包所需的 SKU/仓库级预测产物、字段语义、未知与不足月口径；2026-11-24 增补 classified 选型与 q85/q90/q95
 tags: [forecast, demand, schema, decision-pack, reference]
-date: 2026-10-27
+date: 2026-11-24
 status: verified
 ---
 
@@ -32,6 +32,8 @@ D:/Work/fzh-order-store/en-demand-v1/forecast/
 
 - 下游**只看 `CURRENT` 指向的目录**；不要跨 run 混读。
 - `schema_version = en-demand-forecast-v1`。字段语义变更必须升级版本。
+  2026-11-24 的 classified 选型与 q85/q90/q95 是**纯新增列**（旧列一个不删、
+  默认 `--model-policy autoets` 行为逐字不变），因此不升版本。
 - `forecast_manifest.json` 记录：输入文件路径 + sha256、日期范围、完整月/不足月、
   模型规则与参数、依赖版本、代码 git HEAD / 模块哈希、生成时间、行数对账、校验项。
 
@@ -44,7 +46,17 @@ uv run python -m self_fulfilled_demand.forecast --run-id <id> --censoring \
   --censoring-mode conservative --no-current
 # 只校验已有产物
 uv run python -m self_fulfilled_demand.forecast --validate-only <run_dir>
+# 分型选型（可选；默认 autoets 不变）
+uv run python -m self_fulfilled_demand.forecast --run-id <id> --no-current \
+  --model-policy classified --model-map <model_map.parquet|csv>
 ```
+
+`--model-map` 的必需列：`product_id`（= `canonical_sku`）、`adopted_model`、
+`demand_pattern`；可选 `pool` / `physical_form` / `canonical_uom` / `hist_avg_3y`。
+同一 `product_id` 多行（多 pool/形态）时折叠为一条：
+已知模型 > 非 `none` > `hist_avg_3y` 大 > 原顺序；折叠情况记在 manifest
+`model.model_map.ambiguous_products`。模型名规范：`ets_ann→autoets`、
+`croston_sba→sba` 等；不认识的名字按 `demand_pattern` 回退。
 
 ## 2. 主键与单位
 
@@ -92,9 +104,16 @@ uv run python -m self_fulfilled_demand.forecast --validate-only <run_dir>
 
 | 字段 | 语义 |
 |---|---|
-| `forecast_status` | `ok_autoets` / `ok_fallback_ma3` / `ok_short_ma3` / `ok_short_naive` / `not_forecastable_no_complete_month` |
-| `forecast_method` | `autoets` / `ma3` / `naive_last` / `none` |
+| `forecast_status` | `ok_autoets` / `ok_fallback_ma3` / `ok_short_ma3` / `ok_short_naive` / `not_forecastable_no_complete_month`；classified 额外 `ok_classified` / `ok_classified_pattern` / `ok_classified_no_demand` / `ok_classified_fallback` |
+| `forecast_method` | 实际执行的模型：`autoets` / `snaive` / `naive` / `naive_last` / `ma3` / `sba` / `tsb` / `croston` / `none` |
 | `forecast_method_reason` | 逐 SKU 的选型/回退原因（含异常摘要） |
+| `selected_model` | classified 选中的模型（`map` 或分型回退的结果）；`autoets` policy 恒为 `autoets` |
+| `selection_source` | `map` / `pattern` / `guard` / `default`；`guard` = T20 短史或 AutoETS 默认守卫 |
+| `selection_reason` | 选型来源的一句话依据（map 行、分型、短史等） |
+| `selected_demand_pattern` | map 里的 `demand_pattern`（无则空） |
+| `model_map_product_id` | 参与 map 匹配的 `canonical_sku`（无则空） |
+| `model_failure_reason` | 所选模型不可用并已回退时的原因；未回退为空 |
+| `quantile_method` | `own_rolling_residual_quantile` / `pooled` / `insufficient_backtest` |
 | `history_first_month` / `history_last_month` / `history_months` | 拟合用的**完整月**范围与样本量 |
 | `history_nonzero_months` | 有正销量的完整月数 |
 | `backtest_window` | 滚动回测覆盖的真实月份范围 |
@@ -103,6 +122,7 @@ uv run python -m self_fulfilled_demand.forecast --validate-only <run_dir>
 | `backtest_wape_ma3` / `_naive` / `_seasonal_naive` / `_autoets` | 同窗口对照模型 WAPE；不适用为 null |
 | `backtest_underforecast_origins` / `backtest_overforecast_origins` | 回测原点中 actual>pred / actual<pred 的个数（方向诊断） |
 | `backtest_residual_q10` / `backtest_residual_q90` | 需求残差 actual−pred 的实际下/上分位（已截断到含点预测；方向审计用） |
+| `backtest_residual_upper_q85` / `_q90` / `_q95` | 需求残差的单侧上分位（>=0），q85/q90/q95 的估计来源；`quantile_method=pooled` 时为 null |
 | `canonical_uom` / `uom_status` | 来自 canonical 覆盖表；`known_piece` 才是已证件类单位 |
 | `uom_group` | `个` / `套` / `not_piece` / `unknown` |
 | `uom_totals_allowed` | 只有已证件类单位为 true；`unknown` 一律 false |
@@ -112,6 +132,7 @@ uv run python -m self_fulfilled_demand.forecast --validate-only <run_dir>
 | `censoring_replaced_months` / `censoring_added_units` | 实际补值月数 / 补值增加的观测单位（不是损失销量） |
 | `censoring_mode` | `conservative` / `aggressive`；关闭时为空 |
 | `p50_l60` / `p10_l60` / `p90_l60` | 从决策日起 L60 日历窗口的预测与区间（件） |
+| `q85_l60` / `q90_l60` / `q95_l60` | L60 窗口的 85/90/95 分位；构造上 `q85<=q90<=q95` 且 `p50<=q90` |
 | 同上 `_l90` / `_l120` / `_l180` | L90 / L120 / L180（L180 仅情景，需 7 个月预测覆盖） |
 | `zero_forecast` | 预测真为 0（**不是**不可算） |
 | `negative_clipped` | AutoETS 出现负值并已截零 |
@@ -143,6 +164,8 @@ uv run python -m self_fulfilled_demand.forecast --validate-only <run_dir>
 | `forecast_month` | 预测月（当前 2026-10 … 2027-04，覆盖 L180；180 仅情景） |
 | `horizon_index` | 从 1 开始的月序号 |
 | `p50` / `p10` / `p90` | 该月预测与区间（件） |
+| `q85` / `q90` / `q95` | 该月 85/90/95 分位；与区间同源（滚动有符号残差），不是已校准分位 |
+| `selected_model` / `selection_source` | 该 SKU 的选型结果与来源（与 summary 一致） |
 | `is_history_partial_month` | 该预测月正好是不足月（如 2026-10）时 true；此月的**历史观测**不参与拟合 |
 | `month_note` | 不足月说明 |
 
@@ -153,6 +176,8 @@ uv run python -m self_fulfilled_demand.forecast --validate-only <run_dir>
 | `lead_days` | 60 / 90 / 120 / **180（仅情景，不承诺精度）** |
 | `window_start` / `window_end` | 决策日起算的日历窗口 |
 | `p50` / `p10` / `p90` | 窗口累计预测（= 月度预测按日历天数加权求和） |
+| `q85` / `q90` / `q95` | 窗口累计分位（= 月度 q 的日历加权和，校验与 p50 同口径） |
+| `selected_model` / `selection_source` / `quantile_method` | 选型与分位方法溯源 |
 | `canonical_uom` / `uom_group` / `uom_totals_allowed` | 单位证据，必须随窗口一起读；跨组不得相加 |
 
 窗口权重公式与 T5 一致（`window_weights`）；月度表可复算窗口表。
