@@ -883,6 +883,47 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         forecast_warning = None
         demand_source = "forecast_refresh"
 
+    # S1：只补“近 90 天活跃、且预测覆盖”的 D6 外键，避免把未售/非商品全塞进来
+    active_keys = None
+    if forecast_root:
+        disp_path = Path(forecast_root).parent / "demand_line_disposition.parquet"
+        if disp_path.exists():
+            try:
+                disp = pd.read_parquet(disp_path, columns=[
+                    "canonical_sku", "canonical_warehouse", "uom", "demand_date"])
+                disp["demand_date"] = pd.to_datetime(disp["demand_date"], errors="coerce")
+                cutoff = disp["demand_date"].max() - pd.Timedelta(days=90)
+                recent = disp[(disp["demand_date"] >= cutoff) &
+                              disp["canonical_warehouse"].astype(str).str.startswith(branch_prefix)]
+                active_keys = set(zip(recent["canonical_sku"].astype(str),
+                                      recent["canonical_warehouse"].astype(str),
+                                      recent["uom"].fillna("个").astype(str)))
+            except Exception:
+                active_keys = None
+    extra_rows = []
+    if demand_source == "forecast_refresh" and demand_map and active_keys is not None:
+        existing = set(zip(d6_rows["product_id"].astype(str),
+                           d6_rows["UOM"].astype(str)))
+        for (item, wh, uom), qty in demand_map.items():
+            if not str(wh).startswith(branch_prefix):
+                continue
+            if (str(item), str(uom)) in existing:
+                continue
+            if (str(item), str(wh), str(uom or "个")) not in active_keys:
+                continue
+            existing.add((str(item), str(uom)))
+            extra_rows.append({
+                "product_id": item, "池": pool, "形态": "未证形态", "UOM": uom or "个",
+                "q95": None, "C可发供给": None, "en_stock在途+待发": None,
+                "PO追加(去重)": None, "SO已下": None, "CG可调拨抵扣": 0,
+                "净需求95": None, "建议动作": "观察", "新补数量": None,
+                "催已有量": 0, "建议数量": None, "需要日": None, "下单日": None,
+                "路线状态": "unknown", "动作原因": "D6 外 forecast 覆盖",
+            })
+    if extra_rows:
+        d6_rows = pd.concat([d6_rows, pd.DataFrame(extra_rows)], ignore_index=True,
+                            sort=False)
+
     lead_by_sku = {}
     lead_source = "d6_need_minus_d6_lead"
     branch_lead, branch_source = _branch_lead_days(leadtime_path, pool)
@@ -981,6 +1022,7 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         executable_reasons=executable_reasons,
         stock_age_hours=stock_age_hours,
         duplicate_forms=duplicate_forms,
+        forecast_extra_rows=len(extra_rows),
         totals=dict(rows=int(len(frame)),
                     unique_keys=int(frame[["sku", "warehouse", "uom"]].drop_duplicates().shape[0]),
                     duplicate_rows=int(len(duplicate_forms)),
