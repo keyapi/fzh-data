@@ -74,7 +74,8 @@ COLUMNS = [
     "need_date_status", "order_date_status",
     "demand_qty", "d6_q95", "demand_source", "demand_evidence",
     "supply_opening", "supply_intransit", "supply_po", "supply_cg",
-    "supply_so", "supply_expected", "supply_independent", "supply_proven",
+    "supply_so", "supply_so_on_time", "supply_so_conditional",
+    "supply_expected", "supply_independent", "supply_proven",
     "new_qty_if_independent",
     "qty_status", "reason", "warnings",
     "stock_snapshot_at", "stock_sha256", "stock_snapshot_date",
@@ -281,10 +282,8 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
         if not item:
             evidence["identity_missing"] += 1
             return
-        uom = uom_by_item.get(item)
-        if not uom:
-            evidence["uom_missing"] += 1
-            return
+        # EN 不维护 UOM：缺失默认按“个”，不因 UOM 丢 PO
+        uom = uom_by_item.get(item) or "个"
         profile = resolve_warehouse_role(raw_wh, warehouse_cfg)
         canonical = str(profile["canonical_warehouse"])
         if not (canonical == branch_wh or canonical.startswith(branch_prefix)):
@@ -708,7 +707,9 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
                              else "forecast window p90 (~90% service)"),
             supply_opening=_num(opening), supply_intransit=_num(intransit),
             supply_po=_num(po_qty), supply_cg=_num(cg_qty),
-            supply_so=_num(so_qty), supply_expected=_num(supply_expected),
+            supply_so=_num(so_qty), supply_so_on_time=_num(so_on_time),
+            supply_so_conditional=_num((so_qty or 0) - (so_on_time or 0)),
+            supply_expected=_num(supply_expected),
             supply_independent=_num(supply_independent),
             supply_proven=_num(supply_proven),
             new_qty_if_independent=new_qty_if_independent,
@@ -1076,8 +1077,9 @@ def to_report(frame, meta, limit=None) -> str:
     for _, row in shown.iterrows():
         lines += [f"## {row['sku']} · {row['warehouse']} · {row['uom']}", "",
                   f"**结论：{row['action']}**" +
-                  (f"；新补 {row['new_qty']}" if row.get("new_qty") is not None else
-                   "；数量待核（未知不写 0）") +
+                  ("；不计数（重复形态）" if row.get("action") == "重复形态" else
+                   (f"；新补 {row['new_qty']}" if row.get("new_qty") is not None and not pd.isna(row.get("new_qty")) else
+                    "；数量待核（未知不写 0）")) +
                   (f"；催已有 {row['expedite_qty']}"
                    if row.get("expedite_qty") not in (None, 0) else ""), "",
                   f"- 为什么：{row.get('reason') or '—'}",
@@ -1085,7 +1087,8 @@ def to_report(frame, meta, limit=None) -> str:
                   f"{_fmt(row.get('demand_qty'))}；D6 q95 {_fmt(row.get('d6_q95'))}",
                   f"- 供给：期初 {_fmt(row.get('supply_opening'))}；在途 "
                   f"{_fmt(row.get('supply_intransit'))}；PO {_fmt(row.get('supply_po'))}；"
-                  f"SO {_fmt(row.get('supply_so'))}；CG {_fmt(row.get('supply_cg'))}",
+                  f"SO {_fmt(row.get('supply_so'))}（按时 {_fmt(row.get('supply_so_on_time'))} / "
+                  f"未按时 {_fmt(row.get('supply_so_conditional'))}）；CG {_fmt(row.get('supply_cg'))}",
                   f"- 最坏（在途/无 ETA PO 迟到）：{_fmt(row.get('new_qty_if_conditional_late'))}",
                   f"- 需要日 {row.get('need_date') or '未知'}；下单日 "
                   f"{row.get('order_date') or '未知'}（{row.get('date_source')}）",
