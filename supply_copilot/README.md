@@ -70,15 +70,26 @@ uv run python -m supply_copilot decide --branch USNJ   # 用 live 供给重算�
 
 - **PO 按时**：`ETA ≤ 需要日` 才算按时，逐行比较；ETA 缺失或晚于需要日均计入
   “未证按时”。`meta.po` 分开报 `quantity` / `with_eta_qty` / `on_time_qty` /
-  `missing_eta_qty` / `late_qty` / `outside_decision_qty`。
-- **SO 归一**：EN 原始 SO 行的 `item_code` 先按 `sku_map.tsv` / D6 成品码归一，
-  UOM 对齐 D6 口径，客户 → 分公司主仓。皮壳 `PK#`、别家客户、别家仓、无 UOM
-  等**不能归一的行走 `meta.so.unresolved_samples`**（带源行号与 SO 号），
-  不静默丢弃，也不当成“实测 0”。
+  `missing_eta_qty` / `late_qty`，以及有效开放 `accepted_rows` /
+  `accepted_documents` / `outside_decision_qty`。PO/SO 是
+  `(SKU, 仓, UOM)` 键级**共享事实**：D6 有重复形态键时逐行求和会重复，
+  汇总只能用 `meta.po.decision_qty` / `meta.so.decision_qty`。
+- **SO 身份**：EN `item_code` 是权威身份，**不拿它反查 `sku_map`**（映射表键是
+  `tongtool_sku`）；别名只对明确的 `customer_item_code` 且唯一映射时执行。
+  `PK#` / `ND#` 是合法 EN 物料号，不剥前缀凑成品，归
+  `form_out_of_scope`；其它不在本池 D6 的归 `product_out_of_scope`。
+- **SO 单位**：无 `UOM_EQUIVALENTS` 明确换算证据时，**不改标签照用数量**；
+  单位不一致记 `uom_mismatch`，缺单位记 `uom_missing`。
+- **SO 开放状态**：只有 `status` / `docstatus` 证明有效开放的行才计入并可附加
+  需求；`Closed` 归档单列（`closed_archived_rows/qty`）。没有
+  status/docstatus 的来源整批记 `status_unknown`，**不附加需求**
+  （请用 `open_nonclosed` 来源或带 status 的 JSONL）。
 - **SO 是否已在预测内**：显式开关 `--so-in-forecast true|false`（函数参数
   `so_in_forecast`）。默认 `true`（保守）：视为开放 SO 已含在预测里，
   **不叠加需求**；`false`：视为未含，把可归一的开放 SO 余额叠加到需求。
-  两种语义都会写进 `meta.so.semantics/impact` 和逐行 `warnings`。
+  只有真正加进某个合格建议行后才消费该键；待核行不提前占用，无法附加的量记
+  `meta.so.unattached_qty`。两种语义都会写进 `meta.so.semantics/impact` 和逐行
+  `warnings`。
 
 ## 自己重算需求/预测（不依赖我们）
 
