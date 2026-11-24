@@ -549,6 +549,78 @@ def test_so_non_open_statuses_single_listed_not_attached(tmp_path):
     assert any("非有效开放行未计入、不附加" in w for w in meta["warnings"])
 
 
+def test_source_zero_rows_is_assumed_zero(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    # 源存在但解析零行：不能静默当实测 0
+    so_empty = tmp_path / "so_empty.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse",
+                          "canonical_uom", "quantity"]).to_csv(
+        so_empty, index=False)
+    po_empty = tmp_path / "po_empty.tsv"
+    po_empty.write_text("", encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_empty,
+                        po_path=po_empty)
+    assert meta["so"]["assumed_zero"]["applies"] is True
+    assert meta["so"]["assumed_zero"]["reason"] == "source_exists_but_parsed_zero_rows"
+    assert meta["po"]["assumed_zero"]["applies"] is True
+    assert meta["po"]["assumed_zero"]["reason"] == "source_exists_but_parsed_zero_rows"
+    assert meta["totals"]["assumed_zero_rows"] == {"so": 1, "po": 1}
+    assert any("assumed_zero" in w for w in meta["warnings"])
+    # 仍是 0，但已显式标 assumed_zero，不作为 unknown 待核
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 87
+    assert frame.set_index("sku").loc["KS1", "action"] == "补"
+    # M3：旧“未履约 SO 按未完成量计入需求”不得再出现
+    assert "SO 为上游交付管线，不进需求" in meta["limits"]
+    assert not any("按未完成量计入需求" in item for item in meta["limits"])
+
+
+def test_source_missing_is_unknown_not_assumed_zero(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    missing_so = tmp_path / "missing_so.csv"
+    missing_po = tmp_path / "missing_po.tsv"
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=missing_so,
+                        po_path=missing_po)
+    assert meta["so"]["assumed_zero"]["applies"] is False
+    assert meta["so"]["assumed_zero"]["reason"] == "source_missing"
+    assert meta["po"]["assumed_zero"]["applies"] is False
+    assert meta["po"]["assumed_zero"]["reason"] == "source_missing"
+    assert meta["totals"]["assumed_zero_rows"] == {"so": 0, "po": 0}
+    assert not any("assumed_zero" in w for w in meta["warnings"])
+    for _, row in frame.iterrows():
+        assert row["action"] == "待核"
+        assert set(row["qty_status"].split("_")) >= {"unknown", "so", "po"}
+
+
+def test_source_rows_but_filtered_is_not_assumed_zero(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    so = pd.DataFrame([
+        {"so": "SO-CLOSED", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 9, "uom": "个", "status": "Closed",
+         "docstatus": 1},
+    ])
+    so_path = tmp_path / "so_closed_only.csv"
+    so.to_csv(so_path, index=False, encoding="utf-8")
+    po = tmp_path / "po_zero_qty.tsv"
+    po.write_text("PO-1\tTT1\t0\t0\t美中-FZH-DANEEY\n", encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path,
+                        po_path=po)
+    # 有行但被过滤（Closed / 零开放量）：不是 assumed_zero
+    assert meta["so"]["rows"] == 1 and meta["so"]["accepted_rows"] == 0
+    assert meta["so"]["assumed_zero"]["applies"] is False
+    assert meta["so"]["assumed_zero"]["reason"] == "rows_present"
+    assert meta["po"]["input_rows"] == 1 and meta["po"]["accepted_rows"] == 0
+    assert meta["po"]["assumed_zero"]["applies"] is False
+    assert meta["totals"]["assumed_zero_rows"] == {"so": 0, "po": 0}
+    assert not any("assumed_zero" in w for w in meta["warnings"])
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 87
+
+
 def test_so_attached_only_after_a_valid_row(tmp_path):
     make_pack(tmp_path)
     # 同 SKU 两形态：首行 q95 缺失（待核），次行可算；SO 只能由次行消费

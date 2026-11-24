@@ -94,7 +94,11 @@ uv run python -m supply_copilot decide --branch USNJ   # 用 live 供给重算�
   **不叠加需求**；`false`：视为未含，把可归一的开放 SO 余额叠加到需求。
   只有真正加进某个合格建议行后才消费该键；待核行不提前占用，无法附加的量记
   `meta.so.unattached_qty`。两种语义都会写进 `meta.so.semantics/impact` 和逐行
-  `warnings`。
+  `warnings`。口径上 **SO 为上游交付管线，不进需求**。
+- **assumed_zero**：源文件存在但解析零行时，不静默当实测 0，而是给
+  `meta.so/po.assumed_zero` 信封（`applies` + `reason`），并在
+  `meta.totals.assumed_zero_rows` 按来源计数（`{so, po}`）；有行但被过滤
+  （如全 Closed / 零开放量）不算 assumed_zero。
 
 ## 自己重算需求/预测（不依赖我们）
 

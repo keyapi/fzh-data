@@ -159,12 +159,16 @@ def _file_meta(path) -> dict:
 def _read_table(path):
     p = Path(path)
     suffix = p.suffix.lower()
-    if suffix == ".csv":
-        return pd.read_csv(p, encoding="utf-8-sig")
-    if suffix == ".tsv":
-        return pd.read_csv(p, sep="\t", encoding="utf-8-sig")
-    if suffix in (".parquet", ".pq"):
-        return pd.read_parquet(p)
+    try:
+        if suffix == ".csv":
+            return pd.read_csv(p, encoding="utf-8-sig")
+        if suffix == ".tsv":
+            return pd.read_csv(p, sep="\t", encoding="utf-8-sig")
+        if suffix in (".parquet", ".pq"):
+            return pd.read_parquet(p)
+    except pd.errors.EmptyDataError:
+        # 源文件存在但零行：交给调用方按 assumed_zero 处理，不在这里当 0
+        return pd.DataFrame()
     if suffix in (".jsonl", ".ndjson"):
         records = []
         for line in p.read_text(encoding="utf-8").splitlines():
@@ -324,7 +328,8 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
     from self_fulfilled_demand.canonical import resolve_warehouse_role
 
     po = {}
-    evidence = dict(source=None, rows=0, accepted_rows=0, accepted_documents=0,
+    evidence = dict(source=None, rows=0, input_rows=0,
+                    accepted_rows=0, accepted_documents=0,
                     quantity=0.0,
                     identity_missing=0, uom_missing=0, warehouse_out_of_branch=0,
                     zero_qty=0, with_eta=0, missing_eta=0,
@@ -381,6 +386,7 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
             for line in path.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
+                evidence["input_rows"] += 1
                 parts = line.split("\t")
                 if len(parts) < 4:
                     continue
@@ -403,6 +409,7 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
+            evidence["input_rows"] += 1
             record = json.loads(line)
             status = str(record.get("status"))
             if status == "4":
@@ -481,6 +488,31 @@ def _so_facts(path, branch, *, lookup, uom_by_item, warehouse_cfg,
     branch_wh = POOL_WAREHOUSE[branch]
     branch_prefix = POOL_PREFIX[branch]
     universe = set(decision_skus) if decision_skus is not None else set(uom_by_item)
+    if len(frame) == 0:
+        # 源存在但解析零行：返回零行信封，由 run 标 assumed_zero，不静默当实测 0
+        canonical_like = {"canonical_sku", "canonical_warehouse",
+                          "canonical_uom", "quantity"}.issubset(set(frame.columns))
+        raw_like = {"item_code", "open_qty", "customer"}.issubset(set(frame.columns))
+        if canonical_like:
+            fmt, open_verified, contract = ("canonical", True,
+                                            "canonical_open_backlog")
+        elif raw_like:
+            has_status = "status" in frame.columns
+            has_docstatus = "docstatus" in frame.columns
+            fmt = "en_sales_orders"
+            open_verified = bool(has_status or has_docstatus)
+            contract = ("status+docstatus" if has_status and has_docstatus
+                        else "status" if has_status
+                        else "docstatus" if has_docstatus else "missing")
+        else:
+            fmt, open_verified, contract = "empty", False, "unknown"
+        return {}, dict(source=str(p), sha256=_sha(p), rows=0,
+                        source_mtime=datetime.fromtimestamp(
+                            p.stat().st_mtime).isoformat(),
+                        format=fmt, open_verified=open_verified,
+                        open_verified_semantics=(
+                            "源存在但解析零行；不是实测 0，按 assumed_zero 处理"),
+                        status_contract=contract)
     result = {}
     counts = dict(accepted_rows=0, identity_missing=0, form_out_of_scope=0,
                   product_out_of_scope=0, uom_missing=0, uom_mismatch=0,
@@ -819,7 +851,8 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
 
         opening = supply.get(key + ("opening",))
         intransit = supply.get(key + ("intransit",))
-        # SO/PO 源存在时，「该键没有行」是实测 0；源缺失才是未知。
+        # 源解析到行时，「该键没有行」是实测 0；整源零行由 run 标 assumed_zero；
+        # 源缺失才是未知（None）。
         so_qty = so.get(key, 0.0) if so is not None else None
         po_qty = po.get(key + ("po",), 0.0) if po is not None else None
         po_eta_items = po.get(key + ("eta_items",), []) if po is not None else []
@@ -1115,7 +1148,8 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                     demand_source="d6_pack_q95", warnings=warnings,
                     executable=False, executable_reasons=["live 库存不可用，仅回放"],
                     totals=dict(rows=int(len(frame)), suggest=int((frame["action"] == "补").sum()),
-                                so_attached_qty=0.0),
+                                so_attached_qty=0.0,
+                                assumed_zero_rows=dict(so=0, po=0)),
                     limits=["历史回放，未用 live 库存/SO/PO/CG 重算",
                             "未知数量保持 null，不写 0"])
         return frame, meta
@@ -1158,6 +1192,21 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
     so_known = bool(backlog_path and Path(backlog_path).exists())
     if backlog_path and not so_known:
         so_evidence["exists"] = False
+
+    # 源存在但解析零行：给 assumed_zero 信封，不静默当实测 0；
+    # 有行但被过滤（如全 Closed）不是 assumed_zero。
+    so_input_rows = int(so_evidence.get("rows") or 0)
+    po_input_rows = int(po_evidence.get("input_rows") or 0)
+    so_assumed_zero = bool(so_known and so_input_rows == 0)
+    po_assumed_zero = bool(po_known and po_input_rows == 0)
+    so_evidence["assumed_zero"] = dict(
+        applies=so_assumed_zero, rows=so_input_rows,
+        reason=("source_exists_but_parsed_zero_rows" if so_assumed_zero
+                else "source_missing" if not so_known else "rows_present"))
+    po_evidence["assumed_zero"] = dict(
+        applies=po_assumed_zero, input_rows=po_input_rows,
+        reason=("source_exists_but_parsed_zero_rows" if po_assumed_zero
+                else "source_missing" if not po_known else "rows_present"))
 
     # ---- live 需求：预测优先，D6 q95 兜底 ----
     demand_map, forecast_meta = _forecast_demand(
@@ -1222,6 +1271,13 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         warnings.append(
             "PO 有效开放行全部无 ETA（willArriveDate/purchaseArrivalDate 均空）："
             "on_time_qty=0 是数据缺口，不是按时率 0")
+    assumed_zero_sources = [label for label, flag in
+                            (("SO", so_assumed_zero), ("PO", po_assumed_zero))
+                            if flag]
+    if assumed_zero_sources:
+        warnings.append(
+            "、".join(assumed_zero_sources) + " 源文件存在但解析零行：按 assumed_zero "
+            "记录（不是实测 0）；有行但被过滤的不算")
     if so_evidence.get("status_contract") == "missing" and so_evidence.get("rows"):
         warnings.append(
             "SO 来源没有 status/docstatus：开放状态未证，整批 status_missing，"
@@ -1303,7 +1359,9 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                     suggest=int((frame["action"] == "补").sum()),
                     unknown=int((frame["qty_status"] != "measured").sum()),
                     past_due=int((frame["order_date_status"] == "past_due").sum()),
-                    so_attached_qty=decision_evidence["so"]["attached_qty"]),
+                    so_attached_qty=decision_evidence["so"]["attached_qty"],
+                    assumed_zero_rows=dict(so=int(so_assumed_zero),
+                                           po=int(po_assumed_zero))),
         warnings=warnings,
         limits=["缺口是 D6 q95/预测窗口总量口径，不是某一天的精确缺货日",
                 "在途与无 ETA 的 PO 计入 expected；最坏情况见 "
@@ -1312,6 +1370,9 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                  "若预测实际未含会低估" if so_in_forecast else
                  "开放 SO 视为未含在预测内：已叠加需求（so_in_forecast=false）；"
                  "若预测已含则双计"),
+                "SO 为上游交付管线，不进需求",
+                "源存在但解析零行记 assumed_zero（totals.assumed_zero_rows）；"
+                "有行但被过滤的不算 assumed_zero",
                 "PO 按时 = 逐行 ETA ≤ 需要日；ETA 缺失/晚于需要日均计入未证按时",
                 "SO 身份以 EN item_code 为准，别名只走 customer_item_code；"
                 "PK#/ND# 不剥前缀，归 form_out_of_scope",
