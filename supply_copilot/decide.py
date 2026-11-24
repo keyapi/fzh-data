@@ -1025,10 +1025,11 @@ def to_report(frame, meta, limit=None) -> str:
         lines.append("")
         lines.append(f"### 预测未覆盖、退回 D6 的 {len(uncovered)} 行（需人工复核）")
         lines.append("")
-        lines.append("| SKU | 仓 | UOM | D6 q95 | 动作 | 新补 | 原因 |")
+        lines.append("| SKU | 仓 | 单位（仅非“个”显示） | D6 q95 | 动作 | 新补 | 原因 |")
         lines.append("|---|---|---|---:|---|---:|---|")
         for item in uncovered:
-            lines.append(f"| {item.get('sku')} | {item.get('warehouse')} | {item.get('uom')} | "
+            uom = item.get("uom") if item.get("uom") not in (None, "", "个", "unknown") else ""
+            lines.append(f"| {item.get('sku')} | {item.get('warehouse')} | {uom} | "
                          f"{_fmt(item.get('d6_q95'))} | {item.get('action')} | "
                          f"{_fmt(item.get('new_qty'))} | {item.get('reason')} |")
     lines.append("")
