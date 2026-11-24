@@ -1,23 +1,21 @@
 # -*- coding: utf-8 -*-
-"""把窗口预测（p50/p90 总量）按历史周占比摊成周计划（只读、纯本地、不下单）。
+"""把窗口预测（p50/p90 总量）拆成周计划（只读、纯本地、不下单）。
 
-输入
-- 需求去向表 ``demand_line_disposition.parquet``（rebuild 产物）
-- 预测窗口表 ``forecast_sku_warehouse_windows.parquet``（含 60/90/120/180 天窗口）
+外部评审结论：单靠 12 周占比不足以支撑未来 13 周的周形状，因此改为分层：
 
-做法
-1. **历史周占比**：取 ``as_of`` 所在周（周一为起点）之前的最近 12 个完整周
-   （周一–周日），按 ``(canonical_sku, canonical_warehouse, canonical_uom)`` 汇总成
-   周序列并归一化。占比口径用全部需求行（不按 ``netting_allowed`` 砍）——占比回答
-   的是"需求在周与周之间的形状"，与净额阻断无关。
-2. 某键少于 4 个完整周有需求（含无历史）→ 均匀分摊，``share_basis="even"``，
-   原因写进 ``note``；历史足够 → ``share_basis="history_12w"``。
-3. 对 ``lead_days=90`` 的窗口行，按占比摊到从 ``as_of`` 所在周开始的 ``weeks`` 个周。
-   周数超过 12 周轮廓时按轮廓循环取，再归一化——保证每键周数量之和等于窗口总量
-   （函数内断言，误差 < 0.01）。
+1. **完整周历史 >= 52 周的键**：直接用周度模型按 ``demand_pattern`` 选型
+   （smooth/erratic → Holt 线性 ETS，intermittent → SBA，lumpy → TSB），
+   模型无正预测时依次回退 naive/MA3、周均；并用最近 8 个滚动原点做回测，
+   给出逐周 WAPE 与 ``weeks`` 周累计 WAPE。
+2. **历史不足 52 周（>=4 周）**：用最近 4–8 个完整周的均值（周均速率），
+   ``method="ma_4_8w"``；不足 4 周或无历史 → 等分分摊 ``method="even_split"``。
+3. **最后回退**：周度模型对某键给不出正预测时，才用最近 12 周占比
+   ``method="share_12w"``——不再是主方法。
+4. 所有方法只决定**周形状**，再缩放到 lead_days=90 窗口总量；每键周数量之和
+   == 窗口总量（函数内断言，误差 < 0.01，p50/p90 各自守恒）。
 
 边界
-- 未知 UOM（空串 / ``unknown`` 等）既不参与占比、也不输出（不猜）。
+- 未知 UOM（空串 / ``unknown`` 等）既不参与拟合、也不输出（不猜）。
 - 未映射 SKU 的窗口行不输出，只在返回统计里计数。
 - 不联网、不写 EN、不打印凭证。
 """
@@ -27,13 +25,17 @@ from __future__ import annotations
 import math
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Sequence
 
 import pandas as pd
 
 LEAD_DAYS = 90
-HISTORY_WEEKS = 12
-MIN_HISTORY_WEEKS = 4
+MIN_MODEL_WEEKS = 52
+MIN_MEAN_WEEKS = 4
+MAX_MEAN_WEEKS = 8
+PROFILE_WEEKS = 12
+BACKTEST_ORIGINS = 8
+BACKTEST_MIN_TRAIN = 52
 CONSERVATION_TOLERANCE = 0.01
 UNKNOWN_UOMS = frozenset({"", "unknown", "nan", "none", "null"})
 
@@ -49,7 +51,15 @@ OUTPUT_COLUMNS = [
     "share_basis",
     "share_weeks",
     "note",
+    "method",
+    "backtest_wape",
+    "fallback_reason",
 ]
+
+ModelFn = Callable[[Sequence[float], int], list[float]]
+
+
+# ---------------------------------------------------------------- 基础工具
 
 
 def _to_date(value: Any) -> date:
@@ -92,63 +102,293 @@ def _canonical_by_sku(disp: pd.DataFrame) -> dict[str, str]:
     return {**fallback, **mapped}
 
 
-def _history_profiles(
-    disp: pd.DataFrame, uom_col: str, hist_starts: list[date], cur_week_start: date
+def _weekly_series(
+    disp: pd.DataFrame,
+    uom_col: str,
+    cur_week_start: date,
+    target_keys: set[tuple[str, str, str]],
 ) -> dict[tuple[str, str, str], list[float]]:
-    """键 → 12 个完整周的 quantity 序列（无记录的周补 0）。"""
+    """键 → 完整周序列（周一起点，缺周补 0），截止到 as_of 前最后一个完整周。"""
+    if not target_keys:
+        return {}
     d = disp.copy()
     d["_date"] = pd.to_datetime(d["demand_date"], errors="coerce").dt.normalize()
     d["_qty"] = pd.to_numeric(d["quantity"], errors="coerce")
     keep = d["_date"].notna() & d["_qty"].notna() & _valid_uom(d[uom_col])
-    keep &= (d["_date"] >= pd.Timestamp(hist_starts[0])) & (
-        d["_date"] < pd.Timestamp(cur_week_start)
-    )
+    keep &= d["_date"] < pd.Timestamp(cur_week_start)
     d = d[keep]
     if d.empty:
         return {}
     d["_week"] = (d["_date"] - pd.to_timedelta(d["_date"].dt.weekday, unit="D")).dt.date
     d["_uom"] = d[uom_col].astype("string").str.strip()
-    pivot = d.pivot_table(
-        index=["canonical_sku", "canonical_warehouse", "_uom"],
-        columns="_week",
-        values="_qty",
-        aggfunc="sum",
-        fill_value=0.0,
-    )
-    pivot = pivot.reindex(columns=hist_starts, fill_value=0.0)
-    return {tuple(key): [float(v) for v in row] for key, row in pivot.iterrows()}
+    key_cols = ["canonical_sku", "canonical_warehouse", "_uom"]
+    keys = pd.MultiIndex.from_frame(d[key_cols])
+    d = d[keys.isin(target_keys)]
+    if d.empty:
+        return {}
+
+    weekly = d.groupby(key_cols + ["_week"], dropna=False)["_qty"].sum()
+    out: dict[tuple[str, str, str], list[float]] = {}
+    for key, sub in weekly.groupby(level=[0, 1, 2]):
+        values = sub.droplevel([0, 1, 2]).to_dict()
+        first, last = min(values), max(values)
+        n = (last - first).days // 7 + 1
+        week_dates = [first + timedelta(days=7 * k) for k in range(n)]
+        out[(str(key[0]), str(key[1]), str(key[2]))] = [
+            float(values.get(w, 0.0)) for w in week_dates
+        ]
+    return out
 
 
-def _plan_shares(
-    history: list[float] | None, weeks: int
-) -> tuple[list[float], str, int, str]:
-    """返回 (每周占比, share_basis, share_weeks, note)；占比之和恒为 1。"""
-    positive = 0
-    if history is not None:
-        arr = pd.Series(history, dtype=float)
-        positive = int((arr > 0).sum())
-        total = float(arr.sum())
-        if total > 0 and positive >= MIN_HISTORY_WEEKS:
-            profile = arr / total
-            weights = [float(profile.iloc[k % len(profile)]) for k in range(weeks)]
-            share = pd.Series(weights, dtype=float)
-            share = share / float(share.sum())
-            # 把浮点残差塞进最大的一周，保证 13 周之和严格等于窗口总量
-            share.iloc[int(share.to_numpy().argmax())] += 1.0 - float(share.sum())
-            return (
-                [float(x) for x in share],
-                "history_12w",
-                positive,
-                f"按最近 {HISTORY_WEEKS} 个完整周的需求占比分摊",
-            )
+# ---------------------------------------------------------------- 周度模型
 
-    share = pd.Series([1.0 / weeks] * weeks, dtype=float)
-    share.iloc[0] += 1.0 - float(share.sum())
-    if positive:
-        note = f"历史仅 {positive} 个完整周有需求（<{MIN_HISTORY_WEEKS}），均匀分摊"
+
+def _holt_ets(series: Sequence[float], periods: int, alpha: float = 0.3, beta: float = 0.1) -> list[float]:
+    """Holt 线性 ETS(A,A,N)：水平 + 趋势，负预测截 0。"""
+    values = [float(x) for x in series]
+    if len(values) < 2:
+        return [max(0.0, values[0])] * periods if values else [0.0] * periods
+    level = values[0]
+    trend = values[1] - values[0]
+    for x in values[1:]:
+        prev = level
+        level = alpha * x + (1 - alpha) * (level + trend)
+        trend = beta * (level - prev) + (1 - beta) * trend
+    return [max(0.0, level + h * trend) for h in range(1, periods + 1)]
+
+
+def _sba(series: Sequence[float], periods: int, alpha: float = 0.1) -> list[float]:
+    """Syntetos–Boylan 近似（带偏差修正的 Croston）。"""
+    size: float | None = None
+    interval: float | None = None
+    gap = 0
+    rate = 0.0
+    for x in series:
+        x = float(x)
+        gap += 1
+        if x > 0:
+            if size is None:
+                size, interval = x, float(gap)
+            else:
+                size = alpha * x + (1 - alpha) * size
+                interval = alpha * gap + (1 - alpha) * interval
+            gap = 0
+        if size and interval:
+            rate = (1 - alpha / 2) * size / interval
+    return [max(0.0, rate)] * periods
+
+
+def _tsb(series: Sequence[float], periods: int, alpha: float = 0.1, beta: float = 0.1) -> list[float]:
+    """Teunter–Syntetos–Babai：需求发生概率 + 需求规模。"""
+    values = [float(x) for x in series]
+    nonzero = [x for x in values if x > 0]
+    if not values or not nonzero:
+        return [0.0] * periods
+    prob = len(nonzero) / len(values)
+    size = sum(nonzero) / len(nonzero)
+    for x in values:
+        if x > 0:
+            size = alpha * x + (1 - alpha) * size
+            prob = beta + (1 - beta) * prob
+        else:
+            prob = (1 - beta) * prob
+    return [max(0.0, prob * size)] * periods
+
+
+def _mean_rate(series: Sequence[float], periods: int) -> list[float]:
+    values = [float(x) for x in series if not math.isnan(float(x))]
+    if not values:
+        return [0.0] * periods
+    window = values[-min(len(values), MIN_MODEL_WEEKS):]
+    return [max(0.0, sum(window) / len(window))] * periods
+
+
+def _ma3_rate(series: Sequence[float], periods: int) -> list[float]:
+    values = [float(x) for x in series]
+    if not values:
+        return [0.0] * periods
+    tail = values[-3:]
+    return [max(0.0, sum(tail) / len(tail))] * periods
+
+
+def _demand_pattern(series: Sequence[float]) -> str:
+    """ADI / CV² 分类：smooth / erratic / intermittent / lumpy。"""
+    values = [float(x) for x in series]
+    positive = [x for x in values if x > 0]
+    if not values or not positive:
+        return "none"
+    adi = len(values) / len(positive)
+    mean = sum(positive) / len(positive)
+    if mean <= 0:
+        return "smooth"
+    var = sum((x - mean) ** 2 for x in positive) / len(positive)
+    cv2 = var / (mean**2)
+    if adi < 1.32:
+        return "smooth" if cv2 < 0.49 else "erratic"
+    return "intermittent" if cv2 < 0.49 else "lumpy"
+
+
+def _model_forecast(
+    series: Sequence[float], periods: int
+) -> tuple[list[float] | None, str, str, ModelFn | None]:
+    """返回 (周预测, method, fallback_reason, 实际使用的模型函数)。"""
+    pattern = _demand_pattern(series)
+    if pattern == "none":
+        return None, "none", "no_positive_history", None
+    if pattern in ("smooth", "erratic"):
+        name, fn = "ets", _holt_ets
+    elif pattern == "intermittent":
+        name, fn = "sba", _sba
     else:
-        note = f"最近 {HISTORY_WEEKS} 个完整周无需求记录，均匀分摊"
-    return [float(x) for x in share], "even", positive, note
+        name, fn = "tsb", _tsb
+    try:
+        forecast = fn(series, periods)
+    except Exception:  # pragma: no cover - 防御：模型异常不炸整批
+        forecast = None
+    if forecast is not None and sum(forecast) > 0:
+        return forecast, name, "", fn
+
+    reason = f"{name}_no_positive_forecast"
+    for alt_name, alt_fn in (("naive_ma3", _ma3_rate), ("week_mean", _mean_rate)):
+        alternative = alt_fn(series, periods)
+        if sum(alternative) > 0:
+            return alternative, alt_name, reason, alt_fn
+    return None, name, reason, fn
+
+
+def _backtest(
+    series: Sequence[float],
+    fn: ModelFn,
+    periods: int,
+    *,
+    max_origins: int = BACKTEST_ORIGINS,
+    min_train: int = BACKTEST_MIN_TRAIN,
+) -> tuple[float, float, int]:
+    """滚动原点回测：返回 (逐周 WAPE, periods 周累计 WAPE, 原点数)。"""
+    values = [float(x) for x in series]
+    n = len(values)
+    origins = list(range(n - periods, min_train - 1, -1))[:max_origins]
+    abs_sum = act_sum = cum_abs = cum_act = 0.0
+    used = 0
+    for origin in origins:
+        train = values[:origin]
+        actual = values[origin : origin + periods]
+        try:
+            forecast = fn(train, periods)
+        except Exception:  # pragma: no cover
+            continue
+        if forecast is None or len(actual) == 0:
+            continue
+        used += 1
+        abs_sum += sum(abs(f - a) for f, a in zip(forecast, actual))
+        act_sum += sum(abs(a) for a in actual)
+        cum_abs += abs(sum(forecast) - sum(actual))
+        cum_act += abs(sum(actual))
+    weekly = abs_sum / act_sum if act_sum > 0 else math.nan
+    cumulative = cum_abs / cum_act if cum_act > 0 else math.nan
+    return weekly, cumulative, used
+
+
+# ---------------------------------------------------------------- 周形状
+
+
+def _shares_from(profile: Sequence[float], periods: int) -> list[float] | None:
+    """把任意长度的周轮廓（如 12 周占比）循环铺到 ``periods`` 个周并归一化。"""
+    vals = [0.0 if v is None or math.isnan(float(v)) else max(0.0, float(v)) for v in profile]
+    total = sum(vals)
+    if not vals or total <= 0:
+        return None
+    profile_share = [v / total for v in vals]
+    weights = [profile_share[k % len(profile_share)] for k in range(periods)]
+    scale = sum(weights)
+    share = [w / scale for w in weights]
+    share[int(max(range(periods), key=lambda i: share[i]))] += 1.0 - sum(share)
+    return share
+
+
+def _uniform(periods: int) -> list[float]:
+    share = [1.0 / periods] * periods
+    share[0] += 1.0 - sum(share)
+    return share
+
+
+def _plan_for_key(series: list[float] | None, periods: int) -> dict[str, Any]:
+    """决定某键的周形状与方法；只返回形状证据，不含数量。"""
+    span = len(series) if series else 0
+
+    if span >= MIN_MODEL_WEEKS:
+        forecast, method, fallback, fn = _model_forecast(series, periods)
+        if forecast is not None:
+            share = _shares_from(forecast, periods)
+            if share is not None:
+                weekly_wape = cumulative_wape = math.nan
+                origins = 0
+                if fn is not None:
+                    weekly_wape, cumulative_wape, origins = _backtest(series, fn, periods)
+                return {
+                    "share": share,
+                    "method": method,
+                    "share_basis": "model",
+                    "share_weeks": span,
+                    "note": f"按 {method} 周度模型预测周形状（历史 {span} 个完整周）",
+                    "fallback_reason": fallback,
+                    "backtest_wape": cumulative_wape,
+                    "backtest_weekly_wape": weekly_wape,
+                    "backtest_origins": origins,
+                }
+        # 模型给不出正预测 → 最后回退 12 周占比
+        tail = series[-PROFILE_WEEKS:]
+        share = _shares_from(tail, periods) if sum(tail) > 0 else None
+        if share is not None:
+            return {
+                "share": share,
+                "method": "share_12w",
+                "share_basis": "share_12w",
+                "share_weeks": span,
+                "note": "周度模型无正预测，最后回退到最近 12 周占比",
+                "fallback_reason": fallback or "model_no_positive_forecast",
+                "backtest_wape": math.nan,
+                "backtest_weekly_wape": math.nan,
+                "backtest_origins": 0,
+            }
+        return _even_result(periods, span, "model_zero_and_share12w_zero")
+
+    if span >= MIN_MEAN_WEEKS:
+        window = series[-min(span, MAX_MEAN_WEEKS):]
+        rate = sum(window) / len(window)
+        if rate > 0:
+            return {
+                "share": _uniform(periods),
+                "method": "ma_4_8w",
+                "share_basis": "history_4_8w",
+                "share_weeks": span,
+                "note": f"历史 {span} 个完整周（不足 {MIN_MODEL_WEEKS}），用最近 {len(window)} 周均值分摊",
+                "fallback_reason": f"history_weeks_{span}_lt_{MIN_MODEL_WEEKS}",
+                "backtest_wape": math.nan,
+                "backtest_weekly_wape": math.nan,
+                "backtest_origins": 0,
+            }
+        return _even_result(periods, span, f"history_weeks_{span}_non_positive")
+
+    reason = f"history_weeks_{span}_lt_{MIN_MEAN_WEEKS}" if span else "no_history"
+    return _even_result(periods, span, reason)
+
+
+def _even_result(periods: int, span: int, reason: str) -> dict[str, Any]:
+    return {
+        "share": _uniform(periods),
+        "method": "even_split",
+        "share_basis": "even",
+        "share_weeks": span,
+        "note": "历史不足，均匀分摊",
+        "fallback_reason": reason,
+        "backtest_wape": math.nan,
+        "backtest_weekly_wape": math.nan,
+        "backtest_origins": 0,
+    }
+
+
+# ---------------------------------------------------------------- 主入口
 
 
 def build_weekly_plan(
@@ -160,7 +400,7 @@ def build_weekly_plan(
     weeks: int = 13,
     service: str = "p90",
 ) -> dict[str, Any]:
-    """窗口总量 → 周计划 parquet；返回统计（含守恒自检结果）。"""
+    """窗口总量 → 周计划 parquet；返回统计（含方法分布、回测、守恒自检）。"""
     if service not in ("p50", "p90"):
         raise ValueError(f"service 只能是 p50/p90，收到 {service!r}")
     if int(weeks) < 1:
@@ -169,7 +409,6 @@ def build_weekly_plan(
 
     as_of_date = _to_date(as_of)
     cur_week_start = as_of_date - timedelta(days=as_of_date.weekday())
-    hist_starts = [cur_week_start - timedelta(days=7 * k) for k in range(HISTORY_WEEKS, 0, -1)]
     hist_end = cur_week_start - timedelta(days=1)
 
     disp = pd.read_parquet(disposition_path)
@@ -177,7 +416,6 @@ def build_weekly_plan(
         if col not in disp.columns:
             raise ValueError(f"需求表缺列: {col}")
     disp_uom_col = _uom_col(disp, where="需求表")
-    profiles = _history_profiles(disp, disp_uom_col, hist_starts, cur_week_start)
 
     raw = pd.read_parquet(windows_path)
     for col in ("lead_days", "p50", "p90", "canonical_warehouse"):
@@ -213,15 +451,32 @@ def build_weekly_plan(
         p50=("p50", lambda s: s.sum(min_count=1)),
         p90=("p90", lambda s: s.sum(min_count=1)),
     )
+    target_keys = {
+        (str(rec.product_id), str(rec.canonical_warehouse), str(rec.uom))
+        for rec in agg.itertuples(index=False)
+    }
+    series_by_key = _weekly_series(disp, disp_uom_col, cur_week_start, target_keys)
 
     rows: list[dict[str, Any]] = []
     expected: dict[tuple[str, str, str], tuple[float, float, float]] = {}
-    basis_counts = {"history_12w": 0, "even": 0}
+    method_counts: dict[str, int] = {}
+    basis_counts: dict[str, int] = {}
+    wape_cumulative: list[float] = []
+    wape_weekly: list[float] = []
+    backtests = 0
+
     for rec in agg.itertuples(index=False):
         pid, wh, uom = str(rec.product_id), str(rec.canonical_warehouse), str(rec.uom)
         key = (pid, wh, uom)
-        shares, basis, share_weeks, note = _plan_shares(profiles.get(key), weeks)
-        basis_counts[basis] += 1
+        plan = _plan_for_key(series_by_key.get(key), weeks)
+        method_counts[plan["method"]] = method_counts.get(plan["method"], 0) + 1
+        basis_counts[plan["share_basis"]] = basis_counts.get(plan["share_basis"], 0) + 1
+        if plan["backtest_origins"]:
+            backtests += 1
+            if not math.isnan(plan["backtest_wape"]):
+                wape_cumulative.append(plan["backtest_wape"])
+            if not math.isnan(plan["backtest_weekly_wape"]):
+                wape_weekly.append(plan["backtest_weekly_wape"])
 
         qty_total = float(rec.p90 if service == "p90" else rec.p50)
         p50_total = float(rec.p50) if pd.notna(rec.p50) else math.nan
@@ -229,7 +484,7 @@ def build_weekly_plan(
         if math.isnan(qty_total):
             raise AssertionError(f"窗口总量为空（{key}），不应走到这里")
 
-        for k, share in enumerate(shares):
+        for k, share in enumerate(plan["share"]):
             ws = cur_week_start + timedelta(days=7 * k)
             rows.append(
                 {
@@ -241,9 +496,12 @@ def build_weekly_plan(
                     "qty": qty_total * share,
                     "qty_p50": p50_total * share if not math.isnan(p50_total) else math.nan,
                     "qty_p90": p90_total * share if not math.isnan(p90_total) else math.nan,
-                    "share_basis": basis,
-                    "share_weeks": share_weeks,
-                    "note": note,
+                    "share_basis": plan["share_basis"],
+                    "share_weeks": plan["share_weeks"],
+                    "note": plan["note"],
+                    "method": plan["method"],
+                    "backtest_wape": plan["backtest_wape"],
+                    "fallback_reason": plan["fallback_reason"],
                 }
             )
         expected[key] = (qty_total, p50_total, p90_total)
@@ -285,11 +543,17 @@ def build_weekly_plan(
             "week_start": cur_week_start.isoformat(),
             "week_end": (cur_week_start + timedelta(days=7 * weeks - 1)).isoformat(),
         },
-        "history_window": [hist_starts[0].isoformat(), hist_end.isoformat()],
+        "history_cutoff": hist_end.isoformat(),
         "rows": int(len(out)),
         "keys": int(len(agg)),
         "product_ids": int(out["product_id"].nunique()) if not out.empty else 0,
+        "method_counts": dict(sorted(method_counts.items())),
         "share_basis": basis_counts,
+        "backtest": {
+            "keys": backtests,
+            "median_weekly_wape": _median(wape_weekly),
+            "median_cumulative_wape": _median(wape_cumulative),
+        },
         "dropped": {
             "other_lead_days": rows_other_lead,
             "no_forecast": no_forecast,
@@ -304,3 +568,13 @@ def build_weekly_plan(
         "max_conservation_error": float(max_err),
         "path": str(out_path),
     }
+
+
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return float(ordered[mid])
+    return float((ordered[mid - 1] + ordered[mid]) / 2)
