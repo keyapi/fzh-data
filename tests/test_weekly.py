@@ -134,6 +134,12 @@ def _key(out: pd.DataFrame, product_id: str, warehouse: str, uom: str) -> pd.Dat
     return part.sort_values("week_start").reset_index(drop=True)
 
 
+
+def _uniform_expected(total: float, frame) -> list[float]:
+    """按 covered_days 折算后的均匀周量（首尾部分周）。"""
+    cov = [int(x) for x in frame["covered_days"].tolist()]
+    return [total * c / sum(cov) for c in cov]
+
 def test_output_columns_and_week_grid(tmp_path):
     out, stats = _run(tmp_path)
     assert list(out.columns) == OUTPUT_COLUMNS
@@ -183,8 +189,8 @@ def test_short_history_uses_recent_mean(tmp_path):
     assert set(a["share_basis"]) == {"history_4_8w"}
     assert set(a["share_weeks"]) == {12}
     assert set(a["fallback_reason"]) == {"history_weeks_12_lt_52"}
-    assert list(a["qty_p90"].round(9)) == [round(260.0 / WEEKS, 9)] * WEEKS
-    assert list(a["qty_p50"].round(9)) == [round(130.0 / WEEKS, 9)] * WEEKS
+    assert list(a["qty_p90"].round(6)) == [round(x, 6) for x in _uniform_expected(260.0, a)]
+    assert list(a["qty_p50"].round(6)) == [round(x, 6) for x in _uniform_expected(130.0, a)]
 
 
 def test_even_fallback_for_tiny_or_no_history(tmp_path):
@@ -193,14 +199,14 @@ def test_even_fallback_for_tiny_or_no_history(tmp_path):
     assert set(b["method"]) == {"even_split"}
     assert set(b["share_weeks"]) == {2}
     assert set(b["fallback_reason"]) == {"history_weeks_2_lt_4"}
-    assert list(b["qty_p90"].round(9)) == [round(52.0 / WEEKS, 9)] * WEEKS
-    assert list(b["qty_p50"].round(9)) == [round(26.0 / WEEKS, 9)] * WEEKS
+    assert list(b["qty_p90"].round(6)) == [round(x, 6) for x in _uniform_expected(52.0, b)]
+    assert list(b["qty_p50"].round(6)) == [round(x, 6) for x in _uniform_expected(26.0, b)]
 
     c = _key(out, "KS-C", "波兰仓", "个")
     assert set(c["method"]) == {"even_split"}
     assert set(c["share_weeks"]) == {0}
     assert set(c["fallback_reason"]) == {"no_history"}
-    assert list(c["qty_p90"].round(9)) == [round(13.0 / WEEKS, 9)] * WEEKS
+    assert list(c["qty_p90"].round(6)) == [round(x, 6) for x in _uniform_expected(13.0, c)]
 
 
 def test_long_smooth_history_uses_ets_with_backtest(tmp_path):
@@ -226,8 +232,8 @@ def test_long_intermittent_and_lumpy_use_sba_tsb(tmp_path):
     assert set(e["method"]) == {"sba"} and set(f["method"]) == {"tsb"}
     assert set(e["share_basis"]) == {"model"} and set(f["share_basis"]) == {"model"}
     # SBA/TSB 给的是周均速率 → 周形状均匀
-    assert list(e["qty_p90"].round(9)) == [round(52.0 / WEEKS, 9)] * WEEKS
-    assert list(f["qty_p90"].round(9)) == [round(130.0 / WEEKS, 9)] * WEEKS
+    assert list(e["qty_p90"].round(6)) == [round(x, 6) for x in _uniform_expected(52.0, e)]
+    assert list(f["qty_p90"].round(6)) == [round(x, 6) for x in _uniform_expected(130.0, f)]
     assert e["backtest_wape"].notna().all() and f["backtest_wape"].notna().all()
 
 

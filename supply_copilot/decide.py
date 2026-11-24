@@ -610,7 +610,12 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             if po_qty and po_qty > po_on_time:
                 warnings.append(f"PO {po_qty:g} 中 {po_qty - po_on_time:g} 未证按时（ETA 缺失或晚于需要日）")
             if so_qty:
-                warnings.append(f"分公司 SO {so_qty:g} 未加进需求，也不抵扣主建议（无可靠到货日）；若按时到可少补 {so_qty:g}")
+                if so_on_time > 0:
+                    warnings.append(
+                        f"分公司 SO {so_qty:g} 未加进需求；其中 {so_on_time:g} 按时到仓已计入供给")
+                else:
+                    warnings.append(
+                        f"分公司 SO {so_qty:g} 未加进需求；无可靠到货日或晚于需要日，不抵扣主建议")
 
         if missing:
             action = "待核"
@@ -915,13 +920,27 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                     past_due=int((frame["order_date_status"] == "past_due").sum())),
         warnings=warnings,
         limits=["缺口是 D6 q95/预测窗口总量口径，不是某一天的精确缺货日",
-                "在途与无 ETA 的 PO 计入 expected；最坏情况见 "
+                "在途/未确认 SO 按条件供给；迟到/无 ETA 的 PO 不计按时；最坏情况见 "
                 "new_qty_if_conditional_late",
-                "未履约 SO 按未完成量计入需求；SO 文件缺失时数量保持 null",
+                "SO 不计入需求；仅交付日 <= 需要日的部分计入供给；SO 文件缺失时数量保持 null",
+                "supply_expected 按阶段全重叠假设；独立供给情景见 supply_independent",
                 "CG 未提供 live 源时使用 D6 包值（cg_source 标注）",
                 "demand_netting 只登记哈希；薄封装未接入其逐桶分摊与资格对账",
                 "未知数量/日期保持 null，不写 0"],
     )
+    from .audit import build_bundle_meta, bundle_id
+    bundle = build_bundle_meta(
+        tool={"name": "supply_copilot"},
+        engine={"mode": "live", "demand_source": demand_source},
+        policy={"cg_source": meta.get("cg", {}).get("source")},
+        data={"pack": pack_meta, "demand_netting": meta.get("demand_netting")},
+        live={"stock": stock_meta, "so_sha256": file_meta["so"]["sha256"],
+              "po_sha256": file_meta["po"]["sha256"]},
+        forecast=forecast_meta,
+        computed_at=as_of_dt.isoformat(),
+    )
+    meta["bundle"] = bundle
+    meta["bundle_id"] = bundle_id(bundle)
     return frame, meta
 
 

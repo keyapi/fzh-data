@@ -48,6 +48,8 @@ OUTPUT_COLUMNS = [
     "qty",
     "qty_p50",
     "qty_p90",
+    "covered_days",
+    "partial_week",
     "share_basis",
     "share_weeks",
     "note",
@@ -484,18 +486,36 @@ def build_weekly_plan(
         if math.isnan(qty_total):
             raise AssertionError(f"窗口总量为空（{key}），不应走到这里")
 
+        window_start = as_of_date
+        window_end = as_of_date + timedelta(days=LEAD_DAYS)  # exclusive
+        week_weights = []
+        week_meta = []
         for k, share in enumerate(plan["share"]):
             ws = cur_week_start + timedelta(days=7 * k)
+            we = ws + timedelta(days=6)
+            covered = max(0, (min(we + timedelta(days=1), window_end)
+                              - max(ws, window_start)).days)
+            frac = covered / 7.0
+            week_weights.append(float(share) * frac)
+            week_meta.append((ws, we, covered))
+        total_weight = sum(week_weights)
+        if total_weight <= 0:
+            week_weights = [float(x) for x in plan["share"]]
+            total_weight = sum(week_weights)
+        for (ws, we, covered), weight in zip(week_meta, week_weights):
+            part = weight / total_weight
             rows.append(
                 {
                     "week_start": ws.isoformat(),
-                    "week_end": (ws + timedelta(days=6)).isoformat(),
+                    "week_end": we.isoformat(),
                     "product_id": pid,
                     "warehouse": wh,
                     "uom": uom,
-                    "qty": qty_total * share,
-                    "qty_p50": p50_total * share if not math.isnan(p50_total) else math.nan,
-                    "qty_p90": p90_total * share if not math.isnan(p90_total) else math.nan,
+                    "qty": qty_total * part,
+                    "qty_p50": p50_total * part if not math.isnan(p50_total) else math.nan,
+                    "qty_p90": p90_total * part if not math.isnan(p90_total) else math.nan,
+                    "covered_days": int(covered),
+                    "partial_week": bool(covered < 7),
                     "share_basis": plan["share_basis"],
                     "share_weeks": plan["share_weeks"],
                     "note": plan["note"],

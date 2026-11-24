@@ -100,6 +100,7 @@ def test_live_d6_recompute_columns_and_quantities(tmp_path):
     frame, meta = _call(tmp_path, stock_path=stock, backlog_path=backlog, po_path=po)
 
     assert meta["mode"] == "live"
+    assert len(meta["bundle_id"]) == 64
     assert meta["demand_source"] == "d6_pack_q95"
     assert list(frame.columns) == COLUMNS
     assert len(frame) == 3 and frame["sku"].tolist() == ["KS1", "KS2", "KS3"]
@@ -140,6 +141,7 @@ def test_forecast_missing_falls_back_to_d6_with_warning(tmp_path):
                         po_path=po, forecast_root=tmp_path / "no-forecast")
 
     assert meta["mode"] == "live"
+    assert len(meta["bundle_id"]) == 64
     assert meta["demand_source"] == "d6_pack_q95"
     assert any("预测 CURRENT 不存在" in w or "预测未接入" in w for w in meta["warnings"])
     assert frame.set_index("sku").loc["KS1", "demand_qty"] == 100

@@ -159,7 +159,7 @@ def test_rebuild_writes_manifest(monkeypatch, dataset):
 
     calls = {}
 
-    def fake_run_forecast(out_dir, *, decision_date, lead_days=90, no_statsforecast=False):
+    def fake_run_forecast(out_dir, *, decision_date, lead_days=90, no_statsforecast=False, **kwargs):
         calls["decision_date"] = decision_date
         return {"run_id": "RUN-TEST", "run_dir": str(Path(out_dir) / "forecast" / "RUN-TEST")}
 
