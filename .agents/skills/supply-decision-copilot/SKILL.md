@@ -29,11 +29,12 @@ uv run python -m supply_copilot pull-history             # 从 EN 私有目录�
 uv run python -m supply_copilot pull-orders              # 最新订单明细（到 2026-11-22）
 uv run python -m supply_copilot orders                    # 最新订单是否齐/哈希
 uv run python -m supply_copilot rebuild --orders <parquet> --out <dir>  # 本地重算需求/预测
+uv run python -m supply_copilot weekly                                    # 13 周计划
 ```
 
 `recommend` = replay（pack as_of 固定）。`refresh` = EN 实时库存 + 复用 pack 的 D5 预测重算缺口；**不是 D5 重新训练**。
 `decide` = 实时库存 + 开放 SO/PO 重算；报告开头有 **可执行性（是/否）** 与原因。
-当前默认口径一般是「否」：需求仍是 D6 q95（as_of 2026-11-13）、PO 未映射到分公司仓、CG 未按实时重算、需要日/下单日沿用 D6 且可能已过期。不得把 `decide` 的候选当作可直接下单的指令。
+当前默认口径一般是「否」：需求来自 D6 历史 95% 档或本地 rebuild 的 p90、PO 未映射到分公司仓、CG 规则未确认、需要日/下单日可能已过期。不得把 `decide` 的候选当作可直接下单的指令。
 
 历史订单/需求是 parquet 快照（截止 2026-10-26），放在 EN 私有目录，不打包、不由每个 Agent 拉 EN 订单；只在重训预测/复核明细时 `pull-history`。
 
