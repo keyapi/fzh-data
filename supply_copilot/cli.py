@@ -21,9 +21,8 @@ def doctor(args):
               "status": "ok" if not missing else "incomplete"}
     if getattr(args, "verify", False):
         from .audit import verify_local
-        check = verify_local(root, pack_manifest=manifest,
-                             history_manifest={"files": []},
-                             orders_manifest={"files": []})
+        # pack/history/orders 三个 manifest 都校验；未拉取的会明确列为缺失
+        check = verify_local(root, pack_manifest=manifest)
         result["verify"] = check
         if not check.get("ok"):
             result["status"] = "incomplete"
@@ -216,13 +215,15 @@ def command_pull_orders(args):
 def command_supply(args):
     """抓取实时库存/开放 SO/开放 PO 到 <data-root>/live/，供 decide 使用。"""
     root = data_root(args.data_root, create=True)
-    out = Path(args.out) if args.out else Path(root) / "live" / args.branch
+    base = Path(args.out) if args.out else Path(root) / "live" / args.branch
+    run_id = datetime.now().strftime("%Y%m%dT%H%M%S") + f"-{os.getpid()}"
+    out = base / "runs" / run_id
     out.mkdir(parents=True, exist_ok=True)
     from self_fulfilled_demand.canonical import load_sku_map, load_warehouse_config
     sku_path = next((p for p in (Path(root) / "data" / "sku_map.tsv",
                                  Path(root) / "sku_map.tsv") if p.exists()), None)
     sku_map = load_sku_map(sku_path) if sku_path else None
-    result = {"out": str(out)}
+    result = {"out": str(out), "run_id": run_id}
     stock, stock_meta = en_live.fetch_stock_snapshot()
     stock.to_parquet(out / "stock.parquet", index=False)
     result["stock"] = stock_meta
@@ -250,21 +251,33 @@ def command_supply(args):
         p = Path(path)
         return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
 
-    manifest = {"branch": args.branch,
+    manifest = {"branch": args.branch, "run_id": run_id,
                 "generated_at": datetime.now().astimezone().replace(microsecond=0).isoformat(),
                 "errors": {k: v for k, v in result.items() if isinstance(v, dict) and v.get("error")},
                 "files": {name: {"exists": (out / name).exists(), "sha256": _sha(out / name)}
                           for name in ("stock.parquet", "backlog.csv", "po_open.tsv")}}
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2),
                                       encoding="utf-8")
-    result["manifest"] = str(out / "manifest.json")
+    tmp = base / "current.json.tmp"
+    tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, base / "current.json")
+    result["current"] = str(base / "current.json")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
 def command_decide(args):
     root = data_root(args.data_root)
-    live = Path(root) / "live" / args.branch
+    live_base = Path(root) / "live" / args.branch
+    live = live_base
+    current = live_base / "current.json"
+    if current.exists():
+        try:
+            run_id = json.loads(current.read_text(encoding="utf-8")).get("run_id")
+            if run_id:
+                live = live_base / "runs" / run_id
+        except (OSError, json.JSONDecodeError):
+            pass
     if not live.exists():
         live = Path(root) / "live"
     stock = Path(args.stock) if args.stock else live / "stock.parquet"
