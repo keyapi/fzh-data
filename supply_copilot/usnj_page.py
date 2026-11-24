@@ -44,7 +44,9 @@ def badge(r):
 
 def action(r):
     e = r.get("expedite_qty") or 0
-    n = r.get("new_order_qty") or 0
+    # 2026-11 snapshot 用 new_qty；旧夹具用 new_order_qty。
+    n = r.get("new_qty") if r.get("new_qty") is not None else r.get("new_order_qty")
+    n = n or 0
     parts = []
     if e:
         parts.append(f"催已有 {i(e)}")
