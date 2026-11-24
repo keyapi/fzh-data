@@ -972,6 +972,17 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         forecast=forecast_meta,
         computed_at=as_of_dt.isoformat(),
     )
+    uncovered = []
+    for _, row in frame.iterrows():
+        warn = str(row.get("warnings") or "")
+        if "预测未覆盖" in warn:
+            uncovered.append({
+                "sku": row.get("sku"), "warehouse": row.get("warehouse"),
+                "uom": row.get("uom"), "d6_q95": row.get("d6_q95"),
+                "action": row.get("action"), "new_qty": row.get("new_qty"),
+                "reason": warn,
+            })
+    meta["uncovered"] = uncovered
     meta["bundle"] = bundle
     meta["bundle_id"] = bundle_id(bundle)
     return frame, meta
@@ -1009,6 +1020,17 @@ def to_report(frame, meta, limit=None) -> str:
                      f"{(forecast.get('windows_sha256') or '')[:12]}…）")
     for warning in meta.get("warnings") or []:
         lines.append(f"- ⚠️ {warning}")
+    uncovered = meta.get("uncovered") or []
+    if uncovered:
+        lines.append("")
+        lines.append(f"### 预测未覆盖、退回 D6 的 {len(uncovered)} 行（需人工复核）")
+        lines.append("")
+        lines.append("| SKU | 仓 | UOM | D6 q95 | 动作 | 新补 | 原因 |")
+        lines.append("|---|---|---|---:|---|---:|---|")
+        for item in uncovered:
+            lines.append(f"| {item.get('sku')} | {item.get('warehouse')} | {item.get('uom')} | "
+                         f"{_fmt(item.get('d6_q95'))} | {item.get('action')} | "
+                         f"{_fmt(item.get('new_qty'))} | {item.get('reason')} |")
     lines.append("")
 
     for _, row in shown.iterrows():
