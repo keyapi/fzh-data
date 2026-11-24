@@ -392,6 +392,8 @@ def run_forecast(
     decision_date: str | date,
     lead_days: int = 90,
     no_statsforecast: bool = False,
+    model_policy: str = "autoets",
+    model_map_path: str | None = None,
 ) -> dict[str, Any]:
     """在 ``<out>/demand_line_disposition.parquet`` 上跑一次预测。
 
@@ -411,7 +413,9 @@ def run_forecast(
 
     dd = decision_date if isinstance(decision_date, date) else date.fromisoformat(str(decision_date))
     leads = tuple(sorted(set(STANDARD_LEADS) | {int(lead_days)}))
-    cfg = forecast.ForecastConfig(decision_date=dd, leads=leads)
+    cfg = forecast.ForecastConfig(decision_date=dd, leads=leads,
+                                  model_policy=model_policy,
+                                  model_map_path=model_map_path)
     backend = None if no_statsforecast else forecast.load_backend()
     run_dir = forecast.run(
         disposition_path=disposition,
@@ -441,6 +445,8 @@ def rebuild(
     decision_date: str | date | None = None,
     lead_days: int = 90,
     no_statsforecast: bool = False,
+    model_policy: str = "autoets",
+    model_map_path: str | None = None,
 ) -> dict[str, Any]:
     """build_demand + run_forecast + ``rebuild_manifest.json``；返回 manifest。"""
     t0 = time.perf_counter()
@@ -463,6 +469,8 @@ def rebuild(
         decision_date=decision_date,
         lead_days=lead_days,
         no_statsforecast=no_statsforecast,
+        model_policy=model_policy,
+        model_map_path=model_map_path,
     )
 
     manifest = {

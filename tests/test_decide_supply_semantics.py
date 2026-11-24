@@ -109,3 +109,51 @@ def test_po_en_item_code_identity_is_accepted(tmp_path):
     _, meta = call(tmp_path, stock_path=s, po_path=po)
     assert meta["po"]["identity_missing"] == 0
     assert meta["po"]["rows"] == 1
+
+
+def test_mixed_po_eta_buckets_by_line(tmp_path):
+    make_pack(tmp_path)
+    s = stock(tmp_path, rows=[base_stock()])
+    po = tmp_path / "po.tsv"
+    po.write_text(
+        "PO-1\tTT1\t40\t40\t美中-FZH-DANEEY\t2026-12-01\n"
+        "PO-2\tTT1\t60\t60\t美中-FZH-DANEEY\t2027-12-31\n", encoding="utf-8")
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]).to_csv(backlog, index=False)
+    frame, _ = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    row = frame.set_index("sku").loc["KS1"]
+    assert row["supply_po"] == 100
+    assert row["supply_expected"] == 40       # 只计早到 40，不按最早 ETA 抵整组
+    assert row["new_qty"] == 110
+
+
+def test_so_delivery_date_used_when_present(tmp_path):
+    make_pack(tmp_path)
+    s = stock(tmp_path, rows=[base_stock()])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame([{"canonical_sku": "KS1", "canonical_warehouse": "美中-FZH-DANEEY",
+                   "canonical_uom": "个", "quantity": 100,
+                   "delivery_date": "2026-12-01"}]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"
+    po.write_text("", encoding="utf-8")
+    frame, _ = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    row = frame.set_index("sku").loc["KS1"]
+    assert row["supply_so"] == 100
+    assert row["supply_expected"] == 100     # 按时到仓的 SO 可抵扣
+    assert row["new_qty"] == 50
+
+
+def test_independent_supply_scenario_reported(tmp_path):
+    make_pack(tmp_path)
+    s = stock(tmp_path, rows=[base_stock(intransit=100)])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame([{"canonical_sku": "KS1", "canonical_warehouse": "美中-FZH-DANEEY",
+                   "canonical_uom": "个", "quantity": 100,
+                   "delivery_date": "2026-12-01"}]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"
+    po.write_text("PO-1\tTT1\t100\t100\t美中-FZH-DANEEY\t2026-12-01\n", encoding="utf-8")
+    frame, _ = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    row = frame.set_index("sku").loc["KS1"]
+    assert row["supply_expected"] == 100     # 全重叠假设
+    assert row["supply_independent"] == 300  # 独立供给情景
+    assert row["new_qty_if_independent"] == 0
