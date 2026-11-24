@@ -10,6 +10,7 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-24 | 赛狐官方 MCP 换协议——子账号 X-MCP-Key 开通 + 元工具发现目录（零副作用验证写能力） | [sellfox-mcp-subaccount-key-metatool-protocol.md](sellfox-mcp-subaccount-key-metatool-protocol.md) |
 | 2026-11-19 | Amazon 结算报告 V1/V2 与 XML：旧格式会让 Tax/FBA 静默少算 | [amazon-settlement-v1-v2-flatfile.md](amazon-settlement-v1-v2-flatfile.md) |
 | 2026-11-19 | 账期币种匹配：全角括号与零宽字符让币种/汇率变空、人民币全 0 | [amazon-period-fx-currency-label-invisible-chars.md](amazon-period-fx-currency-label-invisible-chars.md) |
 | 2026-11-11 | 账期 Tax 必须用「每个收款币种一行」的汇率表，别名拆开表会把税额乘多遍 | [amazon-period-tax-fx-alias-multiplies.md](amazon-period-tax-fx-alias-multiplies.md) |
