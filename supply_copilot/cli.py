@@ -77,7 +77,7 @@ def main(argv=None):
             p.add_argument("--decision-date", default=None)
             p.add_argument("--lead-days", type=int, default=90)
             p.add_argument("--no-statsforecast", action="store_true")
-            p.add_argument("--model-policy", choices=["autoets", "classified"], default="autoets")
+            p.add_argument("--model-policy", choices=["autoets", "classified"], default="classified")
             p.add_argument("--model-map", default=None)
         if name == "weekly":
             p.add_argument("--disposition", default=None)
@@ -341,6 +341,10 @@ def command_rebuild(args):
     uom_cache = args.uom_cache or _latest_file(root, "history/*", "item_uom_cache.parquet")
     if uom_cache is None:
         raise SystemExit("缺少 item_uom_cache.parquet：先 pull-history 或传 --uom-cache")
+    model_map = Path(args.model_map) if args.model_map else None
+    if model_map is None:
+        candidates = sorted(Path(root).glob("orders/*/model_map*.csv"))
+        model_map = candidates[-1] if candidates else None
     aliases = Path(__file__).resolve().parent.parent / "self_fulfilled_demand" / "warehouse_aliases.json"
     from .rebuild import rebuild as do_rebuild
     manifest = do_rebuild(
@@ -353,7 +357,7 @@ def command_rebuild(args):
         lead_days=args.lead_days,
         no_statsforecast=args.no_statsforecast,
         model_policy=args.model_policy,
-        model_map_path=args.model_map,
+        model_map_path=model_map,
     )
     run_dir = Path(manifest["forecast"]["run_dir"])
     (run_dir.parent / "CURRENT").write_text(run_dir.name, encoding="utf-8")
