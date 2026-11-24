@@ -1,0 +1,196 @@
+{
+  "schema_version": "supply-config/v1",
+  "config_version": "cfg-2026-11-24.1",
+  "values": {
+    "auto_order": false,
+    "write_en_business": false,
+    "allow_self_approval": false,
+    "unknown_as_zero": false,
+
+    "segmentation_basis": "frozen_abc_xyz",
+    "abc_breaks": {"sales_share": [0.8, 0.95]},
+    "xyz_basis": {
+      "method": "trained_pattern_labels",
+      "labels": ["smooth", "intermittent", "lumpy"]
+    },
+    "service_beta_target": {"A": 0.95, "B": 0.9, "C": 0.85, "D": 0.9},
+    "service_alpha_target": null,
+    "quantile_preset": {"name": "balance", "A": 0.95, "B": 0.9, "C": 0.85, "D": 0.85},
+    "q95_downgrade_gate": {
+      "min_observations": 2,
+      "max_observations": 4,
+      "improvement_min": 0.1,
+      "improvement_max": 0.3,
+      "inventory_alert_ratio": 1.5,
+      "max_steps": 1
+    },
+    "hard_service_infeasible": {
+      "committed_beta": null,
+      "grid": {
+        "beta": [0.9, 0.95, 0.99],
+        "lead_days": [60, 90, 120],
+        "review_days": [7, 30]
+      }
+    },
+    "inventory_policy": "order_up_to_weekly",
+    "review_period_R": 7,
+    "protection_period": "L+R",
+    "safety_stock_method": "protection_period_quantile",
+    "history_fallback": {
+      "short_history_months": 12,
+      "strategy": "short_history_D",
+      "analog_borrow": true
+    },
+    "hard_budget": null,
+    "soft_budget_warning": {
+      "amount_ratio": 1.2,
+      "qty_ratio": 1.2,
+      "threshold_min": 0.1,
+      "threshold_max": 1.0
+    },
+    "moq": null,
+    "order_multiple": null,
+
+    "lead_time_quantile": {
+      "quantile": 0.9,
+      "calendar": "natural_days",
+      "basis": "end_to_end"
+    },
+    "lead_time_evidence": {
+      "lookback_months": 12,
+      "min_samples": 20,
+      "fallback_scenarios_days": [60, 90, 120]
+    },
+    "eta_unknown": true,
+    "po_on_time": "three_state_eta_le_need_date",
+
+    "inventory_refresh": {
+      "times_per_day": 1,
+      "snapshot_at": "05:17",
+      "check_after": "05:45",
+      "timezone": "Asia/Shanghai",
+      "grace_minutes_min": 15,
+      "grace_minutes_max": 120
+    },
+    "demand_recommend_refresh": {
+      "weekday": "mon",
+      "at": "06:00",
+      "min_interval_days": 7,
+      "max_interval_days": 14,
+      "on_event": true
+    },
+    "inventory_age": {
+      "ok_max_hours": 24,
+      "warn_max_hours": 24,
+      "hold_after_hours": 48,
+      "warn_hours_min": 12,
+      "warn_hours_max": 24,
+      "hold_hours_min": 24,
+      "hold_hours_max": 72
+    },
+    "forecast_age": {
+      "ok_max_days": 7,
+      "warn_max_days": 7,
+      "hold_after_days": 14,
+      "warn_days_min": 1,
+      "warn_days_max": 7,
+      "hold_days_min": 7,
+      "hold_days_max": 28
+    },
+    "so_evidence_age": {
+      "ok_max_days": 7,
+      "warn_max_days": 7,
+      "hold_after_days": 14,
+      "warn_days_min": 1,
+      "warn_days_max": 7,
+      "hold_days_min": 7,
+      "hold_days_max": 21
+    },
+    "critical_unknown": "hold",
+    "readiness": "research",
+
+    "operator_scope": {
+      "branches": [],
+      "segments": [],
+      "owners": [],
+      "empty_scope": "deny"
+    },
+    "reviewer_scope": {
+      "branches": [],
+      "segments": [],
+      "empty_scope": "deny",
+      "allow_self_approval": false
+    },
+    "system_manager_scope": {"branches": [], "empty_scope": "deny"},
+
+    "pilot_scope": {"branches": ["USNJ"], "row_list_ref": null, "frozen": true},
+    "pilot_window": {
+      "shadow_weeks": 6,
+      "max_weeks": 8,
+      "checkpoints_weeks": [2, 4, 6],
+      "weeks_min": 4,
+      "weeks_max": 8
+    },
+    "special_cny_owner_hold": true,
+
+    "fva_window": {
+      "frozen_horizon_weeks": 4,
+      "review_weeks": 8,
+      "min_mature_cutpoints": 4,
+      "weeks_min": 4,
+      "weeks_max": 12
+    },
+    "fva_metric": {
+      "primary": "fva_wape",
+      "secondary": [
+        "fva_stage",
+        "bias",
+        "beta_inventory_frontier",
+        "workload",
+        "change_rate"
+      ],
+      "frozen": true,
+      "allowed_extra": ["mase", "pinball"]
+    },
+    "override_degradation": {
+      "consecutive_windows": 2,
+      "beta_drop_pct_points": 2,
+      "inventory_high_ratio": 1.2,
+      "beta_tolerance_min": 0,
+      "beta_tolerance_max": 5,
+      "inventory_ratio_min": 0.1,
+      "inventory_ratio_max": 0.5
+    },
+
+    "accept_auto": "explicit_accept_only",
+    "override_quantity": {
+      "require_total_delta": true,
+      "require_reason": true,
+      "require_evidence": true,
+      "require_period": true,
+      "allow_negative_final": false
+    },
+    "override_priority_threshold": {
+      "abs_ratio": 0.2,
+      "ratio_min": 0.1,
+      "ratio_max": 1.0,
+      "zero_baseline_rule": "priority_review"
+    },
+    "event_only": "event_without_quantity",
+    "period_override": "recompute_before_shift",
+    "weekly_grain": {"min_days": 7, "allowed_days": [7, 14, 28], "enabled": false},
+    "weekly_freeze": {
+      "freeze_weekday": "wed",
+      "freeze_at": "12:00",
+      "submit_by": "tue_18:00",
+      "review_deadline": "wed_11:00",
+      "timezone": "Asia/Shanghai"
+    },
+    "reapproval": {
+      "validity_days": 7,
+      "validity_min": 1,
+      "validity_max": 7,
+      "on_input_version_change": true
+    }
+  }
+}

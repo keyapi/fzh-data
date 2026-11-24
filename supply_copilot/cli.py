@@ -124,6 +124,9 @@ def main(argv=None):
             p.add_argument("--branch", required=True)
             p.add_argument("--sku", required=True)
             p.add_argument("--env-file", default=None)
+    config_parser = sub.add_parser("config", help="查看/校验版本化配置（只读，不接决策）")
+    config_parser.add_argument("action", choices=["show", "validate", "hash"])
+    config_parser.add_argument("--config", default=None, help="配置 JSON 路径；缺省用内置默认")
     args = parser.parse_args(argv)
     return {"doctor": doctor, "pull": command_pull, "recommend": command_recommend,
             "batch": command_batch, "refresh": command_refresh,
@@ -134,7 +137,44 @@ def main(argv=None):
             "supply": command_supply,
             "decide": command_decide,
             "rebuild": command_rebuild,
-            "weekly": command_weekly}[args.command](args)
+            "weekly": command_weekly,
+            "config": command_config}[args.command](args)
+
+
+def command_config(args):
+    """只读：show | validate | hash。不加载决策代码。"""
+    from .config import ConfigError, load_config
+    try:
+        cfg = load_config(args.config)
+    except ConfigError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if args.action == "hash":
+        print(cfg.config_hash)
+        return 0
+    if args.action == "validate":
+        print(json.dumps({"status": "ok",
+                          "schema_version": cfg.schema_version,
+                          "config_version": cfg.config_version,
+                          "config_hash": cfg.config_hash,
+                          "params": len(cfg.values),
+                          "defaulted": list(cfg.defaulted),
+                          "path": cfg.path}, ensure_ascii=False, indent=2))
+        return 0
+    rows = cfg.explain()
+    print(f"# {cfg.schema_version}  config_version={cfg.config_version or '-'}  "
+          f"params={len(rows)}  defaulted={len(cfg.defaulted)}  sha256={cfg.config_hash}")
+    width = max(len(r["key"]) for r in rows) + 2
+    print(f"{'key'.ljust(width)}{'source'.ljust(8)}{'value'.ljust(46)}range/choices")
+    for row in rows:
+        value = json.dumps(row["value"], ensure_ascii=False, separators=(",", ":"))
+        if len(value) > 44:
+            value = value[:43] + "…"
+        allowed = row["range"] or ""
+        if row["choices"] is not None:
+            allowed = f"{allowed} {json.dumps(row['choices'], ensure_ascii=False)}".strip()
+        print(f"{row['key'].ljust(width)}{row['source'].ljust(8)}{value.ljust(46)}{allowed}")
+    return 0
 
 
 def command_weekly(args):
