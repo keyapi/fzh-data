@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, json, os, sys
+import argparse, hashlib, json, os, sys
 from datetime import datetime, date
 from pathlib import Path
 from .paths import data_root, load_manifest
@@ -170,7 +170,7 @@ def command_pull_orders(args):
 def command_supply(args):
     """抓取实时库存/开放 SO/开放 PO 到 <data-root>/live/，供 decide 使用。"""
     root = data_root(args.data_root, create=True)
-    out = Path(args.out) if args.out else Path(root) / "live"
+    out = Path(args.out) if args.out else Path(root) / "live" / args.branch
     out.mkdir(parents=True, exist_ok=True)
     from self_fulfilled_demand.canonical import load_sku_map, load_warehouse_config
     sku_path = next((p for p in (Path(root) / "data" / "sku_map.tsv",
@@ -186,22 +186,38 @@ def command_supply(args):
         so[["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]].to_csv(
             out / "backlog.csv", index=False)
         result["so"] = so_meta
-    except Exception as exc:  # noqa: BLE001 - 失败保留未知，不阻断库存
+    except Exception as exc:  # noqa: BLE001 - 失败必须删除旧文件，不能把旧 SO 当当前
+        (out / "backlog.csv").unlink(missing_ok=True)
         result["so"] = {"error": f"{type(exc).__name__}: {exc}"}
     try:
         po, po_meta = en_live.fetch_open_po()
         po[["document_key", "sku", "ordered", "open_qty", "warehouse"]].to_csv(
             out / "po_open.tsv", sep="\t", header=None, index=False)
         result["po"] = po_meta
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # noqa: BLE001 - 失败必须删除旧文件，不能把旧 PO 当当前
+        (out / "po_open.tsv").unlink(missing_ok=True)
         result["po"] = {"error": f"{type(exc).__name__}: {exc}"}
+    def _sha(path):
+        p = Path(path)
+        return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
+
+    manifest = {"branch": args.branch,
+                "generated_at": datetime.now().astimezone().replace(microsecond=0).isoformat(),
+                "errors": {k: v for k, v in result.items() if isinstance(v, dict) and v.get("error")},
+                "files": {name: {"exists": (out / name).exists(), "sha256": _sha(out / name)}
+                          for name in ("stock.parquet", "backlog.csv", "po_open.tsv")}}
+    (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2),
+                                      encoding="utf-8")
+    result["manifest"] = str(out / "manifest.json")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
 def command_decide(args):
     root = data_root(args.data_root)
-    live = Path(root) / "live"
+    live = Path(root) / "live" / args.branch
+    if not live.exists():
+        live = Path(root) / "live"
     stock = Path(args.stock) if args.stock else live / "stock.parquet"
     backlog = Path(args.backlog) if args.backlog else live / "backlog.csv"
     po = Path(args.po) if args.po else live / "po_open.tsv"

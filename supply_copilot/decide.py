@@ -275,7 +275,8 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
 
     def add(raw_sku, raw_wh, qty, eta):
         evidence["rows"] += 1
-        item = lookup.get(str(raw_sku).strip())
+        raw_sku = str(raw_sku).strip()
+        item = lookup.get(raw_sku) or (raw_sku if raw_sku in uom_by_item else None)
         if not item:
             evidence["identity_missing"] += 1
             return
@@ -291,9 +292,10 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
         if eta:
             evidence["with_eta"] += 1
         key = (item, canonical, uom)
-        bucket = "po_on_time" if eta else "po_conditional"
-        po[key + (bucket,)] = po.get(key + (bucket,), 0.0) + float(qty)
         po[key + ("po",)] = po.get(key + ("po",), 0.0) + float(qty)
+        if eta:
+            old = po.get(key + ("eta",))
+            po[key + ("eta",)] = str(eta) if not old else min(str(old), str(eta))
 
     if po_path:
         path = Path(po_path)
@@ -301,13 +303,21 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
         if not path.exists():
             evidence["exists"] = False
         else:
-            frame = pd.read_csv(path, sep="\t", header=None, dtype=str,
-                                names=["document_key", "sku", "ordered", "open_qty",
-                                       "warehouse"])
-            frame["qty"] = pd.to_numeric(frame["open_qty"], errors="coerce")
-            frame = frame[frame["qty"].notna() & (frame["qty"] > 0)]
-            for row in frame.itertuples(index=False):
-                add(row.sku, row.warehouse, row.qty, eta=False)
+            for line in path.read_text(encoding="utf-8").splitlines():
+                if not line.strip():
+                    continue
+                parts = line.split("\t")
+                if len(parts) < 4:
+                    continue
+                raw_sku, open_qty = parts[1], parts[3]
+                warehouse = parts[4] if len(parts) > 4 else ""
+                eta = parts[5] if len(parts) > 5 else ""
+                try:
+                    qty = float(open_qty)
+                except ValueError:
+                    continue
+                if qty > 0:
+                    add(raw_sku, warehouse, qty, eta=eta)
 
     if po_tongtool_path:
         path = Path(po_tongtool_path)
@@ -521,7 +531,7 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         # SO/PO 源存在时，「该键没有行」是实测 0；源缺失才是未知。
         so_qty = so.get(key, 0.0) if so is not None else None
         po_qty = po.get(key + ("po",), 0.0) if po is not None else None
-        po_on_time = po.get(key + ("po_on_time",), 0.0) if po is not None else None
+        po_eta = po.get(key + ("eta",)) if po is not None else None
         d6_cg = _num(record.get("CG可调拨抵扣"))
         live_cg = cg.get(sku)
         if live_cg is not None and d6_cg is not None:
@@ -533,6 +543,19 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         else:
             cg_qty = d6_cg
             cg_source = "d6_pack"
+
+        need_dt = None
+        if needs_date:
+            try:
+                need_dt = datetime.fromisoformat(str(needs_date)[:10]).date()
+            except ValueError:
+                need_dt = None
+        po_on_time = 0.0
+        if po_qty and po_eta and need_dt:
+            try:
+                po_on_time = (po_qty if datetime.fromisoformat(str(po_eta)[:10]).date() <= need_dt else 0.0)
+            except ValueError:
+                po_on_time = 0.0
 
         reasons, warnings = [], []
         missing = []
@@ -552,10 +575,12 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         supply_expected = supply_proven = None
         new_qty = lower = None
         if not missing:
-            total_demand = demand_qty + (so_qty or 0.0)
-            supply_expected = (opening + (intransit or 0.0) + (po_qty or 0.0)
-                               + (cg_qty or 0.0))
-            supply_proven = (opening + (po_on_time or 0.0) + (cg_qty or 0.0))
+            total_demand = demand_qty
+            # 分公司 SO 是上游生产/交付单，不是终端需求；无批次键时按最大单阶段避免同批重复。
+            incoming = max(float(intransit or 0.0), float(po_on_time or 0.0),
+                           float(so_qty or 0.0))
+            supply_expected = opening + incoming + (cg_qty or 0.0)
+            supply_proven = opening + (po_on_time or 0.0) + (cg_qty or 0.0)
             new_qty = max(0, int(math.ceil(total_demand - supply_expected)))
             lower = max(0, int(math.ceil(total_demand - supply_proven)))
             if new_qty > 0:
@@ -563,7 +588,11 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             else:
                 reasons.append(f"已知供给 {supply_expected:g} 覆盖需求 {total_demand:g}")
             if lower > new_qty:
-                reasons.append(f"若在途/无 ETA 的 PO 迟到，最坏需 {lower}")
+                reasons.append(f"若在途/未确认 SO/迟到 PO 不到，最坏需 {lower}")
+            if po_qty and po_qty > po_on_time:
+                warnings.append(f"PO {po_qty:g} 中 {po_qty - po_on_time:g} 未证按时（ETA 缺失或晚于需要日）")
+            if so_qty:
+                warnings.append(f"分公司 SO {so_qty:g} 作上游供给，未加进需求；无可靠到货日时仅作条件供给")
 
         if missing:
             action = "待核"
@@ -584,7 +613,7 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         if order_status == "past_due":
             warnings.append(f"下单日 {order_date} 已过（D6 包计划），不可直接执行；需重排")
         if intransit or po_qty:
-            warnings.append("在途/无 ETA 的 PO 计入 expected，但未证明按时到")
+            warnings.append("在途/PO 未证明按时；最坏情况见 new_qty_if_conditional_late")
 
         rows.append(dict(
             branch=branch, sku=sku, warehouse=wh, uom=record["UOM"],
