@@ -414,7 +414,10 @@ border-radius:4px;padding:16px}
 .method td{padding:7px 10px}
 .detail-close{display:none}
 .detail-head .detail-close{float:right;margin-left:8px}
-@media (max-width:1279px){
+@media (max-width:1199px){
+  .workspace{grid-template-columns:minmax(0,1fr) 360px}
+}
+@media (max-width:959px){
   .workspace{grid-template-columns:1fr}
   .detail{display:none}
   .workspace.detail-open .detail{display:block;position:fixed;inset:0;z-index:45;
