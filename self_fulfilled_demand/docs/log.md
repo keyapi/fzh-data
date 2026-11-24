@@ -4,7 +4,7 @@ type: Log
 title: 自发货需求增量接入 — 变更日志
 description: 2026-10-27 接入、审查返修与真实采集记录
 tags: [log, demand, en-demand-v1]
-updated: 2026-10-27
+updated: 2026-11-24
 ---
 
 # 变更日志
@@ -47,3 +47,23 @@ updated: 2026-10-27
 - 新增 21 个审核回归（共 52 个）：完整构建守恒、四列键、五类子仓、未知/空仓、FBA 端到端、
   GS 形态、UOM 缺失/空白、复合原因、空输入/缺日期/无效数量、SKU TSV 空字段、快照切换、供应目标过滤。
 - 修复后：可净额 312,208 行 / 330,508 件；阻断 101,353 行 / 109,671 件；四列重复 0。
+
+## 2026-11-24 分型选型（classified）+ q85/q90/q95
+
+- `forecast.py` 新增可选 `--model-policy classified`：按 `--model-map`
+  （D5 v6.8 `1_预测` 导出，`product_id = canonical_sku`）的 `adopted_model`
+  选模型；模型池 AutoETS / SeasonalNaive / Naive / MA3 / SBA(CrostonSBA) / TSB /
+  Croston（对照）。
+- map 缺失 / 模型名不认识 → 按 `demand_pattern` 回退（smooth→AutoETS、
+  intermittent→SBA、lumpy/obsolescent→TSB、new/short→MA3、no_demand→不拟合）；
+  仍失败 → 原 T20/AutoETS 守卫。每 SKU 记 `selected_model` / `selection_source`
+  / `selection_reason` / `model_failure_reason`。
+- 分位数：保留 p10/p50/p90，新增 q85/q90/q95（summary 窗口、monthly、windows、
+  仓库表），由滚动回测的有符号需求残差上分位估计；样本 <3 原点用池化相对误差
+  系数并标 `quantile_method=pooled`。构造与 `validate_frames` 保证
+  q85<=q90<=q95、p50<=q90。
+- 默认 `--model-policy autoets` 的预测/区间/状态逐字不变；新增列只加不删，
+  `schema_version` 不变。
+- 离线测试 `tests/test_forecast_classified.py` 13 个（合成数据，不联网）；
+  真实冒烟：2,588 SKU / 2,562 可预测，map 命中 1,624 SKU，分位单调违例 0，
+  耗时约 1 分 47 秒。
