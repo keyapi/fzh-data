@@ -397,6 +397,37 @@ def _so_facts(path, branch):
 
 
 # --------------------------------------------------------------------------- #
+# 同 SKU×仓×单位多形态：只保留一个主行计数，避免重复建议
+# --------------------------------------------------------------------------- #
+def _mark_duplicate_forms(frame):
+    if frame.empty:
+        return frame, []
+    duplicates = []
+    for key, group in frame.groupby(["sku", "warehouse", "uom"], sort=False):
+        if len(group) <= 1:
+            continue
+        primary_idx = None
+        for idx, row in group.iterrows():
+            if str(row.get("physical_form") or "").strip() == "成品":
+                primary_idx = idx
+                break
+        if primary_idx is None:
+            primary_idx = group.index[0]
+        for idx, row in group.iterrows():
+            if idx == primary_idx:
+                continue
+            warn = str(row.get("warnings") or "")
+            warn = (warn + "；" if warn else "") + "同 SKU×仓×单位存在多个形态，本行不重复计数"
+            frame.at[idx, "action"] = "重复形态"
+            frame.at[idx, "new_qty"] = None
+            frame.at[idx, "qty_status"] = "duplicate_form"
+            frame.at[idx, "warnings"] = warn
+            duplicates.append({"sku": key[0], "warehouse": key[1], "uom": key[2],
+                               "physical_form": row.get("physical_form")})
+    return frame, duplicates
+
+
+# --------------------------------------------------------------------------- #
 # live 需求：D6 q95 / 刷新预测
 # --------------------------------------------------------------------------- #
 def _forecast_demand(forecast_root, *, lead_days, lookup, branch_prefix):
@@ -877,6 +908,7 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         so_known, po_known, branch=pool, stock_meta=stock_meta,
         forecast_meta=forecast_meta, file_meta=file_meta, as_of_dt=as_of_dt,
         lead_by_sku=lead_by_sku, lead_source=lead_source)
+    frame, duplicate_forms = _mark_duplicate_forms(frame)
 
     warnings = []
     if demand_source == "d6_pack_q95":
@@ -947,7 +979,10 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         executable=not executable_reasons,
         executable_reasons=executable_reasons,
         stock_age_hours=stock_age_hours,
+        duplicate_forms=duplicate_forms,
         totals=dict(rows=int(len(frame)),
+                    unique_keys=int(frame[["sku", "warehouse", "uom"]].drop_duplicates().shape[0]),
+                    duplicate_rows=int(len(duplicate_forms)),
                     suggest=int((frame["action"] == "补").sum()),
                     unknown=int((frame["qty_status"] != "measured").sum()),
                     past_due=int((frame["order_date_status"] == "past_due").sum())),
@@ -1002,6 +1037,10 @@ def to_report(frame, meta, limit=None) -> str:
     reasons = "；".join(meta.get("executable_reasons") or [])
     lines.append(f"- 可执行性：**{'是' if executable else '否'}**"
                  + (f"（{reasons}）" if not executable and reasons else ""))
+    if meta.get("bundle_id"):
+        lines.append(f"- bundle_id：`{meta['bundle_id']}`")
+    if meta.get("duplicate_forms"):
+        lines.append(f"- 另有 {len(meta['duplicate_forms'])} 行是同一 SKU×仓×单位的重复形态，已不重复计数")
     stock = meta.get("stock") or {}
     if stock.get("path"):
         lines.append(f"- 供给来源：库存 {stock.get('path')}（snapshot_at "
