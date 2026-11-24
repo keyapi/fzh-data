@@ -71,7 +71,8 @@ COLUMNS = [
     "need_date_status", "order_date_status",
     "demand_qty", "d6_q95", "demand_source", "demand_evidence",
     "supply_opening", "supply_intransit", "supply_po", "supply_cg",
-    "supply_so", "supply_expected", "supply_proven",
+    "supply_so", "supply_expected", "supply_independent", "supply_proven",
+    "new_qty_if_independent",
     "qty_status", "reason", "warnings",
     "stock_snapshot_at", "stock_sha256", "stock_snapshot_date",
     "forecast_run_id", "forecast_as_of",
@@ -293,9 +294,7 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
             evidence["with_eta"] += 1
         key = (item, canonical, uom)
         po[key + ("po",)] = po.get(key + ("po",), 0.0) + float(qty)
-        if eta:
-            old = po.get(key + ("eta",))
-            po[key + ("eta",)] = str(eta) if not old else min(str(old), str(eta))
+        po.setdefault(key + ("detail",), []).append((float(qty), str(eta or "")))
 
     if po_path:
         path = Path(po_path)
@@ -343,32 +342,36 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
 
 
 def _so_facts(path, branch):
-    """未履约 SO 余额 → ``{(sku, 仓, uom): qty}``。
-
-    优先按 ``supply_netting.demand.load_backlog`` 的四列契约读取
-    （canonical_sku / canonical_warehouse / canonical_uom / quantity）；
-    也接受 EN 导出的原始 SO 行（item_code / open_qty / customer / uom），
-    按客户归到本分公司主仓；归不上的计入 evidence，不摊派。
-    """
+    """未履约 SO 余额 → ``{(sku, 仓, uom): qty}`` + 逐行交付日明细。"""
     if not path:
         return None, dict(source="none", rows=0, quantity=None)
     if not Path(path).exists():
         return None, dict(source=str(path), exists=False, rows=0, quantity=None)
-    from supply_netting.demand import load_backlog
 
     frame = _read_table(path)
     branch_wh = POOL_WAREHOUSE[branch]
     result = {}
     evidence = dict(source=str(path), sha256=_sha(path), rows=int(len(frame)))
 
+    def add(key, qty, delivery_date=None):
+        result[key] = result.get(key, 0.0) + float(qty)
+        result.setdefault(key + ("detail",), []).append(
+            (float(qty), str(delivery_date or "")))
+
     canonical_cols = {"canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"}
     if canonical_cols.issubset(set(frame.columns)):
-        backlog, meta = load_backlog(path)
-        for key, qty in backlog.items():
-            if key[1] == branch_wh or str(key[1]).startswith(POOL_PREFIX[branch]):
-                result[key] = result.get(key, 0.0) + float(qty)
-        evidence.update(rows=meta["rows"], quantity=float(sum(result.values())),
-                        format="canonical")
+        for row in frame.itertuples(index=False):
+            key = (str(row.canonical_sku), str(row.canonical_warehouse),
+                   str(row.canonical_uom))
+            qty = _num(getattr(row, "quantity", None))
+            if qty is None or qty <= 0:
+                continue
+            if not (key[1] == branch_wh or key[1].startswith(POOL_PREFIX[branch])):
+                continue
+            add(key, qty, getattr(row, "delivery_date", ""))
+        evidence.update(rows=int(len(frame)), quantity=float(sum(
+            v for k, v in result.items() if not isinstance(k, tuple) or k[-1] != "detail")),
+            format="canonical", with_delivery_date="delivery_date" in frame.columns)
         return result, evidence
 
     if {"item_code", "open_qty", "customer"}.issubset(set(frame.columns)):
@@ -382,10 +385,12 @@ def _so_facts(path, branch):
             if qty is None or not uom:
                 unmapped += 1
                 continue
-            key = (str(row.item_code).strip(), branch_wh, uom)
-            result[key] = result.get(key, 0.0) + qty
-        evidence.update(rows=int(len(frame)), quantity=float(sum(result.values())),
-                        format="en_sales_orders", excluded_rows=unmapped)
+            add((str(row.item_code).strip(), branch_wh, uom), qty,
+                getattr(row, "delivery_date", ""))
+        evidence.update(rows=int(len(frame)), quantity=float(sum(
+            v for k, v in result.items() if not isinstance(k, tuple) or k[-1] != "detail")),
+            format="en_sales_orders", excluded_rows=unmapped,
+            with_delivery_date="delivery_date" in frame.columns)
         return result, evidence
 
     raise ValueError(f"SO 文件 {path} 既不是 canonical 四列，也不是 EN 开放 SO 导出")
@@ -529,9 +534,10 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         opening = supply.get(key + ("opening",))
         intransit = supply.get(key + ("intransit",))
         # SO/PO 源存在时，「该键没有行」是实测 0；源缺失才是未知。
-        so_qty = so.get(key, 0.0) if so is not None else None
-        po_qty = po.get(key + ("po",), 0.0) if po is not None else None
-        po_eta = po.get(key + ("eta",)) if po is not None else None
+        so_detail = list(so.get(key + ("detail",), [])) if so is not None else []
+        po_detail = list(po.get(key + ("detail",), [])) if po is not None else []
+        so_qty = sum(q for q, _ in so_detail) if so is not None else None
+        po_qty = sum(q for q, _ in po_detail) if po is not None else None
         d6_cg = _num(record.get("CG可调拨抵扣"))
         live_cg = cg.get(sku)
         if live_cg is not None and d6_cg is not None:
@@ -550,12 +556,20 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
                 need_dt = datetime.fromisoformat(str(needs_date)[:10]).date()
             except ValueError:
                 need_dt = None
-        po_on_time = 0.0
-        if po_qty and po_eta and need_dt:
-            try:
-                po_on_time = (po_qty if datetime.fromisoformat(str(po_eta)[:10]).date() <= need_dt else 0.0)
-            except ValueError:
-                po_on_time = 0.0
+        def _on_time(detail):
+            total = 0.0
+            for qty, eta in detail:
+                if not eta or need_dt is None:
+                    continue
+                try:
+                    if datetime.fromisoformat(str(eta)[:10]).date() <= need_dt:
+                        total += float(qty)
+                except ValueError:
+                    continue
+            return total
+
+        po_on_time = _on_time(po_detail)
+        so_on_time = _on_time(so_detail)
 
         reasons, warnings = [], []
         missing = []
@@ -572,15 +586,19 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             missing.append("po")
             reasons.append("PO 未接入")
 
-        supply_expected = supply_proven = None
-        new_qty = lower = None
+        supply_expected = supply_proven = supply_independent = None
+        new_qty = lower = new_qty_if_independent = None
         if not missing:
             total_demand = demand_qty
             # 分公司 SO 是上游生产/交付单，不是终端需求；无批次键时按最大单阶段避免同批重复。
             # 在途/按时 PO 可计入；分公司 SO 无可靠到货日时只作条件，不抵扣主建议
-            incoming = max(float(intransit or 0.0), float(po_on_time or 0.0))
+            incoming = max(float(intransit or 0.0), float(po_on_time or 0.0),
+                           float(so_on_time or 0.0))
+            supply_independent = (opening + (intransit or 0.0) + (po_on_time or 0.0)
+                                  + (so_on_time or 0.0) + (cg_qty or 0.0))
             supply_expected = opening + incoming + (cg_qty or 0.0)
-            supply_proven = opening + (po_on_time or 0.0) + (cg_qty or 0.0)
+            supply_proven = opening + (po_on_time or 0.0) + (so_on_time or 0.0) + (cg_qty or 0.0)
+            new_qty_if_independent = max(0, int(math.ceil(total_demand - supply_independent)))
             new_qty = max(0, int(math.ceil(total_demand - supply_expected)))
             lower = max(0, int(math.ceil(total_demand - supply_proven)))
             if new_qty > 0:
@@ -629,7 +647,9 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             supply_opening=_num(opening), supply_intransit=_num(intransit),
             supply_po=_num(po_qty), supply_cg=_num(cg_qty),
             supply_so=_num(so_qty), supply_expected=_num(supply_expected),
+            supply_independent=_num(supply_independent),
             supply_proven=_num(supply_proven),
+            new_qty_if_independent=new_qty_if_independent,
             qty_status=qty_status,
             reason="；".join(reasons) if reasons else None,
             warnings="；".join(warnings) if warnings else None,

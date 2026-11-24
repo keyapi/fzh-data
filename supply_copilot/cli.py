@@ -183,8 +183,11 @@ def command_supply(args):
     try:
         so, so_meta = en_live.fetch_open_so(args.branch, sku_map=sku_map,
                                             warehouse_cfg=load_warehouse_config())
-        so[["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]].to_csv(
-            out / "backlog.csv", index=False)
+        so_cols = ["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]
+        for extra in ("delivery_date", "document_key"):
+            if extra in so.columns:
+                so_cols.append(extra)
+        so[so_cols].to_csv(out / "backlog.csv", index=False)
         result["so"] = so_meta
     except Exception as exc:  # noqa: BLE001 - 失败必须删除旧文件，不能把旧 SO 当当前
         (out / "backlog.csv").unlink(missing_ok=True)
