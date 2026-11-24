@@ -260,21 +260,57 @@ def test_workbench_layout_is_local_left_table_right_detail(inputs):
     snap_path, base_path, _ = inputs
     html = build(snap_path, base_path)
     for marker in (
+        "class='workbench-shell' id='workbench-shell'",
         "class='workspace' id='workspace'",
         "class='board'",
-        "class='detail' id='wb-detail'",
+        "class='detail-slot' id='detail-slot'",
+        "class='detail detail-content' id='detail-content'",
+        "container-type:inline-size",
+        "container-name:workbench",
+        "grid-template-columns:minmax(0,1fr) 420px",
+        "grid-template-columns:minmax(0,1fr) 380px",
+        "grid-template-columns:minmax(0,1fr) 340px",
+        "@container workbench (max-width:1099.9px)",
+        "@container workbench (min-width:721px) and (max-width:899.9px)",
+        "@container workbench (max-width:720px)",
+        "dialog class='sheet' id='detail-sheet'",
+        "sheet-handle",
         "--navy:#172e43",
         "--paper:#f5f4ef",
         "--orange:#df6b34",
-        "grid-template-columns:minmax(0,1fr) 400px",
-        "@media (max-width:1199px)",
-        "@media (max-width:959px)",
-        "@media (max-width:767px)",
     ):
         assert marker in html, marker
+    # The old viewport-based full-screen overlay + "back to list" model is gone.
+    assert "max-width:1279px" not in html
+    assert "@media (max-width:1199px)" not in html
+    assert "detail-open" not in html
+    assert "position:fixed;inset:0" not in html
+    assert "返回列表" not in html
     # Detail starts collapsed: no row-level inline expansion markup.
     assert "<tr class=\"detail\">" not in html
     assert "<tr class='detail'>" not in html
+
+
+def test_detail_three_blocks_in_order_with_anchors(inputs):
+    snap_path, base_path, _ = inputs
+    html = build(snap_path, base_path)
+    js = html.split("<script>", 1)[1]
+    header = _function_body(js, "detailHeader")
+    for anchor in ("detail-summary", "detail-evidence", "detail-actions"):
+        assert 'data-anchor="' + anchor + '"' in header, anchor
+    for fn in ("recDetailHtml", "baseDetailHtml"):
+        body = _function_body(js, fn)
+        i1 = body.index('id="detail-summary"')
+        i2 = body.index('id="detail-evidence"')
+        i3 = body.index('id="detail-actions"')
+        assert i1 < i2 < i3, fn
+    # Seven evidence layers + always-visible missing summary + folded recon.
+    for title in ("① 身份", "② 期间", "③ 需求", "④ 供给阶段",
+                  "⑤ SO 三段", "⑥ 库存", "⑦ 来源哈希", "对单与抽查"):
+        assert title in html, title
+    assert "缺失与未知" in html
+    assert "完整证据链" not in js
+    assert "展开证据明细" in js
 
 
 def test_suggestions_are_readonly_baseline_has_proposal_form(inputs):
@@ -282,12 +318,97 @@ def test_suggestions_are_readonly_baseline_has_proposal_form(inputs):
     html = build(snap_path, base_path)
     assert "补货建议（只读）" in html
     assert "需求基准（可演示提案）" in html
-    assert "建议只读；演示提案只对「需求基准」行开放。" in html
+    assert "补货建议只读；唯一关联到需求基准时可在本栏填写演示判断。" in html
     js = html.split("<script>", 1)[1]
     assert js.count("proposalForm(") == 2  # one definition, one call
-    assert "proposalForm(" in _function_body(js, "renderBaseDetail")
-    assert "proposalForm(" not in _function_body(js, "renderRecDetail")
+    assert "proposalForm(" not in _function_body(js, "recDetailHtml")
+    assert "baseActionsHtml(" in _function_body(js, "baseDetailHtml")
+    assert "proposalBlock(" in _function_body(js, "baseActionsHtml")
+    assert "proposalBlock(" in _function_body(js, "recActionsHtml")
+    assert js.count('<form id="proposal-form"') == 1
     assert "保存演示提案（本浏览器）" in html
+    assert "对关联基准填写演示判断" in js
+
+
+def test_selection_updates_detail_without_rebuilding_the_list(inputs):
+    snap_path, base_path, _ = inputs
+    html = build(snap_path, base_path)
+    js = html.split("<script>", 1)[1]
+    select = _function_body(js, "selectRow")
+    assert "renderTable(" not in select
+    assert "applySelection(" in select
+    assert "renderDetail(" in select
+    assert "aria-current" in js
+    assert "aria-live" in html
+    # setView no longer forces the document back to the top unconditionally.
+    assert "window.scrollTo(0, 0)" not in js
+    assert "window.scrollTo(0, saved.y)" in js
+    # A filter that drops the selected row clears the detail, not keeps a form.
+    reconcile = _function_body(js, "reconcileSelection")
+    assert "outOfFilter" in reconcile
+    assert "renderDetail(" in reconcile
+    assert "所选行不在当前筛选中" in js
+
+
+def test_narrow_mode_is_a_bottom_sheet_not_a_route(inputs):
+    snap_path, base_path, _ = inputs
+    html = build(snap_path, base_path)
+    js = html.split("<script>", 1)[1]
+    for marker in ("showModal(", "finishSheet", "close", "pointerdown", "dy > 64"):
+        assert marker in js, marker
+    assert "pushState" not in js
+    assert "location.hash" not in js
+    assert "ResizeObserver" in js
+    assert "matchMedia('(max-width:1279px)')" not in js
+    # Drafts live in memory only and the notice says refresh loses them.
+    assert "未保存输入刷新后丢失" in js
+    assert "localStorage" not in _function_body(js, "saveDraft")
+    assert "sessionStorage" in _function_body(js, "saveUiState")
+
+
+def test_evidence_same_source_for_detail_and_audit(inputs):
+    snap_path, base_path, _ = inputs
+    html = build(snap_path, base_path)
+    js = html.split("<script>", 1)[1]
+    body = _function_body(js, "evidenceSections")
+    for layer_title in ("① 身份", "② 期间", "③ 需求", "④ 供给阶段",
+                        "⑤ SO 三段", "⑥ 库存", "⑦ 来源哈希"):
+        assert layer_title in body, layer_title
+    assert "evidenceSections(ctx, 'd')" in _function_body(js, "recDetailHtml")
+    assert "evidenceSections(ctx, 'base'" not in body
+    assert "evidenceSections(ctx, 'ev')" in _function_body(js, "renderEvidencePanel")
+
+
+def test_match_kind_only_activates_on_unique_key(tmp_path):
+    out = _run_node(tmp_path, """
+const rec = [
+  {sku: 'K1', physical_form: '成品', uom: '个'},
+  {sku: 'K2', physical_form: '成品', uom: '个'},
+  {sku: 'K2', physical_form: '成品', uom: '个'},
+  {sku: 'K3', physical_form: '皮壳', uom: '套'}
+];
+const base = [
+  {sku: 'K1', physical_form: '成品', unit: '个'},
+  {sku: 'K2', physical_form: '成品', unit: '个'},
+  {sku: 'K2', physical_form: '成品', unit: '个'},
+  {sku: 'K4', physical_form: '成品', unit: '个'}
+];
+const rc = countKeys(rec), bc = countKeys(base);
+console.log(JSON.stringify({
+  unique: matchKind(rc, bc, 'K1|成品|个'),
+  ambiguous: matchKind(rc, bc, 'K2|成品|个'),
+  onlyRec: matchKind(rc, bc, 'K3|皮壳|套'),
+  onlyBase: matchKind(rc, bc, 'K4|成品|个'),
+  none: matchKind(rc, bc, 'K9|成品|个')
+}));
+""")
+    assert out == {
+        "unique": "unique",
+        "ambiguous": "ambiguous",
+        "onlyRec": "only_rec",
+        "onlyBase": "only_base",
+        "none": "none",
+    }
 
 
 # ------------------------------------------------- A–E parity (before/after)
@@ -379,13 +500,13 @@ def test_evidence_view_sections_exist(inputs):
     snap_path, base_path, _ = inputs
     html = build(snap_path, base_path)
     for section in (
-        "身份与期间",
-        "需求（预测分位，不加进建议量）",
-        "供给各阶段",
-        "SO 三段（近期 / 历史 / 未知）",
-        "库存快照与当前观察",
-        "来源与哈希",
-        "未知与未接入原因",
+        "① 身份",
+        "② 期间",
+        "③ 需求",
+        "④ 供给阶段",
+        "⑤ SO 三段",
+        "⑥ 库存",
+        "⑦ 来源哈希",
         "对单与抽查",
     ):
         assert section in html, section
@@ -398,6 +519,7 @@ def test_evidence_view_sections_exist(inputs):
     ):
         assert reason in html, reason
     assert "data-ev-prev" in html and "data-ev-next" in html
+    assert "data-locate" in html
 
 
 def test_evidence_covers_every_snapshot_row(inputs):
