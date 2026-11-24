@@ -501,9 +501,34 @@ def _truthy(value) -> bool:
 # --------------------------------------------------------------------------- #
 # 决策
 # --------------------------------------------------------------------------- #
+def _branch_lead_days(path, branch):
+    """从 leadtime 快照取本分公司 SO→DN p90；缺失返回 None。"""
+    if not path:
+        return None, None
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None, None
+    so = data.get("so_dn") or {}
+    keys = list(so)
+    if not keys:
+        return None, None
+    key = "2026_recent_6m" if "2026_recent_6m" in so else sorted(keys)[-1]
+    entry = so.get(key) or {}
+    customer = {"美东USNJ": "CENTRADE", "美中USTX": "DANEEY", "波兰": "波兰公司"}.get(branch)
+    val = None
+    if customer:
+        val = ((entry.get("customer") or {}).get(customer) or {}).get("p90")
+    if val is None:
+        val = (entry.get("overall") or {}).get("p90")
+    if val is None:
+        return None, None
+    return int(math.ceil(float(val))), f"so_dn_p90_{key}"
+
+
 def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
                  so_known, po_known, *, branch, stock_meta, forecast_meta,
-                 file_meta, as_of_dt, lead_by_sku=None):
+                 file_meta, as_of_dt, lead_by_sku=None, lead_source="d6_need_minus_d6_lead"):
     wh = POOL_WAREHOUSE[branch]
     as_of_date = as_of_dt.date()
     lead_by_sku = lead_by_sku or {}
@@ -523,7 +548,7 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             if calc.get("order_date"):
                 order_date = calc["order_date"]
                 order_status = calc["status"]
-                date_source = "d6_need_minus_d6_lead"
+                date_source = lead_source
         q95 = _num(record.get("q95"))
         forecast_qty = demand_map.get(key) if demand_map is not None else None
         if demand_source == "forecast_refresh":
@@ -740,7 +765,7 @@ def _date_status(value, as_of_date):
 def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         po_path=None, po_tongtool_path=None, forecast_root=None,
         demand_netting=None, snapshot_date=None, forecast_lead_days=FORECAST_LEAD_DAYS,
-        pack_manifest=None):
+        pack_manifest=None, leadtime_path=None):
     """产出 ``(DataFrame, meta)``。只读；无 live 库存时回退 D6 包 replay。"""
     as_of_dt = parse_as_of(as_of)
     pool = normalize_branch(branch)
@@ -827,24 +852,31 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         demand_source = "forecast_refresh"
 
     lead_by_sku = {}
-    for rec in d6_rows.to_dict("records"):
-        need = _date_str(rec.get("需要日"))
-        order = _date_str(rec.get("下单日"))
-        if not need or not order:
-            continue
-        try:
-            days = (datetime.fromisoformat(need).date()
-                    - datetime.fromisoformat(order).date()).days
-        except ValueError:
-            continue
-        if 0 < days < 400:
-            lead_by_sku[str(rec["product_id"])] = days
+    lead_source = "d6_need_minus_d6_lead"
+    branch_lead, branch_source = _branch_lead_days(leadtime_path, pool)
+    if branch_lead:
+        lead_by_sku = {str(rec["product_id"]): branch_lead
+                       for rec in d6_rows.to_dict("records")}
+        lead_source = branch_source
+    else:
+        for rec in d6_rows.to_dict("records"):
+            need = _date_str(rec.get("需要日"))
+            order = _date_str(rec.get("下单日"))
+            if not need or not order:
+                continue
+            try:
+                days = (datetime.fromisoformat(need).date()
+                        - datetime.fromisoformat(order).date()).days
+            except ValueError:
+                continue
+            if 0 < days < 400:
+                lead_by_sku[str(rec["product_id"])] = days
 
     frame = _decide_live(
         d6_rows, demand_map, demand_source, supply, cg, so, po,
         so_known, po_known, branch=pool, stock_meta=stock_meta,
         forecast_meta=forecast_meta, file_meta=file_meta, as_of_dt=as_of_dt,
-        lead_by_sku=lead_by_sku)
+        lead_by_sku=lead_by_sku, lead_source=lead_source)
 
     warnings = []
     if demand_source == "d6_pack_q95":
@@ -905,6 +937,7 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
     meta = dict(
         mode="live", branch=pool, as_of=as_of_dt.isoformat(),
         demand_source=demand_source, pack=pack_meta,
+        leadtime={"source": lead_source, "days": branch_lead},
         stock=stock_meta, forecast=forecast_meta,
         so=so_evidence, po=po_evidence,
         demand_netting=_file_meta(demand_netting),

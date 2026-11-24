@@ -100,6 +100,7 @@ def main(argv=None):
             p.add_argument("--forecast-root", default=None)
             p.add_argument("--demand-netting", default=None)
             p.add_argument("--snapshot-date", default=None)
+            p.add_argument("--leadtime", default=None)
             p.add_argument("--json", action="store_true")
         if name == "pull":
             p.add_argument("--env-file", default=None)
@@ -284,6 +285,10 @@ def command_decide(args):
     backlog = Path(args.backlog) if args.backlog else live / "backlog.csv"
     po = Path(args.po) if args.po else live / "po_open.tsv"
     as_of = args.as_of or datetime.now().astimezone().replace(microsecond=0).isoformat()
+    leadtime = Path(args.leadtime) if args.leadtime else None
+    if leadtime is None:
+        candidates = sorted(Path(root).glob("leadtime_snapshot*.json"))
+        leadtime = candidates[-1] if candidates else None
     frame, info = decide_mod.run(
         root, args.branch, as_of,
         stock_path=stock if stock.exists() else None,
@@ -294,6 +299,7 @@ def command_decide(args):
         demand_netting=args.demand_netting,
         snapshot_date=args.snapshot_date,
         pack_manifest=args.manifest,
+        leadtime_path=leadtime,
     )
     if args.json:
         print(json.dumps({"meta": info,

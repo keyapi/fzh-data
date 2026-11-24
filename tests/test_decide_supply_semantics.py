@@ -174,3 +174,22 @@ def test_cg_allocated_by_b_ownership_not_warehouse_geo(tmp_path):
     # USTX 行也能用 Cranbury 的 CG：按 B SKU 归属，不按仓库地理位置
     assert row["supply_cg"] == 100
     assert row["cg_source"] == "live_stock.cg"
+
+
+def test_leadtime_snapshot_recalculates_order_date(tmp_path):
+    make_pack(tmp_path, need_date="2026-12-10")
+    s = stock(tmp_path, rows=[base_stock()])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"
+    po.write_text("", encoding="utf-8")
+    lead = tmp_path / "leadtime_snapshot_20261123.json"
+    lead.write_text(json.dumps({"so_dn": {"2026_recent_6m": {
+        "overall": {"p90": 10},
+        "customer": {"DANEEY": {"p90": 10}}}}}, ensure_ascii=False), encoding="utf-8")
+    frame, meta = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po,
+                       leadtime_path=lead)
+    row = frame.set_index("sku").loc["KS1"]
+    assert row["order_date"] == "2026-11-30"
+    assert row["date_source"].startswith("so_dn_p90")
+    assert meta["leadtime"]["days"] == 10
