@@ -40,6 +40,29 @@ def sku_of(item_code):
     return text or None
 
 
+def _number(value):
+    """Finite float, or ``None`` when the cell is missing/blank/non-numeric.
+
+    Missing must stay unknown: coercing it to 0 would turn "we do not know how
+    much this line still owes" into "this line owes nothing".
+    """
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if number != number else number
+
+
+def _open_qty(row):
+    qty = _number(row.get("qty"))
+    delivered = _number(row.get("delivered_qty"))
+    if qty is None or delivered is None:
+        return None
+    return max(0.0, qty - delivered)
+
+
 def as_date(value):
     if value is None:
         return None
@@ -113,42 +136,82 @@ def load(path, as_of="2026-11-13", window_start=None):
 
     ``window_start`` defaults to six calendar months before ``as_of``; the
     caller may pass an explicit ISO date to freeze the reporting window.
+    Kept for the recommendation page: no line deduplication (historic shape).
+    """
+    summary, _stats = load_deduped(path, as_of=as_of, window_start=window_start,
+                                   dedupe=False)
+    return summary
+
+
+def load_deduped(path, as_of="2026-11-13", window_start=None, dedupe=True):
+    """Return ``(summary, stats)``; ``dedupe`` collapses repeated SO lines.
+
+    A repeated ``(so, so_line)`` can come from a re-run of the W1 snapshot
+    appended to the same file.  With ``dedupe=True`` its open quantity is
+    counted once (first occurrence wins) and the collapse is reported instead
+    of silently changing the total.
     """
     p = Path(path)
+    stats = {"lines_read": 0, "unique_lines": 0, "known_lines": 0,
+             "unknown_qty_lines": 0, "duplicate_lines": 0,
+             "duplicate_open_qty": 0.0, "skipped_no_sku_or_branch": 0,
+             "skipped_not_open": 0, "keys": 0, "dedupe": bool(dedupe)}
     if not p.exists():
-        return {}
+        stats["error"] = f"SO 证据文件不存在：{p}"
+        return {}, stats
     cutoff = as_date(as_of)
     if cutoff is None:
         raise ValueError("as_of must be an ISO date")
     start = as_date(window_start) if window_start is not None else months_before(cutoff)
     out = {}
+    seen = set()
     for line in p.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         record = json.loads(line)
         payload = record.get("payload") or {}
         for row in payload.get("lines") or []:
+            stats["lines_read"] += 1
             sku = sku_of(row.get("item_code"))
             br = branch(row.get("customer"))
             if not sku or not br:
+                stats["skipped_no_sku_or_branch"] += 1
                 continue
-            try:
-                qty = float(row.get("qty") or 0)
-                delivered = float(row.get("delivered_qty") or 0)
-            except (TypeError, ValueError):
-                continue
-            open_qty = max(0.0, qty - delivered)
-            if open_qty <= 0:
-                continue
+            so_name = record.get("so") or row.get("so")
+            if dedupe:
+                line_key = (str(so_name), str(row.get("so_line")))
+                if line_key in seen:
+                    stats["duplicate_lines"] += 1
+                    duplicate_open = _open_qty(row)
+                    if duplicate_open is not None:
+                        stats["duplicate_open_qty"] += duplicate_open
+                    previous = out.get((sku, br))
+                    if previous is not None:
+                        previous["so_duplicate_lines"] += 1
+                    continue
+                seen.add(line_key)
+            # Missing/blank qty or delivered is *unknown*, never 0: the open
+            # quantity stays null so it cannot be summed or read as "no supply".
+            qty = _number(row.get("qty"))
+            delivered = _number(row.get("delivered_qty"))
+            open_qty = None if (qty is None or delivered is None) \
+                else max(0.0, qty - delivered)
             status = str(row.get("so_status") or "")
-            if status == "Closed" or str(row.get("so_docstatus")) not in {"1", "1.0"}:
+            closed = status == "Closed" or \
+                str(row.get("so_docstatus")) not in {"1", "1.0"}
+            if closed or (open_qty is not None and open_qty <= 0):
+                stats["skipped_not_open"] += 1
                 continue
+            stats["unique_lines"] += 1
+            if open_qty is None:
+                stats["unknown_qty_lines"] += 1
+            else:
+                stats["known_lines"] += 1
             created = as_date(_pick(record, payload, row))
             delivery = as_date(_pick(record, payload, row,
                                      ("delivery_date", "scheduled_delivery")))
             bucket = _bucket(created, start, cutoff)
             overdue = max(0, (cutoff - delivery).days) if delivery else 0
-            so_name = record.get("so") or row.get("so")
             key = (sku, br)
             summary = out.setdefault(key, {
                 "so_open_qty": 0.0, "so_open_orders": 0,
@@ -162,25 +225,44 @@ def load(path, as_of="2026-11-13", window_start=None):
                 "so_as_of": cutoff.isoformat(),
                 "so_lines": [],
                 "so_source_as_of": payload.get("as_of") or "",
+                "so_duplicate_lines": 0,
+                "so_unknown_qty_lines": 0,
+                "so_unknown_lines": [],
+                "so_complete": True,
                 "_orders": set(), "_recent_orders": set(),
                 "_history_orders": set(), "_unknown_orders": set(),
             })
-            summary["so_open_qty"] += open_qty
             summary["_orders"].add(so_name)
             summary["so_overdue_days_max"] = max(summary["so_overdue_days_max"], overdue)
-            if bucket == "recent":
-                summary["so_recent_open_qty"] += open_qty
-                summary["_recent_orders"].add(so_name)
-                summary["so_recent_overdue_days_max"] = max(
-                    summary["so_recent_overdue_days_max"], overdue)
-            elif bucket == "history":
-                summary["so_history_open_qty"] += open_qty
-                summary["_history_orders"].add(so_name)
-                summary["so_history_overdue_days_max"] = max(
-                    summary["so_history_overdue_days_max"], overdue)
+            if open_qty is None:
+                summary["so_unknown_qty_lines"] += 1
+                summary["so_complete"] = False
+                summary["so_unknown_lines"].append({
+                    "so": so_name,
+                    "so_line": row.get("so_line"),
+                    "item_code": row.get("item_code"),
+                    "transaction_date": created.isoformat() if created else None,
+                    "date_bucket": bucket,
+                    "qty": None,
+                    "delivered": None,
+                    "open_qty": None,
+                    "qty_status": "unknown",
+                })
             else:
-                summary["so_unknown_date_open_qty"] += open_qty
-                summary["_unknown_orders"].add(so_name)
+                summary["so_open_qty"] += open_qty
+                if bucket == "recent":
+                    summary["so_recent_open_qty"] += open_qty
+                    summary["_recent_orders"].add(so_name)
+                    summary["so_recent_overdue_days_max"] = max(
+                        summary["so_recent_overdue_days_max"], overdue)
+                elif bucket == "history":
+                    summary["so_history_open_qty"] += open_qty
+                    summary["_history_orders"].add(so_name)
+                    summary["so_history_overdue_days_max"] = max(
+                        summary["so_history_overdue_days_max"], overdue)
+                else:
+                    summary["so_unknown_date_open_qty"] += open_qty
+                    summary["_unknown_orders"].add(so_name)
             summary["so_lines"].append({
                 "so": so_name,
                 "so_line": row.get("so_line"),
@@ -189,6 +271,7 @@ def load(path, as_of="2026-11-13", window_start=None):
                 "qty": qty,
                 "delivered": delivered,
                 "open_qty": open_qty,
+                "qty_status": "unknown" if open_qty is None else "known",
                 "transaction_date": created.isoformat() if created else None,
                 "delivery_date": delivery.isoformat() if delivery else None,
                 "overdue_days": overdue,
@@ -201,9 +284,11 @@ def load(path, as_of="2026-11-13", window_start=None):
         summary["so_recent_open_orders"] = len(summary.pop("_recent_orders"))
         summary["so_history_open_orders"] = len(summary.pop("_history_orders"))
         summary["so_unknown_date_open_orders"] = len(summary.pop("_unknown_orders"))
+        summary["so_complete"] = summary["so_unknown_qty_lines"] == 0
         order = {"recent": 0, "history": 1, "unknown": 2}
         # Stable two-pass sort: newest first inside each bucket, recent bucket first.
         summary["so_lines"].sort(key=lambda line: line.get("transaction_date") or "",
                                  reverse=True)
         summary["so_lines"].sort(key=lambda line: order[line["date_bucket"]])
-    return out
+    stats["keys"] = len(out)
+    return out, stats
