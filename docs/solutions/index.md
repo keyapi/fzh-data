@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-24 | 赛狐官方 MCP 换协议——子账号 X-MCP-Key 开通 + 元工具发现目录（零副作用验证写能力） | [integration-issues/sellfox-mcp-subaccount-key-metatool-protocol.md](integration-issues/sellfox-mcp-subaccount-key-metatool-protocol.md) |
 | 2026-11-19 | 钉钉 aflow 导出工具 UI 漂移：表单改名与日期控件选择器失效 | [developer-experience/dingtalk-aflow-export-ui-drift.md](developer-experience/dingtalk-aflow-export-ui-drift.md) |
 | 2026-11-19 | 账期附件跨桶错放：同一结算文件出现在另一账期桶 | [workflow-issues/amazon-period-cross-bucket-attachment-misfile.md](workflow-issues/amazon-period-cross-bucket-attachment-misfile.md) |
 | 2026-11-19 | 账期管道审计修复：去重、FBA 过滤键、Tax 别名与写表口径 | [workflow-issues/amazon-period-pipeline-audit-fixes.md](workflow-issues/amazon-period-pipeline-audit-fixes.md) |

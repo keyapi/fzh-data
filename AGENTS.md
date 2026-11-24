@@ -178,6 +178,7 @@ uv sync
 | `pb-orders` | `pb_orders/` | Pottery Barn 出件：SPS 库存预检（明细级）→ 通途导入 xlsx + 标签/背贴 PDF；CLI + 网页版 |
 | `pb-reconciliation` | `pb_reconciliation/` | Pottery Barn 对账月度更新 + TM 佣金结算表 |
 | `sellfox-api-proxy` | `sellfox-api-proxy/` | 赛狐 API 代理网关（破 IP 白名单 + 凭证安全分发） |
+| `sellfox_mcp` | `sellfox_mcp/` | 赛狐官方托管 MCP：3 元工具 + 371 业务工具目录、子账号 `X-MCP-Key`、写能力干探测 |
 | `sps-api` | `sps_api/` | SPS Commerce API 可行性探测（EDI / ASN / 发票 / 库存） |
 | `ups-track` | `ups_track/` | UPS 官方 Track API 批量查询（当前状态 + 完整节点时间线） |
 | `web-automation` | `.agents/skills/{web-automation,playwright-setup,tongtu-automation,sellfox-automation}/` | 网页自动化能力舱（通途/赛狐浏览器 + 通用 Playwright），子项目在 `web_automation/` |
@@ -268,7 +269,7 @@ AGENTS.md                        ← 你正在读的，项目总纲 + 路由地�
 | 类别 | 篇数 | 什么时候读 |
 |------|-----|-----------|
 | `workflow-issues/` | 40 | 账期对账、迟交/错位、跨期结算、批处理流程 |
-| `integration-issues/` | 30 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
+| `integration-issues/` | 31 | API 鉴权 / 限流 / 字段长度 / OIDC / Webhook 等集成踩坑 |
 | `architecture-patterns/` | 21 | 「这个管道/系统为什么这样设计」 |
 | `tooling-decisions/` | 15 | 脚本、工具选型、产出校验 |
 | `developer-experience/` | 15 | Windows / worktree / MCP / Colab 等本机环境坑 |

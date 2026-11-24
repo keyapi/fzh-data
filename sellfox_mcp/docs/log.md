@@ -8,6 +8,17 @@ tags: [sellfox, mcp, log]
 
 # 变更日志
 
+## 2026-11-24
+
+- **协议改版实测**：服务端从「23 个扁平工具 + 有状态」改为「3 个元工具（`sf_discover`/`sf_describe`/`sf_execute`）+ 371 个业务工具的发现目录 + **无状态**」。
+- **路径 B 开通**：子账号独立 `X-MCP-Key` 可用（9 月为 `40027 未启用MCP功能`）；权限与子账号角色一致（查询/写入）。
+- **重写**: [scripts/probe_mcp.py](../scripts/probe_mcp.py) — 去掉 session 逻辑，新增 `--catalog` / `--discover` / `--describe` / `--execute` / `--smoke-reads` / `--probe-writes`；自动拼接 `contract_parts` 并校验 SHA-256。
+- **只读实测**：店铺/订单/利润/SP广告活动 ✅ 返回 `complete`；平台仓库存 `complete` 但默认 0 行。
+  踩到三个坑：`page_size` 广告类需 20–50、订单日期必须 `yyyy-MM-dd HH:mm:ss`、批量 describe 会分页。
+- **写能力干探测**：11+3 个写工具（含分片契约的 `edit_sp_campaign`）只发空参数 → 全部 `INVALID_PARAMS`，即「鉴权通 + 路由通 + 校验生效」；前后广告活动快照完全一致，**零变更**。
+- **接入**：本机 Claude Code 用户级已加 `Sellfox-MCP`（`~/.claude.json`），并对 `sf_execute` 设置人工确认（`permissions.ask`）。
+  旧版「按工具名 deny 9 个写工具」的做法无效 —— 写操作现在走 `sf_execute`，没有独立工具名。
+
 ## 2026-09-20
 
 - **初始化 OKF bundle**：新建 `sellfox_mcp/` 模块（README + AGENT_HANDOFF + `docs/` + `scripts/`）。
