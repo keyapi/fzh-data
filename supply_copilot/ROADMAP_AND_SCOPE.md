@@ -23,7 +23,7 @@ D6 名单 vs 最近 90 天实际需求（重建需求表）：
 - 分公司：USNJ
 - SKU：D6 296 行（覆盖 98.7% 近90天单位）
 - 需求：本地 rebuild，默认 90% 档；未覆盖 SKU 退回 D6 并标记
-- 供给：实时 on-hand、开放 SO（带交付日）、开放 PO（按行 ETA；通途 PO 未接，EN 物料仓 PO 按 0 并标注）、CG on-hand（美东仓映射）
+- 供给：实时 on-hand、开放 SO（带交付日）、开放 PO（按行 ETA；通途 PO 未接，EN 物料仓 PO 按 0 并标注）、CG on-hand（按 B SKU 归属计入美东/美中）
 - 输出：CLI 报告 + JSON（bundle_id、证据、可执行性）+ weekly 13 周
 - 决策方式：**人工审核后下单**（工作台未接也可用报告）
 
@@ -53,7 +53,7 @@ D6 名单 vs 最近 90 天实际需求（重建需求表）：
 - 全 USNJ active SKU（含 D6 外 29 个）+ 范围差数报告
 - 通途 PO 开放量（无 ETA 标条件）
 - SO→DN 实测交期（已有快照：中位 14 天、p90 28.5 天；按客户/分公司）倒排下单日
-- CG 仓映射确认（Cranbury/Perris→美东，Romeoville→美中）
+- CG 归属按 B 结论确认（共享仓，不按仓库地理位置）
 
 **不做**：p95、60cm/owner/censoring、工作台、自动下单
 
