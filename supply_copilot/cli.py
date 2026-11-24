@@ -80,6 +80,10 @@ def main(argv=None):
             p.add_argument("--forecast-root", default=None)
             p.add_argument("--demand-netting", default=None)
             p.add_argument("--snapshot-date", default=None)
+            p.add_argument("--so-in-forecast", choices=["true", "false"],
+                           default="true",
+                           help="开放 SO 是否已含在预测内；true=不叠加需求（默认保守），"
+                                "false=叠加开放 SO 余额到需求")
             p.add_argument("--json", action="store_true")
         if name == "pull":
             p.add_argument("--env-file", default=None)
@@ -232,6 +236,7 @@ def command_decide(args):
         demand_netting=args.demand_netting,
         snapshot_date=args.snapshot_date,
         pack_manifest=args.manifest,
+        so_in_forecast=args.so_in_forecast == "true",
     )
     if args.json:
         print(json.dumps({"meta": info,

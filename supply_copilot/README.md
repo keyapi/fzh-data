@@ -66,6 +66,20 @@ uv run python -m supply_copilot decide --branch USNJ   # 用 live 供给重算�
 它给的是**当天候选**（补/不补/待核 + 数量 + 证据），不是可直接下单的指令。
 只有上述原因补齐、`可执行性=是` 时，才允许作为采购建议。
 
+### SO / PO 口径（2026-11-24 P0）
+
+- **PO 按时**：`ETA ≤ 需要日` 才算按时，逐行比较；ETA 缺失或晚于需要日均计入
+  “未证按时”。`meta.po` 分开报 `quantity` / `with_eta_qty` / `on_time_qty` /
+  `missing_eta_qty` / `late_qty` / `outside_decision_qty`。
+- **SO 归一**：EN 原始 SO 行的 `item_code` 先按 `sku_map.tsv` / D6 成品码归一，
+  UOM 对齐 D6 口径，客户 → 分公司主仓。皮壳 `PK#`、别家客户、别家仓、无 UOM
+  等**不能归一的行走 `meta.so.unresolved_samples`**（带源行号与 SO 号），
+  不静默丢弃，也不当成“实测 0”。
+- **SO 是否已在预测内**：显式开关 `--so-in-forecast true|false`（函数参数
+  `so_in_forecast`）。默认 `true`（保守）：视为开放 SO 已含在预测里，
+  **不叠加需求**；`false`：视为未含，把可归一的开放 SO 余额叠加到需求。
+  两种语义都会写进 `meta.so.semantics/impact` 和逐行 `warnings`。
+
 ## 自己重算需求/预测（不依赖我们）
 
 ```bash

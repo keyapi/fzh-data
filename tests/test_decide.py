@@ -233,3 +233,186 @@ def test_requires_timezone(tmp_path):
     make_pack(tmp_path)
     with pytest.raises(ValueError, match="时区"):
         run(tmp_path, "USTX", "2026-11-23T09:00:00")
+
+
+# --------------------------------------------------------------------------- #
+# P0 反例：po_on_time 必须与需要日比较（不能退化成"有 ETA"）
+# --------------------------------------------------------------------------- #
+def _empty_backlog(path: Path):
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse",
+                          "canonical_uom", "quantity"]).to_csv(path, index=False)
+    return path
+
+
+def test_po_eta_compared_to_need_date_not_boolean(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    backlog = _empty_backlog(tmp_path / "backlog_empty.csv")
+
+    po_jsonl = tmp_path / "po_tongtool.jsonl"
+    records = [
+        # KS1 需要日 2027-02-16：ETA 当天 → 按时
+        {"status": "1", "quantity": 20, "in_quantity": 0, "goods_sku": "TT1",
+         "warehouseName": "美中-FZH-DANEEY", "willArriveDate": "2027-02-16"},
+        # KS1 同键另一行无 ETA → 不计按时，计入 missing_eta
+        {"status": "1", "quantity": 5, "in_quantity": 0, "goods_sku": "TT1",
+         "warehouseName": "美中-FZH-DANEEY"},
+        # KS3 需要日 2027-03-01：ETA 晚一天 → 不计按时
+        {"status": "1", "quantity": 7, "in_quantity": 0, "goods_sku": "TT3",
+         "warehouseName": "美中-FZH-DANEEY", "willArriveDate": "2027-03-02"},
+    ]
+    po_jsonl.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in records),
+                        encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                        po_tongtool_path=po_jsonl)
+    po = meta["po"]
+    assert po["rows"] == 3
+    assert po["quantity"] == 32
+    assert po["with_eta"] == 2 and po["with_eta_qty"] == 27
+    assert po["missing_eta"] == 1 and po["missing_eta_qty"] == 5
+    # 回归点：若 ETA 被退化成 bool，这里会是 0
+    assert po["on_time_qty"] == 20
+    assert po["late_qty"] == 7
+    assert po["unproven_qty"] == 12          # 5 无 ETA + 7 迟到
+
+    by_sku = frame.set_index("sku")
+    ks1 = by_sku.loc["KS1"]
+    # 100 − (期初 10 + max(在途 2, 按时 PO 20) + min(CG 3, D6 1)) = 69
+    assert ks1["supply_po"] == 25
+    assert ks1["supply_expected"] == 31 and ks1["new_qty"] == 69
+    assert ks1["supply_proven"] == 31
+    # KS3：7 件迟到 PO 不进 expected/proven
+    ks3 = by_sku.loc["KS3"]
+    assert ks3["supply_po"] == 7 and ks3["supply_expected"] == 0
+    assert ks3["new_qty"] == 50
+
+
+def test_po_tsv_eta_equal_and_next_day(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    backlog = _empty_backlog(tmp_path / "backlog_empty.csv")
+    po = tmp_path / "po_open.tsv"
+    po.write_text(
+        "PO-1\tTT1\t20\t20\t美中-FZH-DANEEY\t2027-02-16\n"   # 当天 → 按时
+        "PO-2\tTT3\t7\t7\t美中-FZH-DANEEY\t2027-03-02\n",    # 晚一天 → 不按时
+        encoding="utf-8")
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=backlog, po_path=po)
+    assert meta["po"]["on_time_qty"] == 20
+    assert meta["po"]["late_qty"] == 7
+    assert meta["po"]["missing_eta_qty"] == 0
+    assert frame.set_index("sku").loc["KS3", "supply_expected"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# P0 反例：SO 事实键 canonical 归一；不能归一的行走 evidence，不得静默变 0
+# --------------------------------------------------------------------------- #
+def test_en_so_rows_canonicalized_and_unresolved_counted(tmp_path):
+    make_pack(tmp_path)
+    # 额外一个可映射到 D6 宇宙之外物料的通途 SKU，用于造 UOM 缺失
+    with open(tmp_path / "data" / "sku_map.tsv", "a", encoding="utf-8") as fh:
+        fh.write("X9\tTT9\tCUST\n")
+    stock, _backlog, po = make_live(tmp_path)
+
+    so = pd.DataFrame([
+        # 1 已规范：EN 成品码直接命中
+        {"so": "SO-1", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 3, "uom": "个"},
+        # 2 皮壳 PK#：不能当成品 → 身份缺失
+        {"so": "SO-2", "customer": "DANEEY", "warehouse": "半成品仓 - FZH",
+         "item_code": "PK#KS1-DM", "open_qty": 4, "uom": "个"},
+        # 3 别家客户 → 客户池不符
+        {"so": "SO-3", "customer": "CENTRADE", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 6, "uom": "个"},
+        # 4 通途 SKU 映射到宇宙外物料且无 UOM → UOM 缺失
+        {"so": "SO-4", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "TT9", "open_qty": 5, "uom": ""},
+        # 5 通途 SKU 经 sku_map 归一到 KS2
+        {"so": "SO-5", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "TT2", "open_qty": 1, "uom": "个"},
+        # 6 行仓明确属于别家分公司 → 仓归属不符
+        {"so": "SO-6", "customer": "DANEEY", "warehouse": "美东-CENTRADE",
+         "item_code": "KS1", "open_qty": 9, "uom": "个"},
+    ])
+    so_path = tmp_path / "so_raw.csv"
+    so.to_csv(so_path, index=False, encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path, po_path=po,
+                        so_in_forecast=True)
+    so_ev = meta["so"]
+    assert so_ev["format"] == "en_sales_orders"
+    assert so_ev["rows"] == 6
+    assert so_ev["accepted_rows"] == 2                 # SO-1 + SO-5
+    assert so_ev["identity_missing"] == 1              # SO-2
+    assert so_ev["customer_pool_mismatch"] == 1        # SO-3
+    assert so_ev["uom_missing"] == 1                   # SO-4
+    assert so_ev["warehouse_out_of_branch"] == 1       # SO-6
+    assert so_ev["rejected_rows"] == 4
+    assert so_ev["quantity"] == 4                      # 3 + 1
+    reasons = {s["reason"] for s in so_ev["unresolved_samples"]}
+    assert reasons == {"identity_missing", "customer_pool_mismatch",
+                       "uom_missing", "warehouse_out_of_branch"}
+    assert [s["row"] for s in so_ev["unresolved_samples"]] == [2, 3, 4, 6]
+    assert {s["so"] for s in so_ev["unresolved_samples"]} == {"SO-2", "SO-3", "SO-4", "SO-6"}
+
+    by_sku = frame.set_index("sku")
+    assert by_sku.loc["KS1", "supply_so"] == 3          # 只有可归一行命中
+    assert by_sku.loc["KS2", "supply_so"] == 1
+    # 未归一的行不改变总量为 0 的假象：KS1 仍按 100 需求算出 87
+    assert by_sku.loc["KS1", "demand_qty"] == 100
+    assert by_sku.loc["KS1", "new_qty"] == 87
+
+
+def test_so_in_forecast_switch_adds_only_resolved_so_once(tmp_path):
+    make_pack(tmp_path)
+    stock, backlog, po = make_live(tmp_path)          # canonical SO: KS1=3
+
+    frame_on, meta_on = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                              po_path=po, so_in_forecast=True)
+    frame_off, meta_off = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                                po_path=po, so_in_forecast=False)
+
+    assert meta_on["so_in_forecast"] is True
+    assert meta_on["so"]["attached_qty"] == 0
+    assert meta_on["totals"]["so_attached_qty"] == 0
+    assert "已含在预测内" in frame_on.set_index("sku").loc["KS1", "warnings"]
+
+    assert meta_off["so_in_forecast"] is False
+    assert meta_off["so"]["attached_qty"] == 3
+    assert meta_off["totals"]["so_attached_qty"] == 3
+    warnings = frame_off.set_index("sku").loc["KS1", "warnings"]
+    assert "已叠加到需求" in warnings and "双计" in warnings
+
+    # 同一条 SO 只计一次：净需求差恰好等于 SO 余额 3，不是 6
+    on_qty = frame_on.set_index("sku").loc["KS1", "new_qty"]
+    off_qty = frame_off.set_index("sku").loc["KS1", "new_qty"]
+    assert off_qty - on_qty == 3
+    # demand_qty 仍是预测/D6 需求原值；SO 叠加只体现在 reason 与净需求
+    assert frame_on.set_index("sku").loc["KS1", "demand_qty"] == 100
+    assert frame_off.set_index("sku").loc["KS1", "demand_qty"] == 100
+    assert "含未履约 SO 3" in (frame_off.set_index("sku").loc["KS1", "reason"] or "")
+
+
+def test_so_in_forecast_not_double_counted_for_duplicate_keys(tmp_path):
+    make_pack(tmp_path)
+    d6_path = tmp_path / "data" / "D6_v6_22.xlsx"
+    d6 = pd.read_excel(d6_path, sheet_name="1_全量动作")
+    dup = d6[d6["product_id"] == "KS1"].iloc[[0]].copy()
+    dup["形态"] = "半成品"          # 同一 (SKU, 主仓, UOM) 键的第二行
+    pd.concat([d6, dup], ignore_index=True).to_excel(
+        d6_path, sheet_name="1_全量动作", index=False)
+
+    stock, backlog, po = make_live(tmp_path)
+    frame_on, _ = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                        po_path=po, so_in_forecast=True)
+    frame_off, meta = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                            po_path=po, so_in_forecast=False)
+    ks1_on = frame_on[frame_on["sku"] == "KS1"]
+    ks1_off = frame_off[frame_off["sku"] == "KS1"]
+    assert len(ks1_on) == 2 and len(ks1_off) == 2
+    assert meta["so"]["attached_qty"] == 3
+    # 同一 SO 在重复键上只叠加一次：两行合计净需求 +3，不是 +6
+    assert ks1_off["new_qty"].sum() - ks1_on["new_qty"].sum() == 3
+    assert any("重复行" in str(w) for w in ks1_off["warnings"])
+
+
