@@ -8,6 +8,15 @@ tags: [supply-copilot, changelog]
 
 # 变更日志
 
+## 2026-11-24（第三轮修正：缺量汇总传播）
+
+- 任何含未知量的合计一律 `null`：行级 `so.open_qty` 与各日期段、`so_scope`、
+  `so_three_way.open_total`、`so_stage.stage_totals`（原先把未知行跳过、把 0 当小计）。
+- 已知部分另命名：`known_open_qty` / `known_recent` / `known_history` /
+  `known_unknown_date` / `stage_known_subtotals`；`balanced` 不完整时为 `null`，
+  另给 `known_balanced`。
+- 测试补混合已知/未知用例（31 条），原「缺量阶段总量=0」断言反转为 `null`。
+
 ## 2026-11-24（复核修正）
 
 - **期间有效性**：库存观测日晚于声明期间起点时一律拒绝（`demand_bridge.available=false`），

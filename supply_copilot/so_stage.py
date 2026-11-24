@@ -50,6 +50,7 @@ def load_stage_balances(path):
     stats = {"records": 0, "rows_read": 0, "unique_rows": 0, "duplicate_rows": 0,
              "skipped_no_branch": 0, "skipped_no_sku": 0, "keys": 0,
              "stage_totals": {stage: 0.0 for stage in STAGE_ORDER},
+             "stage_known_subtotals": {stage: 0.0 for stage in STAGE_ORDER},
              "stage_unknown_qty_rows": 0, "scope_fba_qty": 0.0,
              "scope_fba_unknown_rows": 0,
              "source": "W1 stage_balances"}
@@ -119,14 +120,22 @@ def load_stage_balances(path):
             summary["so_stage_rows"] += 1
             summary["_orders"].add(key_fields[0])
     totals = stats["stage_totals"]
+    known_subtotals = stats["stage_known_subtotals"]
     for summary in out.values():
         summary["so_stage_so_count"] = len(summary.pop("_orders"))
         cells = summary.pop("_cells")
         for stage, cell in cells.items():
             value = None if cell["unknown"] else cell["qty"]
             summary["so_stage_qty"][stage] = value
-            if value is not None and stage in totals:
+            if stage not in totals:
+                continue
+            if cell["unknown"]:
+                # A total that mixes known and unknown rows is not a total:
+                # publish null and keep the known part under its own name.
+                totals[stage] = None
+            elif totals[stage] is not None:
                 totals[stage] = round(totals[stage] + value, 6)
+            known_subtotals[stage] = round(known_subtotals[stage] + cell["qty"], 6)
         summary["so_stage_incomplete"].sort()
         summary["so_stage_qty"] = {stage: summary["so_stage_qty"][stage]
                                    for stage in STAGE_ORDER

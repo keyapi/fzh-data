@@ -70,6 +70,11 @@ supply_observed_at/elapsed_days/demand_bridge`。
 - **数量缺失保持 null**：`qty`/`delivered_qty` 缺失或非数字时 `open_qty=null`、
   `qty_status=unknown`，单列在 `so.unknown_qty_lines` / `so.unknown_lines`；
   不参与三段合计，也不当成 0。`so.completeness=partial_unknown_qty`。
+- **含未知行的合计一律为 null（第三轮修正）**：行级 `so.open_qty` 及其日期段、
+  `so_scope.*`、`so_three_way.open_total`、`so_stage.stage_totals` 只要混入未知量
+  就是 `null`；已知部分另存为 `known_open_qty` / `known_recent` / `known_history` /
+  `known_unknown_date` / `stage_known_subtotals`；`balanced` 此时为 `null`
+  （另给 `known_balanced`）。不允许把"已知小计"写成"总量"或 0。
 - **按 product_id 唯一汇总（2026-11-24 修正）**：296 个形态键只有 290 个唯一
   `product_id`；SO 按产品附挂，同产品的各形态行共享同一汇总，**不可跨行相加**。
   行级保留 `so.aggregation` 说明；报告一律从证据侧按唯一键重算。
@@ -78,15 +83,16 @@ supply_observed_at/elapsed_days/demand_bridge`。
   `so_scope.other_branches`（其它分公司）。`so_dedupe` 是**文件级（全分公司）**
   统计，不等于快照范围。
 - 三段保留：`recent_open_qty`（创建日 ≥ as_of−6 个月）/ `history_open_qty` /
-  `unknown_date_open_qty`（创建日缺失或晚于 as_of）；已知识别量三者之和必须等于
-  `open_qty`，行级 `three_bucket_sum_equals_open`、报告级 `so_three_way.balanced` 双向核对。
+  `unknown_date_open_qty`（创建日缺失或晚于 as_of）；**已知**三段之和等于**已知**
+  `open_qty`（`known_three_bucket_sum_equals_known_open`），报告级
+  `so_three_way.known_balanced` 复核；完整时 `balanced` 才为 true/false。
 - `so.current_for_decision`：证据 `as_of` = 刷新 `as_of` 才为 true；否则
   `completeness=stale_observation`，SO 不参与"补"的确定判断。
 - `so.included_in_proven_supply` 恒为 `false`：SO 是工厂交付阶段，不是海外可发供给。
 - `payload.stage_balances`（若有）另成 `so_stage`：按 `stage` 汇总 in_house 余额，
   `unknown` 原样保留为 `unknown`，`external_fba` 单列，`over_produced` 单独成阶；
-  某阶段只要有数量缺失行，该阶段合计即为 **null**（不是 0），`so_stage_complete=false`；
-  与开放量**不同度量、不可相加**。
+  某阶段只要有数量缺失行，该阶段合计即为 **null**（不是 0），`so_stage_complete=false`，
+  已知部分见 `stage_known_subtotals`；与开放量**不同度量、不可相加**。
 
 ## report.json 字段
 
@@ -97,9 +103,9 @@ supply_observed_at/elapsed_days/demand_bridge`。
 | `live_status_counts` | matched / partial / multi_alias / not_found / unavailable… |
 | `rejected[]` / `skipped[]` | `row_index`、`product_id`、`reason`、**完整源行** |
 | `so_dedupe` | 文件级（全分公司）去重键、读到/唯一/已知/未知数量/重复行数、非开放跳过计数 |
-| `so_three_way` | **快照范围**唯一键的三段合计 vs 开放总量、`balanced`、`known_qty_complete` |
+| `so_three_way` | **快照范围**唯一键的三段合计 vs 开放总量、`balanced`（不完整时 null）、`known_*` 小计、`known_balanced` |
 | `so_scope` | in_scope / out_of_scope（含原因）/ branch_total / other_branches 分解 |
-| `so_stage` | 阶段余额汇总（非相加、不计已证） |
+| `so_stage` | 阶段余额汇总：`stage_totals`（含未知为 null）、`stage_known_subtotals`（非相加、不计已证） |
 | `snapshot` | 文件名 + 整包/行级 sha256 + 行数 |
 | `source_hashes` | D5/D6/sku_map/W1 的 sha256 + 与 manifest 不一致清单 |
 | `warnings` | 陈旧快照、SO 证据时点、全行整期拒绝、q95 缺失等 |

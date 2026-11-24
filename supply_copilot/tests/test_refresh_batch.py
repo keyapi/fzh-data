@@ -247,7 +247,7 @@ def test_so_open_deduped_by_so_and_line(tmp_path):
     assert so["recent_open_qty"] == 10.0
     assert so["history_open_qty"] == 5.0
     assert so["unknown_date_open_qty"] == 8.0
-    assert so["three_bucket_sum_equals_open"] is True
+    assert so["known_three_bucket_sum_equals_known_open"] is True
     assert so["included_in_proven_supply"] is False
     assert result["report"]["so_dedupe"]["duplicate_lines"] == 1
     assert result["report"]["so_three_way"]["balanced"] is True
@@ -314,12 +314,25 @@ def test_so_line_with_missing_quantity_stays_null(tmp_path):
     result = run(tmp_path, live_rows=live_rows("TT1", available=40), sku="KS1",
                  period_start=RUN_AS_OF, period_end="2027-02-28")
     row = result["snapshot"]["rows"][0]
-    assert row["so"]["open_qty"] == 0.0            # known sum only
+    assert row["so"]["open_qty"] is None            # total contains an unknown line
+    assert row["so"]["known_open_qty"] == 0.0       # known part named separately
     assert row["so"]["unknown_qty_lines"] == 1
     assert row["so"]["unknown_lines"][0]["open_qty"] is None
     assert row["so"]["completeness"] == "partial_unknown_qty"
-    assert result["report"]["so_three_way"]["known_qty_complete"] is False
-    assert result["report"]["so_three_way"]["unknown_qty_lines"] == 1
+    assert "下界" in row["so"]["unknown_reason"]
+    so_open_stage = next(s for s in row["supply"]["stages"]
+                         if s["stage"] == "so_open")
+    assert so_open_stage["qty"] is None and so_open_stage["known"] is False
+    assert so_open_stage["known_subtotal"] == 0.0
+    report = result["report"]
+    assert report["so_three_way"]["open_total"] is None
+    assert report["so_three_way"]["known_open_total"] == 0.0
+    assert report["so_three_way"]["balanced"] is None
+    assert report["so_three_way"]["known_qty_complete"] is False
+    assert report["so_three_way"]["unknown_qty_lines"] == 1
+    assert report["so_scope"]["in_scope"]["open_qty"] is None
+    assert report["so_scope"]["in_scope"]["known_open_qty"] == 0.0
+    assert report["so_scope"]["branch_total"]["open_qty"] is None
     assert row["decision"]["action"] == "催已有/待核"   # SO is a lower bound, not 0
 
 
@@ -337,7 +350,51 @@ def test_stage_balance_with_missing_quantity_stays_null(tmp_path):
     stage = next(s for s in row["supply"]["stages"]
                  if s["stage"] == "w1_stage:in_production")
     assert stage["qty"] is None and stage["known"] is False
-    assert result["report"]["so_stage"]["stage_totals"]["in_production"] == 0.0
+    assert result["report"]["so_stage"]["stage_totals"]["in_production"] is None
+    assert result["report"]["so_stage"]["stage_known_subtotals"]["in_production"] == 0.0
+
+
+def test_stage_total_with_known_and_unknown_rows_stays_null(tmp_path):
+    balances = [
+        {"so": "SO-1", "so_line_id": "L1", "item_code": "KS1",
+         "stage": "in_production", "qty": None, "scope": "in_house",
+         "qty_status": "unknown", "source_record": "WO-1"},
+        {"so": "SO-1", "so_line_id": "L1", "item_code": "KS1",
+         "stage": "in_production", "qty": 5.0, "scope": "in_house",
+         "qty_status": "known", "source_record": "WO-2"},
+    ]
+    records = [so_record("SO-1", [so_line("SO-1", "L1", 7, item_code="KS1")],
+                         balances)]
+    make_pack(tmp_path, [d6_row("KS1")], [d5_row("KS1")], {"KS1": "TT1"}, records)
+    result = run(tmp_path, live_rows=live_rows("TT1"), sku="KS1")
+    row = result["snapshot"]["rows"][0]
+    assert row["so_stage"]["so_stage_qty"]["in_production"] is None
+    assert row["so_stage"]["so_stage_complete"] is False
+    stage_report = result["report"]["so_stage"]
+    assert stage_report["stage_totals"]["in_production"] is None   # [null, 5] != 5
+    assert stage_report["stage_known_subtotals"]["in_production"] == 5.0
+
+
+def test_so_scope_total_stays_null_on_mixed_known_and_unknown(tmp_path):
+    records = [so_record("SO-1", [
+        so_line("SO-1", "L1", 10, transaction_date="2026-01-01", item_code="KS1"),
+        so_line("SO-1", "L2", 6, delivered=None,
+                transaction_date="2026-11-01", item_code="KS1"),
+    ], as_of=RUN_AS_OF)]
+    make_pack(tmp_path, [d6_row("KS1")], [d5_row("KS1")], {"KS1": "TT1"}, records)
+    result = run(tmp_path, live_rows=live_rows("TT1"), sku="KS1")
+    so = result["snapshot"]["rows"][0]["so"]
+    assert so["open_qty"] is None and so["known_open_qty"] == 10.0
+    assert so["recent_open_qty"] is None and so["known_recent_open_qty"] == 0.0
+    assert so["history_open_qty"] == 10.0 and so["known_history_open_qty"] == 10.0
+    report = result["report"]
+    assert report["so_three_way"]["open_total"] is None
+    assert report["so_three_way"]["known_open_total"] == 10.0
+    assert report["so_three_way"]["recent"] is None
+    assert report["so_three_way"]["known_recent"] == 0.0
+    assert report["so_three_way"]["history"] == 10.0
+    assert report["so_three_way"]["balanced"] is None
+    assert report["so_three_way"]["known_balanced"] is True
 
 
 def test_tampered_snapshot_file_is_rejected(tmp_path):
