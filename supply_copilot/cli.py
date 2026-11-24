@@ -288,6 +288,7 @@ def command_decide(args):
     leadtime = Path(args.leadtime) if args.leadtime else None
     if leadtime is None:
         candidates = sorted(Path(root).glob("leadtime_snapshot*.json"))
+        candidates += sorted(Path(root).glob("orders/*/leadtime_snapshot*.json"))
         leadtime = candidates[-1] if candidates else None
     frame, info = decide_mod.run(
         root, args.branch, as_of,
