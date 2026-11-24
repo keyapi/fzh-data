@@ -9,6 +9,7 @@ description: >
 # Supply Decision Copilot
 
 只读回放，不直接下单。公共仓库只有代码；客户数据在 EN 私有包。
+解释“为什么这样算”先读 `supply_copilot/METHOD.md`。
 
 ## Prerequisites
 - EN API key/secret (`ERP_API_KEY`, `ERP_API_SECRET`) —— **自己的 EN 内部账号**；
