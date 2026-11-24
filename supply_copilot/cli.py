@@ -16,10 +16,19 @@ def doctor(args):
     root = data_root(args.data_root)
     manifest = load_manifest(args.manifest)
     missing = [f["path"] for f in manifest["files"] if not (root / f["path"]).exists()]
-    print(json.dumps({"data_root": str(root), "pack_version": manifest.get("version"),
-                      "as_of": manifest.get("as_of"), "missing_files": missing,
-                      "status": "ok" if not missing else "incomplete"}, ensure_ascii=False, indent=2))
-    return 0 if not missing else 1
+    result = {"data_root": str(root), "pack_version": manifest.get("version"),
+              "as_of": manifest.get("as_of"), "missing_files": missing,
+              "status": "ok" if not missing else "incomplete"}
+    if getattr(args, "verify", False):
+        from .audit import verify_local
+        check = verify_local(root, pack_manifest=manifest,
+                             history_manifest={"files": []},
+                             orders_manifest={"files": []})
+        result["verify"] = check
+        if not check.get("ok"):
+            result["status"] = "incomplete"
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result["status"] == "ok" else 1
 
 
 def command_pull(args):
@@ -53,6 +62,9 @@ def main(argv=None):
         p = sub.add_parser(name)
         p.add_argument("--data-root", default=None)
         p.add_argument("--manifest", default=None)
+        if name == "doctor":
+            p.add_argument("--verify", action="store_true",
+                           help="逐文件校验 sha256/rows（pack）")
         if name in ("supply", "decide"):
             p.add_argument("--branch", required=True)
         if name == "supply":
