@@ -8,7 +8,7 @@ tags: [sellfox, amazon, settlement, okf, log]
 # 变更日志
 
 ## 2026-11-20
-- **新增账期业绩报表口径**：`账号-按应收`（25 列）按 渠道账号 落 7/8/9 月普通簿与 `-特殊规则` 簿；收入=OA 账期 04–03、成本=当月 `写回`（自发货按发货日、FBA 按付款/销售日）；`应收业绩=应收−四段成本−附加费−Tax`，`剔预留业绩=销售额−费用−四段成本−附加费−Tax`；两列主业绩放附加费右边。→ `../docs/solutions/workflow-issues/amazon-period-performance-report-pipeline.md`
+- **新增账期业绩报表口径**：`账号-按应收`（26 列）按 渠道账号 落 7/8/9 月普通簿与 `-特殊规则` 簿；收入=OA 账期 04–03、成本=当月 `写回`（自发货按发货日、FBA 按付款/销售日）；`应收业绩=应收−四段成本−附加费−Tax`，`剔预留业绩=销售额−费用−四段成本−附加费−Tax`；两列主业绩放附加费右边。→ `../docs/solutions/workflow-issues/amazon-period-performance-report-pipeline.md`
 - **1.7.0 本地复刻**：只认 `和财务部共享/黄-特殊规则-订单改销售额成本`；用 Colab cell22 原代码重建 `df_order_pre` 后 exec，写 `特殊规则-写回YYYY年M月…`，原 `写回` 不动；FX 改为 ISO+月份唯一，规则重复执行消除、金额逐列不变。旧下划线 `特殊规则_写回…` 为过时快照，禁用。
 - **全链路门禁**：新增 13 类门禁（账号覆盖/别名唯一/merge 基数/运营人员/币种 FX/金额尺度/成本恒等/预留恒等/Tax 附加费/源新鲜度/规则版本/期间/写前基线），`validate_account_period.py` 202607–09 × normal/special 六组 FAIL 0 / WARN 4；`validate_ingest.py` 独立检查附件 hash、期间、V1/V2、100 倍。三个 GS writer 已改为 clear 前强制校验；普通簿与特殊规则簿均新增 `运营人员-按应收`（账号表右侧，按运营人员 pivot，7/8/9 为 17/17/18 人）；P2 最小快照 `snapshot_guard.py` 记录源表 modifiedTime + payload sha256，变化即中止；门禁审计另证实规则缺列扩命中、c82 负/净零行删除、差额≤1 自动调最大行。→ `../docs/solutions/best-practices/account-period-data-gates.md`
 

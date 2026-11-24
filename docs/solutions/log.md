@@ -8,7 +8,7 @@ tags: [solutions, log]
 # 变更日志
 
 ## 2026-11-20（账期业绩报表 + 全链路门禁）
-- **新增**: `workflow-issues/amazon-period-performance-report-pipeline.md` —— 账期业绩=应收−通途四段成本−附加费−Tax；收入=OA 账期 04–03、成本=当月订单（自发货按发货日、FBA 按付款/销售日）；25 列 `账号-按应收` 放 `账号` 左边；1.7.0 只认 `黄-特殊规则-订单改销售额成本`，特殊成本写 `特殊规则-写回…`、原 `写回` 不动；FX 先做 ISO+月份唯一；`WFUS-Daneey→WFDANEEYUS`、AllegroHU 零宽/全角币种坑；逐账号舍入 0.02–0.05 尾差同层比较。
+- **新增**: `workflow-issues/amazon-period-performance-report-pipeline.md` —— 账期业绩=应收−通途四段成本−附加费−Tax；收入=OA 账期 04–03、成本=当月订单（自发货按发货日、FBA 按付款/销售日）；26 列 `账号-按应收` 放 `账号` 左边；1.7.0 只认 `黄-特殊规则-订单改销售额成本`，特殊成本写 `特殊规则-写回…`、原 `写回` 不动；FX 先做 ISO+月份唯一；`WFUS-Daneey→WFDANEEYUS`、AllegroHU 零宽/全角币种坑；逐账号舍入 0.02–0.05 尾差同层比较。
 - **新增**: `best-practices/account-period-data-gates.md` —— 账号覆盖/别名唯一/merge 基数/运营人员/币种 FX/金额尺度/成本恒等/预留恒等/Tax 附加费/源新鲜度/规则版本/期间/写前基线 13 类门禁；含 WFDANEEYUS、AllegroHU、JohnaSE 100 倍、8 月 Tax 重复附件、账号 vs 写回 −556,373、旧特殊写回等事故对照；`validate_account_period.py` 六组基线 FAIL 0 / WARN 4；门禁审计另证实规则缺列会扩大命中、c82 负费用/净零行被删、差额≤1 自动调最大行。P2 最小快照 `snapshot_guard.py` 绑定源表 modifiedTime + payload sha256。
 - **更新**: `tongtool_order_cost/engine_170.py` —— 1.7.0 混合模式与 Colab cell22 对齐：系数与参考值同时存在时参考值优先，不再判 `invalid_mixed`。
 
