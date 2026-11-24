@@ -1,7 +1,7 @@
 {
   "version": "orders-2026-11-22.1",
   "as_of": "2026-11-22",
-  "generated_at": "2026-11-24T17:10:00+08:00",
+  "generated_at": "2026-11-24T17:30:00+08:00",
   "source": "EN DB direct export (tabTongtool Order/Item) 2026-11-10..2026-11-22 + orders_unified_20261111_v2",
   "files": [
     {
@@ -22,6 +22,12 @@
       "sha256": "a83aaca62236284497324b34bb1e3301ebadc53c222b3c77af5d9aca0732f25c",
       "bytes": 9692,
       "rows": 141
+    },
+    {
+      "name": "model_map_d5_v6_8_20261124.csv",
+      "sha256": "c87627cc2588898d04560bec158e14f0f84fc58aae8483857c698afe494e00f6",
+      "bytes": 105187,
+      "rows": 1749
     }
   ],
   "notes": "最新订单明细（含历史 GS + EN 增量）；用于分析与预测，不直接下单。"
