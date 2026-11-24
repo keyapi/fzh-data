@@ -78,11 +78,12 @@ def _uom_status(stock_uom: Any, item_found: bool) -> str:
 
     if not item_found:
         return "missing"
+    # EN 不维护 UOM（项目既定）：缺失/空按“个”，不因 UOM 阻断；明确非“个”的才另处理。
     if stock_uom is None or (isinstance(stock_uom, float) and pd.isna(stock_uom)):
-        return "missing"
+        return "known_piece"
     value = str(stock_uom).strip()
     if not value:
-        return "missing"
+        return "known_piece"
     return "known_piece" if value in PIECE_UOMS else "not_piece"
 
 
@@ -311,7 +312,7 @@ def build_demand(
         raw_uom = uom_lookup.get(code) if found else None
         st = _uom_status(raw_uom, found)
         uom_statuses.append(st)
-        uom_values.append(str(raw_uom).strip() if st == "known_piece" else "unknown")
+        uom_values.append(str(raw_uom).strip() if st == "known_piece" and raw_uom else "个")
 
     kept_qty = qty[keep].reset_index(drop=True)
     block_reason = [
@@ -392,6 +393,8 @@ def run_forecast(
     decision_date: str | date,
     lead_days: int = 90,
     no_statsforecast: bool = False,
+    model_policy: str = "autoets",
+    model_map_path: str | None = None,
 ) -> dict[str, Any]:
     """在 ``<out>/demand_line_disposition.parquet`` 上跑一次预测。
 
@@ -411,7 +414,9 @@ def run_forecast(
 
     dd = decision_date if isinstance(decision_date, date) else date.fromisoformat(str(decision_date))
     leads = tuple(sorted(set(STANDARD_LEADS) | {int(lead_days)}))
-    cfg = forecast.ForecastConfig(decision_date=dd, leads=leads)
+    cfg = forecast.ForecastConfig(decision_date=dd, leads=leads,
+                                  model_policy=model_policy,
+                                  model_map_path=model_map_path)
     backend = None if no_statsforecast else forecast.load_backend()
     run_dir = forecast.run(
         disposition_path=disposition,
@@ -441,6 +446,8 @@ def rebuild(
     decision_date: str | date | None = None,
     lead_days: int = 90,
     no_statsforecast: bool = False,
+    model_policy: str = "autoets",
+    model_map_path: str | None = None,
 ) -> dict[str, Any]:
     """build_demand + run_forecast + ``rebuild_manifest.json``；返回 manifest。"""
     t0 = time.perf_counter()
@@ -463,6 +470,8 @@ def rebuild(
         decision_date=decision_date,
         lead_days=lead_days,
         no_statsforecast=no_statsforecast,
+        model_policy=model_policy,
+        model_map_path=model_map_path,
     )
 
     manifest = {

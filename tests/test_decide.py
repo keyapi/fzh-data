@@ -100,20 +100,21 @@ def test_live_d6_recompute_columns_and_quantities(tmp_path):
     frame, meta = _call(tmp_path, stock_path=stock, backlog_path=backlog, po_path=po)
 
     assert meta["mode"] == "live"
+    assert len(meta["bundle_id"]) == 64
     assert meta["demand_source"] == "d6_pack_q95"
     assert list(frame.columns) == COLUMNS
     assert len(frame) == 3 and frame["sku"].tolist() == ["KS1", "KS2", "KS3"]
 
     row = frame.set_index("sku").loc["KS1"]
     assert row["action"] == "补"
-    # 需求 100（SO 不加需求、不抵扣主建议）− (期初 10 + max(在途 2, 按时 PO 0) + min(CG 3, D6 1)) = 87
-    assert row["new_qty"] == 87
-    assert row["cg_source"] == "live_capped_by_d6"
-    # 条件供给不到时：100 − (10 + 0 + min(3,1)) = 89
-    assert row["new_qty_if_conditional_late"] == 89
+    # 需求 100 − (期初 10 + max(在途 2, 按时 PO 0) + live CG 3) = 85
+    assert row["new_qty"] == 85
+    assert row["cg_source"] == "live_stock.cg"
+    # 条件供给不到时：100 − (10 + 0 + 3) = 87
+    assert row["new_qty_if_conditional_late"] == 87
     assert row["demand_qty"] == 100  # SO 不加进需求
     assert row["supply_so"] == 3
-    assert row["supply_cg"] == 1 and row["cg_source"] == "live_capped_by_d6"
+    assert row["supply_cg"] == 3 and row["cg_source"] == "live_stock.cg"
     assert row["demand_source"] == "d6_pack_q95"
     assert row["stock_snapshot_at"] == "2026-11-23 08:00:00+08:00"
     assert len(row["so_sha256"]) == 64 and len(row["po_sha256"]) == 64
@@ -140,6 +141,7 @@ def test_forecast_missing_falls_back_to_d6_with_warning(tmp_path):
                         po_path=po, forecast_root=tmp_path / "no-forecast")
 
     assert meta["mode"] == "live"
+    assert len(meta["bundle_id"]) == 64
     assert meta["demand_source"] == "d6_pack_q95"
     assert any("预测 CURRENT 不存在" in w or "预测未接入" in w for w in meta["warnings"])
     assert frame.set_index("sku").loc["KS1", "demand_qty"] == 100
@@ -221,7 +223,7 @@ def test_forecast_refresh_replaces_d6_demand(tmp_path):
     by_sku = frame.set_index("sku")
     assert by_sku.loc["KS1", "demand_qty"] == 80
     assert by_sku.loc["KS1", "d6_q95"] == 100          # D6 仅作对照
-    assert by_sku.loc["KS1", "new_qty"] == 67          # 80 − (10+max(2,0)+min(3,1))
+    assert by_sku.loc["KS1", "new_qty"] == 65          # 80 − (10+max(2,0)+live CG 3)
     # 预测未覆盖 KS2 → 退回 D6 q95 并标注
     assert by_sku.loc["KS2", "demand_qty"] == 10
     assert "预测未覆盖" in str(by_sku.loc["KS2", "warnings"])
@@ -283,8 +285,8 @@ def test_po_eta_compared_to_need_date_not_boolean(tmp_path):
     ks1 = by_sku.loc["KS1"]
     # 100 − (期初 10 + max(在途 2, 按时 PO 20) + min(CG 3, D6 1)) = 69
     assert ks1["supply_po"] == 25
-    assert ks1["supply_expected"] == 31 and ks1["new_qty"] == 69
-    assert ks1["supply_proven"] == 31
+    assert ks1["supply_expected"] == 33 and ks1["new_qty"] == 67
+    assert ks1["supply_proven"] == 33
     # KS3：7 件迟到 PO 不进 expected/proven
     ks3 = by_sku.loc["KS3"]
     assert ks3["supply_po"] == 7 and ks3["supply_expected"] == 0
@@ -388,7 +390,7 @@ def test_en_so_rows_canonicalized_and_unresolved_counted(tmp_path):
     assert by_sku.loc["KS2", "supply_so"] == 1
     # 未归一的行不改变总量为 0 的假象：KS1 仍按 100 需求算出 87
     assert by_sku.loc["KS1", "demand_qty"] == 100
-    assert by_sku.loc["KS1", "new_qty"] == 87
+    assert by_sku.loc["KS1", "new_qty"] == 85
 
 
 def test_so_without_status_is_not_attachable(tmp_path):
@@ -415,7 +417,7 @@ def test_so_without_status_is_not_attachable(tmp_path):
     assert so_ev["quantity"] == 0
     assert so_ev["attached_qty"] == 0
     assert any("整批 status_missing" in w for w in meta["warnings"])
-    assert frame.set_index("sku").loc["KS1", "new_qty"] == 87
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 85
 
 
 def test_en_item_code_is_authoritative_not_alias(tmp_path):
@@ -494,7 +496,7 @@ def test_so_jsonl_status_filter_and_attach(tmp_path):
     assert so_ev["status_draft_rows"] == 1
     assert so_ev["status_draft_qty"] == 7
     assert so_ev["attached_qty"] == 3
-    assert frame.set_index("sku").loc["KS1", "new_qty"] == 90   # 87 + 3
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 88   # 85 + 3
 
 
 def test_so_non_open_statuses_single_listed_not_attached(tmp_path):
@@ -545,7 +547,7 @@ def test_so_non_open_statuses_single_listed_not_attached(tmp_path):
     assert so_ev["closed_archived_rows"] == 0
     assert so_ev["attached_qty"] == 2
     assert frame.set_index("sku").loc["KS1", "supply_so"] == 2
-    assert frame.set_index("sku").loc["KS1", "new_qty"] == 89   # 87 + 2
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 87   # 85 + 2
     assert any("非有效开放行未计入、不附加" in w for w in meta["warnings"])
 
 
@@ -569,10 +571,10 @@ def test_source_zero_rows_is_assumed_zero(tmp_path):
     assert meta["totals"]["assumed_zero_rows"] == {"so": 1, "po": 1}
     assert any("assumed_zero" in w for w in meta["warnings"])
     # 仍是 0，但已显式标 assumed_zero，不作为 unknown 待核
-    assert frame.set_index("sku").loc["KS1", "new_qty"] == 87
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 85
     assert frame.set_index("sku").loc["KS1", "action"] == "补"
     # M3：旧“未履约 SO 按未完成量计入需求”不得再出现
-    assert "SO 为上游交付管线，不进需求" in meta["limits"]
+    assert any("SO 为上游交付管线，不进需求" in item for item in meta["limits"])
     assert not any("按未完成量计入需求" in item for item in meta["limits"])
 
 
@@ -618,7 +620,7 @@ def test_source_rows_but_filtered_is_not_assumed_zero(tmp_path):
     assert meta["po"]["assumed_zero"]["applies"] is False
     assert meta["totals"]["assumed_zero_rows"] == {"so": 0, "po": 0}
     assert not any("assumed_zero" in w for w in meta["warnings"])
-    assert frame.set_index("sku").loc["KS1", "new_qty"] == 87
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 85
 
 
 def test_so_attached_only_after_a_valid_row(tmp_path):
@@ -640,12 +642,14 @@ def test_so_attached_only_after_a_valid_row(tmp_path):
                         po_path=po, so_in_forecast=False)
     ks1 = frame[frame["sku"] == "KS1"]
     assert len(ks1) == 2
-    assert ks1.iloc[0]["action"] == "待核"
-    # 次行 100 + SO 3 − (期初 10 + max(在途 2, PO 0) + min(CG 3, D6 1)) = 90
-    assert ks1.iloc[1]["new_qty"] == 90
+    # 有效行（次行）是主行，SO 只在这里叠加一次；缺失需求的行被去重标记
+    primary = ks1[ks1["action"] == "补"]
+    assert len(primary) == 1
+    # 100 + SO 3 − (期初 10 + max(在途 2, PO 0) + live CG 3) = 88
+    assert primary.iloc[0]["new_qty"] == 88
     assert meta["so"]["attached_qty"] == 3
     assert meta["so"]["unattached_qty"] == 0
-    assert "待核，未附加" in str(ks1.iloc[0]["warnings"])
+    assert ks1["action"].tolist().count("重复形态") == 1
 
 
 def test_so_in_forecast_switch_adds_only_resolved_so_once(tmp_path):
@@ -660,7 +664,7 @@ def test_so_in_forecast_switch_adds_only_resolved_so_once(tmp_path):
     assert meta_on["so_in_forecast"] is True
     assert meta_on["so"]["attached_qty"] == 0
     assert meta_on["totals"]["so_attached_qty"] == 0
-    assert "已含在预测内" in frame_on.set_index("sku").loc["KS1", "warnings"]
+    assert "未加进需求" in frame_on.set_index("sku").loc["KS1", "warnings"]
 
     assert meta_off["so_in_forecast"] is False
     assert meta_off["so"]["attached_qty"] == 3

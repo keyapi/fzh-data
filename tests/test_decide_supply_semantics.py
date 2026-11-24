@@ -109,3 +109,108 @@ def test_po_en_item_code_identity_is_accepted(tmp_path):
     _, meta = call(tmp_path, stock_path=s, po_path=po)
     assert meta["po"]["identity_missing"] == 0
     assert meta["po"]["rows"] == 1
+
+
+def test_mixed_po_eta_buckets_by_line(tmp_path):
+    make_pack(tmp_path)
+    s = stock(tmp_path, rows=[base_stock()])
+    po = tmp_path / "po.tsv"
+    po.write_text(
+        "PO-1\tTT1\t40\t40\t美中-FZH-DANEEY\t2026-12-01\n"
+        "PO-2\tTT1\t60\t60\t美中-FZH-DANEEY\t2027-12-31\n", encoding="utf-8")
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]).to_csv(backlog, index=False)
+    frame, _ = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    row = frame.set_index("sku").loc["KS1"]
+    assert row["supply_po"] == 100
+    assert row["supply_expected"] == 40       # 只计早到 40，不按最早 ETA 抵整组
+    assert row["new_qty"] == 110
+
+
+def test_so_delivery_date_used_when_present(tmp_path):
+    make_pack(tmp_path)
+    s = stock(tmp_path, rows=[base_stock()])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame([{"canonical_sku": "KS1", "canonical_warehouse": "美中-FZH-DANEEY",
+                   "canonical_uom": "个", "quantity": 100,
+                   "delivery_date": "2026-12-01"}]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"
+    po.write_text("", encoding="utf-8")
+    frame, _ = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    row = frame.set_index("sku").loc["KS1"]
+    assert row["supply_so"] == 100
+    assert row["supply_expected"] == 100     # 按时到仓的 SO 可抵扣
+    assert row["new_qty"] == 50
+
+
+def test_independent_supply_scenario_reported(tmp_path):
+    make_pack(tmp_path)
+    s = stock(tmp_path, rows=[base_stock(intransit=100)])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame([{"canonical_sku": "KS1", "canonical_warehouse": "美中-FZH-DANEEY",
+                   "canonical_uom": "个", "quantity": 100,
+                   "delivery_date": "2026-12-01"}]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"
+    po.write_text("PO-1\tTT1\t100\t100\t美中-FZH-DANEEY\t2026-12-01\n", encoding="utf-8")
+    frame, _ = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    row = frame.set_index("sku").loc["KS1"]
+    assert row["supply_expected"] == 100     # 全重叠假设
+    assert row["supply_independent"] == 300  # 独立供给情景
+    assert row["new_qty_if_independent"] == 0
+
+
+def test_cg_allocated_by_b_ownership_not_warehouse_geo(tmp_path):
+    make_pack(tmp_path)
+    s = stock(tmp_path, rows=[
+        base_stock(),
+        {**base_stock(), "warehouse_name": "WayfairCG-Cranbury仓", "available": 100},
+    ])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"
+    po.write_text("", encoding="utf-8")
+    frame, _ = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    row = frame.set_index("sku").loc["KS1"]
+    # USTX 行也能用 Cranbury 的 CG：按 B SKU 归属，不按仓库地理位置
+    assert row["supply_cg"] == 100
+    assert row["cg_source"] == "live_stock.cg"
+
+
+def test_leadtime_snapshot_recalculates_order_date(tmp_path):
+    make_pack(tmp_path, need_date="2026-12-10")
+    s = stock(tmp_path, rows=[base_stock()])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"
+    po.write_text("", encoding="utf-8")
+    lead = tmp_path / "leadtime_snapshot_20261123.json"
+    lead.write_text(json.dumps({"so_dn": {"2026_recent_6m": {
+        "overall": {"p90": 10},
+        "customer": {"DANEEY": {"p90": 10}}}}}, ensure_ascii=False), encoding="utf-8")
+    frame, meta = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po,
+                       leadtime_path=lead)
+    row = frame.set_index("sku").loc["KS1"]
+    assert row["order_date"] == "2026-11-30"
+    assert row["date_source"].startswith("so_dn_p90")
+    assert meta["leadtime"]["days"] == 10
+
+
+def test_duplicate_forms_not_double_counted(tmp_path):
+    make_pack(tmp_path)
+    d6_path = tmp_path / "data" / "D6_v6_22.xlsx"
+    d6 = pd.read_excel(d6_path, sheet_name="1_全量动作")
+    dup = d6.copy(); dup["形态"] = "成品+皮壳"
+    both = pd.concat([d6, dup], ignore_index=True)
+    with pd.ExcelWriter(d6_path) as w:
+        both.to_excel(w, sheet_name="1_全量动作", index=False)
+    s = stock(tmp_path, rows=[base_stock()])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"; po.write_text("", encoding="utf-8")
+    frame, meta = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    ks = frame[frame["sku"] == "KS1"]
+    assert len(ks) == 2
+    assert set(ks["action"]) == {"补", "重复形态"}
+    assert meta["totals"]["duplicate_rows"] == 1
+    assert meta["totals"]["suggest"] == 1         # 只按主形态计一次
+    assert ks[ks["action"] == "重复形态"]["new_qty"].isna().all()

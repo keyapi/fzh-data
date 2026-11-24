@@ -130,12 +130,13 @@ def test_coverage_keeps_block_reasons_and_forecast_columns(dataset):
     assert by_sku.loc["TT-MAPPED", "blocked_rows"] == 0
     assert "quantity_invalid" in by_sku.loc["TT-ZERO", "block_reasons"]
     assert "sku_mapping_missing" in by_sku.loc["TT-UNMAPPED", "block_reasons"]
-    assert "uom_missing" in by_sku.loc["TT-NO-UOM", "block_reasons"]
+    assert "uom_missing" not in by_sku.loc["TT-NO-UOM", "block_reasons"]
     assert "sku_mapping_ambiguous" in by_sku.loc["TT-AMBIG", "block_reasons"]
     assert "warehouse_identity_unknown" in by_sku.loc["TT-UNMAPPED", "block_reasons"]
     # 已知件类单位才写具体 UOM，否则 unknown
     assert by_sku.loc["TT-MAPPED", "uom"] == "个"
-    assert by_sku.loc["TT-NO-UOM", "uom_status"] == "missing"
+    assert by_sku.loc["TT-NO-UOM", "uom_status"] == "known_piece"
+    assert by_sku.loc["TT-NO-UOM", "uom"] == "个"
     assert "__TOTAL__" in by_sku.index
 
 
@@ -159,7 +160,7 @@ def test_rebuild_writes_manifest(monkeypatch, dataset):
 
     calls = {}
 
-    def fake_run_forecast(out_dir, *, decision_date, lead_days=90, no_statsforecast=False):
+    def fake_run_forecast(out_dir, *, decision_date, lead_days=90, no_statsforecast=False, **kwargs):
         calls["decision_date"] = decision_date
         return {"run_id": "RUN-TEST", "run_dir": str(Path(out_dir) / "forecast" / "RUN-TEST")}
 

@@ -16,10 +16,18 @@ def doctor(args):
     root = data_root(args.data_root)
     manifest = load_manifest(args.manifest)
     missing = [f["path"] for f in manifest["files"] if not (root / f["path"]).exists()]
-    print(json.dumps({"data_root": str(root), "pack_version": manifest.get("version"),
-                      "as_of": manifest.get("as_of"), "missing_files": missing,
-                      "status": "ok" if not missing else "incomplete"}, ensure_ascii=False, indent=2))
-    return 0 if not missing else 1
+    result = {"data_root": str(root), "pack_version": manifest.get("version"),
+              "as_of": manifest.get("as_of"), "missing_files": missing,
+              "status": "ok" if not missing else "incomplete"}
+    if getattr(args, "verify", False):
+        from .audit import verify_local
+        # pack/history/orders 三个 manifest 都校验；未拉取的会明确列为缺失
+        check = verify_local(root, pack_manifest=manifest)
+        result["verify"] = check
+        if not check.get("ok"):
+            result["status"] = "incomplete"
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if result["status"] == "ok" else 1
 
 
 def command_pull(args):
@@ -49,10 +57,13 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog="supply_copilot", description="供应链 A/B/C/D/E 决策 Copilot（只读回放）")
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("doctor", "pull", "recommend", "batch", "refresh", "history", "pull-history",
-                 "orders", "pull-orders", "supply", "decide", "rebuild"):
+                 "orders", "pull-orders", "supply", "decide", "rebuild", "weekly"):
         p = sub.add_parser(name)
         p.add_argument("--data-root", default=None)
         p.add_argument("--manifest", default=None)
+        if name == "doctor":
+            p.add_argument("--verify", action="store_true",
+                           help="逐文件校验 sha256/rows（pack）")
         if name in ("supply", "decide"):
             p.add_argument("--branch", required=True)
         if name == "supply":
@@ -66,6 +77,15 @@ def main(argv=None):
             p.add_argument("--decision-date", default=None)
             p.add_argument("--lead-days", type=int, default=90)
             p.add_argument("--no-statsforecast", action="store_true")
+            p.add_argument("--model-policy", choices=["autoets", "classified"], default="autoets")
+            p.add_argument("--model-map", default=None)
+        if name == "weekly":
+            p.add_argument("--disposition", default=None)
+            p.add_argument("--windows", default=None)
+            p.add_argument("--out", default=None)
+            p.add_argument("--as-of", default=None)
+            p.add_argument("--weeks", type=int, default=13)
+            p.add_argument("--service", choices=["p50", "p90"], default="p90")
         if name == "pull-orders":
             p.add_argument("--env-file", default=None)
             p.add_argument("--base", default="https://erpnext.vilavi.cn")
@@ -80,10 +100,11 @@ def main(argv=None):
             p.add_argument("--forecast-root", default=None)
             p.add_argument("--demand-netting", default=None)
             p.add_argument("--snapshot-date", default=None)
+            p.add_argument("--leadtime", default=None)
             p.add_argument("--so-in-forecast", choices=["true", "false"],
                            default="true",
                            help="开放 SO 是否已含在预测内；true=不叠加需求（默认保守），"
-                                "false=叠加开放 SO 余额到需求")
+                                "false=开放 SO 余额叠加到需求")
             p.add_argument("--json", action="store_true")
         if name == "pull":
             p.add_argument("--env-file", default=None)
@@ -116,7 +137,32 @@ def main(argv=None):
             "pull-orders": command_pull_orders,
             "supply": command_supply,
             "decide": command_decide,
-            "rebuild": command_rebuild}[args.command](args)
+            "rebuild": command_rebuild,
+            "weekly": command_weekly}[args.command](args)
+
+
+def command_weekly(args):
+    root = data_root(args.data_root, create=True)
+    disp = Path(args.disposition) if args.disposition else None
+    if disp is None:
+        candidates = sorted(Path(root).glob("rebuild/*/demand_line_disposition.parquet"))
+        disp = candidates[-1] if candidates else None
+    if disp is None or not disp.exists():
+        raise SystemExit("找不到需求表：先 rebuild，或传 --disposition")
+    windows = Path(args.windows) if args.windows else None
+    if windows is None:
+        current = disp.parent / "forecast" / "CURRENT"
+        if not current.exists():
+            raise SystemExit("找不到 forecast/CURRENT：先 rebuild，或传 --windows")
+        run = current.read_text(encoding="utf-8").strip()
+        windows = current.parent / run / "forecast_sku_warehouse_windows.parquet"
+    out = Path(args.out) if args.out else disp.parent / "weekly_plan.parquet"
+    from .weekly import build_weekly_plan
+    info = build_weekly_plan(disp, windows, out,
+                             as_of=args.as_of or date.today().isoformat(),
+                             weeks=args.weeks, service=args.service)
+    print(json.dumps(info, ensure_ascii=False, indent=2))
+    return 0
 
 
 def command_refresh(args):
@@ -174,21 +220,26 @@ def command_pull_orders(args):
 def command_supply(args):
     """抓取实时库存/开放 SO/开放 PO 到 <data-root>/live/，供 decide 使用。"""
     root = data_root(args.data_root, create=True)
-    out = Path(args.out) if args.out else Path(root) / "live" / args.branch
+    base = Path(args.out) if args.out else Path(root) / "live" / args.branch
+    run_id = datetime.now().strftime("%Y%m%dT%H%M%S") + f"-{os.getpid()}"
+    out = base / "runs" / run_id
     out.mkdir(parents=True, exist_ok=True)
     from self_fulfilled_demand.canonical import load_sku_map, load_warehouse_config
     sku_path = next((p for p in (Path(root) / "data" / "sku_map.tsv",
                                  Path(root) / "sku_map.tsv") if p.exists()), None)
     sku_map = load_sku_map(sku_path) if sku_path else None
-    result = {"out": str(out)}
+    result = {"out": str(out), "run_id": run_id}
     stock, stock_meta = en_live.fetch_stock_snapshot()
     stock.to_parquet(out / "stock.parquet", index=False)
     result["stock"] = stock_meta
     try:
         so, so_meta = en_live.fetch_open_so(args.branch, sku_map=sku_map,
                                             warehouse_cfg=load_warehouse_config())
-        so[["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]].to_csv(
-            out / "backlog.csv", index=False)
+        so_cols = ["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]
+        for extra in ("delivery_date", "document_key"):
+            if extra in so.columns:
+                so_cols.append(extra)
+        so[so_cols].to_csv(out / "backlog.csv", index=False)
         result["so"] = so_meta
     except Exception as exc:  # noqa: BLE001 - 失败必须删除旧文件，不能把旧 SO 当当前
         (out / "backlog.csv").unlink(missing_ok=True)
@@ -205,27 +256,44 @@ def command_supply(args):
         p = Path(path)
         return hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else None
 
-    manifest = {"branch": args.branch,
+    manifest = {"branch": args.branch, "run_id": run_id,
                 "generated_at": datetime.now().astimezone().replace(microsecond=0).isoformat(),
                 "errors": {k: v for k, v in result.items() if isinstance(v, dict) and v.get("error")},
                 "files": {name: {"exists": (out / name).exists(), "sha256": _sha(out / name)}
                           for name in ("stock.parquet", "backlog.csv", "po_open.tsv")}}
     (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2),
                                       encoding="utf-8")
-    result["manifest"] = str(out / "manifest.json")
+    tmp = base / "current.json.tmp"
+    tmp.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, base / "current.json")
+    result["current"] = str(base / "current.json")
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
 def command_decide(args):
     root = data_root(args.data_root)
-    live = Path(root) / "live" / args.branch
+    live_base = Path(root) / "live" / args.branch
+    live = live_base
+    current = live_base / "current.json"
+    if current.exists():
+        try:
+            run_id = json.loads(current.read_text(encoding="utf-8")).get("run_id")
+            if run_id:
+                live = live_base / "runs" / run_id
+        except (OSError, json.JSONDecodeError):
+            pass
     if not live.exists():
         live = Path(root) / "live"
     stock = Path(args.stock) if args.stock else live / "stock.parquet"
     backlog = Path(args.backlog) if args.backlog else live / "backlog.csv"
     po = Path(args.po) if args.po else live / "po_open.tsv"
     as_of = args.as_of or datetime.now().astimezone().replace(microsecond=0).isoformat()
+    leadtime = Path(args.leadtime) if args.leadtime else None
+    if leadtime is None:
+        candidates = sorted(Path(root).glob("leadtime_snapshot*.json"))
+        candidates += sorted(Path(root).glob("orders/*/leadtime_snapshot*.json"))
+        leadtime = candidates[-1] if candidates else None
     frame, info = decide_mod.run(
         root, args.branch, as_of,
         stock_path=stock if stock.exists() else None,
@@ -236,6 +304,7 @@ def command_decide(args):
         demand_netting=args.demand_netting,
         snapshot_date=args.snapshot_date,
         pack_manifest=args.manifest,
+        leadtime_path=leadtime,
         so_in_forecast=args.so_in_forecast == "true",
     )
     if args.json:
@@ -284,6 +353,8 @@ def command_rebuild(args):
         decision_date=args.decision_date or date.today().isoformat(),
         lead_days=args.lead_days,
         no_statsforecast=args.no_statsforecast,
+        model_policy=args.model_policy,
+        model_map_path=args.model_map,
     )
     run_dir = Path(manifest["forecast"]["run_dir"])
     (run_dir.parent / "CURRENT").write_text(run_dir.name, encoding="utf-8")

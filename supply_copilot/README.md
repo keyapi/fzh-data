@@ -115,6 +115,7 @@ uv run python -m supply_copilot decide --branch USNJ --forecast-root <root>/rebu
 - 未覆盖的 SKU 退回 D6 历史 95% 档并计数，不会静默当成已刷新。
 - 需要 `sku_map.tsv`（`pull` 提供）和 `item_uom_cache.parquet`（`pull-history` 提供）；
   也可用 `--sku-map/--uom-cache` 指定。
+- 周计划：`uv run python -m supply_copilot weekly`（13 周；周度模型/4–8 周/等分，标 method 与回测）。
 
 ## 历史订单数据（不在公共仓库）
 
