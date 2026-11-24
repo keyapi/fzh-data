@@ -25,17 +25,23 @@ uv run python -m supply_copilot refresh --branch USNJ --as-of 2026-11-24 --all \
 - `doctor` / `recommend` / `batch` 只用已下载的包，不需要凭证；`pull` / `refresh` 需要。
 - `recommend`：回放 pack（as_of 固定）。
 - `refresh --sku`（无 `--out`）：拉 EN 实时库存、复用 pack 的 D5 预测重算；**不重训 D5**，
-  报告标 `forecast reused`。这是历史探索口径。
+  报告标 `forecast reused`。这是**历史探索口径**（整期 D5 直接对当下库存、SO 仍进供给），
+  不代表上面第 1–4 条的新口径；要审计口径请用 `--out`。
 - `refresh --all --out`：整分公司快照，逐行写期间依据、供给分阶段、W1 SO 去重与对账。
 
 ## 刷新口径（新）
 
 1. **期间**：D5 的 97/157 天是**整期**，不得当剩余期。未给 `--period-start/--period-end`
-   时全部行 `period_basis=full_period` 且 `暂不能判断`；只有显式等长期间才给确定建议。
+   时全部行 `period_basis=full_period` 且 `暂不能判断`；显式等长期间还必须满足
+   **期间起点 = EN 库存观测日**——库存晚于起点时已逝需求无法桥接（D5 无日级分布），
+   一律拒绝，不用整期需求减当下库存。
 2. **已证供给**：`on_hand + in_transit + to_ship`（同一 EN 快照、单别名）。PO / CG / SO
    是不同阶段，单列、不进已证供给；SO 永不与生产/DN/PO 相加。
-3. **W1 SO**：按 `(so, so_line)` 去重，开放量只计一次；近期/历史开放/创建日未知三段保留，
-   合计等于开放总量；阶段余额（`stage_balances`）单列、unknown 原样保留、不可与开放量相加。
+3. **W1 SO**：按 `(so, so_line)` 去重，开放量只计一次；**按 product_id 唯一汇总**
+   （同产品的多形态行不可相加）；近期/历史开放/创建日未知三段保留，合计等于已知开放总量；
+   数量缺失的行保持 `null` 并单列；报告拆 `so_scope`（快照内 / 范围外 / 其它分公司）。
+   证据时点 ≠ 刷新时点时，SO 不参与"补"的确定判断（旧快照未观察到 ≠ 当前为 0）。
+   阶段余额（`stage_balances`）单列、unknown 原样保留、不可与开放量相加。
 4. **对账**：`report.json` 的 `输入行 = 接收 + 拒收 + 跳过`，每个拒收/跳过保留源行与原因；
    未知不补 0，数量缺失保持 `null`；同一输入同一字节（行级与整包 sha256）。
 

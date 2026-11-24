@@ -43,11 +43,19 @@ FIELD_DICTIONARY = {
     "period.basis": "full_period=D5 整期（97/157 天）；explicit_period=调用方显式声明",
     "period.determinate": "true 才允许给出确定建议；false 时 action=暂不能判断",
     "period.start/end": "本次建议覆盖的日期区间（含首尾）",
+    "period.supply_observed_at": "EN 库存快照时点；只有等于 period.start 才能做缺口计算",
+    "period.elapsed_days": "库存观测日 − 期间起点；>0 表示已逝需求未桥接（拒绝）",
+    "period.demand_bridge": "已逝需求桥接可用性；D5 只有整期总量、无日级路径 → 不可用",
     "demand.q95": "D5 整期 q95 需求；缺失保持 null，不补 0",
-    "supply.proven": "已证供给 = on_hand + in_transit + to_ship（同一 EN 快照、单别名匹配）",
+    "supply.proven": "已证供给 = on_hand + in_transit + to_ship（同一 EN 快照、单别名匹配）；"
+                     "三类是否业务互斥未核实（D39 要求核实）",
     "supply.stages[].counts_as_proven": "仅 on_hand/in_transit/to_ship 计入 proven",
-    "so.open_qty": "W1 SO 开放量（qty-delivered），按 (so, so_line) 去重后只计一次",
-    "so.recent/history/unknown_date_open_qty": "按创建日三段，合计等于 open_qty",
+    "so.open_qty": "W1 SO 开放量（qty-delivered），按 (so, so_line) 去重只计一次；"
+                   "按 product_id 汇总，同 product_id 的各形态行不可相加",
+    "so.current_for_decision": "SO 证据 as_of == 刷新 as_of 才视为当前；旧快照未观察到 ≠ 当前为 0",
+    "so.recent/history/unknown_date_open_qty": "按创建日三段，合计等于已知 open_qty",
+    "so.unknown_qty_lines": "数量缺失的 SO 行：open_qty 保持 null，不进三段",
+    "so_scope": "in_scope（快照范围唯一键）/ out_of_scope（按原因）/ branch_total / other_branches",
     "so.included_in_proven_supply": "恒为 false：SO 是工厂交付阶段，不是海外可发供给",
     "so.stage_balances": "W1 阶段余额（完工/在产/在途/未排产/未知…），与世界开放量不同度量，不可相加",
     "pipeline": "PO/CG 等未证管线量；不进入 proven，未知保持 null",
@@ -246,11 +254,6 @@ def _row_payload(row, d5, so_map, stage_map, live, index, conflicts, tt_skus,
     if demand_row is None:
         warnings.append("D5 该键无预测行（demand 全部 null，不作 0）")
 
-    period = resolve_period(
-        horizon_days=horizon_days if horizon_days else params["horizon"],
-        pack_as_of=params["pack_as_of"], as_of=params["as_of"],
-        period_start=params["period_start"], period_end=params["period_end"])
-
     live_out = lookup_live(live, index, conflicts, tt_skus.get(pid, []), warehouse)
     if live_out["status"] != "matched":
         warnings.append(f"实时库存不可用于合计：{live_out['status']} — {live_out['error']}")
@@ -260,6 +263,12 @@ def _row_payload(row, d5, so_map, stage_map, live, index, conflicts, tt_skus,
         warnings.append(
             f"EN 库存快照 {_text(live_out['snapshot_at'])} 与 as_of {params['as_of']} 不同日，"
             "库存不是 as_of 当刻")
+
+    period = resolve_period(
+        horizon_days=horizon_days if horizon_days else params["horizon"],
+        pack_as_of=params["pack_as_of"], as_of=params["as_of"],
+        period_start=params["period_start"], period_end=params["period_end"],
+        supply_observed_at=live_out["snapshot_at"])
 
     proven = None
     stages = []
@@ -295,7 +304,8 @@ def _row_payload(row, d5, so_map, stage_map, live, index, conflicts, tt_skus,
                        "evidence": "pack_column"})
 
     so_summary, so_stage = _so_block(pid, branch_code, so_map, stage_map, d6_so,
-                                     params["so_loaded"])
+                                     params["so_loaded"], params["so_source_as_of"],
+                                     params["as_of"])
     if so_summary["open_qty"] is not None:
         stages.append({"stage": "so_open", "qty": so_summary["open_qty"], "known": True,
                        "counts_as_proven": False,
@@ -305,15 +315,22 @@ def _row_payload(row, d5, so_map, stage_map, live, index, conflicts, tt_skus,
         unknown_supply.append({"stage": "so_open", "qty": None,
                                "reason": so_summary["error"]})
     for stage, qty in (so_stage or {}).get("so_stage_qty", {}).items():
-        stages.append({"stage": f"w1_stage:{stage}", "qty": qty, "known": True,
+        stages.append({"stage": f"w1_stage:{stage}", "qty": qty,
+                       "known": qty is not None,
                        "counts_as_proven": False,
                        "source": "W1 stage_balances（与开放量不同度量，不可相加）",
                        "evidence": "pack_evidence"})
+        if qty is None:
+            unknown_supply.append({"stage": f"w1_stage:{stage}", "qty": None,
+                                   "reason": "W1 阶段余额行数量缺失（未知不补 0）"})
 
     decision = _decide(period=period, q95=q95, proven=proven, live_out=live_out,
                        po_open=po_open, cg_open=cg_open,
                        so_open=so_summary["open_qty"],
-                       so_evidence_loaded=so_summary["evidence_loaded"])
+                       so_evidence_loaded=so_summary["evidence_loaded"],
+                       so_current=so_summary["current_for_decision"],
+                       so_complete=so_summary["complete_known_qty"],
+                       so_observed_as_of=so_summary["observed_as_of"])
 
     return {
         "key": f"{branch_code}|{pid}|{form}|{uom}",
@@ -354,9 +371,11 @@ def _row_payload(row, d5, so_map, stage_map, live, index, conflicts, tt_skus,
     }
 
 
-def _so_block(pid, branch_code, so_map, stage_map, d6_so, evidence_loaded):
+def _so_block(pid, branch_code, so_map, stage_map, d6_so, evidence_loaded,
+              evidence_as_of, run_as_of):
     summary = so_map.get((pid, branch_code)) if branch_code else None
     stage = stage_map.get((pid, branch_code)) if branch_code else None
+    current = bool(evidence_loaded and evidence_as_of and evidence_as_of == run_as_of)
     if summary is None:
         block = {"matched": False, "open_qty": 0.0 if evidence_loaded else None,
                  "recent_open_qty": 0.0 if evidence_loaded else None,
@@ -364,18 +383,27 @@ def _so_block(pid, branch_code, so_map, stage_map, d6_so, evidence_loaded):
                  "unknown_date_open_qty": 0.0 if evidence_loaded else None,
                  "recent_open_orders": 0, "history_open_orders": 0,
                  "unknown_date_open_orders": 0, "lines_count": 0,
-                 "duplicate_lines_collapsed": 0,
+                 "duplicate_lines_collapsed": 0, "unknown_qty_lines": 0,
                  "stage_counts": {}, "stage_status": "unknown",
                  "included_in_proven_supply": False,
                  "evidence_loaded": evidence_loaded,
+                 "complete_known_qty": bool(evidence_loaded),
+                 "observed_as_of": evidence_as_of,
+                 "current_for_decision": current,
+                 "completeness": ("current" if current else
+                                  ("stale_observation" if evidence_loaded else "missing")),
+                 "aggregation": "product_level（同 product_id 的各形态行共享同一 SO 汇总，不可跨行相加）",
                  "coverage": "no_open_line_observed" if evidence_loaded else "evidence_missing",
                  "error": None if evidence_loaded else "W1 SO 证据不可用"}
     else:
         duplicated = summary.get("so_duplicate_lines", 0)
+        unknown_lines = summary.get("so_unknown_qty_lines", 0)
         bucket_sum = round(summary["so_recent_open_qty"] + summary["so_history_open_qty"]
                            + summary["so_unknown_date_open_qty"], 6)
         stage_counts = {}
         for line in summary["so_lines"]:
+            if line.get("open_qty") is None:
+                continue          # unknown quantity: counted in unknown_qty_lines
             name = _text(line.get("stage")) or "unknown"
             stage_counts[name] = round(stage_counts.get(name, 0.0) + line["open_qty"], 6)
         placed = [name for name in stage_counts if name != "unknown"]
@@ -390,11 +418,20 @@ def _so_block(pid, branch_code, so_map, stage_map, d6_so, evidence_loaded):
                  "unknown_date_open_orders": summary["so_unknown_date_open_orders"],
                  "lines_count": len(summary["so_lines"]),
                  "duplicate_lines_collapsed": duplicated,
+                 "unknown_qty_lines": unknown_lines,
+                 "unknown_lines": summary.get("so_unknown_lines", []),
                  "stage_counts": stage_counts, "stage_status": stage_status,
                  "included_in_proven_supply": False, "evidence_loaded": True,
+                 "complete_known_qty": unknown_lines == 0,
+                 "observed_as_of": evidence_as_of,
+                 "current_for_decision": current,
+                 "completeness": ("partial_unknown_qty" if unknown_lines else
+                                  ("current" if current else "stale_observation")),
+                 "aggregation": "product_level（同 product_id 的各形态行共享同一 SO 汇总，不可跨行相加）",
                  "coverage": "observed", "error": None,
                  "three_bucket_sum_equals_open":
                      abs(bucket_sum - round(summary["so_open_qty"], 6)) < 1e-6,
+                 "known_qty_complete": unknown_lines == 0,
                  "window_start": summary["so_window_start"],
                  "source_as_of": summary.get("so_source_as_of")}
     block["d6_so_open"] = d6_so
@@ -406,7 +443,7 @@ def _so_block(pid, branch_code, so_map, stage_map, d6_so, evidence_loaded):
 
 
 def _decide(*, period, q95, proven, live_out, po_open, cg_open, so_open,
-            so_evidence_loaded):
+            so_evidence_loaded, so_current, so_complete, so_observed_as_of):
     reasons = []
     if not period["determinate"]:
         reasons.append(period["reason"])
@@ -426,16 +463,31 @@ def _decide(*, period, q95, proven, live_out, po_open, cg_open, so_open,
         return {"action": "不补", "reason": f"q95 {q95:g} ≤ 已证供给 {proven:g}",
                 "net_requirement": net, "net_formula": "q95 - proven",
                 "so_included_in_supply": False}
+    # SO 只在证据时点 == 刷新时点、且数量完整时才可视为"已知"；
+    # 旧快照未观察到 ≠ 当前管线为 0，未证明覆盖前不得据此说"无管线可催"。
+    so_known = bool(so_evidence_loaded and so_current and so_complete
+                    and so_open is not None)
+    so_unknown_reason = None
+    if not so_evidence_loaded:
+        so_unknown_reason = "SO（缺 W1 证据）"
+    elif not so_current:
+        so_unknown_reason = (f"SO（W1 证据 as_of={so_observed_as_of or '未知'}，非当前；"
+                             "旧快照未观察到不等于当前为 0）")
+    elif not so_complete:
+        so_unknown_reason = "SO（含数量缺失的开放行，已知开放量只是下界）"
     pipeline_unknown = [name for name, value in
                         (("PO", po_open), ("CG", cg_open),
-                         ("SO", so_open if so_evidence_loaded else None))
+                         ("SO", so_open if so_known else None))
                         if value is None]
     pipeline_positive = [name for name, value in
-                         (("PO", po_open), ("CG", cg_open), ("SO", so_open))
+                         (("PO", po_open), ("CG", cg_open),
+                          ("SO", so_open if so_known else None))
                          if value is not None and value > 0]
     if pipeline_unknown:
         action = "催已有/待核"
-        reason = (f"净需求 {net:g} > 0，但管线量（{'/'.join(pipeline_unknown)}）未知，"
+        unknown_names = [r for r in (so_unknown_reason, ) if r] + \
+            [n for n in pipeline_unknown if n != "SO"]
+        reason = (f"净需求 {net:g} > 0，但管线量（{'；'.join(unknown_names) or '未知'}）未知，"
                   "不得当 0 也不得计入已证供给；先核实")
     elif pipeline_positive:
         action = "催已有/待核"
@@ -505,7 +557,7 @@ def refresh_pool(data_root, branch, as_of=None, period_start=None, period_end=No
               "d5_file": d5_name, "so_file": so_name, "d6_version": d6_version,
               "horizon": horizon, "period_start": period_start,
               "period_end": period_end, "pack_version": manifest.get("version"),
-              "so_loaded": so_loaded}
+              "so_loaded": so_loaded, "so_source_as_of": so_source_as_of}
 
     rows_out, rejected, skipped, seen = [], [], [], set()
     for position, (_, row) in enumerate(frame.iterrows()):
@@ -537,6 +589,9 @@ def refresh_pool(data_root, branch, as_of=None, period_start=None, period_end=No
     rows_out.sort(key=lambda r: (r["product_id"] or "", r["form"] or "",
                                  r["uom"] or "", r["key"]))
     rows_sha = _sha(canonical(rows_out))
+    selected = {str(pid) for pid in frame["product_id"].dropna().astype(str)}
+    so_scope = _so_scope(so_map, POOL_BRANCH.get(pool, str(branch)), selected,
+                         so_source_as_of, as_of)
 
     body = {
         "schema": SCHEMA_SNAPSHOT,
@@ -551,16 +606,20 @@ def refresh_pool(data_root, branch, as_of=None, period_start=None, period_end=No
         "live": {name: _jsonable(live.get(name)) for name in
                  ("source", "source_path", "status", "run_id", "snapshot_at")},
         "so_evidence": {**{name: _jsonable(so_stats.get(name)) for name in
-                           ("lines_read", "unique_lines", "duplicate_lines",
+                           ("lines_read", "unique_lines", "known_lines",
+                            "unknown_qty_lines", "duplicate_lines",
                             "duplicate_open_qty", "skipped_no_sku_or_branch",
-                            "skipped_bad_qty", "skipped_not_open", "keys")},
-                        "source_as_of": so_source_as_of},
+                            "skipped_not_open", "keys")},
+                        "source_as_of": so_source_as_of,
+                        "scope": "all_recognizable_branches（含快照范围外与其它分公司）"},
         "so_evidence_error": so_stats.get("error"),
         "so_stage_evidence": {name: _jsonable(stage_stats.get(name)) for name in
                               ("records", "rows_read", "unique_rows", "duplicate_rows",
                                "skipped_no_branch", "skipped_no_sku", "keys",
-                               "stage_totals", "stage_unknown_qty_rows", "scope_fba_qty")},
+                               "stage_totals", "stage_unknown_qty_rows", "scope_fba_qty",
+                               "scope_fba_unknown_rows")},
         "so_stage_error": stage_stats.get("error"),
+        "so_scope": so_scope,
         "row_count": len(rows_out),
         "rows": rows_out,
         "field_dictionary": FIELD_DICTIONARY,
@@ -570,6 +629,75 @@ def refresh_pool(data_root, branch, as_of=None, period_start=None, period_end=No
     report = _build_report(snapshot, input_rows, rows_out, rejected, skipped,
                           so_stats, stage_stats, d5_duplicates)
     return {"snapshot": snapshot, "report": report}
+
+
+def _blank_so_scope():
+    return {"keys": 0, "lines": 0, "open_qty": 0.0, "recent": 0.0, "history": 0.0,
+            "unknown_date": 0.0, "unknown_qty_lines": 0, "orders": 0,
+            "complete": True, "sos": set()}
+
+
+def _so_scope(so_map, branch_code, selected, evidence_as_of, run_as_of):
+    """Aggregate SO evidence by unique (product_id, branch) key.
+
+    A ``product_id`` can appear on several D6 form rows (成品/成品+皮壳…).  SO is
+    attached at the product level, so summing row blocks would double count it;
+    this aggregates the evidence once and splits the snapshot scope from what
+    falls outside it, instead of hiding the out-of-scope quantity.
+    """
+    in_scope = _blank_so_scope()
+    out_scope = _blank_so_scope()
+    other_branch = _blank_so_scope()
+    for (sku, br), summary in so_map.items():
+        if br != branch_code:
+            target = other_branch
+        elif sku not in selected:
+            target = out_scope
+        else:
+            target = in_scope
+        values = (summary["so_open_qty"], summary["so_recent_open_qty"],
+                  summary["so_history_open_qty"], summary["so_unknown_date_open_qty"])
+        target["keys"] += 1
+        target["lines"] += len(summary["so_lines"])
+        target["open_qty"] += values[0]
+        target["recent"] += values[1]
+        target["history"] += values[2]
+        target["unknown_date"] += values[3]
+        target["unknown_qty_lines"] += summary.get("so_unknown_qty_lines", 0)
+        target["orders"] += summary["so_open_orders"]
+        target["complete"] = target["complete"] and summary.get("so_complete", True)
+        target["sos"].add(summary.get("so_source_as_of") or "")
+
+    def finish(bucket):
+        out = {key: round(value, 6) for key, value in bucket.items()
+               if isinstance(value, float)}
+        out.update({"keys": bucket["keys"], "lines": bucket["lines"],
+                    "unknown_qty_lines": bucket["unknown_qty_lines"],
+                    "orders": bucket["orders"], "complete": bucket["complete"]})
+        return out
+
+    in_scope, out_scope, other_branch = finish(in_scope), finish(out_scope), \
+        finish(other_branch)
+    branch_total = {key: round(in_scope[key] + out_scope[key], 6)
+                    for key in ("open_qty", "recent", "history", "unknown_date")}
+    branch_total.update({"keys": in_scope["keys"] + out_scope["keys"],
+                         "lines": in_scope["lines"] + out_scope["lines"],
+                         "unknown_qty_lines": in_scope["unknown_qty_lines"]
+                                              + out_scope["unknown_qty_lines"],
+                         "complete": in_scope["complete"] and out_scope["complete"]})
+    return {
+        "branch": branch_code,
+        "basis": ("unique (product_id, branch) 键；每 (so, so_line) 只计一次；"
+                  "同 product_id 的多形态行共享，不跨行相加"),
+        "evidence_as_of": evidence_as_of,
+        "current_for_decision": bool(evidence_as_of and evidence_as_of == run_as_of),
+        "in_scope": in_scope,
+        "out_of_scope": {"total": out_scope,
+                         "reason": "product_not_in_snapshot_scope（本分公司但不在本次 D6 选取范围）"},
+        "branch_total": branch_total,
+        "other_branches": {"total": other_branch,
+                           "reason": "branch_out_of_scope（其它分公司）"},
+    }
 
 
 def _source_hashes(root, manifest, names):
@@ -599,30 +727,25 @@ def _build_report(snapshot, input_rows, rows_out, rejected, skipped, so_stats,
         status = row["live"]["status"]
         live_status[status] = live_status.get(status, 0) + 1
     balanced = input_rows == len(rows_out) + len(rejected) + len(skipped)
-    so_three_way = {"open_total": 0.0, "recent": 0.0, "history": 0.0, "unknown": 0.0,
-                    "balanced": True}
+    scope = snapshot["so_scope"]
+    in_scope = scope["in_scope"]
+    so_three_way = {"open_total": in_scope["open_qty"],
+                    "recent": in_scope["recent"],
+                    "history": in_scope["history"],
+                    "unknown": in_scope["unknown_date"],
+                    "sum_of_buckets": round(in_scope["recent"] + in_scope["history"]
+                                            + in_scope["unknown_date"], 6),
+                    "unknown_qty_lines": in_scope["unknown_qty_lines"],
+                    "known_qty_complete": in_scope["complete"],
+                    "scope": "snapshot_scope（唯一 (product_id, branch) 键，非行级累加）"}
+    so_three_way["balanced"] = abs(so_three_way["sum_of_buckets"]
+                                   - so_three_way["open_total"]) < 1e-6
     so_stage_unknown = 0.0
     for row in rows_out:
-        so = row["so"]
-        for field, target in (("recent_open_qty", "recent"),
-                              ("history_open_qty", "history"),
-                              ("unknown_date_open_qty", "unknown")):
-            value = so.get(field)
-            if value is not None:
-                so_three_way[target] = round(so_three_way[target] + value, 6)
-        if so.get("open_qty") is not None:
-            so_three_way["open_total"] = round(so_three_way["open_total"] + so["open_qty"], 6)
-        if not so.get("three_bucket_sum_equals_open", True):
-            so_three_way["balanced"] = False
         stage_block = row.get("so_stage") or {}
-        so_stage_unknown = round(so_stage_unknown
-                                 + (stage_block.get("so_stage_qty") or {}).get("unknown", 0.0), 6)
-    so_three_way["sum_of_buckets"] = round(so_three_way["recent"]
-                                           + so_three_way["history"]
-                                           + so_three_way["unknown"], 6)
-    so_three_way["balanced"] = bool(
-        so_three_way["balanced"]
-        and abs(so_three_way["sum_of_buckets"] - so_three_way["open_total"]) < 1e-6)
+        value = (stage_block.get("so_stage_qty") or {}).get("unknown")
+        if value is not None:
+            so_stage_unknown = round(so_stage_unknown + value, 6)
     return {
         "schema": SCHEMA_REPORT,
         "branch": snapshot["branch"], "pool": snapshot["pool"],
@@ -643,20 +766,24 @@ def _build_report(snapshot, input_rows, rows_out, rejected, skipped, so_stats,
         "live_status_counts": live_status,
         "rejected": rejected,
         "skipped": skipped,
-        "so_dedupe": {"dedupe_key": ["so", "so_line"], "scope": "W1 lines 开放量",
+        "so_dedupe": {"dedupe_key": ["so", "so_line"],
+                      "scope": "all_recognizable_branches（W1 文件级，含快照范围外与其它分公司）",
                       **{name: _jsonable(so_stats.get(name)) for name in
-                         ("lines_read", "unique_lines", "duplicate_lines",
+                         ("lines_read", "unique_lines", "known_lines",
+                          "unknown_qty_lines", "duplicate_lines",
                           "duplicate_open_qty", "skipped_no_sku_or_branch",
-                          "skipped_bad_qty", "skipped_not_open", "keys")},
+                          "skipped_not_open", "keys")},
                       "error": so_stats.get("error")},
         "so_three_way": so_three_way,
+        "so_scope": scope,
         "so_stage": {"scope": "W1 stage_balances（in_house）",
                      "not_additive_with_open_qty": True,
                      "included_in_proven_supply": False,
                      "unknown_stage_qty": so_stage_unknown,
                      **{name: _jsonable(stage_stats.get(name)) for name in
                         ("records", "rows_read", "unique_rows", "duplicate_rows",
-                         "stage_totals", "stage_unknown_qty_rows", "scope_fba_qty")},
+                         "stage_totals", "stage_unknown_qty_rows", "scope_fba_qty",
+                         "scope_fba_unknown_rows")},
                      "error": stage_stats.get("error")},
         "d5_duplicate_keys": d5_duplicates,
         "source_hashes": snapshot["sources"],
@@ -675,16 +802,35 @@ def _report_warnings(snapshot, rows_out, so_stats):
     if so_stats.get("duplicate_lines"):
         out.append(f"W1 SO 行 (so, so_line) 重复 {so_stats['duplicate_lines']} 条，"
                    f"开放量重复 {so_stats['duplicate_open_qty']:g} 已只计一次")
+    if so_stats.get("unknown_qty_lines"):
+        out.append(f"W1 SO {so_stats['unknown_qty_lines']} 行数量缺失，开放量保持 null 并单列")
+    scope = snapshot.get("so_scope") or {}
+    out_scope = (scope.get("out_of_scope") or {}).get("total") or {}
+    other = (scope.get("other_branches") or {}).get("total") or {}
+    if out_scope.get("lines") or other.get("lines"):
+        out.append(f"SO 范围外：本分公司非快照范围 {out_scope.get('lines', 0)} 行 / "
+                   f"开放 {out_scope.get('open_qty', 0)}，其它分公司 "
+                   f"{other.get('lines', 0)} 行 / 开放 {other.get('open_qty', 0)}；"
+                   "均未计入快照范围合计")
     source_as_of = (snapshot.get("so_evidence") or {}).get("source_as_of")
     if source_as_of and source_as_of != snapshot["as_of"]:
-        out.append(f"W1 SO 证据 as_of={source_as_of}，与刷新 as_of={snapshot['as_of']} 不同")
+        out.append(f"W1 SO 证据 as_of={source_as_of}，与刷新 as_of={snapshot['as_of']} 不同："
+                   "旧快照未观察到不等于当前为 0，SO 不参与'补'的确定判断")
     if snapshot["live"].get("snapshot_at") and \
             str(snapshot["live"]["snapshot_at"])[:10] != snapshot["as_of"]:
         out.append(f"EN 实时库存快照 {snapshot['live']['snapshot_at']} ≠ as_of "
                    f"{snapshot['as_of']}：库存不是 as_of 当刻")
-    if snapshot["rows"] and all(not r["period"]["determinate"] for r in snapshot["rows"]):
+    elapsed = [r for r in rows_out
+               if r["period"]["basis"] == "explicit_period"
+               and not r["period"]["determinate"]]
+    if elapsed and len(elapsed) == len(rows_out):
+        first = elapsed[0]["period"]
+        out.append(f"显式期间不可确定：{first['reason']}"
+                   "（已逝需求未桥接，全部行拒绝确定建议）")
+    if rows_out and all(not r["period"]["determinate"] for r in rows_out) and not elapsed:
         out.append("全部行 period_basis=full_period 且无显式期间：整期需求不得当剩余期，"
-                   "故全部标暂不能判断（可用 --period-start/--period-end 声明等长期间）")
+                   "故全部标暂不能判断（可用 --period-start/--period-end 声明等长期间，"
+                   "起点须等于库存观测日）")
     unknown_q95 = sum(1 for r in rows_out if r["demand"]["q95"] is None)
     if unknown_q95:
         out.append(f"{unknown_q95} 行 D5 q95 缺失，保持 null 并拒绝确定建议")
@@ -703,8 +849,11 @@ def write_outputs(out_dir, result):
     text = json.dumps(snapshot, ensure_ascii=False, indent=2)
     if path.exists():
         existing = json.loads(path.read_text(encoding="utf-8"))
-        if existing.get("snapshot_sha256") != snapshot["snapshot_sha256"]:
-            raise SystemExit(f"快照已存在且内容不同，拒绝覆盖：{path}")
+        stored = existing.pop("snapshot_sha256", None)
+        existing.pop("rows_sha256", None)
+        recomputed = _sha(canonical(existing))
+        if stored != recomputed or stored != snapshot["snapshot_sha256"]:
+            raise SystemExit(f"快照文件内容与记录的哈希不符（疑似被改），拒绝覆盖：{path}")
     else:
         path.write_text(text, encoding="utf-8", newline="\n")
     report_path = out / "report.json"
@@ -729,11 +878,16 @@ def summary_text(result, paths=None):
         f"拒收 {bankers['rejected']} + 跳过 {bankers['skipped']}"
         f"（{'对平' if bankers['balanced'] else '未对平'}）",
         f"动作：{report['accepted_by_action']}",
-        f"SO 去重：唯一 {report['so_dedupe']['unique_lines']} 行，"
-        f"重复 {report['so_dedupe']['duplicate_lines']} 行；"
-        f"三段合计 {report['so_three_way']['sum_of_buckets']:g} = "
-        f"开放 {report['so_three_way']['open_total']:g}"
-        f"（{'守恒' if report['so_three_way']['balanced'] else '不守恒'}），未计入已证供给",
+        f"SO 范围：快照内唯一 {report['so_scope']['in_scope']['keys']} 键 / "
+        f"{report['so_scope']['in_scope']['lines']} 行 / 开放 "
+        f"{report['so_scope']['in_scope']['open_qty']:g}（三段合计 "
+        f"{report['so_three_way']['sum_of_buckets']:g}，"
+        f"{'守恒' if report['so_three_way']['balanced'] else '不守恒'}）；"
+        f"范围外 {report['so_scope']['out_of_scope']['total']['lines']} 行 / "
+        f"{report['so_scope']['out_of_scope']['total']['open_qty']:g}，未计入；"
+        "未计入已证供给",
+        f"SO 文件级去重：唯一 {report['so_dedupe']['unique_lines']} 行（全分公司），"
+        f"重复 {report['so_dedupe']['duplicate_lines']} 行",
         f"EN 快照：{report['live'].get('snapshot_at')}（{report['live'].get('status')}）",
     ]
     for warning in report["warnings"]:

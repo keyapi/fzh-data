@@ -27,8 +27,8 @@ def d6_row(pid, q95=100, **extra):
     return row
 
 
-def d5_row(pid, q95=100):
-    return {"product_id": pid, "pool": POOL, "physical_form": "成品",
+def d5_row(pid, q95=100, form="成品"):
+    return {"product_id": pid, "pool": POOL, "physical_form": form,
             "canonical_uom": "个", "horizon": 97, "horizon_days": 97,
             "p50": 70, "q90": 90, "q95": q95, "model": "ets_ann"}
 
@@ -59,8 +59,8 @@ def live_rows(alias, available=40, intransit=0, waiting=0,
              "run_id": "R1", "snapshot_at": snapshot_at}]
 
 
-def so_record(so, lines, stage_balances=None):
-    return {"so": so, "payload": {"as_of": "2026-11-20", "lines": lines,
+def so_record(so, lines, stage_balances=None, as_of="2026-11-20"):
+    return {"so": so, "payload": {"as_of": as_of, "lines": lines,
                                   "stage_balances": stage_balances or []}}
 
 
@@ -90,16 +90,39 @@ def test_period_full_period_is_not_remaining_period():
     assert "整期不得当剩余期" in out["reason"]
 
 
-def test_period_explicit_equal_length_is_determinate():
+def test_period_explicit_equal_length_is_determinate_only_with_matching_observation():
     out = period.resolve_period(horizon_days=97, pack_as_of=PACK_AS_OF, as_of=RUN_AS_OF,
-                                period_start="2026-11-13", period_end="2027-02-17")
+                                period_start="2026-11-24", period_end="2027-02-28",
+                                supply_observed_at="2026-11-24 05:17:57")
     assert out["basis"] == "explicit_period" and out["determinate"] is True
-    assert out["days"] == 97 and out["note"] is None
+    assert out["days"] == 97 and out["elapsed_days"] == 0
+    assert out["note"] and "起点相差 11 天" in out["note"]
+
+
+def test_period_elapsed_days_are_refused_not_bridged():
+    out = period.resolve_period(horizon_days=97, pack_as_of=PACK_AS_OF, as_of=RUN_AS_OF,
+                                period_start="2026-11-13", period_end="2027-02-17",
+                                supply_observed_at="2026-11-24 05:17:57")
+    assert out["determinate"] is False
+    assert out["elapsed_days"] == 11
+    assert "已逝 11 天" in out["reason"] and "不得用整期需求减当下库存" in out["reason"]
+    assert out["demand_bridge"]["available"] is False
+
+
+def test_period_observation_before_start_or_missing_is_refused():
+    early = period.resolve_period(horizon_days=97, pack_as_of=PACK_AS_OF, as_of=RUN_AS_OF,
+                                  period_start="2026-11-24", period_end="2027-02-28",
+                                  supply_observed_at="2026-11-23")
+    assert early["determinate"] is False and "不是期初库存" in early["reason"]
+    missing = period.resolve_period(horizon_days=97, pack_as_of=PACK_AS_OF, as_of=RUN_AS_OF,
+                                    period_start="2026-11-24", period_end="2027-02-28")
+    assert missing["determinate"] is False and "库存观测时点不明" in missing["reason"]
 
 
 def test_period_short_explicit_window_is_refused():
     out = period.resolve_period(horizon_days=97, pack_as_of=PACK_AS_OF, as_of=RUN_AS_OF,
-                                period_start="2026-11-24", period_end="2026-12-04")
+                                period_start="2026-11-24", period_end="2026-12-04",
+                                supply_observed_at="2026-11-24")
     assert out["determinate"] is False
     assert "不做比例外推" in out["reason"]
 
@@ -135,7 +158,7 @@ def test_explicit_period_uses_proven_supply_only(tmp_path):
     make_pack(tmp_path, [d6_row("KS1", q95=100, **{"PO追加(去重)": 30})],
               [d5_row("KS1", q95=100)], {"KS1": "TT1"})
     result = run(tmp_path, live_rows=live_rows("TT1", available=40), sku="KS1",
-                 period_start=PACK_AS_OF, period_end="2027-02-17")
+                 period_start=RUN_AS_OF, period_end="2027-02-28")
     row = result["snapshot"]["rows"][0]
     assert row["supply"]["proven"] == 40
     assert row["supply"]["stages"][-3]["stage"] == "po_open"
@@ -145,14 +168,31 @@ def test_explicit_period_uses_proven_supply_only(tmp_path):
 
 
 def test_explicit_period_without_pipeline_buys(tmp_path):
+    # current W1 snapshot (as_of == run) so an unobserved SO may be trusted as 0
+    records = [so_record("SO-9", [so_line("SO-9", "L1", 5, item_code="KS2")],
+                         as_of=RUN_AS_OF)]
     make_pack(tmp_path, [d6_row("KS1", q95=100)], [d5_row("KS1", q95=100)],
-              {"KS1": "TT1"})
+              {"KS1": "TT1"}, records)
     result = run(tmp_path, live_rows=live_rows("TT1", available=40), sku="KS1",
-                 period_start=PACK_AS_OF, period_end="2027-02-17")
+                 period_start=RUN_AS_OF, period_end="2027-02-28")
     row = result["snapshot"]["rows"][0]
     assert row["decision"]["action"] == "补"
     assert row["decision"]["net_requirement"] == 60
     assert row["so"]["open_qty"] == 0.0
+    assert row["so"]["current_for_decision"] is True
+
+
+def test_stale_so_evidence_never_becomes_zero_pipeline(tmp_path):
+    records = [so_record("SO-1", [so_line("SO-1", "L1", 10)], as_of="2026-10-27")]
+    make_pack(tmp_path, [d6_row("KS1", q95=100)], [d5_row("KS1", q95=100)],
+              {"KS1": "TT1"}, records)
+    result = run(tmp_path, live_rows=live_rows("TT1", available=40), sku="KS1",
+                 period_start=RUN_AS_OF, period_end="2027-02-28")
+    row = result["snapshot"]["rows"][0]
+    assert row["so"]["current_for_decision"] is False
+    assert row["so"]["completeness"] == "stale_observation"
+    assert row["decision"]["action"] == "催已有/待核"     # not 补: SO is unknown, not 0
+    assert "非当前" in row["decision"]["reason"]
 
 
 def test_short_explicit_period_keeps_row_but_refuses(tmp_path):
@@ -169,7 +209,7 @@ def test_unknown_quantities_stay_null(tmp_path):
     make_pack(tmp_path, [d6_row("KS1", q95=float("nan"))],
               [d5_row("KS1", q95=float("nan"))], {"KS1": "TT1"})
     result = run(tmp_path, live_rows=live_rows("TT1"), sku="KS1",
-                 period_start=PACK_AS_OF, period_end="2027-02-17")
+                 period_start=RUN_AS_OF, period_end="2027-02-28")
     row = result["snapshot"]["rows"][0]
     assert row["demand"]["q95"] is None
     assert row["decision"]["net_requirement"] is None
@@ -179,7 +219,7 @@ def test_unknown_quantities_stay_null(tmp_path):
 def test_live_unavailable_keeps_supply_null(tmp_path):
     make_pack(tmp_path, [d6_row("KS1")], [d5_row("KS1")], {"KS1": "TT1"})
     result = run(tmp_path, live_rows=[], sku="KS1",
-                 period_start=PACK_AS_OF, period_end="2027-02-17")
+                 period_start=RUN_AS_OF, period_end="2027-02-28")
     row = result["snapshot"]["rows"][0]
     assert row["supply"]["proven"] is None
     assert all(stage["qty"] is None for stage in row["supply"]["stages"][:3])
@@ -200,7 +240,7 @@ def test_so_open_deduped_by_so_and_line(tmp_path):
     make_pack(tmp_path, [d6_row("KS1-BASE")], [d5_row("KS1-BASE")],
               {"KS1-BASE": "TT1"}, records)
     result = run(tmp_path, live_rows=live_rows("TT1"), sku="KS1-BASE",
-                 period_start=PACK_AS_OF, period_end="2027-02-17")
+                 period_start=RUN_AS_OF, period_end="2027-02-28")
     so = result["snapshot"]["rows"][0]["so"]
     assert so["open_qty"] == 23.0                     # 10 + 5 + 8, duplicate 10 skipped
     assert so["duplicate_lines_collapsed"] == 1
@@ -218,13 +258,101 @@ def test_so_is_never_added_to_proven_supply(tmp_path):
     make_pack(tmp_path, [d6_row("KS1-BASE", q95=100)], [d5_row("KS1-BASE", q95=100)],
               {"KS1-BASE": "TT1"}, records)
     result = run(tmp_path, live_rows=live_rows("TT1", available=40),
-                 sku="KS1-BASE", period_start=PACK_AS_OF, period_end="2027-02-17")
+                 sku="KS1-BASE", period_start=RUN_AS_OF, period_end="2027-02-28")
     row = result["snapshot"]["rows"][0]
     assert row["supply"]["proven"] == 40               # SO 50 not added
     assert row["decision"]["net_requirement"] == 60    # still 100 - 40
     assert row["decision"]["so_included_in_supply"] is False
     assert row["decision"]["action"] == "催已有/待核"
     assert row["so"]["open_qty"] == 50.0
+
+
+def test_so_not_double_counted_across_form_rows(tmp_path):
+    rows = [d6_row("KS1"), d6_row("KS1", **{"形态": "成品+皮壳"})]
+    d5 = [d5_row("KS1"), d5_row("KS1", form="成品+皮壳")]
+    records = [so_record("SO-1", [so_line("SO-1", "L1", 45, item_code="KS1")],
+                         as_of=RUN_AS_OF)]
+    make_pack(tmp_path, rows, d5, {"KS1": "TT1"}, records)
+    result = run(tmp_path, live_rows=live_rows("TT1", available=10))
+    report = result["report"]
+    assert report["bankers"]["accepted"] == 2
+    assert report["so_three_way"]["open_total"] == 45.0      # not 90
+    assert report["so_scope"]["in_scope"]["keys"] == 1
+    assert report["so_scope"]["in_scope"]["lines"] == 1
+    for row in result["snapshot"]["rows"]:
+        assert row["so"]["open_qty"] == 45.0                  # row-level repeats
+        assert "不可跨行相加" in row["so"]["aggregation"]
+    uniq_row_sum = len({row["key"].split("|")[1] for row in result["snapshot"]["rows"]})
+    assert uniq_row_sum == 1
+
+
+def test_so_out_of_scope_is_reported_separately(tmp_path):
+    records = [
+        so_record("SO-1", [so_line("SO-1", "L1", 10, item_code="KS1")], as_of=RUN_AS_OF),
+        so_record("SO-2", [so_line("SO-2", "L1", 20, item_code="KS-OTHER")],
+                  as_of=RUN_AS_OF),
+        so_record("SO-3", [so_line("SO-3", "L1", 30, item_code="KS-USTX",
+                                   customer="美中公司（DANEEY）")], as_of=RUN_AS_OF),
+    ]
+    make_pack(tmp_path, [d6_row("KS1")], [d5_row("KS1")], {"KS1": "TT1"}, records)
+    result = run(tmp_path, live_rows=live_rows("TT1"))
+    scope = result["report"]["so_scope"]
+    assert result["report"]["so_three_way"]["open_total"] == 10.0
+    assert scope["in_scope"]["keys"] == 1
+    assert scope["out_of_scope"]["total"]["open_qty"] == 20.0
+    assert scope["out_of_scope"]["total"]["open_qty"] == 20.0
+    assert "product_not_in_snapshot_scope" in scope["out_of_scope"]["reason"]
+    assert scope["other_branches"]["total"]["open_qty"] == 30.0
+    assert scope["branch_total"]["open_qty"] == 30.0
+
+
+def test_so_line_with_missing_quantity_stays_null(tmp_path):
+    records = [so_record("SO-1", [so_line("SO-1", "L1", 10, delivered=None,
+                                          item_code="KS1")], as_of=RUN_AS_OF)]
+    make_pack(tmp_path, [d6_row("KS1", q95=100)], [d5_row("KS1", q95=100)],
+              {"KS1": "TT1"}, records)
+    result = run(tmp_path, live_rows=live_rows("TT1", available=40), sku="KS1",
+                 period_start=RUN_AS_OF, period_end="2027-02-28")
+    row = result["snapshot"]["rows"][0]
+    assert row["so"]["open_qty"] == 0.0            # known sum only
+    assert row["so"]["unknown_qty_lines"] == 1
+    assert row["so"]["unknown_lines"][0]["open_qty"] is None
+    assert row["so"]["completeness"] == "partial_unknown_qty"
+    assert result["report"]["so_three_way"]["known_qty_complete"] is False
+    assert result["report"]["so_three_way"]["unknown_qty_lines"] == 1
+    assert row["decision"]["action"] == "催已有/待核"   # SO is a lower bound, not 0
+
+
+def test_stage_balance_with_missing_quantity_stays_null(tmp_path):
+    balances = [{"so": "SO-1", "so_line_id": "L1", "item_code": "KS1",
+                 "stage": "in_production", "qty": None, "scope": "in_house",
+                 "qty_status": "unknown", "source_record": "WO-1"}]
+    records = [so_record("SO-1", [so_line("SO-1", "L1", 7, item_code="KS1")],
+                         balances)]
+    make_pack(tmp_path, [d6_row("KS1")], [d5_row("KS1")], {"KS1": "TT1"}, records)
+    result = run(tmp_path, live_rows=live_rows("TT1"), sku="KS1")
+    row = result["snapshot"]["rows"][0]
+    assert row["so_stage"]["so_stage_qty"]["in_production"] is None
+    assert row["so_stage"]["so_stage_complete"] is False
+    stage = next(s for s in row["supply"]["stages"]
+                 if s["stage"] == "w1_stage:in_production")
+    assert stage["qty"] is None and stage["known"] is False
+    assert result["report"]["so_stage"]["stage_totals"]["in_production"] == 0.0
+
+
+def test_tampered_snapshot_file_is_rejected(tmp_path):
+    pack = tmp_path / "pack"
+    make_pack(pack, [d6_row("KS1")], [d5_row("KS1")], {"KS1": "TT1"})
+    result = run(pack, live_rows=live_rows("TT1"))
+    out = tmp_path / "out"
+    paths = batch.write_outputs(out, result)
+    path = Path(paths["snapshot_path"])
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["rows"][0]["demand"]["q95"] = 1
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    with pytest.raises(SystemExit) as exc:
+        batch.write_outputs(out, result)
+    assert "疑似被改" in str(exc.value)
 
 
 def test_unknown_stage_is_kept(tmp_path):

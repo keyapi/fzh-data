@@ -51,6 +51,7 @@ def load_stage_balances(path):
              "skipped_no_branch": 0, "skipped_no_sku": 0, "keys": 0,
              "stage_totals": {stage: 0.0 for stage in STAGE_ORDER},
              "stage_unknown_qty_rows": 0, "scope_fba_qty": 0.0,
+             "scope_fba_unknown_rows": 0,
              "source": "W1 stage_balances"}
     p = Path(path)
     if not p.exists():
@@ -76,7 +77,10 @@ def load_stage_balances(path):
             scope = str(row.get("scope") or "in_house")
             stage = str(row.get("stage") or "unknown")
             if scope == FBA_SCOPE:
-                stats["scope_fba_qty"] = round(stats["scope_fba_qty"] + (qty or 0.0), 6)
+                if qty is None:
+                    stats["scope_fba_unknown_rows"] += 1
+                else:
+                    stats["scope_fba_qty"] = round(stats["scope_fba_qty"] + qty, 6)
                 continue
             if not br:
                 stats["skipped_no_branch"] += 1
@@ -100,10 +104,16 @@ def load_stage_balances(path):
                 "so_stage_rows": 0,
                 "so_stage_so_count": 0,
                 "so_stage_scope_fba_qty": 0.0,
+                "_cells": {},
                 "_orders": set(),
             })
-            bucket = summary["so_stage_qty"].setdefault(stage, 0.0)
-            summary["so_stage_qty"][stage] = round(bucket + (qty or 0.0), 6)
+            # A stage with any unknown row keeps a *null* total: summing the
+            # known rows would publish a partial amount as if it were complete.
+            cell = summary["_cells"].setdefault(stage, {"qty": 0.0, "unknown": False})
+            if qty is None:
+                cell["unknown"] = True
+            else:
+                cell["qty"] = round(cell["qty"] + qty, 6)
             if qty is None and stage not in summary["so_stage_incomplete"]:
                 summary["so_stage_incomplete"].append(stage)
             summary["so_stage_rows"] += 1
@@ -111,13 +121,17 @@ def load_stage_balances(path):
     totals = stats["stage_totals"]
     for summary in out.values():
         summary["so_stage_so_count"] = len(summary.pop("_orders"))
-        for stage, value in summary["so_stage_qty"].items():
-            if stage in totals:
+        cells = summary.pop("_cells")
+        for stage, cell in cells.items():
+            value = None if cell["unknown"] else cell["qty"]
+            summary["so_stage_qty"][stage] = value
+            if value is not None and stage in totals:
                 totals[stage] = round(totals[stage] + value, 6)
         summary["so_stage_incomplete"].sort()
         summary["so_stage_qty"] = {stage: summary["so_stage_qty"][stage]
                                    for stage in STAGE_ORDER
                                    if stage in summary["so_stage_qty"]}
+        summary["so_stage_complete"] = not summary["so_stage_incomplete"]
         summary["so_stage_included_in_proven_supply"] = False
         summary["so_stage_not_additive_with_open_qty"] = True
     stats["keys"] = len(out)

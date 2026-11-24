@@ -35,14 +35,23 @@ def parse_date(value):
 
 
 def resolve_period(*, horizon_days, pack_as_of, as_of,
-                   period_start=None, period_end=None):
+                   period_start=None, period_end=None,
+                   supply_observed_at=None):
     """Decide the period basis, bounds and whether a determinate answer is allowed.
 
     ``horizon_days`` is the D5 horizon length; ``pack_as_of`` is the anchor of
-    that forecast; ``as_of`` is the refresh time point the caller asked for.
+    that forecast; ``as_of`` is the refresh time point the caller asked for;
+    ``supply_observed_at`` is when the live supply was actually observed.
+
+    A gap can only be computed when the supply snapshot is taken **at the
+    start** of the demand window.  If stock is observed later, the demand of
+    the elapsed days is already inside the D5 total while the stock has moved
+    on; there is no daily demand path to bridge it, so the row is refused
+    instead of subtracting today's stock from the whole-period demand.
     """
     anchor = parse_date(pack_as_of)
     run_at = parse_date(as_of)
+    observed = parse_date(supply_observed_at)
     try:
         days = int(float(horizon_days)) if horizon_days is not None else 0
     except (TypeError, ValueError):
@@ -54,6 +63,9 @@ def resolve_period(*, horizon_days, pack_as_of, as_of,
            "forecast_anchor": anchor.isoformat() if anchor else None,
            "forecast_horizon_days": days or None,
            "as_of": run_at.isoformat() if run_at else None,
+           "supply_observed_at": observed.isoformat() if observed else None,
+           "elapsed_days": None,
+           "demand_bridge": None,
            "declared_start": period_start, "declared_end": period_end}
 
     if anchor is None:
@@ -93,7 +105,30 @@ def resolve_period(*, horizon_days, pack_as_of, as_of,
             "剩余期需求不能由整期总量代替"
         )
         return out
+    if observed is None:
+        out["reason"] = "库存观测时点不明（缺 EN 快照 snapshot_at），无法判断已逝需求"
+        return out
+    out["elapsed_days"] = (observed - start).days
+    if observed > start:
+        out["reason"] = (
+            f"库存观测日 {observed.isoformat()} 晚于期间起点 {start.isoformat()}"
+            f"（已逝 {out['elapsed_days']} 天）；已逝需求无日级分布可桥接，"
+            "不得用整期需求减当下库存"
+        )
+        out["demand_bridge"] = {
+            "available": False,
+            "reason": "D5 只有整期总量（p50/q90/q95），没有日级需求路径，无法扣除已逝消耗",
+        }
+        return out
+    if observed < start:
+        out["reason"] = (
+            f"库存观测日 {observed.isoformat()} 早于期间起点 {start.isoformat()}，"
+            "库存不是期初库存"
+        )
+        return out
     out["determinate"] = True
+    out["demand_bridge"] = {"available": True, "elapsed_days": 0,
+                            "reason": "库存观测日 = 期间起点，无已逝需求"}
     if start != anchor:
         shift = (start - anchor).days
         out["note"] = (

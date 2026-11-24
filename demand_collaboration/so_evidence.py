@@ -40,6 +40,29 @@ def sku_of(item_code):
     return text or None
 
 
+def _number(value):
+    """Finite float, or ``None`` when the cell is missing/blank/non-numeric.
+
+    Missing must stay unknown: coercing it to 0 would turn "we do not know how
+    much this line still owes" into "this line owes nothing".
+    """
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return None if number != number else number
+
+
+def _open_qty(row):
+    qty = _number(row.get("qty"))
+    delivered = _number(row.get("delivered_qty"))
+    if qty is None or delivered is None:
+        return None
+    return max(0.0, qty - delivered)
+
+
 def as_date(value):
     if value is None:
         return None
@@ -129,10 +152,10 @@ def load_deduped(path, as_of="2026-11-13", window_start=None, dedupe=True):
     of silently changing the total.
     """
     p = Path(path)
-    stats = {"lines_read": 0, "unique_lines": 0, "duplicate_lines": 0,
+    stats = {"lines_read": 0, "unique_lines": 0, "known_lines": 0,
+             "unknown_qty_lines": 0, "duplicate_lines": 0,
              "duplicate_open_qty": 0.0, "skipped_no_sku_or_branch": 0,
-             "skipped_bad_qty": 0, "skipped_not_open": 0,
-             "keys": 0, "dedupe": bool(dedupe)}
+             "skipped_not_open": 0, "keys": 0, "dedupe": bool(dedupe)}
     if not p.exists():
         stats["error"] = f"SO 证据文件不存在：{p}"
         return {}, stats
@@ -154,30 +177,36 @@ def load_deduped(path, as_of="2026-11-13", window_start=None, dedupe=True):
             if not sku or not br:
                 stats["skipped_no_sku_or_branch"] += 1
                 continue
-            try:
-                qty = float(row.get("qty") or 0)
-                delivered = float(row.get("delivered_qty") or 0)
-            except (TypeError, ValueError):
-                stats["skipped_bad_qty"] += 1
-                continue
-            open_qty = max(0.0, qty - delivered)
-            status = str(row.get("so_status") or "")
-            if open_qty <= 0 or status == "Closed" or \
-                    str(row.get("so_docstatus")) not in {"1", "1.0"}:
-                stats["skipped_not_open"] += 1
-                continue
             so_name = record.get("so") or row.get("so")
             if dedupe:
                 line_key = (str(so_name), str(row.get("so_line")))
                 if line_key in seen:
                     stats["duplicate_lines"] += 1
-                    stats["duplicate_open_qty"] += open_qty
+                    duplicate_open = _open_qty(row)
+                    if duplicate_open is not None:
+                        stats["duplicate_open_qty"] += duplicate_open
                     previous = out.get((sku, br))
                     if previous is not None:
                         previous["so_duplicate_lines"] += 1
                     continue
                 seen.add(line_key)
+            # Missing/blank qty or delivered is *unknown*, never 0: the open
+            # quantity stays null so it cannot be summed or read as "no supply".
+            qty = _number(row.get("qty"))
+            delivered = _number(row.get("delivered_qty"))
+            open_qty = None if (qty is None or delivered is None) \
+                else max(0.0, qty - delivered)
+            status = str(row.get("so_status") or "")
+            closed = status == "Closed" or \
+                str(row.get("so_docstatus")) not in {"1", "1.0"}
+            if closed or (open_qty is not None and open_qty <= 0):
+                stats["skipped_not_open"] += 1
+                continue
             stats["unique_lines"] += 1
+            if open_qty is None:
+                stats["unknown_qty_lines"] += 1
+            else:
+                stats["known_lines"] += 1
             created = as_date(_pick(record, payload, row))
             delivery = as_date(_pick(record, payload, row,
                                      ("delivery_date", "scheduled_delivery")))
@@ -197,25 +226,43 @@ def load_deduped(path, as_of="2026-11-13", window_start=None, dedupe=True):
                 "so_lines": [],
                 "so_source_as_of": payload.get("as_of") or "",
                 "so_duplicate_lines": 0,
+                "so_unknown_qty_lines": 0,
+                "so_unknown_lines": [],
+                "so_complete": True,
                 "_orders": set(), "_recent_orders": set(),
                 "_history_orders": set(), "_unknown_orders": set(),
             })
-            summary["so_open_qty"] += open_qty
             summary["_orders"].add(so_name)
             summary["so_overdue_days_max"] = max(summary["so_overdue_days_max"], overdue)
-            if bucket == "recent":
-                summary["so_recent_open_qty"] += open_qty
-                summary["_recent_orders"].add(so_name)
-                summary["so_recent_overdue_days_max"] = max(
-                    summary["so_recent_overdue_days_max"], overdue)
-            elif bucket == "history":
-                summary["so_history_open_qty"] += open_qty
-                summary["_history_orders"].add(so_name)
-                summary["so_history_overdue_days_max"] = max(
-                    summary["so_history_overdue_days_max"], overdue)
+            if open_qty is None:
+                summary["so_unknown_qty_lines"] += 1
+                summary["so_complete"] = False
+                summary["so_unknown_lines"].append({
+                    "so": so_name,
+                    "so_line": row.get("so_line"),
+                    "item_code": row.get("item_code"),
+                    "transaction_date": created.isoformat() if created else None,
+                    "date_bucket": bucket,
+                    "qty": None,
+                    "delivered": None,
+                    "open_qty": None,
+                    "qty_status": "unknown",
+                })
             else:
-                summary["so_unknown_date_open_qty"] += open_qty
-                summary["_unknown_orders"].add(so_name)
+                summary["so_open_qty"] += open_qty
+                if bucket == "recent":
+                    summary["so_recent_open_qty"] += open_qty
+                    summary["_recent_orders"].add(so_name)
+                    summary["so_recent_overdue_days_max"] = max(
+                        summary["so_recent_overdue_days_max"], overdue)
+                elif bucket == "history":
+                    summary["so_history_open_qty"] += open_qty
+                    summary["_history_orders"].add(so_name)
+                    summary["so_history_overdue_days_max"] = max(
+                        summary["so_history_overdue_days_max"], overdue)
+                else:
+                    summary["so_unknown_date_open_qty"] += open_qty
+                    summary["_unknown_orders"].add(so_name)
             summary["so_lines"].append({
                 "so": so_name,
                 "so_line": row.get("so_line"),
@@ -224,6 +271,7 @@ def load_deduped(path, as_of="2026-11-13", window_start=None, dedupe=True):
                 "qty": qty,
                 "delivered": delivered,
                 "open_qty": open_qty,
+                "qty_status": "unknown" if open_qty is None else "known",
                 "transaction_date": created.isoformat() if created else None,
                 "delivery_date": delivery.isoformat() if delivery else None,
                 "overdue_days": overdue,
@@ -236,6 +284,7 @@ def load_deduped(path, as_of="2026-11-13", window_start=None, dedupe=True):
         summary["so_recent_open_orders"] = len(summary.pop("_recent_orders"))
         summary["so_history_open_orders"] = len(summary.pop("_history_orders"))
         summary["so_unknown_date_open_orders"] = len(summary.pop("_unknown_orders"))
+        summary["so_complete"] = summary["so_unknown_qty_lines"] == 0
         order = {"recent": 0, "history": 1, "unknown": 2}
         # Stable two-pass sort: newest first inside each bucket, recent bucket first.
         summary["so_lines"].sort(key=lambda line: line.get("transaction_date") or "",
