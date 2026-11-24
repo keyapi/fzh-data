@@ -1,0 +1,8 @@
+{
+  "as_of": "2026-10-20",
+  "wos": 3,
+  "creation_on_or_before_as_of": 3,
+  "modified_after_as_of": 2,
+  "production_conflict": 1,
+  "note": "Per-WO dates and JC sums are local only (local/wo_audit_20261022.json); this file keeps aggregate counts only."
+}

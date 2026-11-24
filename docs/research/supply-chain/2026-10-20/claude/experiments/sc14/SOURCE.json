@@ -1,0 +1,17 @@
+{
+  "source_branch": "docs/jack-w1-channel",
+  "source_commit": "197901f78026c7e9ff1d4193bca19719b397399c",
+  "content_unchanged_through": "65f0dff0f22a2eee76cf12695b1e175a62ea18c2",
+  "retrieved": "2026-10-26",
+  "note": "Byte-identical copy of experiments/sc14 from the docs branch; keep in sync via tests/test_sc14_sync.py.",
+  "files": {
+    "contract.py": {
+      "lines": 297,
+      "sha256_lf": "45c2bb930265ed0ddcfed9ec43fccd1e951b3855f9803d6939ae1a354f850e87"
+    },
+    "test_contract.py": {
+      "lines": 245,
+      "sha256_lf": "f3da773d2ce369ca3426522f45b09f56f9bdb6d162f59cda9b335c3520abefd2"
+    }
+  }
+}
