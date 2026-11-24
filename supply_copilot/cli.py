@@ -283,7 +283,11 @@ def command_decide(args):
         live = Path(root) / "live"
     stock = Path(args.stock) if args.stock else live / "stock.parquet"
     backlog = Path(args.backlog) if args.backlog else live / "backlog.csv"
-    po = Path(args.po) if args.po else live / "po_open.tsv"
+    if args.po:
+        po = Path(args.po)
+    else:
+        manual_po = sorted(Path(root).glob("orders/*/po_tongtool_open*.tsv"))
+        po = manual_po[-1] if manual_po else live / "po_open.tsv"
     as_of = args.as_of or datetime.now().astimezone().replace(microsecond=0).isoformat()
     leadtime = Path(args.leadtime) if args.leadtime else None
     if leadtime is None:
