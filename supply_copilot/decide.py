@@ -253,10 +253,8 @@ def _supply_facts(stock_df, *, lookup, uom_by_item, warehouse_cfg, branch_wh,
         if not (canonical == branch_wh or canonical.startswith(branch_prefix)):
             evidence["warehouse_out_of_branch"] += 1
             continue
-        uom = uom_by_item.get(item)
-        if not uom:
-            evidence["uom_missing"] += 1
-            continue
+        # EN 不维护 UOM（项目既定：全部按“个”，套件另行换算）；缺失默认按个，不因 UOM 阻断。
+        uom = uom_by_item.get(item) or "个"
         key = (item, canonical, uom)
         if available is not None:
             add(supply, key + ("opening",), available)
@@ -455,10 +453,10 @@ def _forecast_demand(forecast_root, *, lead_days, lookup, branch_prefix):
         if not item:
             excluded["identity"] += 1
             continue
+        # EN 不维护 UOM；空/unknown 默认按“个”，只有明确的“套”才单独处理。
         uom = str(row.canonical_uom or "").strip()
         if not uom or uom == "unknown":
-            excluded["uom"] += 1
-            continue
+            uom = "个"
         canonical = str(row.canonical_warehouse)
         if not canonical.startswith(branch_prefix):
             excluded["out_of_branch"] += 1
@@ -536,6 +534,8 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
     for record in d6_rows.to_dict("records"):
         sku = str(record["product_id"])
         uom = str(record["UOM"]).strip()
+        if not uom or uom == "unknown":
+            uom = "个"
         key = (sku, wh, uom)
         needs_date = _date_str(record.get("需要日"))
         order_date = _date_str(record.get("下单日"))

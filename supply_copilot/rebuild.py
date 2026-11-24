@@ -78,11 +78,12 @@ def _uom_status(stock_uom: Any, item_found: bool) -> str:
 
     if not item_found:
         return "missing"
+    # EN 不维护 UOM（项目既定）：缺失/空按“个”，不因 UOM 阻断；明确非“个”的才另处理。
     if stock_uom is None or (isinstance(stock_uom, float) and pd.isna(stock_uom)):
-        return "missing"
+        return "known_piece"
     value = str(stock_uom).strip()
     if not value:
-        return "missing"
+        return "known_piece"
     return "known_piece" if value in PIECE_UOMS else "not_piece"
 
 
@@ -311,7 +312,7 @@ def build_demand(
         raw_uom = uom_lookup.get(code) if found else None
         st = _uom_status(raw_uom, found)
         uom_statuses.append(st)
-        uom_values.append(str(raw_uom).strip() if st == "known_piece" else "unknown")
+        uom_values.append(str(raw_uom).strip() if st == "known_piece" and raw_uom else "个")
 
     kept_qty = qty[keep].reset_index(drop=True)
     block_reason = [
