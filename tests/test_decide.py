@@ -107,14 +107,14 @@ def test_live_d6_recompute_columns_and_quantities(tmp_path):
 
     row = frame.set_index("sku").loc["KS1"]
     assert row["action"] == "补"
-    # 需求 100（SO 不加需求、不抵扣主建议）− (期初 10 + max(在途 2, 按时 PO 0) + min(CG 3, D6 1)) = 87
-    assert row["new_qty"] == 87
-    assert row["cg_source"] == "live_capped_by_d6"
-    # 条件供给不到时：100 − (10 + 0 + min(3,1)) = 89
-    assert row["new_qty_if_conditional_late"] == 89
+    # 需求 100 − (期初 10 + max(在途 2, 按时 PO 0) + live CG 3) = 85
+    assert row["new_qty"] == 85
+    assert row["cg_source"] == "live_stock.cg"
+    # 条件供给不到时：100 − (10 + 0 + 3) = 87
+    assert row["new_qty_if_conditional_late"] == 87
     assert row["demand_qty"] == 100  # SO 不加进需求
     assert row["supply_so"] == 3
-    assert row["supply_cg"] == 1 and row["cg_source"] == "live_capped_by_d6"
+    assert row["supply_cg"] == 3 and row["cg_source"] == "live_stock.cg"
     assert row["demand_source"] == "d6_pack_q95"
     assert row["stock_snapshot_at"] == "2026-11-23 08:00:00+08:00"
     assert len(row["so_sha256"]) == 64 and len(row["po_sha256"]) == 64
@@ -223,7 +223,7 @@ def test_forecast_refresh_replaces_d6_demand(tmp_path):
     by_sku = frame.set_index("sku")
     assert by_sku.loc["KS1", "demand_qty"] == 80
     assert by_sku.loc["KS1", "d6_q95"] == 100          # D6 仅作对照
-    assert by_sku.loc["KS1", "new_qty"] == 67          # 80 − (10+max(2,0)+min(3,1))
+    assert by_sku.loc["KS1", "new_qty"] == 65          # 80 − (10+max(2,0)+live CG 3)
     # 预测未覆盖 KS2 → 退回 D6 q95 并标注
     assert by_sku.loc["KS2", "demand_qty"] == 10
     assert "预测未覆盖" in str(by_sku.loc["KS2", "warnings"])
