@@ -106,12 +106,12 @@ def test_live_d6_recompute_columns_and_quantities(tmp_path):
 
     row = frame.set_index("sku").loc["KS1"]
     assert row["action"] == "补"
-    # 100 + SO 3 − (期初 10 + 在途 2 + PO 4 + min(live CG 3, D6 上限 1)) = 86
+    # 需求 100（SO 不再加需求）− (期初 10 + max(在途 2, SO 3) + min(live CG 3, D6 1)) = 86
     assert row["new_qty"] == 86
     assert row["cg_source"] == "live_capped_by_d6"
-    # 无 ETA 的在途/PO 迟到时：100 + 3 − (10 + 0 + min(3,1)) = 92
-    assert row["new_qty_if_conditional_late"] == 92
-    assert row["demand_qty"] == 100
+    # 条件供给不到时：100 − (10 + 0 + min(3,1)) = 89
+    assert row["new_qty_if_conditional_late"] == 89
+    assert row["demand_qty"] == 100  # SO 不加进需求
     assert row["supply_so"] == 3
     assert row["supply_cg"] == 1 and row["cg_source"] == "live_capped_by_d6"
     assert row["demand_source"] == "d6_pack_q95"
