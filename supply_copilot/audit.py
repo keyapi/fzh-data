@@ -107,6 +107,10 @@ def _row_count(path: Path) -> int | None:
         if suffix == ".csv":
             with path.open("rb") as handle:
                 return max(sum(1 for line in handle if line.strip()) - 1, 0)
+        if suffix == ".tsv":
+            # 供应链导出 TSV 无表头；按非空行计数
+            with path.open("rb") as handle:
+                return sum(1 for line in handle if line.strip())
     except Exception:
         return None
     return None

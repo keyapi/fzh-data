@@ -230,3 +230,10 @@ def test_format_header_does_not_guess_missing_as_of():
     text = audit.format_header(meta)
     assert "as_of: 未声明" in text
     assert 2 <= len(text.splitlines()) <= 4
+
+
+def test_row_count_tsv_no_header(tmp_path):
+    from supply_copilot.audit import _row_count
+    p = tmp_path / "po.tsv"
+    p.write_text("PO1\tSKU\t1\t1\tWH\t2026-12-01\nPO2\tSKU\t2\t2\tWH\t\n", encoding="utf-8")
+    assert _row_count(p) == 2
