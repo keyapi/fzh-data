@@ -157,3 +157,20 @@ def test_independent_supply_scenario_reported(tmp_path):
     assert row["supply_expected"] == 100     # 全重叠假设
     assert row["supply_independent"] == 300  # 独立供给情景
     assert row["new_qty_if_independent"] == 0
+
+
+def test_cg_allocated_by_b_ownership_not_warehouse_geo(tmp_path):
+    make_pack(tmp_path)
+    s = stock(tmp_path, rows=[
+        base_stock(),
+        {**base_stock(), "warehouse_name": "WayfairCG-Cranbury仓", "available": 100},
+    ])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"
+    po.write_text("", encoding="utf-8")
+    frame, _ = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    row = frame.set_index("sku").loc["KS1"]
+    # USTX 行也能用 Cranbury 的 CG：按 B SKU 归属，不按仓库地理位置
+    assert row["supply_cg"] == 100
+    assert row["cg_source"] == "live_stock.cg"
