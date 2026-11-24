@@ -235,3 +235,473 @@ def test_requires_timezone(tmp_path):
     make_pack(tmp_path)
     with pytest.raises(ValueError, match="时区"):
         run(tmp_path, "USTX", "2026-11-23T09:00:00")
+
+
+# --------------------------------------------------------------------------- #
+# P0 反例：po_on_time 必须与需要日比较（不能退化成"有 ETA"）
+# --------------------------------------------------------------------------- #
+def _empty_backlog(path: Path):
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse",
+                          "canonical_uom", "quantity"]).to_csv(path, index=False)
+    return path
+
+
+def test_po_eta_compared_to_need_date_not_boolean(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    backlog = _empty_backlog(tmp_path / "backlog_empty.csv")
+
+    po_jsonl = tmp_path / "po_tongtool.jsonl"
+    records = [
+        # KS1 需要日 2027-02-16：ETA 当天 → 按时
+        {"status": "1", "quantity": 20, "in_quantity": 0, "goods_sku": "TT1",
+         "warehouseName": "美中-FZH-DANEEY", "willArriveDate": "2027-02-16",
+         "PONum": "PO-A"},
+        # KS1 同键另一行无 ETA → 不计按时，计入 missing_eta
+        {"status": "1", "quantity": 5, "in_quantity": 0, "goods_sku": "TT1",
+         "warehouseName": "美中-FZH-DANEEY", "PONum": "PO-A"},
+        # KS3 需要日 2027-03-01：ETA 晚一天 → 不计按时
+        {"status": "1", "quantity": 7, "in_quantity": 0, "goods_sku": "TT3",
+         "warehouseName": "美中-FZH-DANEEY", "willArriveDate": "2027-03-02",
+         "PONum": "PO-B"},
+    ]
+    po_jsonl.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in records),
+                        encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                        po_tongtool_path=po_jsonl)
+    po = meta["po"]
+    assert po["rows"] == 3
+    assert po["accepted_rows"] == 3 and po["accepted_documents"] == 2
+    assert po["quantity"] == 32 and po["decision_qty"] == 32
+    assert po["with_eta"] == 2 and po["with_eta_qty"] == 27
+    assert po["missing_eta"] == 1 and po["missing_eta_qty"] == 5
+    # 回归点：若 ETA 被退化成 bool，这里会是 0
+    assert po["on_time_qty"] == 20
+    assert po["late_qty"] == 7
+    assert po["unproven_qty"] == 12          # 5 无 ETA + 7 迟到
+
+    by_sku = frame.set_index("sku")
+    ks1 = by_sku.loc["KS1"]
+    # 100 − (期初 10 + max(在途 2, 按时 PO 20) + min(CG 3, D6 1)) = 69
+    assert ks1["supply_po"] == 25
+    assert ks1["supply_expected"] == 33 and ks1["new_qty"] == 67
+    assert ks1["supply_proven"] == 33
+    # KS3：7 件迟到 PO 不进 expected/proven
+    ks3 = by_sku.loc["KS3"]
+    assert ks3["supply_po"] == 7 and ks3["supply_expected"] == 0
+    assert ks3["new_qty"] == 50
+
+
+def test_po_tsv_eta_equal_and_next_day(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    backlog = _empty_backlog(tmp_path / "backlog_empty.csv")
+    po = tmp_path / "po_open.tsv"
+    po.write_text(
+        "PO-1\tTT1\t20\t20\t美中-FZH-DANEEY\t2027-02-16\n"   # 当天 → 按时
+        "PO-2\tTT3\t7\t7\t美中-FZH-DANEEY\t2027-03-02\n",    # 晚一天 → 不按时
+        encoding="utf-8")
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=backlog, po_path=po)
+    assert meta["po"]["on_time_qty"] == 20
+    assert meta["po"]["late_qty"] == 7
+    assert meta["po"]["missing_eta_qty"] == 0
+    assert frame.set_index("sku").loc["KS3", "supply_expected"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# P0 反例：SO 事实键 canonical 归一；不能归一的行走 evidence，不得静默变 0
+# --------------------------------------------------------------------------- #
+def test_en_so_rows_canonicalized_and_unresolved_counted(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, po = make_live(tmp_path)
+
+    open_status = "To Deliver and Bill"
+    so = pd.DataFrame([
+        # 1 已规范：EN 成品码直接命中
+        {"so": "SO-1", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "customer_item_code": "", "open_qty": 3, "uom": "个",
+         "status": open_status},
+        # 2 皮壳 PK#：合法 EN 物料号，但不是成品 → form_out_of_scope
+        {"so": "SO-2", "customer": "DANEEY", "warehouse": "半成品仓 - FZH",
+         "item_code": "PK#KS1-DM", "customer_item_code": "", "open_qty": 4,
+         "uom": "个", "status": open_status},
+        # 3 别家客户 → 客户池不符
+        {"so": "SO-3", "customer": "CENTRADE", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "customer_item_code": "", "open_qty": 6, "uom": "个",
+         "status": open_status},
+        # 4 缺 UOM → uom_missing（不猜 D6 单位）
+        {"so": "SO-4", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "customer_item_code": "", "open_qty": 5, "uom": "",
+         "status": open_status},
+        # 5 item_code 缺失，但 customer_item_code 有唯一映射 → 允许别名
+        {"so": "SO-5", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "", "customer_item_code": "TT2", "open_qty": 1, "uom": "个",
+         "status": open_status},
+        # 6 行仓明确属于别家分公司 → 仓归属不符
+        {"so": "SO-6", "customer": "DANEEY", "warehouse": "美东-CENTRADE",
+         "item_code": "KS1", "customer_item_code": "", "open_qty": 9, "uom": "个",
+         "status": open_status},
+        # 7 Closed 归档：单列，不能当开放需求
+        {"so": "SO-7", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "customer_item_code": "", "open_qty": 9, "uom": "个",
+         "status": "Closed"},
+        # 8 完全无身份 → identity_missing
+        {"so": "SO-8", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "", "customer_item_code": "", "open_qty": 2, "uom": "个",
+         "status": open_status},
+        # 9 合法 EN 码但不在本池 D6 → product_out_of_scope
+        {"so": "SO-9", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "OTHER-FG", "customer_item_code": "", "open_qty": 8,
+         "uom": "个", "status": open_status},
+    ])
+    so_path = tmp_path / "so_raw.csv"
+    so.to_csv(so_path, index=False, encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path, po_path=po,
+                        so_in_forecast=True)
+    so_ev = meta["so"]
+    assert so_ev["format"] == "en_sales_orders"
+    assert so_ev["status_contract"] == "status"
+    assert so_ev["open_verified"] is True
+    assert so_ev["rows"] == 9
+    assert so_ev["accepted_rows"] == 2                 # SO-1 + SO-5
+    assert so_ev["identity_missing"] == 1              # SO-8
+    assert so_ev["form_out_of_scope"] == 1             # SO-2（PK#）
+    assert so_ev["product_out_of_scope"] == 1          # SO-9
+    assert so_ev["customer_pool_mismatch"] == 1        # SO-3
+    assert so_ev["uom_missing"] == 1                   # SO-4
+    assert so_ev["warehouse_out_of_branch"] == 1       # SO-6
+    assert so_ev["closed_archived_rows"] == 1          # SO-7
+    assert so_ev["closed_archived_qty"] == 9
+    assert so_ev["rejected_rows"] == 7
+    assert so_ev["quantity"] == 4                      # 3 + 1
+    reasons = {s["reason"] for s in so_ev["unresolved_samples"]}
+    assert reasons == {"form_out_of_scope", "customer_pool_mismatch",
+                       "uom_missing", "warehouse_out_of_branch",
+                       "identity_missing", "product_out_of_scope"}
+    # Closed 归档单列（closed_archived_rows），不进 unresolved_samples
+    assert [s["row"] for s in so_ev["unresolved_samples"]] == [2, 3, 4, 6, 8, 9]
+    assert {s["so"] for s in so_ev["unresolved_samples"]} == {
+        "SO-2", "SO-3", "SO-4", "SO-6", "SO-8", "SO-9"}
+
+    by_sku = frame.set_index("sku")
+    assert by_sku.loc["KS1", "supply_so"] == 3          # 只有可归一行命中
+    assert by_sku.loc["KS2", "supply_so"] == 1
+    # 未归一的行不改变总量为 0 的假象：KS1 仍按 100 需求算出 87
+    assert by_sku.loc["KS1", "demand_qty"] == 100
+    assert by_sku.loc["KS1", "new_qty"] == 85
+
+
+def test_so_without_status_is_not_attachable(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, po = make_live(tmp_path)
+    # 无 status/docstatus：开放未证，整批只能作证据
+    so = pd.DataFrame([
+        {"so": "SO-1", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 3, "uom": "个"},
+        {"so": "SO-2", "customer": "DANEEY", "warehouse": "半成品仓 - FZH",
+         "item_code": "PK#KS1-DM", "open_qty": 4, "uom": "个"},
+    ])
+    so_path = tmp_path / "so_no_status.csv"
+    so.to_csv(so_path, index=False, encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path,
+                        po_path=po, so_in_forecast=False)
+    so_ev = meta["so"]
+    assert so_ev["status_contract"] == "missing"
+    assert so_ev["open_verified"] is False
+    assert so_ev["status_missing_rows"] == 2
+    assert so_ev["status_unknown_rows"] == 0
+    assert so_ev["accepted_rows"] == 0
+    assert so_ev["quantity"] == 0
+    assert so_ev["attached_qty"] == 0
+    assert any("整批 status_missing" in w for w in meta["warnings"])
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 85
+
+
+def test_en_item_code_is_authoritative_not_alias(tmp_path):
+    make_pack(tmp_path)
+    # 通途 SKU 恰好与一个 EN 物料号同名：EN 侧必须按自身身份解释，不能串号
+    with open(tmp_path / "data" / "sku_map.tsv", "a", encoding="utf-8") as fh:
+        fh.write("KS1\tSYNTHETIC\tCUST\n")
+    stock, _backlog, po = make_live(tmp_path)
+    so = pd.DataFrame([
+        {"so": "SO-1", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "SYNTHETIC", "customer_item_code": "", "open_qty": 5,
+         "uom": "个", "status": "To Deliver and Bill"},
+    ])
+    so_path = tmp_path / "so_namespace.csv"
+    so.to_csv(so_path, index=False, encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path,
+                        po_path=po, so_in_forecast=False)
+    so_ev = meta["so"]
+    assert so_ev["accepted_rows"] == 0
+    assert so_ev["product_out_of_scope"] == 1
+    assert so_ev["quantity"] == 0 and so_ev["attached_qty"] == 0
+    # 没有被错误归到 KS1
+    assert not frame.set_index("sku").loc["KS1", "supply_so"] or \
+        pd.isna(frame.set_index("sku").loc["KS1", "supply_so"])
+
+
+def test_so_uom_mismatch_is_rejected_not_relabelled(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, po = make_live(tmp_path)
+    so = pd.DataFrame([
+        {"so": "SO-1", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "customer_item_code": "", "open_qty": 1,
+         "uom": "箱", "status": "To Deliver and Bill"},
+    ])
+    so_path = tmp_path / "so_uom.csv"
+    so.to_csv(so_path, index=False, encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path,
+                        po_path=po, so_in_forecast=False)
+    so_ev = meta["so"]
+    assert so_ev["uom_mismatch"] == 1
+    assert so_ev["accepted_rows"] == 0 and so_ev["quantity"] == 0
+    assert so_ev["attached_qty"] == 0
+    # 1 箱没有被改标签成 1 个
+    assert pd.isna(frame.set_index("sku").loc["KS1", "supply_so"]) or \
+        frame.set_index("sku").loc["KS1", "supply_so"] == 0
+
+
+def test_so_jsonl_status_filter_and_attach(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, po = make_live(tmp_path)
+    so_rows = [
+        {"so": "SO-OPEN", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 3, "stock_uom": "个",
+         "status": "To Deliver and Bill", "docstatus": 1},
+        {"so": "SO-CLOSED", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 9, "stock_uom": "个",
+         "status": "Closed", "docstatus": 1},
+        {"so": "SO-DRAFT", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 7, "stock_uom": "个",
+         "status": "Draft", "docstatus": 0},
+    ]
+    so_path = tmp_path / "open_nonclosed.jsonl"
+    so_path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in so_rows),
+                       encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path,
+                        po_path=po, so_in_forecast=False)
+    so_ev = meta["so"]
+    assert so_ev["format"] == "en_sales_orders"
+    assert so_ev["status_contract"] == "status+docstatus"
+    assert so_ev["accepted_rows"] == 1 and so_ev["quantity"] == 3
+    assert so_ev["closed_archived_rows"] == 1
+    assert so_ev["closed_archived_qty"] == 9
+    assert so_ev["status_draft_rows"] == 1
+    assert so_ev["status_draft_qty"] == 7
+    assert so_ev["attached_qty"] == 3
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 88   # 85 + 3
+
+
+def test_so_non_open_statuses_single_listed_not_attached(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, po = make_live(tmp_path)
+    so = pd.DataFrame([
+        # 空状态：不能默认开放
+        {"so": "SO-1", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 3, "uom": "个", "status": "",
+         "docstatus": 1},
+        # Draft：单列，不附加
+        {"so": "SO-2", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 4, "uom": "个", "status": "Draft",
+         "docstatus": 0},
+        # Unknown / 未知状态：单列，不附加
+        {"so": "SO-3", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 5, "uom": "个", "status": "Unknown",
+         "docstatus": 1},
+        {"so": "SO-4", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 6, "uom": "个", "status": "On Hold",
+         "docstatus": 1},
+        # 开放状态但 docstatus 未提交：不附加
+        {"so": "SO-5", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 7, "uom": "个",
+         "status": "To Deliver and Bill", "docstatus": 0},
+        # 明确允许的开放状态 + docstatus=1：唯一可附加行
+        {"so": "SO-6", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 2, "uom": "个", "status": "To Deliver",
+         "docstatus": 1},
+    ])
+    so_path = tmp_path / "so_status_mix.csv"
+    so.to_csv(so_path, index=False, encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path,
+                        po_path=po, so_in_forecast=False)
+    so_ev = meta["so"]
+    assert so_ev["status_contract"] == "status+docstatus"
+    assert so_ev["open_verified"] is True
+    assert so_ev["accepted_rows"] == 1 and so_ev["quantity"] == 2
+    assert so_ev["status_missing_rows"] == 1
+    assert so_ev["status_missing_qty"] == 3
+    assert so_ev["status_draft_rows"] == 1
+    assert so_ev["status_draft_qty"] == 4
+    assert so_ev["status_unknown_rows"] == 2
+    assert so_ev["status_unknown_qty"] == 11
+    assert so_ev["docstatus_not_submitted_rows"] == 1
+    assert so_ev["docstatus_not_submitted_qty"] == 7
+    assert so_ev["closed_archived_rows"] == 0
+    assert so_ev["attached_qty"] == 2
+    assert frame.set_index("sku").loc["KS1", "supply_so"] == 2
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 87   # 85 + 2
+    assert any("非有效开放行未计入、不附加" in w for w in meta["warnings"])
+
+
+def test_source_zero_rows_is_assumed_zero(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    # 源存在但解析零行：不能静默当实测 0
+    so_empty = tmp_path / "so_empty.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse",
+                          "canonical_uom", "quantity"]).to_csv(
+        so_empty, index=False)
+    po_empty = tmp_path / "po_empty.tsv"
+    po_empty.write_text("", encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_empty,
+                        po_path=po_empty)
+    assert meta["so"]["assumed_zero"]["applies"] is True
+    assert meta["so"]["assumed_zero"]["reason"] == "source_exists_but_parsed_zero_rows"
+    assert meta["po"]["assumed_zero"]["applies"] is True
+    assert meta["po"]["assumed_zero"]["reason"] == "source_exists_but_parsed_zero_rows"
+    assert meta["totals"]["assumed_zero_rows"] == {"so": 1, "po": 1}
+    assert any("assumed_zero" in w for w in meta["warnings"])
+    # 仍是 0，但已显式标 assumed_zero，不作为 unknown 待核
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 85
+    assert frame.set_index("sku").loc["KS1", "action"] == "补"
+    # M3：旧“未履约 SO 按未完成量计入需求”不得再出现
+    assert any("SO 为上游交付管线，不进需求" in item for item in meta["limits"])
+    assert not any("按未完成量计入需求" in item for item in meta["limits"])
+
+
+def test_source_missing_is_unknown_not_assumed_zero(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    missing_so = tmp_path / "missing_so.csv"
+    missing_po = tmp_path / "missing_po.tsv"
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=missing_so,
+                        po_path=missing_po)
+    assert meta["so"]["assumed_zero"]["applies"] is False
+    assert meta["so"]["assumed_zero"]["reason"] == "source_missing"
+    assert meta["po"]["assumed_zero"]["applies"] is False
+    assert meta["po"]["assumed_zero"]["reason"] == "source_missing"
+    assert meta["totals"]["assumed_zero_rows"] == {"so": 0, "po": 0}
+    assert not any("assumed_zero" in w for w in meta["warnings"])
+    for _, row in frame.iterrows():
+        assert row["action"] == "待核"
+        assert set(row["qty_status"].split("_")) >= {"unknown", "so", "po"}
+
+
+def test_source_rows_but_filtered_is_not_assumed_zero(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, _po = make_live(tmp_path)
+    so = pd.DataFrame([
+        {"so": "SO-CLOSED", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 9, "uom": "个", "status": "Closed",
+         "docstatus": 1},
+    ])
+    so_path = tmp_path / "so_closed_only.csv"
+    so.to_csv(so_path, index=False, encoding="utf-8")
+    po = tmp_path / "po_zero_qty.tsv"
+    po.write_text("PO-1\tTT1\t0\t0\t美中-FZH-DANEEY\n", encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path,
+                        po_path=po)
+    # 有行但被过滤（Closed / 零开放量）：不是 assumed_zero
+    assert meta["so"]["rows"] == 1 and meta["so"]["accepted_rows"] == 0
+    assert meta["so"]["assumed_zero"]["applies"] is False
+    assert meta["so"]["assumed_zero"]["reason"] == "rows_present"
+    assert meta["po"]["input_rows"] == 1 and meta["po"]["accepted_rows"] == 0
+    assert meta["po"]["assumed_zero"]["applies"] is False
+    assert meta["totals"]["assumed_zero_rows"] == {"so": 0, "po": 0}
+    assert not any("assumed_zero" in w for w in meta["warnings"])
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 85
+
+
+def test_so_attached_only_after_a_valid_row(tmp_path):
+    make_pack(tmp_path)
+    # 同 SKU 两形态：首行 q95 缺失（待核），次行可算；SO 只能由次行消费
+    d6_path = tmp_path / "data" / "D6_v6_22.xlsx"
+    d6 = pd.read_excel(d6_path, sheet_name="1_全量动作")
+    first = d6[d6["product_id"] == "KS1"].iloc[[0]].copy()
+    first["形态"] = "成品"
+    first["q95"] = None
+    rest = d6[d6["product_id"] != "KS1"].copy()
+    second = d6[d6["product_id"] == "KS1"].iloc[[0]].copy()
+    second["形态"] = "半成品"
+    pd.concat([first, second, rest], ignore_index=True).to_excel(
+        d6_path, sheet_name="1_全量动作", index=False)
+
+    stock, backlog, po = make_live(tmp_path)          # canonical SO: KS1=3
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                        po_path=po, so_in_forecast=False)
+    ks1 = frame[frame["sku"] == "KS1"]
+    assert len(ks1) == 2
+    # 有效行（次行）是主行，SO 只在这里叠加一次；缺失需求的行被去重标记
+    primary = ks1[ks1["action"] == "补"]
+    assert len(primary) == 1
+    # 100 + SO 3 − (期初 10 + max(在途 2, PO 0) + live CG 3) = 88
+    assert primary.iloc[0]["new_qty"] == 88
+    assert meta["so"]["attached_qty"] == 3
+    assert meta["so"]["unattached_qty"] == 0
+    assert ks1["action"].tolist().count("重复形态") == 1
+
+
+def test_so_in_forecast_switch_adds_only_resolved_so_once(tmp_path):
+    make_pack(tmp_path)
+    stock, backlog, po = make_live(tmp_path)          # canonical SO: KS1=3
+
+    frame_on, meta_on = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                              po_path=po, so_in_forecast=True)
+    frame_off, meta_off = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                                po_path=po, so_in_forecast=False)
+
+    assert meta_on["so_in_forecast"] is True
+    assert meta_on["so"]["attached_qty"] == 0
+    assert meta_on["totals"]["so_attached_qty"] == 0
+    assert "未加进需求" in frame_on.set_index("sku").loc["KS1", "warnings"]
+
+    assert meta_off["so_in_forecast"] is False
+    assert meta_off["so"]["attached_qty"] == 3
+    assert meta_off["totals"]["so_attached_qty"] == 3
+    warnings = frame_off.set_index("sku").loc["KS1", "warnings"]
+    assert "已叠加到需求" in warnings and "双计" in warnings
+
+    # 同一条 SO 只计一次：净需求差恰好等于 SO 余额 3，不是 6
+    on_qty = frame_on.set_index("sku").loc["KS1", "new_qty"]
+    off_qty = frame_off.set_index("sku").loc["KS1", "new_qty"]
+    assert off_qty - on_qty == 3
+    # demand_qty 仍是预测/D6 需求原值；SO 叠加只体现在 reason 与净需求
+    assert frame_on.set_index("sku").loc["KS1", "demand_qty"] == 100
+    assert frame_off.set_index("sku").loc["KS1", "demand_qty"] == 100
+    assert "含未履约 SO 3" in (frame_off.set_index("sku").loc["KS1", "reason"] or "")
+
+
+def test_so_in_forecast_not_double_counted_for_duplicate_keys(tmp_path):
+    make_pack(tmp_path)
+    d6_path = tmp_path / "data" / "D6_v6_22.xlsx"
+    d6 = pd.read_excel(d6_path, sheet_name="1_全量动作")
+    dup = d6[d6["product_id"] == "KS1"].iloc[[0]].copy()
+    dup["形态"] = "半成品"          # 同一 (SKU, 主仓, UOM) 键的第二行
+    pd.concat([d6, dup], ignore_index=True).to_excel(
+        d6_path, sheet_name="1_全量动作", index=False)
+
+    stock, backlog, po = make_live(tmp_path)
+    frame_on, _ = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                        po_path=po, so_in_forecast=True)
+    frame_off, meta = _call(tmp_path, stock_path=stock, backlog_path=backlog,
+                            po_path=po, so_in_forecast=False)
+    ks1_on = frame_on[frame_on["sku"] == "KS1"]
+    ks1_off = frame_off[frame_off["sku"] == "KS1"]
+    assert len(ks1_on) == 2 and len(ks1_off) == 2
+    assert meta["so"]["attached_qty"] == 3
+    # 同一 SO 在重复键上只叠加一次：两行合计净需求 +3，不是 +6
+    assert ks1_off["new_qty"].sum() - ks1_on["new_qty"].sum() == 3
+    assert any("重复行" in str(w) for w in ks1_off["warnings"])
+
+

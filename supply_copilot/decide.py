@@ -55,6 +55,14 @@ POOL_PREFIX = {"美东USNJ": "美东-", "美中USTX": "美中-", "波兰": "波�
 # live SO 导出（en_sales_orders/so_backlog_all_open_rows.csv）用客户名区分分公司；
 # 无法归到本分公司的行保留在证据计数里，不摊派、不写 0。
 SO_CUSTOMER_POOL = {"CENTRADE": "美东USNJ", "DANEEY": "美中USTX", "波兰公司": "波兰"}
+# 只有 status/docstatus 证明是有效开放的行才可以计入未履约 SO / 附加需求。
+SO_OPEN_STATUSES = {"to deliver and bill", "to deliver", "to bill"}
+SO_CLOSED_STATUSES = {"closed", "cancelled", "canceled", "completed"}
+# PK#（皮壳）/ ND#（内胆）是合法 EN 物料号，但不是成品决策行；不剥前缀凑成品。
+SO_OUT_OF_SCOPE_FORM_PREFIXES = ("PK#", "ND#")
+# 单位换算必须显式有据：key=(源单位, D6单位) → 换算系数。空 = 无证据，一律拒绝。
+UOM_EQUIVALENTS = {}
+
 CG_WAREHOUSE_PREFIX = "WayfairCG"
 # 简化口径（2026-11-24 用户确认）：CG 是共享 on-hand 库存；
 # 按 **B 的 SKU 归属** 计入对应分公司（行属于哪个 pool，就把该 SKU 的 CG 计入哪个分公司），
@@ -102,6 +110,43 @@ def _num(value):
         return None
 
 
+def _text(value) -> str:
+    """任何缺失/非字符串 → ""；保留原值，不做猜测。"""
+    if value is None:
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip()
+
+
+def _uom_text(value) -> str:
+    text = _text(value)
+    return "" if text.lower() in ("nan", "nat", "none", "unknown") else text
+
+
+def _eta_text(value) -> str:
+    """ETA → 原始日期字符串；布尔/空/占位值一律视为缺失，绝不把 True 当日期。"""
+    if isinstance(value, bool):
+        return ""
+    text = _text(value)
+    if text.lower() in ("nan", "nat", "none", "true", "false"):
+        return ""
+    return text
+
+
+def _eta_on_or_before(eta_text, need_dt) -> bool:
+    """ETA ≤ 需要日才算按时；无法解析/缺需要日一律不计（未证按时）。"""
+    if not eta_text or need_dt is None:
+        return False
+    try:
+        return datetime.fromisoformat(str(eta_text)[:10]).date() <= need_dt
+    except ValueError:
+        return False
+
+
 def _sha(path) -> str:
     if not path:
         return ""
@@ -119,12 +164,22 @@ def _file_meta(path) -> dict:
 def _read_table(path):
     p = Path(path)
     suffix = p.suffix.lower()
-    if suffix == ".csv":
-        return pd.read_csv(p, encoding="utf-8-sig")
-    if suffix == ".tsv":
-        return pd.read_csv(p, sep="\t", encoding="utf-8-sig")
-    if suffix in (".parquet", ".pq"):
-        return pd.read_parquet(p)
+    try:
+        if suffix == ".csv":
+            return pd.read_csv(p, encoding="utf-8-sig")
+        if suffix == ".tsv":
+            return pd.read_csv(p, sep="\t", encoding="utf-8-sig")
+        if suffix in (".parquet", ".pq"):
+            return pd.read_parquet(p)
+    except pd.errors.EmptyDataError:
+        # 源文件存在但零行：交给调用方按 assumed_zero 处理，不在这里当 0
+        return pd.DataFrame()
+    if suffix in (".jsonl", ".ndjson"):
+        records = []
+        for line in p.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                records.append(json.loads(line))
+        return pd.DataFrame(records)
     raise ValueError(f"不支持的表格格式：{p}")
 
 
@@ -266,17 +321,33 @@ def _supply_facts(stock_df, *, lookup, uom_by_item, warehouse_cfg, branch_wh,
 
 def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
               branch_wh, branch_prefix):
-    """开放 PO（tsv 或 JSONL）→ ``(sku, 仓, uom, on_time?)`` 数量。"""
+    """开放 PO（tsv 或 JSONL）→ ``(sku, 仓, uom)`` 数量 + 逐行 ETA。
+
+    ETA 原样保留（字符串），由 ``_decide_live`` 与需要日比较；
+    **禁止**把 ETA 退化成布尔 —— 那样所有 PO 都永远"未证按时"。
+    证据区分：``quantity`` / ``with_eta*`` / ``missing_eta*`` / ``on_time_*``。
+    """
     from self_fulfilled_demand.canonical import resolve_warehouse_role
 
     po = {}
-    evidence = dict(source=None, rows=0, identity_missing=0, uom_missing=0,
-                    warehouse_out_of_branch=0, with_eta=0)
+    evidence = dict(source=None, rows=0, input_rows=0,
+                    accepted_rows=0, accepted_documents=0,
+                    quantity=0.0,
+                    identity_missing=0, uom_missing=0, warehouse_out_of_branch=0,
+                    zero_qty=0, with_eta=0, missing_eta=0,
+                    with_eta_qty=0.0, missing_eta_qty=0.0,
+                    on_time_qty=0.0, late_qty=0.0,
+                    decision_qty=0.0, outside_decision_qty=0.0)
+    documents = set()
     if not po_path and not po_tongtool_path:
         return po, evidence
 
-    def add(raw_sku, raw_wh, qty, eta):
+    def add(raw_sku, raw_wh, qty, eta, document_key=""):
         evidence["rows"] += 1
+        qty = float(qty)
+        if qty <= 0:
+            evidence["zero_qty"] += 1
+            return
         raw_sku = str(raw_sku).strip()
         item = lookup.get(raw_sku) or (raw_sku if raw_sku in uom_by_item else None)
         if not item:
@@ -289,11 +360,24 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
         if not (canonical == branch_wh or canonical.startswith(branch_prefix)):
             evidence["warehouse_out_of_branch"] += 1
             return
-        if eta:
-            evidence["with_eta"] += 1
         key = (item, canonical, uom)
-        po[key + ("po",)] = po.get(key + ("po",), 0.0) + float(qty)
-        po.setdefault(key + ("detail",), []).append((float(qty), str(eta or "")))
+        po[key + ("po",)] = po.get(key + ("po",), 0.0) + qty
+        # #388 的逐行明细（qty, ETA）供独立供给情景；ETA 必须传真实字符串
+        eta_text = _eta_text(eta)
+        po.setdefault(key + ("detail",), []).append((qty, eta_text))
+        evidence["quantity"] += qty
+        evidence["accepted_rows"] += 1
+        doc = str(document_key or "").strip()
+        if doc:
+            documents.add(doc)
+        if eta_text:
+            # 逐行保留 ETA，避免"最早一张按时"就代表整键按时
+            po.setdefault(key + ("eta_items",), []).append((eta_text, qty))
+            evidence["with_eta"] += 1
+            evidence["with_eta_qty"] += qty
+        else:
+            evidence["missing_eta"] += 1
+            evidence["missing_eta_qty"] += qty
 
     if po_path:
         path = Path(po_path)
@@ -304,6 +388,7 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
             for line in path.read_text(encoding="utf-8").splitlines():
                 if not line.strip():
                     continue
+                evidence["input_rows"] += 1
                 parts = line.split("\t")
                 if len(parts) < 4:
                     continue
@@ -315,7 +400,7 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
                 except ValueError:
                     continue
                 if qty > 0:
-                    add(raw_sku, warehouse, qty, eta=eta)
+                    add(raw_sku, warehouse, qty, eta=eta, document_key=parts[0])
 
     if po_tongtool_path:
         path = Path(po_tongtool_path)
@@ -326,6 +411,7 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
         for line in path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
+            evidence["input_rows"] += 1
             record = json.loads(line)
             status = str(record.get("status"))
             if status == "4":
@@ -335,64 +421,293 @@ def _po_facts(po_path, po_tongtool_path, *, lookup, uom_by_item, warehouse_cfg,
             qty = float(record.get("quantity") or 0) - float(record.get("in_quantity") or 0)
             if qty <= 0:
                 continue
+            # 关键：传真实 ETA 字符串，不传 bool(eta)
             eta = record.get("willArriveDate") or record.get("purchaseArrivalDate")
-            add(record.get("goods_sku") or "", record.get("warehouseName") or "", qty, eta=bool(eta))
+            add(record.get("goods_sku") or "", record.get("warehouseName") or "",
+                qty, eta=eta,
+                document_key=(record.get("PONum")
+                              or record.get("purchaseOrderId") or ""))
+    evidence["accepted_documents"] = len(documents)
     return po, evidence
 
 
-def _so_facts(path, branch):
-    """未履约 SO 余额 → ``{(sku, 仓, uom): qty}`` + 逐行交付日明细。"""
-    if not path:
-        return None, dict(source="none", rows=0, quantity=None)
-    if not Path(path).exists():
-        return None, dict(source=str(path), exists=False, rows=0, quantity=None)
+def _so_identity(record, lookup, uom_by_item):
+    """EN ``item_code`` 是权威身份；别名只对明确的 customer_item_code/tongtool_sku 唯一映射执行。
 
-    frame = _read_table(path)
+    不能拿 EN item_code 反查 ``sku_map``（它的键是 tongtool_sku），否则同名会串号。
+    """
+    raw_item = _text(record.get("item_code"))
+    if raw_item:
+        return raw_item, "item_code"
+    for field in ("customer_item_code", "tongtool_sku"):
+        alias = _text(record.get(field))
+        if not alias:
+            continue
+        if alias in uom_by_item:
+            return alias, f"{field}"
+        mapped = lookup.get(alias)
+        if mapped:
+            return mapped, f"{field}_alias"
+    return "", "identity_missing"
+
+
+def _so_scope(item, universe) -> str:
+    """EN 物料是否在决策宇宙内；不在则按形态/范围分开，不报 identity_missing。"""
+    if item in universe:
+        return "in_scope"
+    if item.upper().startswith(SO_OUT_OF_SCOPE_FORM_PREFIXES):
+        return "form_out_of_scope"
+    return "product_out_of_scope"
+
+
+def _so_facts(path, branch, *, lookup, uom_by_item, warehouse_cfg,
+              decision_skus=None, require_open_status=False):
+    """未履约 SO 余额 → ``{(canonical_sku, 主仓, canonical_uom): qty}`` + 逐行交付日明细。
+
+    两种输入都要归一到与主循环 ``(product_id, 主仓, D6 UOM)`` 相同的键：
+    - canonical 四列（``supply_netting.demand.load_backlog`` 契约，视为已筛开放）；
+    - EN 导出原始行（item_code / open_qty / customer / uom / status）。
+
+    身份：EN item_code 优先；PK#/ND# 是合法 EN 物料号，但不剥前缀凑成品，
+    归 ``form_out_of_scope``；其它不在决策宇宙的归 ``product_out_of_scope``。
+    单位：只有 ``UOM_EQUIVALENTS`` 明确有换算系数才转换，否则 ``uom_mismatch``。
+    开放：``require_open_status=True``（``run`` 强制）时，逐行正向校验明确允许的
+    开放状态（``SO_OPEN_STATUSES``）或有效 ``docstatus=1``；Closed 归档单列，
+    空状态/Draft/Unknown/未知分别单列（status_missing/draft/unknown、
+    docstatus_not_submitted），一律不附加。无 status 来源整批 ``status_missing``，
+    不附加需求。直接解析（单元测试）可传 False，但 evidence 仍如实标
+    ``open_verified=False``。
+    同时保留 ``key+("detail",)`` 的 (qty, delivery_date) 明细，供 #388 的
+    SO 按时到仓/独立供给情景使用。
+    """
+    if not path:
+        return None, dict(source="none", rows=0, quantity=None, open_verified=False,
+                          with_delivery_date=False)
+    p = Path(path)
+    if not p.exists():
+        return None, dict(source=str(path), exists=False, rows=0, quantity=None,
+                          open_verified=False, with_delivery_date=False)
+    from self_fulfilled_demand.canonical import resolve_warehouse_role
+
+    frame = _read_table(p)
     branch_wh = POOL_WAREHOUSE[branch]
+    branch_prefix = POOL_PREFIX[branch]
+    universe = set(decision_skus) if decision_skus is not None else set(uom_by_item)
+    if len(frame) == 0:
+        # 源存在但解析零行：返回零行信封，由 run 标 assumed_zero，不静默当实测 0
+        canonical_like = {"canonical_sku", "canonical_warehouse",
+                          "canonical_uom", "quantity"}.issubset(set(frame.columns))
+        raw_like = {"item_code", "open_qty", "customer"}.issubset(set(frame.columns))
+        if canonical_like:
+            fmt, open_verified, contract = ("canonical", True,
+                                            "canonical_open_backlog")
+        elif raw_like:
+            has_status = "status" in frame.columns
+            has_docstatus = "docstatus" in frame.columns
+            fmt = "en_sales_orders"
+            open_verified = bool(has_status or has_docstatus)
+            contract = ("status+docstatus" if has_status and has_docstatus
+                        else "status" if has_status
+                        else "docstatus" if has_docstatus else "missing")
+        else:
+            fmt, open_verified, contract = "empty", False, "unknown"
+        return {}, dict(source=str(p), sha256=_sha(p), rows=0,
+                        source_mtime=datetime.fromtimestamp(
+                            p.stat().st_mtime).isoformat(),
+                        format=fmt, open_verified=open_verified,
+                        open_verified_semantics=(
+                            "源存在但解析零行；不是实测 0，按 assumed_zero 处理"),
+                        status_contract=contract,
+                        with_delivery_date="delivery_date" in frame.columns)
+
     result = {}
-    evidence = dict(source=str(path), sha256=_sha(path), rows=int(len(frame)))
+    counts = dict(accepted_rows=0, identity_missing=0, form_out_of_scope=0,
+                  product_out_of_scope=0, uom_missing=0, uom_mismatch=0,
+                  warehouse_out_of_branch=0, customer_pool_mismatch=0,
+                  quantity_invalid=0, closed_archived_rows=0,
+                  status_missing_rows=0, status_draft_rows=0,
+                  status_unknown_rows=0, docstatus_not_submitted_rows=0,
+                  warehouse_collapsed_to_branch=0)
+    status_qty = dict(closed_archived_qty=0.0, status_missing_qty=0.0,
+                      status_draft_qty=0.0, status_unknown_qty=0.0,
+                      docstatus_not_submitted_qty=0.0)
+    status_counts = {}
+    samples = []
+
+    def reject(row_no, record, reason):
+        if len(samples) < 50:
+            samples.append(dict(
+                row=row_no,
+                so=_text(record.get("so")) or _text(record.get("document_key")),
+                item_code=_text(record.get("item_code"))
+                or _text(record.get("canonical_sku")),
+                customer=_text(record.get("customer")),
+                reason=reason))
+        counts[reason] += 1
+
+    def reject_status(reason, qty):
+        counts[f"{reason}_rows"] += 1
+        status_qty[f"{reason}_qty"] += float(qty or 0.0)
+
+    def resolve_uom(record, item, raw_uom, qty):
+        """(uom, qty, reason)；无换算证据时绝不改标签照用数量。"""
+        if not raw_uom:
+            return None, qty, "uom_missing"
+        canonical = _uom_text(uom_by_item.get(item))
+        if canonical and raw_uom != canonical:
+            factor = UOM_EQUIVALENTS.get((raw_uom, canonical))
+            if factor is None:
+                return None, qty, "uom_mismatch"
+            qty = None if qty is None else qty * factor
+            return canonical, qty, None
+        return canonical or raw_uom, qty, None
+
+    details = {}
 
     def add(key, qty, delivery_date=None):
         result[key] = result.get(key, 0.0) + float(qty)
-        result.setdefault(key + ("detail",), []).append(
+        details.setdefault(key, []).append(
             (float(qty), str(delivery_date or "")))
 
     canonical_cols = {"canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"}
     if canonical_cols.issubset(set(frame.columns)):
-        for row in frame.itertuples(index=False):
-            key = (str(row.canonical_sku), str(row.canonical_warehouse),
-                   str(row.canonical_uom))
-            qty = _num(getattr(row, "quantity", None))
+        evidence = dict(source=str(p), sha256=_sha(p), rows=int(len(frame)),
+                        source_mtime=datetime.fromtimestamp(
+                            p.stat().st_mtime).isoformat(),
+                        format="canonical", open_verified=True,
+                        open_verified_semantics=(
+                            "canonical backlog 视为上游已筛开放；仍逐行校验身份/UOM/仓"),
+                        status_contract="canonical_open_backlog",
+                        with_delivery_date="delivery_date" in frame.columns)
+        for row_no, record in enumerate(frame.to_dict("records"), start=1):
+            sku = _text(record.get("canonical_sku"))
+            wh = _text(record.get("canonical_warehouse"))
+            qty = _num(record.get("quantity"))
+            if not sku:
+                reject(row_no, record, "identity_missing")
+                continue
+            scope = _so_scope(sku, universe)
+            if scope != "in_scope":
+                reject(row_no, record, scope)
+                continue
+            uom, qty, reason = resolve_uom(
+                record, sku, _uom_text(record.get("canonical_uom")), qty)
+            if reason:
+                reject(row_no, record, reason)
+                continue
+            if not (wh == branch_wh or wh.startswith(branch_prefix)):
+                reject(row_no, record, "warehouse_out_of_branch")
+                continue
             if qty is None or qty <= 0:
+                reject(row_no, record, "quantity_invalid")
                 continue
-            if not (key[1] == branch_wh or key[1].startswith(POOL_PREFIX[branch])):
-                continue
-            add(key, qty, getattr(row, "delivery_date", ""))
-        evidence.update(rows=int(len(frame)), quantity=float(sum(
-            v for k, v in result.items() if not isinstance(k, tuple) or k[-1] != "detail")),
-            format="canonical", with_delivery_date="delivery_date" in frame.columns)
-        return result, evidence
+            if wh != branch_wh:
+                # 主循环的键用分公司主仓；子仓不合并就永远匹配不上
+                counts["warehouse_collapsed_to_branch"] += 1
+            add((sku, branch_wh, uom), qty, record.get("delivery_date"))
+            counts["accepted_rows"] += 1
+    elif {"item_code", "open_qty", "customer"}.issubset(set(frame.columns)):
+        has_status = "status" in frame.columns
+        has_docstatus = "docstatus" in frame.columns
+        status_contract = ("status+docstatus" if has_status and has_docstatus
+                           else "status" if has_status
+                           else "docstatus" if has_docstatus
+                           else "missing")
+        enforce_open = bool(require_open_status and not (has_status or has_docstatus))
+        evidence = dict(source=str(p), sha256=_sha(p), rows=int(len(frame)),
+                        source_mtime=datetime.fromtimestamp(
+                            p.stat().st_mtime).isoformat(),
+                        format="en_sales_orders",
+                        open_verified=bool(has_status or has_docstatus),
+                        open_verified_semantics=(
+                            "仅表示来源带 status/docstatus 契约；每行是否有效开放"
+                            "看 status_missing/draft/unknown/docstatus_not_submitted 计数"),
+                        status_contract=status_contract,
+                        with_delivery_date="delivery_date" in frame.columns)
+        for row_no, record in enumerate(frame.to_dict("records"), start=1):
+            record_qty = _num(record.get("open_qty"))
+            status = _text(record.get("status"))
+            status_key = status.lower()
+            docstatus = _num(record.get("docstatus")) if has_docstatus else None
+            if status:
+                status_counts[status] = status_counts.get(status, 0) + 1
+            elif has_status:
+                status_counts["<empty>"] = status_counts.get("<empty>", 0) + 1
 
-    if {"item_code", "open_qty", "customer"}.issubset(set(frame.columns)):
-        unmapped = 0
-        for row in frame.itertuples(index=False):
-            if SO_CUSTOMER_POOL.get(str(row.customer).strip()) != branch:
-                unmapped += 1
+            # 逐行正向校验：明确允许的开放状态，或（仅无 status 列时）已提交 docstatus
+            if enforce_open:
+                reject_status("status_missing", record_qty)
                 continue
-            qty = _num(getattr(row, "open_qty", None))
-            uom = str(getattr(row, "uom", "") or "").strip()
-            if qty is None or not uom:
-                unmapped += 1
+            if has_status:
+                if not status:
+                    reject_status("status_missing", record_qty)
+                    continue
+                if status_key in SO_CLOSED_STATUSES:
+                    reject_status("closed_archived", record_qty)
+                    continue
+                if status_key == "draft":
+                    reject_status("status_draft", record_qty)
+                    continue
+                if status_key not in SO_OPEN_STATUSES:
+                    reject_status("status_unknown", record_qty)
+                    continue
+                if has_docstatus and (docstatus is None or int(docstatus) != 1):
+                    reject_status("docstatus_not_submitted", record_qty)
+                    continue
+            elif has_docstatus:
+                if docstatus is None or int(docstatus) != 1:
+                    reject_status("docstatus_not_submitted", record_qty)
+                    continue
+            # 无 status/docstatus 且未强制：由调用方声明为开放（仅解析单元测试）
+            if record_qty is None or record_qty <= 0:
+                reject(row_no, record, "quantity_invalid")
                 continue
-            add((str(row.item_code).strip(), branch_wh, uom), qty,
-                getattr(row, "delivery_date", ""))
-        evidence.update(rows=int(len(frame)), quantity=float(sum(
-            v for k, v in result.items() if not isinstance(k, tuple) or k[-1] != "detail")),
-            format="en_sales_orders", excluded_rows=unmapped,
-            with_delivery_date="delivery_date" in frame.columns)
-        return result, evidence
+            customer = _text(record.get("customer"))
+            if SO_CUSTOMER_POOL.get(customer) != branch:
+                reject(row_no, record, "customer_pool_mismatch")
+                continue
+            item, _identity_source = _so_identity(record, lookup, uom_by_item)
+            if not item:
+                reject(row_no, record, "identity_missing")
+                continue
+            scope = _so_scope(item, universe)
+            if scope != "in_scope":
+                reject(row_no, record, scope)
+                continue
+            uom, qty, reason = resolve_uom(
+                record, item,
+                _uom_text(record.get("uom")) or _uom_text(record.get("stock_uom")),
+                record_qty)
+            if reason:
+                reject(row_no, record, reason)
+                continue
+            raw_wh = _text(record.get("warehouse"))
+            if raw_wh:
+                profile = resolve_warehouse_role(raw_wh, warehouse_cfg)
+                canonical = str(profile["canonical_warehouse"])
+                known = profile.get("warehouse_status") not in (None, "unknown")
+                if known and not (canonical == branch_wh
+                                  or canonical.startswith(branch_prefix)):
+                    reject(row_no, record, "warehouse_out_of_branch")
+                    continue
+            if qty is None or qty <= 0:
+                reject(row_no, record, "quantity_invalid")
+                continue
+            add((item, branch_wh, uom), qty, record.get("delivery_date"))
+            counts["accepted_rows"] += 1
+    else:
+        raise ValueError(f"SO 文件 {path} 既不是 canonical 四列，也不是 EN 开放 SO 导出")
 
-    raise ValueError(f"SO 文件 {path} 既不是 canonical 四列，也不是 EN 开放 SO 导出")
+    rejected = int(evidence["rows"]) - counts["accepted_rows"]
+    evidence.update(counts)
+    evidence.update(status_qty)
+    evidence["rejected_rows"] = rejected
+    evidence["status_counts"] = status_counts
+    evidence["quantity"] = float(sum(result.values()))
+    evidence["_detail_by_key"] = details
+    evidence["unresolved_samples"] = samples
+    evidence["unresolved_truncated"] = rejected > len(samples)
+    return result, evidence
 
 
 # --------------------------------------------------------------------------- #
@@ -406,10 +721,20 @@ def _mark_duplicate_forms(frame):
         if len(group) <= 1:
             continue
         primary_idx = None
-        for idx, row in group.iterrows():
-            if str(row.get("physical_form") or "").strip() == "成品":
-                primary_idx = idx
-                break
+        # 可计算且是成品；可计算；成品；首行（与 _decide_live 的主行一致）
+        if primary_idx is None:
+            measured = group[group["qty_status"] == "measured"]
+            for idx, row in measured.iterrows():
+                if str(row.get("physical_form") or "").strip() == "成品":
+                    primary_idx = idx
+                    break
+            if primary_idx is None and len(measured):
+                primary_idx = measured.index[0]
+        if primary_idx is None:
+            for idx, row in group.iterrows():
+                if str(row.get("physical_form") or "").strip() == "成品":
+                    primary_idx = idx
+                    break
         if primary_idx is None:
             primary_idx = group.index[0]
         for idx, row in group.iterrows():
@@ -556,12 +881,60 @@ def _branch_lead_days(path, branch):
 
 def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
                  so_known, po_known, *, branch, stock_meta, forecast_meta,
-                 file_meta, as_of_dt, lead_by_sku=None, lead_source="d6_need_minus_d6_lead"):
+                 file_meta, as_of_dt, lead_by_sku=None,
+                 lead_source="d6_need_minus_d6_lead", so_in_forecast=True,
+                 so_details=None):
     wh = POOL_WAREHOUSE[branch]
     as_of_date = as_of_dt.date()
     lead_by_sku = lead_by_sku or {}
-    rows = []
+    so_details = so_details or {}
+    decision = dict(
+        po=dict(quantity=0.0, on_time_qty=0.0, late_qty=0.0,
+                missing_eta_qty=0.0, unproven_qty=0.0,
+                decision_qty=0.0, outside_decision_qty=0.0,
+                row_sum_qty=0.0, keys_without_need_date=0),
+        so=dict(attached_qty=0.0, decision_qty=0.0, unattached_qty=0.0,
+                outside_decision_qty=0.0, row_sum_qty=0.0, rows_with_so=0),
+        d6_duplicate_keys=0,
+        shared_fact_note=("PO/SO 是 (SKU, 仓, UOM) 键级共享事实；D6 有重复形态键时，"
+                          "逐行求和会重复，汇总只能用 decision_qty/attached_qty"),
+    )
+    key_rows = {}
     for record in d6_rows.to_dict("records"):
+        k = (str(record["product_id"]), str(record["UOM"]).strip())
+        key_rows[k] = key_rows.get(k, 0) + 1
+    decision["d6_duplicate_keys"] = sum(1 for count in key_rows.values() if count > 1)
+    seen_po, seen_so, attached_so = set(), set(), set()
+    row_sum_po = 0.0
+    row_sum_so = 0.0
+    records = d6_rows.to_dict("records")
+    # 同键多形态的稳定主行：可计算优先、成品优先；SO 只叠加到主行，
+    # 避免 so_in_forecast 开关改变主行导致汇总差异不等于 SO 量。
+    groups = {}
+    for idx, record in enumerate(records):
+        sku = str(record["product_id"])
+        uom = str(record["UOM"]).strip() or "个"
+        key = (sku, wh, uom)
+        q95 = _num(record.get("q95"))
+        opening = supply.get(key + ("opening",))
+        demand_ok = q95 is not None
+        if demand_source == "forecast_refresh" and demand_map is not None:
+            demand_ok = demand_map.get(key) is not None or demand_ok
+        measured = demand_ok and opening is not None and so_known and po_known
+        groups.setdefault(key, []).append(
+            (idx, str(record.get("形态") or "").strip(), measured))
+    primary_index = {}
+    for key, members in groups.items():
+        pick = next((i for i, form, ok in members if form == "成品" and ok), None)
+        if pick is None:
+            pick = next((i for i, form, ok in members if ok), None)
+        if pick is None:
+            pick = next((i for i, form, ok in members if form == "成品"), None)
+        if pick is None:
+            pick = members[0][0]
+        primary_index[key] = pick
+    rows = []
+    for row_idx, record in enumerate(records):
         sku = str(record["product_id"])
         uom = str(record["UOM"]).strip()
         if not uom or uom == "unknown":
@@ -590,8 +963,9 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
 
         opening = supply.get(key + ("opening",))
         intransit = supply.get(key + ("intransit",))
-        # SO/PO 源存在时，「该键没有行」是实测 0；源缺失才是未知。
-        so_detail = list(so.get(key + ("detail",), [])) if so is not None else []
+        # 源解析到行时，「该键没有行」是实测 0；整源零行由 run 标 assumed_zero；
+        # 源缺失才是未知（None）。逐行明细 (qty, date/ETA) 供按时/独立供给情景。
+        so_detail = list(so_details.get(key, [])) if so is not None else []
         po_detail = list(po.get(key + ("detail",), [])) if po is not None else []
         so_qty = sum(q for q, _ in so_detail) if so is not None else None
         po_qty = sum(q for q, _ in po_detail) if po is not None else None
@@ -610,20 +984,37 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
                 need_dt = datetime.fromisoformat(str(needs_date)[:10]).date()
             except ValueError:
                 need_dt = None
-        def _on_time(detail):
-            total = 0.0
-            for qty, eta in detail:
-                if not eta or need_dt is None:
-                    continue
-                try:
-                    if datetime.fromisoformat(str(eta)[:10]).date() <= need_dt:
-                        total += float(qty)
-                except ValueError:
-                    continue
-            return total
-
-        po_on_time = _on_time(po_detail)
-        so_on_time = _on_time(so_detail)
+        # 按时 = ETA ≤ 需要日；逐行比较，不能用"最早一张"代表整键
+        po_on_time = 0.0
+        po_with_eta = 0.0
+        for eta_qty, eta_text in po_detail:
+            if _eta_text(eta_text):
+                po_with_eta += float(eta_qty)
+                if _eta_on_or_before(eta_text, need_dt):
+                    po_on_time += float(eta_qty)
+        so_on_time = sum(float(qty) for qty, delivery in so_detail
+                         if _eta_on_or_before(delivery, need_dt))
+        if po_qty and key not in seen_po:
+            seen_po.add(key)
+            stats = decision["po"]
+            stats["quantity"] += float(po_qty)
+            stats["decision_qty"] += float(po_qty)
+            stats["on_time_qty"] += po_on_time
+            stats["late_qty"] += po_with_eta - po_on_time
+            stats["missing_eta_qty"] += float(po_qty) - po_with_eta
+            stats["unproven_qty"] += float(po_qty) - po_on_time
+            if not need_dt:
+                stats["keys_without_need_date"] += 1
+        if po_qty:
+            row_sum_po += float(po_qty)
+        so_first_for_key = bool(so_qty) and key not in seen_so
+        if so_first_for_key:
+            seen_so.add(key)
+            stats = decision["so"]
+            stats["decision_qty"] += float(so_qty)
+            stats["rows_with_so"] += 1
+        if so_qty:
+            row_sum_so += float(so_qty)
 
         reasons, warnings = [], []
         missing = []
@@ -643,33 +1034,63 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         supply_expected = supply_proven = supply_independent = None
         new_qty = lower = new_qty_if_independent = None
         if not missing:
-            total_demand = demand_qty
+            total_demand = float(demand_qty)
+            so_added = 0.0
+            if (not so_in_forecast and so_qty
+                    and primary_index.get(key) == row_idx
+                    and key not in attached_so):
+                # 显式开关：只有明确"预测未含开放 SO"时才叠加；
+                # 实际加进某个合格建议行后才消费该键，首行待核不会吞掉后续有效行
+                so_added = float(so_qty)
+                attached_so.add(key)
+                total_demand += so_added
+                decision["so"]["attached_qty"] += so_added
             # 分公司 SO 是上游生产/交付单，不是终端需求；无批次键时按最大单阶段避免同批重复。
-            # 在途/按时 PO 可计入；分公司 SO 无可靠到货日时只作条件，不抵扣主建议
+            # 在途/按时 PO 可计入；SO 仅在"已含在预测"模式（默认）下按按时到仓计入供给；
+            # so_in_forecast=false 时 SO 已是需求，不能再同时当供给（防双计）。
+            so_supply_on_time = float(so_on_time or 0.0) if so_in_forecast else 0.0
             incoming = max(float(intransit or 0.0), float(po_on_time or 0.0),
-                           float(so_on_time or 0.0))
+                           so_supply_on_time)
             supply_independent = (opening + (intransit or 0.0) + (po_on_time or 0.0)
-                                  + (so_on_time or 0.0) + (cg_qty or 0.0))
+                                  + so_supply_on_time + (cg_qty or 0.0))
             supply_expected = opening + incoming + (cg_qty or 0.0)
-            supply_proven = opening + (po_on_time or 0.0) + (so_on_time or 0.0) + (cg_qty or 0.0)
+            supply_proven = opening + (po_on_time or 0.0) + so_supply_on_time + (cg_qty or 0.0)
             new_qty_if_independent = max(0, int(math.ceil(total_demand - supply_independent)))
             new_qty = max(0, int(math.ceil(total_demand - supply_expected)))
             lower = max(0, int(math.ceil(total_demand - supply_proven)))
+            demand_label = f"{total_demand:g}"
+            if so_added:
+                demand_label += f"（含未履约 SO {so_added:g}）"
             if new_qty > 0:
-                reasons.append(f"需求 {total_demand:g} > 已知供给 {supply_expected:g}")
+                reasons.append(f"需求 {demand_label} > 已知供给 {supply_expected:g}")
             else:
-                reasons.append(f"已知供给 {supply_expected:g} 覆盖需求 {total_demand:g}")
+                reasons.append(f"已知供给 {supply_expected:g} 覆盖需求 {demand_label}")
             if lower > new_qty:
                 reasons.append(f"若在途/未确认 SO/迟到 PO 不到，最坏需 {lower}")
             if po_qty and po_qty > po_on_time:
                 warnings.append(f"PO {po_qty:g} 中 {po_qty - po_on_time:g} 未证按时（ETA 缺失或晚于需要日）")
             if so_qty:
-                if so_on_time > 0:
+                if so_in_forecast:
+                    if so_on_time > 0:
+                        warnings.append(
+                            f"分公司 SO {so_qty:g} 未加进需求；其中 {so_on_time:g} "
+                            "按时到仓已计入供给")
+                    else:
+                        warnings.append(
+                            f"分公司 SO {so_qty:g} 未加进需求；无可靠到货日或晚于需要日，"
+                            "不抵扣主建议")
+                elif so_added:
                     warnings.append(
-                        f"分公司 SO {so_qty:g} 未加进需求；其中 {so_on_time:g} 按时到仓已计入供给")
+                        f"分公司 SO {so_qty:g} 视为未含在预测内：已叠加到需求；若预测已含则双计")
                 else:
                     warnings.append(
-                        f"分公司 SO {so_qty:g} 未加进需求；无可靠到货日或晚于需要日，不抵扣主建议")
+                        f"分公司 SO {so_qty:g} 属同一 (SKU,仓,UOM) 键的重复行："
+                        "只在该键首个有效行叠加一次，本行不重复计入")
+        elif so_qty and not so_in_forecast:
+            # 待核行不能静默吞掉 SO；同键后续有效行会叠加，否则在 meta 里计 unattached
+            warnings.append(
+                f"分公司 SO {so_qty:g} 本行待核，未附加；同键有效行会叠加一次，"
+                "若无有效行则计入 meta.so.unattached_qty（明确待核，不静默丢量）")
 
         if missing:
             action = "待核"
@@ -728,7 +1149,21 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
                    else "live",
             mode="live",
         ))
-    return pd.DataFrame(rows, columns=COLUMNS)
+    # PO/SO 中不属于任何决策键的量：不进建议，但必须在证据里显形
+    if po is not None:
+        total_po = sum(float(qty) for name, qty in po.items() if name[-1] == "po")
+        decision["po"]["quantity"] = total_po
+        decision["po"]["outside_decision_qty"] = total_po - decision["po"]["decision_qty"]
+        decision["po"]["row_sum_qty"] = row_sum_po
+    if so is not None:
+        total_so = float(sum(value for k, value in so.items()
+                             if k[-1] != "detail"))
+        decision["so"]["outside_decision_qty"] = total_so - decision["so"]["decision_qty"]
+        decision["so"]["row_sum_qty"] = row_sum_so
+        decision["so"]["unattached_qty"] = (
+            0.0 if so_in_forecast else
+            decision["so"]["decision_qty"] - decision["so"]["attached_qty"])
+    return pd.DataFrame(rows, columns=COLUMNS), decision
 
 
 def _decide_fallback(frame, *, branch):
@@ -797,11 +1232,23 @@ def _date_status(value, as_of_date):
 def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         po_path=None, po_tongtool_path=None, forecast_root=None,
         demand_netting=None, snapshot_date=None, forecast_lead_days=FORECAST_LEAD_DAYS,
-        pack_manifest=None, leadtime_path=None):
-    """产出 ``(DataFrame, meta)``。只读；无 live 库存时回退 D6 包 replay。"""
+        pack_manifest=None, leadtime_path=None, so_in_forecast=True):
+    """产出 ``(DataFrame, meta)``。只读；无 live 库存时回退 D6 包 replay。
+
+    ``so_in_forecast`` 显式声明开放 SO 是否已含在预测里：
+    - True（默认，保守）：视为已含 → 不叠加到需求，避免双计；
+    - False：视为未含 → 把开放 SO 余额叠加到需求。
+    两种模式的语义与影响都写进 ``meta["so"]`` 与逐行 warnings，禁止隐式。
+    ``leadtime_path`` 为 #388 的 SO→DN 交期快照，用于倒排下单日。
+    """
     as_of_dt = parse_as_of(as_of)
     pool = normalize_branch(branch)
     root = Path(data_root)
+    if isinstance(so_in_forecast, str):
+        so_in_forecast = so_in_forecast.strip().lower() not in (
+            "false", "0", "no", "off")
+    else:
+        so_in_forecast = bool(so_in_forecast)
 
     manifest = _load_pack_manifest(pack_manifest)
     pack_meta = dict(version=manifest.get("version"), as_of=manifest.get("as_of"))
@@ -828,11 +1275,14 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         meta = dict(mode="replay_fallback", branch=pool, as_of=as_of_dt.isoformat(),
                     pack=pack_meta, stock=stock_meta, forecast=None,
                     so=file_meta["so"], po=file_meta["po"],
+                    so_in_forecast=so_in_forecast,
                     demand_netting=_file_meta(demand_netting),
                     cg=dict(source="d6_pack"),
                     demand_source="d6_pack_q95", warnings=warnings,
                     executable=False, executable_reasons=["live 库存不可用，仅回放"],
-                    totals=dict(rows=int(len(frame)), suggest=int((frame["action"] == "补").sum())),
+                    totals=dict(rows=int(len(frame)), suggest=int((frame["action"] == "补").sum()),
+                                so_attached_qty=0.0,
+                                assumed_zero_rows=dict(so=0, po=0)),
                     limits=["历史回放，未用 live 库存/SO/PO/CG 重算",
                             "未知数量保持 null，不写 0"])
         return frame, meta
@@ -866,10 +1316,31 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                                 branch_wh=branch_wh, branch_prefix=branch_prefix)
     po_known = bool((po_path and Path(po_path).exists())
                     or (po_tongtool_path and Path(po_tongtool_path).exists()))
-    so, so_evidence = _so_facts(backlog_path, pool)
+    decision_skus = {str(record["product_id"])
+                     for record in d6_rows.to_dict("records")}
+    so, so_evidence = _so_facts(backlog_path, pool, lookup=lookup,
+                                uom_by_item=uom_by_item, warehouse_cfg=warehouse_cfg,
+                                decision_skus=decision_skus,
+                                require_open_status=True)
     so_known = bool(backlog_path and Path(backlog_path).exists())
     if backlog_path and not so_known:
         so_evidence["exists"] = False
+    so_details = so_evidence.pop("_detail_by_key", {})
+
+    # 源存在但解析零行：给 assumed_zero 信封，不静默当实测 0；
+    # 有行但被过滤（如全 Closed）不是 assumed_zero。
+    so_input_rows = int(so_evidence.get("rows") or 0)
+    po_input_rows = int(po_evidence.get("input_rows") or 0)
+    so_assumed_zero = bool(so_known and so_input_rows == 0)
+    po_assumed_zero = bool(po_known and po_input_rows == 0)
+    so_evidence["assumed_zero"] = dict(
+        applies=so_assumed_zero, rows=so_input_rows,
+        reason=("source_exists_but_parsed_zero_rows" if so_assumed_zero
+                else "source_missing" if not so_known else "rows_present"))
+    po_evidence["assumed_zero"] = dict(
+        applies=po_assumed_zero, input_rows=po_input_rows,
+        reason=("source_exists_but_parsed_zero_rows" if po_assumed_zero
+                else "source_missing" if not po_known else "rows_present"))
 
     # ---- live 需求：预测优先，D6 q95 兜底 ----
     demand_map, forecast_meta = _forecast_demand(
@@ -904,12 +1375,24 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
             if 0 < days < 400:
                 lead_by_sku[str(rec["product_id"])] = days
 
-    frame = _decide_live(
+    frame, decision_evidence = _decide_live(
         d6_rows, demand_map, demand_source, supply, cg, so, po,
         so_known, po_known, branch=pool, stock_meta=stock_meta,
         forecast_meta=forecast_meta, file_meta=file_meta, as_of_dt=as_of_dt,
-        lead_by_sku=lead_by_sku, lead_source=lead_source)
+        lead_by_sku=lead_by_sku, lead_source=lead_source,
+        so_in_forecast=so_in_forecast, so_details=so_details)
     frame, duplicate_forms = _mark_duplicate_forms(frame)
+    po_evidence.update(decision_evidence["po"])
+    so_evidence.update(decision_evidence["so"])
+    so_evidence.update(dict(
+        so_in_forecast=so_in_forecast,
+        semantics=("open_so_already_in_forecast: 不叠加到需求（默认保守，防双计）"
+                   if so_in_forecast else
+                   "open_so_not_in_forecast: 开放 SO 余额叠加到需求；若预测已含则双计"),
+        impact=("attached_qty=0；需求只含预测/D6 值"
+                if so_in_forecast else
+                f"attached_qty={decision_evidence['so']['attached_qty']:g}；"
+                "需求=预测/D6 值+开放 SO")))
 
     warnings = []
     if demand_source == "d6_pack_q95":
@@ -927,6 +1410,38 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
             == po_evidence["rows"]):
         warnings.append("PO 文件行没有落到本分公司仓（多为物料仓/未映射 SKU），"
                         "PO 供给按 0 计；请改用通途 purchaseOrderQuery JSONL")
+    if po_known and po_evidence.get("quantity", 0) > 0 and not po_evidence.get("with_eta_qty"):
+        warnings.append(
+            "PO 有效开放行全部无 ETA（willArriveDate/purchaseArrivalDate 均空）："
+            "on_time_qty=0 是数据缺口，不是按时率 0")
+    assumed_zero_sources = [label for label, flag in
+                            (("SO", so_assumed_zero), ("PO", po_assumed_zero))
+                            if flag]
+    if assumed_zero_sources:
+        warnings.append(
+            "、".join(assumed_zero_sources) + " 源文件存在但解析零行：按 assumed_zero "
+            "记录（不是实测 0）；有行但被过滤的不算")
+    if so_evidence.get("status_contract") == "missing" and so_evidence.get("rows"):
+        warnings.append(
+            "SO 来源没有 status/docstatus：开放状态未证，整批 status_missing，"
+            "不附加任何需求；请改用 open_nonclosed 来源（或带 status 的 JSONL）")
+    elif so_evidence.get("rows"):
+        not_open = {label: so_evidence.get(f"{key}_rows", 0)
+                    for key, label in (("status_missing", "空状态"),
+                                       ("status_draft", "Draft"),
+                                       ("status_unknown", "Unknown/未知"),
+                                       ("docstatus_not_submitted", "docstatus 未提交"))}
+        if any(not_open.values()):
+            warnings.append(
+                "SO 有非有效开放行未计入、不附加："
+                + "；".join(f"{label} {count} 行"
+                            for label, count in not_open.items() if count)
+                + "（Closed 归档另计）")
+    if (not so_in_forecast and so_evidence.get("open_verified")
+            and so_evidence.get("unattached_qty", 0) > 0):
+        warnings.append(
+            f"有 {so_evidence['unattached_qty']:g} 件开放 SO 因对应建议行待核未附加："
+            "已计入 meta.so.unattached_qty，不静默丢量")
     if policy_path is None:
         warnings.append("service_policy.csv 缺失：单位取自 D6 行，供给单位证据偏弱")
     warnings.append("未接入 supply_netting 的批次去重/跨阶段同批/FBA 分配等 gate；"
@@ -973,6 +1488,7 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         leadtime={"source": lead_source, "days": branch_lead},
         stock=stock_meta, forecast=forecast_meta,
         so=so_evidence, po=po_evidence,
+        so_in_forecast=so_in_forecast,
         demand_netting=_file_meta(demand_netting),
         cg=dict(source=("live_stock.cg" if cg else "d6_pack"),
                 items=int(len(cg)), quantity=round(float(sum(cg.values())), 6)),
@@ -981,18 +1497,40 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         executable_reasons=executable_reasons,
         stock_age_hours=stock_age_hours,
         duplicate_forms=duplicate_forms,
+        d6_duplicate_keys=decision_evidence["d6_duplicate_keys"],
+        shared_fact_note=decision_evidence["shared_fact_note"],
         totals=dict(rows=int(len(frame)),
                     unique_keys=int(frame[["sku", "warehouse", "uom"]].drop_duplicates().shape[0]),
                     duplicate_rows=int(len(duplicate_forms)),
                     suggest=int((frame["action"] == "补").sum()),
                     unknown=int((frame["qty_status"] != "measured").sum()),
-                    past_due=int((frame["order_date_status"] == "past_due").sum())),
+                    past_due=int((frame["order_date_status"] == "past_due").sum()),
+                    so_attached_qty=decision_evidence["so"]["attached_qty"],
+                    assumed_zero_rows=dict(so=int(so_assumed_zero),
+                                           po=int(po_assumed_zero))),
         warnings=warnings,
         limits=["缺口是 D6 q95/预测窗口总量口径，不是某一天的精确缺货日",
                 "在途/未确认 SO 按条件供给；迟到/无 ETA 的 PO 不计按时；最坏情况见 "
                 "new_qty_if_conditional_late",
-                "SO 不计入需求；仅交付日 <= 需要日的部分计入供给；SO 文件缺失时数量保持 null",
+                ("开放 SO 视为已含在预测内：不叠加需求（so_in_forecast=true，默认保守）；"
+                 "若预测实际未含会低估" if so_in_forecast else
+                 "开放 SO 视为未含在预测内：已叠加需求（so_in_forecast=false）；"
+                 "若预测已含则双计"),
+                "SO 为上游交付管线，不进需求（默认）；显式 so_in_forecast=false 时才叠加需求",
+                "默认模式下 SO 仅交付日 <= 需要日的部分计入条件供给；"
+                "SO 文件缺失时数量保持 null",
                 "supply_expected 按阶段全重叠假设；独立供给情景见 supply_independent",
+                "源存在但解析零行记 assumed_zero（totals.assumed_zero_rows）；"
+                "有行但被过滤的不算 assumed_zero",
+                "PO 按时 = 逐行 ETA ≤ 需要日；ETA 缺失/晚于需要日均计入未证按时",
+                "SO 身份以 EN item_code 为准，别名只走 customer_item_code；"
+                "PK#/ND# 不剥前缀，归 form_out_of_scope",
+                "SO 单位不做无据换算：无 UOM_EQUIVALENTS 证据时 uom_mismatch 拒绝",
+                "SO 只有明确允许的开放状态（To Deliver and Bill / To Deliver / To Bill）"
+                "或有效 docstatus=1 才可附加需求；空/Draft/Unknown/未知不附加并单列原因；"
+                "Closed 归档单列",
+                "PO/SO 是 (SKU,仓,UOM) 键级共享事实：D6 有重复形态键时逐行求和不等于唯一聚合，"
+                "汇总用 meta.po.decision_qty / meta.so.decision_qty",
                 "CG 未提供 live 源时使用 D6 包值（cg_source 标注）",
                 "demand_netting 只登记哈希；薄封装未接入其逐桶分摊与资格对账",
                 "未知数量/日期保持 null，不写 0"],
@@ -1033,7 +1571,10 @@ def to_report(frame, meta, limit=None) -> str:
              f"- 需求来源：**{meta.get('demand_source')}**"
              + (f"（D6 包 as_of {meta.get('pack', {}).get('as_of')}）"
                 if meta.get("demand_source") == "d6_pack_q95" else ""),
-             f"- 显示 {len(shown)} / {len(frame)} 行；未静默截断", ""]
+             f"- 显示 {len(shown)} / {len(frame)} 行；未静默截断",
+             ("- SO 口径：**视为已含在预测内**（不叠加需求，默认保守）"
+              if meta.get("so_in_forecast", True) else
+              "- SO 口径：**视为未含在预测内**（开放 SO 叠加到需求）"), ""]
     executable = bool(meta.get("executable"))
     reasons = "；".join(meta.get("executable_reasons") or [])
     lines.append(f"- 可执行性：**{'是' if executable else '否'}**"
@@ -1050,9 +1591,29 @@ def to_report(frame, meta, limit=None) -> str:
         so = meta.get("so") or {}
         po = meta.get("po") or {}
         lines.append(f"  - SO：{so.get('source') or '未接入'}（sha256 "
-                     f"{(so.get('sha256') or '')[:12] or '—'}）")
-        lines.append(f"  - PO：{po.get('source') or '未接入'}；CG："
+                     f"{(so.get('sha256') or '')[:12] or '—'}；"
+                     f"source_mtime {so.get('source_mtime') or '未知'}；"
+                     f"status 契约 {so.get('status_contract') or '未知'}；"
+                     f"Closed 归档 {so.get('closed_archived_rows', 0)} 行/"
+                     f"{so.get('closed_archived_qty', 0):g} 件已剔除）")
+        non_open = [(label, so.get(key, 0)) for key, label in (
+            ("status_missing_rows", "空状态"),
+            ("status_draft_rows", "Draft"),
+            ("status_unknown_rows", "Unknown/未知"),
+            ("docstatus_not_submitted_rows", "docstatus 未提交")) if so.get(key)]
+        if non_open:
+            lines.append("    · 未计入/不附加：" + "；".join(
+                f"{label} {count} 行" for label, count in non_open))
+        lines.append(f"  - PO：{po.get('source') or '未接入'}（有效开放 "
+                     f"{po.get('accepted_rows', 0)} 物料行/"
+                     f"{po.get('accepted_documents', 0)} 张单，"
+                     f"{po.get('quantity', 0):g} 件；ETA 缺失 "
+                     f"{po.get('missing_eta', 0)} 行）；CG："
                      f"{(meta.get('cg') or {}).get('source')}")
+        if meta.get("d6_duplicate_keys"):
+            lines.append(f"  - 注意：D6 有 {meta['d6_duplicate_keys']} 个重复形态键；"
+                         f"逐行 PO 合计 {po.get('row_sum_qty', 0):g} ≠ 唯一 "
+                         f"{po.get('decision_qty', 0):g}，汇总请用唯一聚合")
     forecast = meta.get("forecast") or {}
     if forecast:
         lines.append(f"- 预测：{forecast.get('run_id')}（as_of {forecast.get('as_of')}，"

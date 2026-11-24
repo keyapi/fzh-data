@@ -66,6 +66,40 @@ uv run python -m supply_copilot decide --branch USNJ   # 用 live 供给重算�
 它给的是**当天候选**（补/不补/待核 + 数量 + 证据），不是可直接下单的指令。
 只有上述原因补齐、`可执行性=是` 时，才允许作为采购建议。
 
+### SO / PO 口径（2026-11-24 P0）
+
+- **PO 按时**：`ETA ≤ 需要日` 才算按时，逐行比较；ETA 缺失或晚于需要日均计入
+  “未证按时”。`meta.po` 分开报 `quantity` / `with_eta_qty` / `on_time_qty` /
+  `missing_eta_qty` / `late_qty`，以及有效开放 `accepted_rows` /
+  `accepted_documents` / `outside_decision_qty`。PO/SO 是
+  `(SKU, 仓, UOM)` 键级**共享事实**：D6 有重复形态键时逐行求和会重复，
+  汇总只能用 `meta.po.decision_qty` / `meta.so.decision_qty`。
+- **SO 身份**：EN `item_code` 是权威身份，**不拿它反查 `sku_map`**（映射表键是
+  `tongtool_sku`）；别名只对明确的 `customer_item_code` 且唯一映射时执行。
+  `PK#` / `ND#` 是合法 EN 物料号，不剥前缀凑成品，归
+  `form_out_of_scope`；其它不在本池 D6 的归 `product_out_of_scope`。
+- **SO 单位**：无 `UOM_EQUIVALENTS` 明确换算证据时，**不改标签照用数量**；
+  单位不一致记 `uom_mismatch`，缺单位记 `uom_missing`。
+- **SO 开放状态**：逐行正向校验，只有明确允许的开放状态
+  （`To Deliver and Bill` / `To Deliver` / `To Bill`）且 `docstatus=1`
+  （或无 status 列时的有效 `docstatus=1`）才计入并可附加需求；
+  `Closed` 归档单列，空状态 / `Draft` / `Unknown` / 其它未知状态分别单列
+  （`status_missing/draft/unknown_rows`、`docstatus_not_submitted_rows`），
+  **一律不附加**。`meta.so.open_verified` 只表示来源带 status/docstatus 契约，
+  不代表每行都已验开放（逐行结论看 `status_*_rows`）。没有 status/docstatus
+  的来源整批 `status_missing`，不附加需求（请用 `open_nonclosed` 来源或带 status
+  的 JSONL）。
+- **SO 是否已在预测内**：显式开关 `--so-in-forecast true|false`（函数参数
+  `so_in_forecast`）。默认 `true`（保守）：视为开放 SO 已含在预测里，
+  **不叠加需求**；`false`：视为未含，把可归一的开放 SO 余额叠加到需求。
+  只有真正加进某个合格建议行后才消费该键；待核行不提前占用，无法附加的量记
+  `meta.so.unattached_qty`。两种语义都会写进 `meta.so.semantics/impact` 和逐行
+  `warnings`。口径上 **SO 为上游交付管线，不进需求**。
+- **assumed_zero**：源文件存在但解析零行时，不静默当实测 0，而是给
+  `meta.so/po.assumed_zero` 信封（`applies` + `reason`），并在
+  `meta.totals.assumed_zero_rows` 按来源计数（`{so, po}`）；有行但被过滤
+  （如全 Closed / 零开放量）不算 assumed_zero。
+
 ## 自己重算需求/预测（不依赖我们）
 
 ```bash
