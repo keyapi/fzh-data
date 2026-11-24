@@ -56,6 +56,13 @@ POOL_PREFIX = {"美东USNJ": "美东-", "美中USTX": "美中-", "波兰": "波�
 # 无法归到本分公司的行保留在证据计数里，不摊派、不写 0。
 SO_CUSTOMER_POOL = {"CENTRADE": "美东USNJ", "DANEEY": "美中USTX", "波兰公司": "波兰"}
 CG_WAREHOUSE_PREFIX = "WayfairCG"
+# 简化口径（2026-11-24 用户确认）：CG 当作美东/美中仓库存；在途数据 Wayfair API 不提供，只算 on-hand。
+# 仓到分公司的映射可后续在工作台修正；未列出的 CG 仓不摊派。
+CG_WAREHOUSE_BRANCH = {
+    "WayfairCG-Cranbury仓": "美东-",
+    "WayfairCG-Perris仓": "美东-",
+    "WayfairCG-Romeoville仓": "美中-",
+}
 FORECAST_SCHEMA = "en-demand-forecast-v1"
 FORECAST_LEAD_DAYS = 90          # 预测 run 实测只有 60/90/120 三档
 
@@ -238,8 +245,11 @@ def _supply_facts(stock_df, *, lookup, uom_by_item, warehouse_cfg, branch_wh,
         intransit = _num(getattr(row, "intransit", None))
         raw_wh = str(row.warehouse_name)
         if raw_wh.startswith(CG_WAREHOUSE_PREFIX):
-            # CG 可调拨：按 SKU 汇总，跨分公司可调；
-            # 是否真的抵到本分公司由 D6 口径决定，这里只提供上界证据。
+            target = CG_WAREHOUSE_BRANCH.get(raw_wh)
+            if target is None or target != branch_prefix:
+                evidence["cg_out_of_branch"] = evidence.get("cg_out_of_branch", 0) + 1
+                continue
+            # 简化：CG 当本分公司仓库存；只算 on-hand，不含在途。
             if available is not None:
                 add(cg, item, available)
             continue
@@ -540,12 +550,9 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         po_qty = sum(q for q, _ in po_detail) if po is not None else None
         d6_cg = _num(record.get("CG可调拨抵扣"))
         live_cg = cg.get(sku)
-        if live_cg is not None and d6_cg is not None:
-            cg_qty = min(live_cg, d6_cg)
-            cg_source = "live_capped_by_d6"
-        elif live_cg is not None:
-            cg_qty = 0.0
-            cg_source = "live_no_policy"
+        if live_cg is not None:
+            cg_qty = live_cg
+            cg_source = "live_stock.cg"
         else:
             cg_qty = d6_cg
             cg_source = "d6_pack"
@@ -630,7 +637,9 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         if demand_source == "forecast_refresh" and forecast_qty is None:
             warnings.append("预测未覆盖该键，需求退回 D6 q95")
         if cg_source == "d6_pack":
-            warnings.append("CG 用 D6 包值，不是 live WayfairCG 仓重算")
+            warnings.append("CG 无实时仓库存，退回 D6 包值")
+        elif cg_source == "live_stock.cg":
+            warnings.append("CG 只算 on-hand；Wayfair API 无在途数据，不含在途")
         if need_status == "past_due":
             warnings.append(f"需要日 {needs_date} 已过（D6 包计划），需按路线交期重排")
         if order_status == "past_due":
@@ -899,8 +908,7 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
         executable_reasons.append("PO 未映射到本分公司仓")
     if (frame["order_date_status"] == "past_due").any():
         executable_reasons.append("存在已过下单日")
-    if (frame["cg_source"].isin(["d6_pack", "live_no_policy"])).any():
-        executable_reasons.append("CG 抵扣规则未确认（仅 D6 上限/实时封顶）")
+
 
     meta = dict(
         mode="live", branch=pool, as_of=as_of_dt.isoformat(),
