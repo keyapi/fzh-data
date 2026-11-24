@@ -56,6 +56,7 @@ POOL_PREFIX = {"美东USNJ": "美东-", "美中USTX": "美中-", "波兰": "波�
 # 无法归到本分公司的行保留在证据计数里，不摊派、不写 0。
 SO_CUSTOMER_POOL = {"CENTRADE": "美东USNJ", "DANEEY": "美中USTX", "波兰公司": "波兰"}
 # 只有 status/docstatus 证明是有效开放的行才可以计入未履约 SO / 附加需求。
+SO_OPEN_STATUSES = {"to deliver and bill", "to deliver", "to bill"}
 SO_CLOSED_STATUSES = {"closed", "cancelled", "canceled", "completed"}
 # PK#（皮壳）/ ND#（内胆）是合法 EN 物料号，但不是成品决策行；不剥前缀凑成品。
 SO_OUT_OF_SCOPE_FORM_PREFIXES = ("PK#", "ND#")
@@ -461,8 +462,10 @@ def _so_facts(path, branch, *, lookup, uom_by_item, warehouse_cfg,
     身份：EN item_code 优先；PK#/ND# 是合法 EN 物料号，但不剥前缀凑成品，
     归 ``form_out_of_scope``；其它不在决策宇宙的归 ``product_out_of_scope``。
     单位：只有 ``UOM_EQUIVALENTS`` 明确有换算系数才转换，否则 ``uom_mismatch``。
-    开放：``require_open_status=True``（``run`` 强制）时，只有 status/docstatus
-    证明有效开放的行才计入；Closed 单列；无 status 来源整批 ``status_unknown``，
+    开放：``require_open_status=True``（``run`` 强制）时，逐行正向校验明确允许的
+    开放状态（``SO_OPEN_STATUSES``）或有效 ``docstatus=1``；Closed 归档单列，
+    空状态/Draft/Unknown/未知分别单列（status_missing/draft/unknown、
+    docstatus_not_submitted），一律不附加。无 status 来源整批 ``status_missing``，
     不附加需求。直接解析（单元测试）可传 False，但 evidence 仍如实标
     ``open_verified=False``。
     """
@@ -483,9 +486,12 @@ def _so_facts(path, branch, *, lookup, uom_by_item, warehouse_cfg,
                   product_out_of_scope=0, uom_missing=0, uom_mismatch=0,
                   warehouse_out_of_branch=0, customer_pool_mismatch=0,
                   quantity_invalid=0, closed_archived_rows=0,
-                  status_unknown_rows=0, warehouse_collapsed_to_branch=0)
-    closed_qty = 0.0
-    status_unknown_qty = 0.0
+                  status_missing_rows=0, status_draft_rows=0,
+                  status_unknown_rows=0, docstatus_not_submitted_rows=0,
+                  warehouse_collapsed_to_branch=0)
+    status_qty = dict(closed_archived_qty=0.0, status_missing_qty=0.0,
+                      status_draft_qty=0.0, status_unknown_qty=0.0,
+                      docstatus_not_submitted_qty=0.0)
     status_counts = {}
     samples = []
 
@@ -499,6 +505,10 @@ def _so_facts(path, branch, *, lookup, uom_by_item, warehouse_cfg,
                 customer=_text(record.get("customer")),
                 reason=reason))
         counts[reason] += 1
+
+    def reject_status(reason, qty):
+        counts[f"{reason}_rows"] += 1
+        status_qty[f"{reason}_qty"] += float(qty or 0.0)
 
     def resolve_uom(record, item, raw_uom, qty):
         """(uom, qty, reason)；无换算证据时绝不改标签照用数量。"""
@@ -519,6 +529,8 @@ def _so_facts(path, branch, *, lookup, uom_by_item, warehouse_cfg,
                         source_mtime=datetime.fromtimestamp(
                             p.stat().st_mtime).isoformat(),
                         format="canonical", open_verified=True,
+                        open_verified_semantics=(
+                            "canonical backlog 视为上游已筛开放；仍逐行校验身份/UOM/仓"),
                         status_contract="canonical_open_backlog")
         for row_no, record in enumerate(frame.to_dict("records"), start=1):
             sku = _text(record.get("canonical_sku"))
@@ -551,40 +563,57 @@ def _so_facts(path, branch, *, lookup, uom_by_item, warehouse_cfg,
     elif {"item_code", "open_qty", "customer"}.issubset(set(frame.columns)):
         has_status = "status" in frame.columns
         has_docstatus = "docstatus" in frame.columns
-        status_verified = bool(has_status or has_docstatus)
-        enforce_open = bool(require_open_status and not status_verified)
+        status_contract = ("status+docstatus" if has_status and has_docstatus
+                           else "status" if has_status
+                           else "docstatus" if has_docstatus
+                           else "missing")
+        enforce_open = bool(require_open_status and not (has_status or has_docstatus))
         evidence = dict(source=str(p), sha256=_sha(p), rows=int(len(frame)),
                         source_mtime=datetime.fromtimestamp(
                             p.stat().st_mtime).isoformat(),
-                        format="en_sales_orders", open_verified=status_verified,
-                        status_contract=("status/docstatus" if status_verified
-                                         else "missing"))
+                        format="en_sales_orders",
+                        open_verified=bool(has_status or has_docstatus),
+                        open_verified_semantics=(
+                            "仅表示来源带 status/docstatus 契约；每行是否有效开放"
+                            "看 status_missing/draft/unknown/docstatus_not_submitted 计数"),
+                        status_contract=status_contract)
         for row_no, record in enumerate(frame.to_dict("records"), start=1):
             record_qty = _num(record.get("open_qty"))
-            if has_docstatus:
-                docstatus = _num(record.get("docstatus"))
-                if docstatus is None or int(docstatus) != 1:
-                    counts["closed_archived_rows"] += 1
-                    closed_qty += record_qty or 0.0
-                    continue
             status = _text(record.get("status"))
+            status_key = status.lower()
+            docstatus = _num(record.get("docstatus")) if has_docstatus else None
             if status:
                 status_counts[status] = status_counts.get(status, 0) + 1
-            if status and status.lower() in SO_CLOSED_STATUSES:
-                counts["closed_archived_rows"] += 1
-                closed_qty += record_qty or 0.0
+            elif has_status:
+                status_counts["<empty>"] = status_counts.get("<empty>", 0) + 1
+
+            # 逐行正向校验：明确允许的开放状态，或（仅无 status 列时）已提交 docstatus
+            if enforce_open:
+                reject_status("status_missing", record_qty)
                 continue
+            if has_status:
+                if not status:
+                    reject_status("status_missing", record_qty)
+                    continue
+                if status_key in SO_CLOSED_STATUSES:
+                    reject_status("closed_archived", record_qty)
+                    continue
+                if status_key == "draft":
+                    reject_status("status_draft", record_qty)
+                    continue
+                if status_key not in SO_OPEN_STATUSES:
+                    reject_status("status_unknown", record_qty)
+                    continue
+                if has_docstatus and (docstatus is None or int(docstatus) != 1):
+                    reject_status("docstatus_not_submitted", record_qty)
+                    continue
+            elif has_docstatus:
+                if docstatus is None or int(docstatus) != 1:
+                    reject_status("docstatus_not_submitted", record_qty)
+                    continue
+            # 无 status/docstatus 且未强制：由调用方声明为开放（仅解析单元测试）
             if record_qty is None or record_qty <= 0:
                 reject(row_no, record, "quantity_invalid")
-                continue
-            if enforce_open:
-                # run 的决策路径：没有 status/docstatus 就整批只作证据，不能附加需求
-                counts["status_unknown_rows"] += 1
-                status_unknown_qty += record_qty
-                item, _ = _so_identity(record, lookup, uom_by_item)
-                kind = "identity_missing" if not item else _so_scope(item, universe)
-                breakdown = evidence.setdefault("status_unknown_breakdown", {})
-                breakdown[kind] = breakdown.get(kind, 0) + 1
                 continue
             customer = _text(record.get("customer"))
             if SO_CUSTOMER_POOL.get(customer) != branch:
@@ -625,9 +654,8 @@ def _so_facts(path, branch, *, lookup, uom_by_item, warehouse_cfg,
 
     rejected = int(evidence["rows"]) - counts["accepted_rows"]
     evidence.update(counts)
+    evidence.update(status_qty)
     evidence["rejected_rows"] = rejected
-    evidence["closed_archived_qty"] = closed_qty
-    evidence["status_unknown_qty"] = status_unknown_qty
     evidence["status_counts"] = status_counts
     evidence["quantity"] = float(sum(result.values()))
     evidence["unresolved_samples"] = samples
@@ -1196,8 +1224,20 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
             "on_time_qty=0 是数据缺口，不是按时率 0")
     if so_evidence.get("status_contract") == "missing" and so_evidence.get("rows"):
         warnings.append(
-            "SO 来源没有 status/docstatus：开放状态未证，整批判 status_unknown，"
+            "SO 来源没有 status/docstatus：开放状态未证，整批 status_missing，"
             "不附加任何需求；请改用 open_nonclosed 来源（或带 status 的 JSONL）")
+    elif so_evidence.get("rows"):
+        not_open = {label: so_evidence.get(f"{key}_rows", 0)
+                    for key, label in (("status_missing", "空状态"),
+                                       ("status_draft", "Draft"),
+                                       ("status_unknown", "Unknown/未知"),
+                                       ("docstatus_not_submitted", "docstatus 未提交"))}
+        if any(not_open.values()):
+            warnings.append(
+                "SO 有非有效开放行未计入、不附加："
+                + "；".join(f"{label} {count} 行"
+                            for label, count in not_open.items() if count)
+                + "（Closed 归档另计）")
     if (not so_in_forecast and so_evidence.get("open_verified")
             and so_evidence.get("unattached_qty", 0) > 0):
         warnings.append(
@@ -1276,8 +1316,9 @@ def run(data_root, branch, as_of, *, stock_path=None, backlog_path=None,
                 "SO 身份以 EN item_code 为准，别名只走 customer_item_code；"
                 "PK#/ND# 不剥前缀，归 form_out_of_scope",
                 "SO 单位不做无据换算：无 UOM_EQUIVALENTS 证据时 uom_mismatch 拒绝",
-                "只有 status/docstatus 证明有效开放的 SO 行才可附加需求；"
-                "Closed 归档单列，无 status 来源整批 status_unknown",
+                "SO 只有明确允许的开放状态（To Deliver and Bill / To Deliver / To Bill）"
+                "或有效 docstatus=1 才可附加需求；空/Draft/Unknown/未知不附加并单列原因；"
+                "Closed 归档单列",
                 "PO/SO 是 (SKU,仓,UOM) 键级共享事实：D6 有重复形态键时逐行求和不等于唯一聚合，"
                 "汇总用 meta.po.decision_qty / meta.so.decision_qty",
                 "CG 未提供 live 源时使用 D6 包值（cg_source 标注）",
@@ -1317,6 +1358,14 @@ def to_report(frame, meta, limit=None) -> str:
                      f"status 契约 {so.get('status_contract') or '未知'}；"
                      f"Closed 归档 {so.get('closed_archived_rows', 0)} 行/"
                      f"{so.get('closed_archived_qty', 0):g} 件已剔除）")
+        non_open = [(label, so.get(key, 0)) for key, label in (
+            ("status_missing_rows", "空状态"),
+            ("status_draft_rows", "Draft"),
+            ("status_unknown_rows", "Unknown/未知"),
+            ("docstatus_not_submitted_rows", "docstatus 未提交")) if so.get(key)]
+        if non_open:
+            lines.append("    · 未计入/不附加：" + "；".join(
+                f"{label} {count} 行" for label, count in non_open))
         lines.append(f"  - PO：{po.get('source') or '未接入'}（有效开放 "
                      f"{po.get('accepted_rows', 0)} 物料行/"
                      f"{po.get('accepted_documents', 0)} 张单，"

@@ -360,7 +360,7 @@ def test_en_so_rows_canonicalized_and_unresolved_counted(tmp_path):
                         so_in_forecast=True)
     so_ev = meta["so"]
     assert so_ev["format"] == "en_sales_orders"
-    assert so_ev["status_contract"] == "status/docstatus"
+    assert so_ev["status_contract"] == "status"
     assert so_ev["open_verified"] is True
     assert so_ev["rows"] == 9
     assert so_ev["accepted_rows"] == 2                 # SO-1 + SO-5
@@ -409,13 +409,12 @@ def test_so_without_status_is_not_attachable(tmp_path):
     so_ev = meta["so"]
     assert so_ev["status_contract"] == "missing"
     assert so_ev["open_verified"] is False
-    assert so_ev["status_unknown_rows"] == 2
-    assert so_ev["status_unknown_breakdown"] == {
-        "in_scope": 1, "form_out_of_scope": 1}
+    assert so_ev["status_missing_rows"] == 2
+    assert so_ev["status_unknown_rows"] == 0
     assert so_ev["accepted_rows"] == 0
     assert so_ev["quantity"] == 0
     assert so_ev["attached_qty"] == 0
-    assert any("开放状态未证" in w for w in meta["warnings"])
+    assert any("整批 status_missing" in w for w in meta["warnings"])
     assert frame.set_index("sku").loc["KS1", "new_qty"] == 87
 
 
@@ -488,12 +487,66 @@ def test_so_jsonl_status_filter_and_attach(tmp_path):
                         po_path=po, so_in_forecast=False)
     so_ev = meta["so"]
     assert so_ev["format"] == "en_sales_orders"
-    assert so_ev["status_contract"] == "status/docstatus"
+    assert so_ev["status_contract"] == "status+docstatus"
     assert so_ev["accepted_rows"] == 1 and so_ev["quantity"] == 3
-    assert so_ev["closed_archived_rows"] == 2
-    assert so_ev["closed_archived_qty"] == 16
+    assert so_ev["closed_archived_rows"] == 1
+    assert so_ev["closed_archived_qty"] == 9
+    assert so_ev["status_draft_rows"] == 1
+    assert so_ev["status_draft_qty"] == 7
     assert so_ev["attached_qty"] == 3
     assert frame.set_index("sku").loc["KS1", "new_qty"] == 90   # 87 + 3
+
+
+def test_so_non_open_statuses_single_listed_not_attached(tmp_path):
+    make_pack(tmp_path)
+    stock, _backlog, po = make_live(tmp_path)
+    so = pd.DataFrame([
+        # 空状态：不能默认开放
+        {"so": "SO-1", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 3, "uom": "个", "status": "",
+         "docstatus": 1},
+        # Draft：单列，不附加
+        {"so": "SO-2", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 4, "uom": "个", "status": "Draft",
+         "docstatus": 0},
+        # Unknown / 未知状态：单列，不附加
+        {"so": "SO-3", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 5, "uom": "个", "status": "Unknown",
+         "docstatus": 1},
+        {"so": "SO-4", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 6, "uom": "个", "status": "On Hold",
+         "docstatus": 1},
+        # 开放状态但 docstatus 未提交：不附加
+        {"so": "SO-5", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 7, "uom": "个",
+         "status": "To Deliver and Bill", "docstatus": 0},
+        # 明确允许的开放状态 + docstatus=1：唯一可附加行
+        {"so": "SO-6", "customer": "DANEEY", "warehouse": "成品仓 - FZH",
+         "item_code": "KS1", "open_qty": 2, "uom": "个", "status": "To Deliver",
+         "docstatus": 1},
+    ])
+    so_path = tmp_path / "so_status_mix.csv"
+    so.to_csv(so_path, index=False, encoding="utf-8")
+
+    frame, meta = _call(tmp_path, stock_path=stock, backlog_path=so_path,
+                        po_path=po, so_in_forecast=False)
+    so_ev = meta["so"]
+    assert so_ev["status_contract"] == "status+docstatus"
+    assert so_ev["open_verified"] is True
+    assert so_ev["accepted_rows"] == 1 and so_ev["quantity"] == 2
+    assert so_ev["status_missing_rows"] == 1
+    assert so_ev["status_missing_qty"] == 3
+    assert so_ev["status_draft_rows"] == 1
+    assert so_ev["status_draft_qty"] == 4
+    assert so_ev["status_unknown_rows"] == 2
+    assert so_ev["status_unknown_qty"] == 11
+    assert so_ev["docstatus_not_submitted_rows"] == 1
+    assert so_ev["docstatus_not_submitted_qty"] == 7
+    assert so_ev["closed_archived_rows"] == 0
+    assert so_ev["attached_qty"] == 2
+    assert frame.set_index("sku").loc["KS1", "supply_so"] == 2
+    assert frame.set_index("sku").loc["KS1", "new_qty"] == 89   # 87 + 2
+    assert any("非有效开放行未计入、不附加" in w for w in meta["warnings"])
 
 
 def test_so_attached_only_after_a_valid_row(tmp_path):

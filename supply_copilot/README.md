@@ -80,10 +80,15 @@ uv run python -m supply_copilot decide --branch USNJ   # 用 live 供给重算�
   `form_out_of_scope`；其它不在本池 D6 的归 `product_out_of_scope`。
 - **SO 单位**：无 `UOM_EQUIVALENTS` 明确换算证据时，**不改标签照用数量**；
   单位不一致记 `uom_mismatch`，缺单位记 `uom_missing`。
-- **SO 开放状态**：只有 `status` / `docstatus` 证明有效开放的行才计入并可附加
-  需求；`Closed` 归档单列（`closed_archived_rows/qty`）。没有
-  status/docstatus 的来源整批记 `status_unknown`，**不附加需求**
-  （请用 `open_nonclosed` 来源或带 status 的 JSONL）。
+- **SO 开放状态**：逐行正向校验，只有明确允许的开放状态
+  （`To Deliver and Bill` / `To Deliver` / `To Bill`）且 `docstatus=1`
+  （或无 status 列时的有效 `docstatus=1`）才计入并可附加需求；
+  `Closed` 归档单列，空状态 / `Draft` / `Unknown` / 其它未知状态分别单列
+  （`status_missing/draft/unknown_rows`、`docstatus_not_submitted_rows`），
+  **一律不附加**。`meta.so.open_verified` 只表示来源带 status/docstatus 契约，
+  不代表每行都已验开放（逐行结论看 `status_*_rows`）。没有 status/docstatus
+  的来源整批 `status_missing`，不附加需求（请用 `open_nonclosed` 来源或带 status
+  的 JSONL）。
 - **SO 是否已在预测内**：显式开关 `--so-in-forecast true|false`（函数参数
   `so_in_forecast`）。默认 `true`（保守）：视为开放 SO 已含在预测里，
   **不叠加需求**；`false`：视为未含，把可归一的开放 SO 余额叠加到需求。
