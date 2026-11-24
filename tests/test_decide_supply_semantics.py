@@ -67,8 +67,8 @@ def test_open_branch_so_is_supply_not_demand(tmp_path):
     row = frame.set_index("sku").loc["KS1"]
     assert row["demand_qty"] == 150          # SO 不加进需求
     assert row["supply_so"] == 100
-    assert row["new_qty"] == 50              # 条件供给可覆盖后的缺口
-    assert row["new_qty_if_conditional_late"] == 150  # SO 不到时最坏
+    assert row["new_qty"] == 150             # 无可靠到货日的 SO 不抵扣主建议
+    assert row["new_qty_if_conditional_late"] == 150
     assert row["action"] == "补"
 
 

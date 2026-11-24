@@ -577,8 +577,8 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
         if not missing:
             total_demand = demand_qty
             # 分公司 SO 是上游生产/交付单，不是终端需求；无批次键时按最大单阶段避免同批重复。
-            incoming = max(float(intransit or 0.0), float(po_on_time or 0.0),
-                           float(so_qty or 0.0))
+            # 在途/按时 PO 可计入；分公司 SO 无可靠到货日时只作条件，不抵扣主建议
+            incoming = max(float(intransit or 0.0), float(po_on_time or 0.0))
             supply_expected = opening + incoming + (cg_qty or 0.0)
             supply_proven = opening + (po_on_time or 0.0) + (cg_qty or 0.0)
             new_qty = max(0, int(math.ceil(total_demand - supply_expected)))
@@ -592,7 +592,7 @@ def _decide_live(d6_rows, demand_map, demand_source, supply, cg, so, po,
             if po_qty and po_qty > po_on_time:
                 warnings.append(f"PO {po_qty:g} 中 {po_qty - po_on_time:g} 未证按时（ETA 缺失或晚于需要日）")
             if so_qty:
-                warnings.append(f"分公司 SO {so_qty:g} 作上游供给，未加进需求；无可靠到货日时仅作条件供给")
+                warnings.append(f"分公司 SO {so_qty:g} 未加进需求，也不抵扣主建议（无可靠到货日）；若按时到可少补 {so_qty:g}")
 
         if missing:
             action = "待核"
