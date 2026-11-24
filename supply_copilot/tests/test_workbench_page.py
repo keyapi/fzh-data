@@ -342,7 +342,8 @@ def test_selection_updates_detail_without_rebuilding_the_list(inputs):
     assert "aria-live" in html
     # setView no longer forces the document back to the top unconditionally.
     assert "window.scrollTo(0, 0)" not in js
-    assert "window.scrollTo(0, saved.y)" in js
+    assert "window.scrollTo(0, saved.y)" not in js
+    assert "boardTop" in _function_body(js, "saveUiState")
     # A filter that drops the selected row clears the detail, not keeps a form.
     reconcile = _function_body(js, "reconcileSelection")
     assert "outOfFilter" in reconcile
@@ -364,6 +365,24 @@ def test_narrow_mode_is_a_bottom_sheet_not_a_route(inputs):
     assert "未保存输入刷新后丢失" in js
     assert "localStorage" not in _function_body(js, "saveDraft")
     assert "sessionStorage" in _function_body(js, "saveUiState")
+
+
+def test_bounded_shell_and_detail_segments(inputs):
+    snap_path, base_path, _ = inputs
+    html = build(snap_path, base_path)
+    js = html.split("<script>", 1)[1]
+    assert "class='app-shell'" in html
+    assert "height:100dvh" in html
+    assert "Math.max(240" not in js
+    assert "--ws-h" not in html
+    assert 'role="tablist" aria-label="详情内定位"' in js
+    assert "function showDetailSection(" in js
+    from pathlib import Path
+    controller = Path(__file__).parents[1] / "en_page/supply_workbench/supply_workbench.js"
+    source = controller.read_text(encoding="utf-8")
+    assert "min-height:700px" not in source
+    assert "getBoundingClientRect().top" in source
+    assert "orientationchange" in source
 
 
 def test_evidence_same_source_for_detail_and_audit(inputs):

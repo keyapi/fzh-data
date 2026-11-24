@@ -1,0 +1,10 @@
+{
+ "doctype": "Page",
+ "name": "supply-planning",
+ "page_name": "supply-planning",
+ "title": "供应链计划工作台",
+ "module": "key_test",
+ "standard": "Yes",
+ "roles": [{"role": "System Manager"}],
+ "idx": 0
+}

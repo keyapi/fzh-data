@@ -257,6 +257,7 @@ STYLE = """
 --orange:#df6b34;--white:#fffefa;--warn:#a35b29;--warnbg:#f9ead9;--cool:#2b5e7d;
 --coolbg:#e3eef4;--reject:#b54735;--soft:#f0f3ef}
 *{box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
 body{margin:0;background:var(--paper);color:var(--ink);
 font-family:"Microsoft YaHei UI","PingFang SC","Microsoft YaHei",sans-serif;font-size:14px}
 button,input,select,textarea{font:inherit}
@@ -266,7 +267,19 @@ input,select,textarea{border:1px solid var(--line);border-radius:3px;background:
 padding:8px 10px;color:var(--ink);min-width:0}
 label{font-size:11px;color:#596a77}
 h1,h2,h3,h4{margin:0}
-.topstack{position:sticky;top:0;z-index:30}
+.app-shell{height:100vh;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr);
+min-height:0;min-width:0;overflow:hidden;overflow:clip}
+.topstack{position:relative;z-index:30;min-width:0;background:var(--navy);color:#fff}
+.shellbar{display:flex;align-items:center;gap:12px;padding:7px 12px;min-width:0;flex-wrap:wrap}
+.shellbar .brand{font:600 15px "Microsoft YaHei UI",sans-serif;letter-spacing:0}
+.shellbar .snapshot{font-size:11px;color:#c8d3dc}
+.shell-info{margin-left:auto;font-size:11px}
+.shell-info>summary{cursor:pointer;white-space:nowrap}
+.shell-info-body{position:absolute;right:8px;top:100%;padding:12px;max-width:min(600px,95vw);
+background:var(--navy);border:1px solid #476073;box-shadow:0 5px 12px #172e4333}
+.shell-info-body .modebanner{padding:4px 0;background:none;font-size:11px}
+.shell-info-body .datachips{margin:6px 0}
+.shell-info-body .sitemeta{text-align:left}
 .modebanner{background:var(--warn);color:#fff;padding:8px 16px;font-size:12px;line-height:1.5;
 display:flex;gap:10px 14px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .modebanner .mb-main{font-weight:bold;letter-spacing:.3px}
@@ -283,12 +296,15 @@ margin-left:14px}
 .datachips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .datachips .chip{border:1px solid #2f5871;border-radius:20px;padding:3px 11px;font-size:11px;
 color:#dceaf2}
-nav.topnav{background:var(--navy);display:flex;gap:2px;padding:0 22px;overflow-x:auto;
+nav.topnav{background:var(--navy);display:flex;flex-wrap:wrap;gap:2px;padding:0;
 border-top:1px solid #2b4459}
-nav.topnav button{border:0;background:none;color:#b9c8d2;padding:11px 18px;font-size:14px;
+nav.topnav button{border:0;background:none;color:#b9c8d2;padding:5px 10px;font-size:12px;
 border-bottom:3px solid transparent;white-space:nowrap}
 nav.topnav button.active{color:#fff;border-bottom-color:var(--orange);font-weight:bold}
-main{padding:22px 28px 44px}
+main{padding:8px 12px;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;overflow:clip}
+main>.storage-notice{flex:none;margin:0 0 6px}
+.view.active{flex:1;min-height:0;min-width:0}
+#view-workbench.active{display:flex;flex-direction:column}
 .view{display:none}.view.active{display:block}
 .viewhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
 margin-bottom:14px;flex-wrap:wrap}
@@ -306,10 +322,14 @@ padding:8px 13px;font-size:12px}
 background:var(--white)}
 .setswitch button{border:0;background:none;padding:8px 14px;color:var(--muted);font-size:13px}
 .setswitch button.active{background:var(--navy);color:#fff}
-.wbtop{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
-.wbfilters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.wbfilters input[type=search]{flex:1;min-width:210px}
-.wbfilters select{width:132px}
+.wbtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;min-width:0}
+.wbfilters{display:flex;gap:6px;flex:1;min-width:0;align-items:center;flex-wrap:wrap}
+.wbfilters input[type=search]{flex:1;min-width:100px;width:120px;padding:5px 8px}
+.wbfilters select{width:100px;padding:5px}
+.advanced-filters{position:relative;font-size:11px}
+.advanced-filters>summary{cursor:pointer;white-space:nowrap}
+.advanced-body{position:absolute;top:100%;right:0;z-index:20;display:flex;flex-wrap:wrap;gap:8px;
+width:min(300px,80vw);padding:10px;background:var(--white);border:1px solid var(--line);box-shadow:0 4px 12px #172e4322}
 .check{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);
 white-space:nowrap}
 .wbcount{font-size:11px;color:var(--muted);display:flex;gap:12px;align-items:center;
@@ -317,17 +337,18 @@ flex-wrap:wrap}
 /* Workbench shell: the ONLY layout basis is its own content width (container
    query), never the viewport. W >= 1100 two-column 420px detail; 900-1099 380px;
    721-899 340px; <= 720 single column + bottom sheet. */
-.workbench-shell{container-type:inline-size;container-name:workbench;min-width:0}
+.workbench-shell{container-type:inline-size;container-name:workbench;min-width:0;min-height:0;
+flex:1;display:grid;grid-template-rows:auto minmax(0,1fr)}
 .workspace{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:16px;
-align-items:stretch;height:var(--ws-h,560px);min-height:0}
+align-items:stretch;min-height:0;min-width:0;overflow:hidden;overflow:clip}
 .board,.detail,.panel{background:var(--white);border:1px solid var(--line);border-radius:4px}
-.board{overflow:hidden;min-width:0;min-height:0;display:flex;flex-direction:column}
-.board-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
+.board{overflow:hidden;overflow:clip;min-width:0;min-height:0;display:flex;flex-direction:column}
+.board-scroll{flex:1;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
 .scroll{overflow:auto}
 table{width:100%;border-collapse:collapse;font-size:12px}
 th{text-align:left;font-weight:normal;font-size:10px;color:var(--muted);background:#f8f8f4;
 padding:11px 12px;white-space:nowrap;position:sticky;top:0;z-index:1}
-td{padding:13px 12px;border-bottom:1px solid #ecece5;vertical-align:top;overflow-wrap:anywhere}
+td{padding:7px 9px;border-bottom:1px solid #ecece5;vertical-align:top;overflow-wrap:anywhere}
 tbody tr:last-child td{border:0}
 table.rows tbody tr[data-key]{cursor:pointer}
 table.rows tbody tr[data-key]:hover td{background:#fafaf6}
@@ -352,11 +373,11 @@ display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;flex:0 0 auto
 .empty{padding:34px 18px;text-align:center;color:var(--muted);font-size:12px}
 .detail-slot{min-width:0;min-height:0;height:100%}
 .detail{overflow:hidden;min-width:0;min-height:0}
-.detail-content{height:100%;overflow:auto;background:var(--white);border:1px solid var(--line);
+.detail-content{height:100%;display:flex;flex-direction:column;overflow:hidden;overflow:clip;background:var(--white);border:1px solid var(--line);
 border-radius:4px;overflow-wrap:anywhere;overscroll-behavior:contain}
-.detail-head{position:sticky;top:0;z-index:3;background:var(--white);
+.detail-head{flex:none;position:sticky;top:0;z-index:3;background:var(--white);
 padding:18px 20px 14px;border-bottom:1px solid var(--line)}
-.detail-head h2{margin:6px 0;font-size:17px;line-height:1.5;outline:none}
+.detail-head h2{margin:3px 0;font-size:15px;overflow-wrap:anywhere;line-height:1.5;outline:none}
 .detail-head .hint{margin:0;color:var(--muted);font-size:11px;line-height:1.7}
 .detail-anchors{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .detail-anchors button{border:1px solid var(--line);background:var(--soft);border-radius:20px;
@@ -389,8 +410,7 @@ border-left:3px solid var(--cool);padding:7px 10px;margin:8px 0}
 clip:rect(0 0 0 0);white-space:nowrap;border:0}
 /* bottom sheet (narrow container only; wide keeps the inline right column) */
 dialog.sheet{position:fixed;inset:auto 0 0 0;width:100%;max-width:none;
-height:max(220px, min(65dvh, calc(100dvh - var(--stack-h,0px) - 25dvh)));
-max-height:75dvh;margin:0;padding:0;border:0;
+height:90vh;height:90dvh;max-height:100%;margin:0;padding:0;border:0;
 border-radius:12px 12px 0 0;background:var(--white);color:var(--ink);
 box-shadow:0 -10px 34px rgba(23,46,67,.28);overflow:hidden}
 dialog.sheet::backdrop{background:rgba(23,46,67,.28)}
@@ -402,10 +422,10 @@ background:var(--white)}
 display:block;width:56px;height:5px;border-radius:3px;background:#c9d2d8;
 cursor:grab;touch-action:none}
 .sheet-close{margin-left:auto}
-.sheet-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain}
-.sheet-scroll .detail-content{height:auto;overflow:visible;border:0;border-radius:0}
+.sheet-scroll{flex:1;min-height:0;overflow:hidden;overflow:clip}
+.sheet-scroll .detail-content{height:100%;overflow:hidden;overflow:clip;border:0;border-radius:0}
 .sheet-scroll .detail-head{padding-top:10px}
-@media (max-height:360px){dialog.sheet{height:auto;max-height:75%}}
+@media (max-height:480px){dialog.sheet{height:100%;border-radius:0}}
 @container workbench (max-width:1099.9px){
   .workspace{grid-template-columns:minmax(0,1fr) 380px;gap:12px}
 }
@@ -420,9 +440,9 @@ cursor:grab;touch-action:none}
   .sub-merged,.row-select .sub-merged{display:block}
 }
 @container workbench (max-width:720px){
-  .workspace{display:block;grid-template-columns:1fr;height:auto;gap:0}
-  .board{display:block}
-  .board-scroll{overflow:visible}
+  .workspace{grid-template-columns:minmax(0,1fr);gap:0}
+  .board{min-height:0}
+  .board-scroll{overflow-y:auto}
   .detail-slot{display:none}
   .l1{grid-template-columns:1fr}
   table.rows,table.rows tbody,table.rows tr,table.rows td{display:block;width:100%}
@@ -524,14 +544,82 @@ border-radius:4px;padding:16px}
    part of the container-driven workbench layout. */
 @media (max-width:959px){
   .evgrid{grid-template-columns:1fr}
-  .evlist{max-height:280px;overflow:auto}
+  .evgrid{grid-template-rows:minmax(0,1fr) minmax(0,2fr)}
 }
 @media (max-width:767px){
-  main{padding:16px}
+  main{padding:6px}
   header.site{padding:13px 16px}
   .brand span{display:none}
   .sitemeta{text-align:left}
   .method{padding:14px}
+}
+.detail-body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;overflow:clip;padding:0}
+.detail-body>.dsec{flex:1;min-height:0;margin:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:10px 12px}
+.detail-body>.dsec[hidden]{display:none}
+.detail-anchors [aria-selected=true]{background:var(--navy);color:#fff}
+.detail-head{padding:8px 12px}
+.detail-anchors{margin-top:7px;gap:5px}
+.detail-anchors button{padding:6px 8px}
+.detail-body .dsec h3{margin-top:4px}
+.section-entry{margin:8px 0}
+.detail-body #proposal-form{margin-top:6px}
+.detail-body .submitline{position:sticky;bottom:0;background:var(--white);padding:6px 0;
+border-top:1px solid var(--line);z-index:2}
+#proposal-form input,#proposal-form select,#proposal-form textarea{padding:5px 7px}
+#proposal-form textarea{min-height:44px}
+.wbtop .setswitch button{padding:5px 8px;font-size:12px}
+.wbcount{gap:6px;flex-wrap:nowrap}
+.viewhead{margin-bottom:6px}.viewhead h1{font-size:17px}.viewhead .sub{display:none}
+#view-evidence.active,#view-analysis.active,#view-method.active{display:flex;flex-direction:column}
+.evgrid{flex:1;min-height:0;min-width:0;overflow:hidden;overflow:clip;align-items:stretch}
+.evlist{min-height:0;min-width:0;display:flex;flex-direction:column;overflow:hidden;overflow:clip}
+.evlist>.scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+.evpanel{min-height:0;min-width:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:12px}
+.analysis-pane.active{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+.analysis-pane .scroll-x{overflow:visible}.analysis-pane table{min-width:0;table-layout:fixed}
+.analysis-pane th{white-space:normal;overflow-wrap:anywhere}
+.analysis-nav{margin-bottom:6px}.analysis-nav button{padding:5px 8px}
+#view-method>.method{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:12px}
+.topstack nav{border:0}
+@media(max-width:767px){
+  .shellbar{gap:5px;padding:5px 7px}.shellbar .brand{font-size:13px}
+  .shellbar .snapshot{font-size:10px}.shell-info{margin-left:0}
+  .shellbar nav{margin-left:auto}.shellbar nav button{padding:4px 7px}
+  .wbtop{gap:5px}.wbfilters{gap:4px}.wbcount>#wb-count{display:none}
+}
+@media(max-width:480px){
+  .shellbar .snapshot{display:none}.shellbar nav{width:100%;margin:0}
+  .shellbar nav{order:2}.shellbar .shell-info{order:1;margin-left:auto}
+  .shellbar nav button{flex:1;padding:3px 5px}
+  .wbtop{display:grid;grid-template-columns:minmax(0,1fr)}
+  .wbcount{justify-content:space-between;gap:2px}
+  .wbcount .btn{padding:4px}.wbfilters{width:100%}
+  .wbcount .btn,.wbtop .setswitch button{white-space:nowrap}
+  .wbtop .setswitch button{font-size:11px;padding:5px}
+  .analysis-pane table,.analysis-pane tbody,.analysis-pane tr,.analysis-pane td{display:block;width:100%}
+  .analysis-pane thead{display:none}.analysis-pane td::before{content:attr(data-label) "：";font-weight:bold}
+  .analysis-pane tr{border-bottom:2px solid var(--line)}
+}
+@media(max-width:280px){
+  .wbcount{flex-wrap:wrap}.wbtop .setswitch{width:100%}
+  .wbtop .setswitch button{flex:1}
+  .detail-head h2{font-size:12px}
+  .detail-anchors button{font-size:10px;padding:5px}
+  .submitline>.hint{display:none}.submitline .btn{font-size:11px;padding:6px}
+  .detail-body .submitline{padding:3px 0;margin-top:3px}
+  .two{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-height:480px){
+  .shellbar{padding:3px 6px;gap:4px}.shellbar .snapshot{display:none}
+  .shellbar .brand{font-size:11px}.shellbar nav button{font-size:10px;padding:3px 5px}
+  .tablefoot{padding:3px 6px;font-size:9px;gap:2px}
+  .wbtop{margin-bottom:3px;gap:3px}.wbtop .btn{font-size:10px;padding:3px}
+  .wbfilters input[type=search],.wbfilters select{font-size:11px;padding:3px}
+  .detail-head{padding:5px 8px}.detail-head .hint{font-size:10px;line-height:1.3}
+  .detail-head .hint{display:none}
+  .detail-head h2{font-size:12px;line-height:1.3}
+  .detail-anchors{margin-top:3px}.detail-anchors button{padding:4px;font-size:10px}
+  .submitline>.hint{display:none}.submitline .btn{padding:5px;font-size:11px}
 }
 @media (prefers-reduced-motion:no-preference){
   .view.active{animation:enter .2s ease-out}
@@ -1210,10 +1298,10 @@ APP_JS = """
       '<div class="micro">' + kicker + '</div>' +
       '<h2 id="detail-title" tabindex="-1">' + esc(title) + '</h2>' +
       '<p class="hint">' + ident + '</p>' +
-      '<div class="detail-anchors" role="group" aria-label="详情内定位">' +
-      '<button type="button" data-anchor="detail-summary">摘要</button>' +
-      '<button type="button" data-anchor="detail-evidence">证据</button>' +
-      '<button type="button" data-anchor="detail-actions">运营判断</button>' +
+      '<div class="detail-anchors" role="tablist" aria-label="详情内定位">' +
+      '<button type="button" role="tab" aria-controls="detail-summary" data-anchor="detail-summary">摘要</button>' +
+      '<button type="button" role="tab" aria-controls="detail-evidence" data-anchor="detail-evidence">证据</button>' +
+      '<button type="button" role="tab" aria-controls="detail-actions" data-anchor="detail-actions">运营判断</button>' +
       '</div></div>';
   }
 
@@ -1296,7 +1384,7 @@ APP_JS = """
         esc(twin.name || twin.sku || twin.id) + '</b> · 期间 ' + periodShort(twin) +
         ' · 基准版本 ' + esc(BASE_VERSION || '—') + '</p>';
       if (state.activated[key] === String(twin.id || key)) {
-        html += proposalBlock(twin);
+        html = proposalBlock(twin) + html;
         html += '<p class="form-note hint">表单写的是上面这条需求基准；左侧仍选中原补货建议，' +
           '不改变建议本体。</p>';
         html += '<div class="actions"><button type="button" class="btn small ghost" ' +
@@ -1321,7 +1409,7 @@ APP_JS = """
   }
 
   function baseActionsHtml(r, kind, twinRec) {
-    var html = '<h3>运营举措 / 判断</h3>';
+    var html = proposalBlock(r);
     if (kind === 'unique' && twinRec) {
       html += '<p class="target-note">唯一关联建议：<b>' + esc(twinRec.sku || '') + '</b> · ' +
         esc(twinRec.action || '观察') + ' · 期间 ' + periodShort(twinRec) + '</p>';
@@ -1330,7 +1418,6 @@ APP_JS = """
     }
     html += '<p class="readonly-reason">需求基准是唯一允许填写演示提案的一方；' +
       '提案只存本浏览器，不上传、不审批、不写 EN。</p>';
-    html += proposalBlock(r);
     html += '<p class="form-note hint">仅演示需求提案，不修改 USNJ 补货建议，不进入采购。</p>';
     return html;
   }
@@ -1473,17 +1560,29 @@ APP_JS = """
   }
 
   function detailScroller() {
-    return sheetOpen ? byId('sheet-scroll') : byId('detail-content');
+    return document.querySelector('#detail-content .dsec:not([hidden])');
+  }
+
+  function showDetailSection(id, focus) {
+    var host = byId('detail-content');
+    if (!host || !byId(id)) return;
+    host.setAttribute('data-section', id);
+    Array.prototype.forEach.call(host.querySelectorAll('.dsec'), function (section) {
+      section.hidden = section.id !== id;
+      section.setAttribute('role', 'tabpanel');
+      section.setAttribute('aria-labelledby', 'tab-' + section.id);
+    });
+    Array.prototype.forEach.call(host.querySelectorAll('.detail-anchors [data-anchor]'), function (button) {
+      var on = button.getAttribute('data-anchor') === id;
+      button.id = 'tab-' + button.getAttribute('data-anchor');
+      button.setAttribute('aria-selected', on ? 'true' : 'false');
+      button.tabIndex = on ? 0 : -1;
+    });
+    if (focus) { try { byId(id).focus({preventScroll: true}); } catch (e) {} }
   }
 
   function scrollDetailTo(id) {
-    var sc = detailScroller(), el = byId(id);
-    if (!sc || !el) return;
-    var head = sc.querySelector ? sc.querySelector('.detail-head') : null;
-    var offset = head ? head.getBoundingClientRect().height : 0;
-    var delta = el.getBoundingClientRect().top - sc.getBoundingClientRect().top - offset - 6;
-    sc.scrollTop = Math.max(0, sc.scrollTop + delta);
-    try { el.focus({preventScroll: true}); } catch (e) { el.focus(); }
+    showDetailSection(id, true);
   }
 
   function saveFold(el) {
@@ -1513,8 +1612,9 @@ APP_JS = """
     if (!twin) return;
     state.activated[key] = String(twin.id || key);
     renderDetail({force: true});
+    showDetailSection('detail-actions');
     var kind = byId('wb-kind');
-    if (kind) { try { kind.focus(); } catch (e) {} }
+    if (kind) { try { kind.focus({preventScroll: true}); } catch (e) {} }
     announce('已激活关联基准的演示表单；左侧仍选中原补货建议');
   }
 
@@ -1523,6 +1623,7 @@ APP_JS = """
     if (!r) return;
     delete state.activated[rowKey(r)];
     renderDetail({force: true});
+    showDetailSection('detail-actions');
     var btn = document.querySelector('[data-activate]');
     if (btn) { try { btn.focus(); } catch (e) {} }
   }
@@ -1531,6 +1632,15 @@ APP_JS = """
     bindFolds(host);
     Array.prototype.forEach.call(host.querySelectorAll('[data-anchor]'), function (b) {
       b.addEventListener('click', function () { scrollDetailTo(b.getAttribute('data-anchor')); });
+      b.addEventListener('keydown', function (event) {
+        var tabs = Array.prototype.slice.call(host.querySelectorAll('.detail-anchors [data-anchor]'));
+        if (tabs.indexOf(b) < 0 || ['ArrowLeft', 'ArrowRight', 'Home', 'End'].indexOf(event.key) < 0) return;
+        event.preventDefault();
+        var index = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 :
+          (tabs.indexOf(b) + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
+        showDetailSection(tabs[index].getAttribute('data-anchor'));
+        tabs[index].focus({preventScroll: true});
+      });
     });
     Array.prototype.forEach.call(host.querySelectorAll('[data-expand-evidence]'), function (b) {
       b.addEventListener('click', function () { expandEvidence(host); });
@@ -1567,7 +1677,7 @@ APP_JS = """
   function recDetailHtml(r) {
     var ctx = contextFor(r, 'rec');
     return detailHeader(ctx) + '<div class="detail-body">' +
-      '<section id="detail-summary" class="dsec" tabindex="-1">' + recSummaryHtml(r) + '</section>' +
+      '<section id="detail-summary" class="dsec" tabindex="-1">' + recSummaryHtml(r) + '<button type="button" class="btn section-entry" data-anchor="detail-actions">运营判断 →</button></section>' +
       '<section id="detail-evidence" class="dsec" tabindex="-1">' +
       evidenceSections(ctx, 'd') + '</section>' +
       '<section id="detail-actions" class="dsec" tabindex="-1">' +
@@ -1577,7 +1687,7 @@ APP_JS = """
   function baseDetailHtml(r) {
     var ctx = contextFor(r, 'base');
     return detailHeader(ctx) + '<div class="detail-body">' +
-      '<section id="detail-summary" class="dsec" tabindex="-1">' + baseSummaryHtml(r) + '</section>' +
+      '<section id="detail-summary" class="dsec" tabindex="-1">' + baseSummaryHtml(r) + '<button type="button" class="btn section-entry" data-anchor="detail-actions">填写运营判断 →</button></section>' +
       '<section id="detail-evidence" class="dsec" tabindex="-1">' +
       evidenceSections(ctx, 'd') + '</section>' +
       '<section id="detail-actions" class="dsec" tabindex="-1">' +
@@ -1589,6 +1699,8 @@ APP_JS = """
     var host = byId('detail-content');
     if (!host) return;
     var key = currentKey();
+    var section = host.getAttribute('data-section') || 'detail-summary';
+    if (host.getAttribute('data-row-key') !== key) section = 'detail-summary';
     var sig = state.set + '|' + (key || '') + '|' +
       (state.set === 'rec' && key ? (state.activated[key] || '') : '');
     if (!opts.force && key && host.getAttribute('data-sig') === sig) {
@@ -1600,7 +1712,9 @@ APP_JS = """
     else if (state.set === 'rec') host.innerHTML = recDetailHtml(row);
     else host.innerHTML = baseDetailHtml(row);
     host.setAttribute('data-sig', sig);
+    host.setAttribute('data-row-key', key || '');
     bindDetailHost(host);
+    showDetailSection(section);
     if (opts.scrollTop) { var top = detailScroller(); if (top) top.scrollTop = 0; }
   }
 
@@ -1667,22 +1781,9 @@ APP_JS = """
     }
   }
 
-  function measureWorkspace() {
-    var shell = byId('workbench-shell');
-    if (!shell) return;
-    var stack = document.querySelector('.topstack');
-    var stackH = stack ? stack.getBoundingClientRect().height : 0;
-    var vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 0;
-    if (!vh) return;
-    var h = Math.max(240, Math.round(vh - stackH - 56));
-    shell.style.setProperty('--ws-h', h + 'px');
-    document.documentElement.style.setProperty('--stack-h', Math.round(stackH) + 'px');
-  }
-
   function measureShell() {
     var shell = byId('workbench-shell');
     if (!shell) return;
-    measureWorkspace();
     var next = shell.clientWidth <= 720 ? 'narrow' : 'wide';
     if (next === mode) return;
     mode = next;
@@ -1712,7 +1813,9 @@ APP_JS = """
       sessionStorage.setItem(uiKey(), JSON.stringify({
         set: state.set, recKey: state.recKey, baseKey: state.baseKey,
         q: state.q, action: state.action, flags: state.flags,
-        y: (window.scrollY || window.pageYOffset || 0)
+        boardTop: byId('board-scroll') ? byId('board-scroll').scrollTop : 0,
+        detailSection: byId('detail-content').getAttribute('data-section'),
+        detailTop: detailScroller() ? detailScroller().scrollTop : 0
       }));
     } catch (e) { /* optional: read-only browsing must keep working */ }
   }
@@ -1743,9 +1846,16 @@ APP_JS = """
     if (recKey && REC_INDEX[recKey] && recMatches(REC_INDEX[recKey])) state.recKey = recKey;
     if (baseKey && BASE_INDEX[baseKey] && baseMatches(BASE_INDEX[baseKey])) state.baseKey = baseKey;
     syncSetSwitch();
-    if (typeof saved.y === 'number') {
-      try { window.scrollTo(0, saved.y); } catch (e) {}
+    if (typeof saved.boardTop === 'number') {
+      requestAnimationFrame(function () { if (byId('board-scroll')) byId('board-scroll').scrollTop = saved.boardTop; });
     }
+    requestAnimationFrame(function () {
+      if (['detail-summary', 'detail-evidence', 'detail-actions'].indexOf(saved.detailSection) >= 0) {
+        showDetailSection(saved.detailSection);
+      }
+      var scroller = detailScroller();
+      if (scroller && typeof saved.detailTop === 'number') scroller.scrollTop = saved.detailTop;
+    });
     return true;
   }
 
@@ -2036,7 +2146,7 @@ APP_JS = """
   function setView(view) {
     if (state.view === view) return;
     viewScroll[state.view] = {
-      y: (window.scrollY || window.pageYOffset || 0),
+      boardTop: byId('board-scroll') ? byId('board-scroll').scrollTop : 0,
       detail: (function () { var sc = detailScroller(); return sc ? sc.scrollTop : 0; })()
     };
     state.view = view;
@@ -2057,9 +2167,7 @@ APP_JS = """
       if (sc && typeof savedDetail === 'number') sc.scrollTop = savedDetail;
     }
     var saved = viewScroll[view];
-    if (saved && typeof saved.y === 'number') {
-      try { window.scrollTo(0, saved.y); } catch (e) {}
-    }
+    if (saved && byId('board-scroll')) byId('board-scroll').scrollTop = saved.boardTop || 0;
     saveUiState();
   }
 
@@ -2180,6 +2288,17 @@ APP_JS = """
       probeStorage();
       bindControls();
       bindSheet();
+      window.addEventListener('pagehide', saveUiState);
+      byId('detail-content').addEventListener('focusin', function (event) {
+        var scroller = detailScroller(), target = event.target;
+        if (!scroller || !scroller.contains(target) || target === scroller) return;
+        var footer = scroller.querySelector('.submitline');
+        if (footer && footer.contains(target)) return;
+        var box = scroller.getBoundingClientRect(), rect = target.getBoundingClientRect();
+        var bottom = footer ? Math.min(box.bottom, footer.getBoundingClientRect().top) : box.bottom;
+        if (rect.bottom > bottom - 2) scroller.scrollTop += rect.bottom - bottom + 2;
+        else if (rect.top < box.top + 2) scroller.scrollTop -= box.top - rect.top + 2;
+      });
       restoreUiState();
       if (!BASE.length) baseSwitchFallback();
       state.evKey = state.recKey || (REC.length ? rowKey(REC[0]) : null);
@@ -2190,6 +2309,14 @@ APP_JS = """
       renderEvidenceList();
       renderEvidencePanel();
       renderProposals();
+      Array.prototype.forEach.call(document.querySelectorAll('.analysis-pane table'), function (table) {
+        var headers = table.querySelectorAll('thead th');
+        Array.prototype.forEach.call(table.querySelectorAll('tbody tr'), function (row) {
+          Array.prototype.forEach.call(row.cells, function (cell, i) {
+            if (headers[i]) cell.setAttribute('data-label', headers[i].textContent);
+          });
+        });
+      });
       measureShell();
       observeLayout();
       if (!storageState.available) showStorageNotice(storageState.message);
@@ -2500,23 +2627,18 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     doc += "<title>USNJ 补货协同工作台（静态演示）</title>"
     doc += "<style>" + STYLE + "</style></head><body>"
 
-    doc += "<div class='topstack'>"
-    doc += "<div class='modebanner' role='note'>"
-    doc += f"<span class='mb-main'>{esc(BANNER_TEXT.format(as_of=as_of))}</span>"
-    doc += f"<span class='mchips'>{chips}</span></div>"
-    doc += "<header class='site'><div><div class='brand'>USNJ 补货协同工作台"
-    doc += "<span>STATIC DEMO</span></div>"
-    doc += "<div class='datachips'>"
+    doc += "<div class='app-shell'><div class='topstack'><div class='shellbar'>"
+    doc += "<div class='brand'>供应链计划 · 演示</div>"
+    doc += f"<span class='snapshot'>静态演示 · 快照 {esc(as_of)} · 只读</span>"
+    doc += f"<nav class='topnav' role='tablist' aria-label='一级视图'>{nav}</nav>"
+    doc += "<details class='shell-info'><summary aria-label='快照与模式'>ⓘ</summary><div class='shell-info-body'>"
+    doc += f"<div class='modebanner' role='note'><span class='mb-main'>{esc(BANNER_TEXT.format(as_of=as_of))}</span>"
+    doc += f"<span class='mchips'>{chips}</span></div><div class='datachips'>"
     doc += f"<span class='chip'>补货建议 {len(rows)} 行（只读）</span>"
     doc += f"<span class='chip'>需求基准 {len(baseline_rows)} 行（仅 USNJ）</span>"
-    doc += (f"<span class='chip'>对单 {recon['unique']}/{recon['rec_total']}（"
-            f"{esc(recon['key'])}）</span></div></div>")
-    doc += "<div class='sitemeta'>"
-    doc += f"快照 {esc(snap.get('version') or snap.get('source_name'))} · as_of {esc(as_of)}<br>"
-    doc += f"基准 {esc(baseline_doc.get('version'))} · {esc(baseline_doc.get('as_of'))}<br>"
-    doc += "不直接下单；采购/运营需复核</div></header>"
-    doc += f"<nav class='topnav' role='tablist' aria-label='一级视图'>{nav}</nav>"
-    doc += "</div>"
+    doc += f"<span class='chip'>对单 {recon['unique']}/{recon['rec_total']}</span></div>"
+    doc += f"<div class='sitemeta'>快照 {esc(snap.get('version'))} · 基准 {esc(baseline_doc.get('version'))}"
+    doc += "<br>提案只存本浏览器；不上传、不审批、不写 EN；采购/运营需复核。</div></div></details></div></div>"
 
     doc += "<main>"
     doc += "<p class='storage-notice' id='collab-storage-notice' role='alert' hidden></p>"
@@ -2524,33 +2646,41 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     # ---- 工作台 ----
     doc += "<section class='view active' id='view-workbench' role='tabpanel'>"
     doc += "<div class='workbench-shell' id='workbench-shell'>"
-    doc += "<div class='viewhead'><div><div class='eyebrow'>WORKBENCH</div>"
-    doc += "<h1>工作台</h1><p class='sub'>默认看补货建议（只读）。切到需求基准才允许填写演示提案。"
-    doc += "工作区宽度大于 720px 时始终左表 + 右详情；窄屏改为底部抽屉，列表仍留在背后。</p></div>"
-    doc += f"<div class='micro' id='collab-summary'>D5 整期需求基准 {len(baseline_rows)} 行 · "
-    doc += f"USNJ 补货建议 {len(rows)} 行</div></div>"
     doc += "<div class='wbtop'><div class='wbcount'>"
     doc += "<div class='setswitch' role='group' aria-label='数据视图'>"
-    doc += "<button class='active' type='button' data-set='rec' aria-pressed='true'>补货建议（只读）</button>"
-    doc += "<button type='button' data-set='base' aria-pressed='false'>需求基准（可演示提案）</button></div>"
+    doc += "<button class='active' type='button' data-set='rec' aria-label='补货建议（只读）' aria-pressed='true'>补货建议</button>"
+    doc += "<button type='button' data-set='base' aria-label='需求基准（可演示提案）' aria-pressed='false'>需求基准</button></div>"
     doc += "<span id='wb-count'>—</span><button class='btn small ghost' type='button' id='wb-clear'>清除筛选</button>"
     doc += "<button class='btn small ghost' type='button' id='wb-focus-detail'>查看详情</button>"
     doc += "</div>"
     doc += "<div class='wbfilters'>"
     doc += "<input id='wb-search' type='search' placeholder='搜索 SKU / 客户 / 原因 / 模型' autocomplete='off' aria-label='搜索'>"
     doc += "<span id='wb-action-wrap'><select id='wb-action' aria-label='筛选动作'><option value=''>全部动作</option></select></span>"
+    doc += "<details class='advanced-filters'><summary>高级筛选</summary><div class='advanced-body'>"
+    doc += "<label>分公司 <select aria-label='分公司' disabled><option>USNJ</option></select></label>"
+    doc += f"<span class='micro'>快照 {esc(as_of)}（当前数据范围）</span>"
     doc += "<label class='check'><input type='checkbox' data-flag='decision'>需拍板</label>"
     doc += "<label class='check'><input type='checkbox' data-flag='supply'>缺供给</label>"
     doc += "<label class='check'><input type='checkbox' data-flag='special'>特殊品</label>"
     doc += "<label class='check'><input type='checkbox' data-flag='pending'>归属待确认</label>"
     doc += "<label class='check'><input type='checkbox' data-flag='low'>低置信</label>"
-    doc += "</div></div>"
+    doc += "</div></details></div></div>"
     doc += "<div class='workspace' id='workspace'>"
-    doc += "<section class='board' aria-label='列表'><div class='board-scroll' id='board-scroll'>"
+    doc += "<section class='board' aria-label='列表'><div class='board-scroll' id='board-scroll' tabindex='0' role='region' aria-label='商品列表'>"
     doc += "<table class='rows' id='wb-table' data-table-set='rec'><thead><tr><th>商品 / 客户 / 形态</th>"
     doc += "<th class='col-period'>期间</th><th>建议</th><th class='col-coverage'>覆盖</th>"
     doc += "<th class='col-reason'>原因</th><th class='col-flags'>标记</th></tr></thead>"
     doc += "<tbody id='wb-rows'><tr><td colspan='6' class='empty'>正在载入…</td></tr></tbody></table>"
+    doc += "<details class='panel-fold' id='proposals-fold'>"
+    doc += "<summary>本浏览器演示提案 <span class='muted' id='proposal-count'>（0 条）</span></summary>"
+    doc += "<p class='hint'>提案只存在本浏览器；刷新保留，清理浏览器数据或换浏览器看不到。"
+    doc += "「模拟通过/模拟驳回」只是本地状态，不代表审批。</p>"
+    doc += "<div class='viewswitch' role='group' aria-label='本地视角'>"
+    doc += "<button type='button' data-review-mode='operator' class='active'>运营视角</button>"
+    doc += "<button type='button' data-review-mode='reviewer'>审核视角（模拟）</button></div>"
+    doc += "<p class='mutednote' id='legacy-proposals' hidden></p>"
+    doc += "<div id='proposals'><p class='mutednote'>还没有提案。</p></div>"
+    doc += "<p class='form-message' id='collab-message' aria-live='polite'></p></details>"
     doc += "</div><div class='tablefoot'><span id='wb-foot'></span><span id='wb-version'></span></div></section>"
     doc += "<div class='detail-slot' id='detail-slot' aria-label='详情'>"
     doc += "<div class='detail detail-content' id='detail-content'>"
@@ -2563,16 +2693,6 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     doc += "<span class='sheet-handle' id='sheet-handle' aria-hidden='true'></span>"
     doc += "<button type='button' class='btn small sheet-close' id='sheet-close'>关闭详情 ×</button></div>"
     doc += "<div class='sheet-scroll' id='sheet-scroll'></div></div></dialog>"
-    doc += "<details class='panel-fold' id='proposals-fold'>"
-    doc += "<summary>本浏览器演示提案 <span class='muted' id='proposal-count'>（0 条）</span></summary>"
-    doc += "<p class='hint'>提案只存在本浏览器；刷新保留，清理浏览器数据或换浏览器看不到。"
-    doc += "「模拟通过/模拟驳回」只是本地状态，不代表审批。</p>"
-    doc += "<div class='viewswitch' role='group' aria-label='本地视角'>"
-    doc += "<button type='button' data-review-mode='operator' class='active'>运营视角</button>"
-    doc += "<button type='button' data-review-mode='reviewer'>审核视角（模拟）</button></div>"
-    doc += "<p class='mutednote' id='legacy-proposals' hidden></p>"
-    doc += "<div id='proposals'><p class='mutednote'>还没有提案。</p></div>"
-    doc += "<p class='form-message' id='collab-message' aria-live='polite'></p></details>"
     doc += "</div>"
     doc += "</section>"
 
@@ -2607,7 +2727,7 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     doc += "<section class='view' id='view-method' role='tabpanel'>"
     doc += _method_view(recon, as_of, payload["nonfinite"])
     doc += "</section>"
-    doc += "</main>"
+    doc += "</main></div>"
 
     doc += "<noscript><p class='storage-notice'>本页交互依赖内联脚本（CSP 仅允许哈希脚本）。"
     doc += "脚本被禁用时分析方法 A–E 与口径仍可阅读，工作台/证据链需要启用脚本。</p></noscript>"

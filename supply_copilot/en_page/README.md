@@ -5,6 +5,29 @@ title: Supply Workbench EN 接入产物
 
 # Supply Workbench（/app/supply-workbench）EN 接入产物
 
+## 当前交付：供应链计划工作台（原生 Page）
+
+正式新入口为 `/app/supply-planning`，标题“供应链计划工作台”，放在现有 key_test app。
+下文旧 `supply-workbench` iframe 部署说明保留兼容参考；新入口不使用 iframe。
+
+| 源文件 | 安装到 key_test app |
+|---|---|
+| `supply_planning/supply_planning.json`、`.js` | `key_test/page/supply_planning/` |
+| `supply_planning_static.py`、`supply_workbench_static.py` | `key_test/demand_collaboration/` |
+| 原生成器产出的 HTML（私有，不入库） | 站点 `private/supply_workbench.html` |
+
+`key_test.demand_collaboration.supply_planning_static.get_parts()` 复用固定文件读取和
+System Manager 校验，返回 html/css/js。Page 在 page.main 下挂 Shadow DOM，用局部 document
+代理运行现有脚本；测量内容区剩余高度，顶部紧凑，列表/当前右侧分段各自滚动。
+分公司与快照在页内高级筛选显示，当前数据只含 USNJ，不扩展业务范围。
+
+原生内容继承 Desk CSP；Shadow DOM 不提供独立 CSP/sandbox。受信任脚本的 Function
+执行需要 Desk CSP 允许；失败显示错误，不放宽 CSP。真实 Desk 的路由、容器与 CSP 尚待
+部署者检查，本轮仅本地预览，未部署。原静态 HTML 的 CSP 哈希策略和旧 iframe sandbox 不变。
+
+完整结构、验收证据与私有预览路径见
+[滚动修复规格 §9](../../docs/research/supply-chain/2026-11-24/scroll-app-shell-fix.md#9-最终交付原生-supply-planning-page)。
+
 本目录只放**部署产物模板**，不含任何客户数据或生成的 HTML。
 
 - 页面生成器：`supply_copilot/workbench_page.py`（单文件 HTML，四个一级视图：
