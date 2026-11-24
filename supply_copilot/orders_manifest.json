@@ -1,7 +1,7 @@
 {
   "version": "orders-2026-11-22.1",
   "as_of": "2026-11-22",
-  "generated_at": "2026-11-24T17:30:00+08:00",
+  "generated_at": "2026-11-24T17:50:00+08:00",
   "source": "EN DB direct export (tabTongtool Order/Item) 2026-11-10..2026-11-22 + orders_unified_20261111_v2",
   "files": [
     {
@@ -19,8 +19,8 @@
     },
     {
       "name": "po_tongtool_open_20261124.tsv",
-      "sha256": "a83aaca62236284497324b34bb1e3301ebadc53c222b3c77af5d9aca0732f25c",
-      "bytes": 9692,
+      "sha256": "4cd5c3a24cdcd56dfb89ae23bb83c8275bd07cdd3056ce3adfc7b92640a902a6",
+      "bytes": 9532,
       "rows": 141
     },
     {
