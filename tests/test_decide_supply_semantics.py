@@ -193,3 +193,24 @@ def test_leadtime_snapshot_recalculates_order_date(tmp_path):
     assert row["order_date"] == "2026-11-30"
     assert row["date_source"].startswith("so_dn_p90")
     assert meta["leadtime"]["days"] == 10
+
+
+def test_duplicate_forms_not_double_counted(tmp_path):
+    make_pack(tmp_path)
+    d6_path = tmp_path / "data" / "D6_v6_22.xlsx"
+    d6 = pd.read_excel(d6_path, sheet_name="1_全量动作")
+    dup = d6.copy(); dup["形态"] = "成品+皮壳"
+    both = pd.concat([d6, dup], ignore_index=True)
+    with pd.ExcelWriter(d6_path) as w:
+        both.to_excel(w, sheet_name="1_全量动作", index=False)
+    s = stock(tmp_path, rows=[base_stock()])
+    backlog = tmp_path / "backlog.csv"
+    pd.DataFrame(columns=["canonical_sku", "canonical_warehouse", "canonical_uom", "quantity"]).to_csv(backlog, index=False)
+    po = tmp_path / "po.tsv"; po.write_text("", encoding="utf-8")
+    frame, meta = call(tmp_path, stock_path=s, backlog_path=backlog, po_path=po)
+    ks = frame[frame["sku"] == "KS1"]
+    assert len(ks) == 2
+    assert set(ks["action"]) == {"补", "重复形态"}
+    assert meta["totals"]["duplicate_rows"] == 1
+    assert meta["totals"]["suggest"] == 1         # 只按主形态计一次
+    assert ks[ks["action"] == "重复形态"]["new_qty"].isna().all()
