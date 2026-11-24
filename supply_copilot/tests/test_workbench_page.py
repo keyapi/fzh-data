@@ -267,7 +267,8 @@ def test_workbench_layout_is_local_left_table_right_detail(inputs):
         "--paper:#f5f4ef",
         "--orange:#df6b34",
         "grid-template-columns:minmax(0,1fr) 400px",
-        "@media (max-width:1279px)",
+        "@media (max-width:1199px)",
+        "@media (max-width:959px)",
         "@media (max-width:767px)",
     ):
         assert marker in html, marker
