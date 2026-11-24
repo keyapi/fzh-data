@@ -7,13 +7,16 @@ title: Supply Workbench EN 接入产物
 
 本目录只放**部署产物模板**，不含任何客户数据或生成的 HTML。
 
-- 页面生成器：`supply_copilot/workbench_page.py`（单文件 HTML，8 页签）
+- 页面生成器：`supply_copilot/workbench_page.py`（单文件 HTML，四个一级视图：
+  工作台 / 证据链 / 分析方法 / 口径；分析方法内含 A–E 五张表）
 - EN 白名单读取：`supply_workbench_static.py`
 - Desk Page 定义：`supply_workbench/supply_workbench.json` + `.js`
 
 页面是只读演示页：数据全部内嵌，提案只存浏览器 `localStorage`
-（键 `supply-workbench:proposals:v1`）。刷新保留；清理浏览器数据或换浏览器
-看不到本浏览器的提案。页面不发起网络请求、不写 EN。
+（键 `supply-workbench:proposals:v2`；旧键 `…:proposals:v1` 只读展示，不迁移）。
+刷新保留；清理浏览器数据或换浏览器看不到本浏览器的提案。页面不发起网络请求、不写 EN。
+顶部常驻横幅写「静态演示 · 数据快照 <as_of> · 提案只存本浏览器 · 不上传/不审批/不写 EN」，
+服务可用 / 库存实时 / 建议可执行三者分开标识，不用绿色暗示采购资格。
 
 ## 安全策略（CSP）
 
@@ -103,8 +106,9 @@ fi
 
    普通 Page/静态 HTML 部署不需要 `bench migrate`，也不要跑全量 `bench migrate`。
 
-5. 用 System Manager 账号打开 `/app/supply-workbench`，确认 8 页签、运营协同
-   左右联动、演示横幅与 CSP 均正常（浏览器控制台无 CSP 拒绝记录）。
+5. 用 System Manager 账号打开 `/app/supply-workbench`，确认四个一级视图可切换、
+   工作台左右联动（建议只读 / 基准可演示提案）、证据链逐行区块齐全、
+   分析方法 A–E 字段完整、演示横幅与 CSP 均正常（浏览器控制台无 CSP 拒绝记录）。
 
 6. 测试站验证通过后，按项目发布链路合并到生产 app 仓库再部署生产
    （测试分支 → main → 生产 `git pull upstream` → 放入新增文件 →
