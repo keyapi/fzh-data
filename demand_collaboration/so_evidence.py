@@ -113,42 +113,76 @@ def load(path, as_of="2026-11-13", window_start=None):
 
     ``window_start`` defaults to six calendar months before ``as_of``; the
     caller may pass an explicit ISO date to freeze the reporting window.
+    Kept for the recommendation page: no line deduplication (historic shape).
+    """
+    summary, _stats = load_deduped(path, as_of=as_of, window_start=window_start,
+                                   dedupe=False)
+    return summary
+
+
+def load_deduped(path, as_of="2026-11-13", window_start=None, dedupe=True):
+    """Return ``(summary, stats)``; ``dedupe`` collapses repeated SO lines.
+
+    A repeated ``(so, so_line)`` can come from a re-run of the W1 snapshot
+    appended to the same file.  With ``dedupe=True`` its open quantity is
+    counted once (first occurrence wins) and the collapse is reported instead
+    of silently changing the total.
     """
     p = Path(path)
+    stats = {"lines_read": 0, "unique_lines": 0, "duplicate_lines": 0,
+             "duplicate_open_qty": 0.0, "skipped_no_sku_or_branch": 0,
+             "skipped_bad_qty": 0, "skipped_not_open": 0,
+             "keys": 0, "dedupe": bool(dedupe)}
     if not p.exists():
-        return {}
+        stats["error"] = f"SO 证据文件不存在：{p}"
+        return {}, stats
     cutoff = as_date(as_of)
     if cutoff is None:
         raise ValueError("as_of must be an ISO date")
     start = as_date(window_start) if window_start is not None else months_before(cutoff)
     out = {}
+    seen = set()
     for line in p.read_text(encoding="utf-8").splitlines():
         if not line.strip():
             continue
         record = json.loads(line)
         payload = record.get("payload") or {}
         for row in payload.get("lines") or []:
+            stats["lines_read"] += 1
             sku = sku_of(row.get("item_code"))
             br = branch(row.get("customer"))
             if not sku or not br:
+                stats["skipped_no_sku_or_branch"] += 1
                 continue
             try:
                 qty = float(row.get("qty") or 0)
                 delivered = float(row.get("delivered_qty") or 0)
             except (TypeError, ValueError):
+                stats["skipped_bad_qty"] += 1
                 continue
             open_qty = max(0.0, qty - delivered)
-            if open_qty <= 0:
-                continue
             status = str(row.get("so_status") or "")
-            if status == "Closed" or str(row.get("so_docstatus")) not in {"1", "1.0"}:
+            if open_qty <= 0 or status == "Closed" or \
+                    str(row.get("so_docstatus")) not in {"1", "1.0"}:
+                stats["skipped_not_open"] += 1
                 continue
+            so_name = record.get("so") or row.get("so")
+            if dedupe:
+                line_key = (str(so_name), str(row.get("so_line")))
+                if line_key in seen:
+                    stats["duplicate_lines"] += 1
+                    stats["duplicate_open_qty"] += open_qty
+                    previous = out.get((sku, br))
+                    if previous is not None:
+                        previous["so_duplicate_lines"] += 1
+                    continue
+                seen.add(line_key)
+            stats["unique_lines"] += 1
             created = as_date(_pick(record, payload, row))
             delivery = as_date(_pick(record, payload, row,
                                      ("delivery_date", "scheduled_delivery")))
             bucket = _bucket(created, start, cutoff)
             overdue = max(0, (cutoff - delivery).days) if delivery else 0
-            so_name = record.get("so") or row.get("so")
             key = (sku, br)
             summary = out.setdefault(key, {
                 "so_open_qty": 0.0, "so_open_orders": 0,
@@ -162,6 +196,7 @@ def load(path, as_of="2026-11-13", window_start=None):
                 "so_as_of": cutoff.isoformat(),
                 "so_lines": [],
                 "so_source_as_of": payload.get("as_of") or "",
+                "so_duplicate_lines": 0,
                 "_orders": set(), "_recent_orders": set(),
                 "_history_orders": set(), "_unknown_orders": set(),
             })
@@ -206,4 +241,5 @@ def load(path, as_of="2026-11-13", window_start=None):
         summary["so_lines"].sort(key=lambda line: line.get("transaction_date") or "",
                                  reverse=True)
         summary["so_lines"].sort(key=lambda line: order[line["date_bucket"]])
-    return out
+    stats["keys"] = len(out)
+    return out, stats
