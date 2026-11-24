@@ -101,7 +101,7 @@ def collect_inbound(warehouses: list[str], since: _dt.datetime,
         from tongtool_api.openapi_client import TongtoolOpenApiClient
 
         api = TongtoolOpenApiClient(*primary_credentials(), min_interval=min_interval,
-                                    max_retries=1)
+                                    max_retries=2)
     out: dict[str, list[dict]] = {}
     for warehouse in warehouses:
         rows = fetch_changes(api, warehouse, since, page_size=page_size)

@@ -287,6 +287,17 @@ def test_single_warehouse_inbound_title_and_filename(monkeypatch, tmp_path):
     assert '美中-FZH-DANEEY' in posts[0][4]
     assert any('美中-FZH-DANEEY' in str(p) for p in uploads)
 
+
+def test_failure_alert_redacts_tokens():
+    from stock_alert.notify import _redact_secrets
+    raw = "url?app_token=UNIQUE_TOKEN&sign=UNIQUE_SIGN&timestamp=UNIQUE_TS&secret=UNIQUE_SECRET"
+    out = _redact_secrets(raw)
+    assert "UNIQUE_TOKEN" not in out
+    assert "UNIQUE_SIGN" not in out
+    assert "UNIQUE_TS" not in out
+    assert "UNIQUE_SECRET" not in out
+    assert "app_token=***" in out and "sign=***" in out
+
 def test_failure_diagnostic_kept():
     from stock_alert.notify import failure_body
     assert '1.2.3.4' in failure_body('524', egress_ip='1.2.3.4')

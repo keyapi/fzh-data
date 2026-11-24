@@ -8,6 +8,13 @@ tags: [stock-alert, changelog, dingtalk, tongtool]
 
 # 变更日志
 
+## 2026-11-24
+
+- 通途 OpenAPI 整体返回 500（`stocksQuery` / `stocksChangeQuery` / `stocksChangeDetailQuery`
+  均 500，旧窗口/小窗口同样失败），14:00 入库任务失败告警；属于通途服务端故障。
+- 入库 OpenAPI 重试从 2 次提高到 3 次；失败告警脱敏 `app_token`/`sign`/`timestamp`/`secret`，
+  避免把临时 token 发到钉钉群。当前 94 项测试通过。
+
 ## 2026-11-18
 
 - 低库存卡片去掉各仓标题右侧的低库存总数，只保留今日新增数与新增 SKU 列表。当前 93 项测试通过。

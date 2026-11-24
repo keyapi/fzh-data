@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -342,12 +343,19 @@ def failure_body(message: str, *, egress_ip: str | None = None) -> str:
     )
 
 
+def _redact_secrets(text: str) -> str:
+    """失败告警里去掉 app_token/sign/timestamp/secret 等敏感查询参数。"""
+    for key in ("app_token", "sign", "timestamp", "secret", "access_token"):
+        text = re.sub(rf"({key}=)[^&\s]+", r"\1***", text)
+    return text
+
+
 def notify_failure(message: str, *, title: str = "通途低库存任务失败") -> dict:
     """无人值守跑挂时的告警；凭证缺失会同样抛出，由调用方兜底打印。"""
     _robot_path()
     from send_dingtalk import send_markdown
 
-    body = failure_body(message, egress_ip=_egress_ip())
+    body = _redact_secrets(failure_body(message, egress_ip=_egress_ip()))
     webhook = os.environ.get(WEBHOOK_ENV, "").strip() or os.environ.get("DINGTALK_WEBHOOK", "").strip()
     secret = os.environ.get(SECRET_ENV, "").strip() or os.environ.get("DINGTALK_SECRET", "").strip()
     return send_markdown(f"## {title}\n\n{body}", title=title, webhook=webhook or None, secret=secret or None)
