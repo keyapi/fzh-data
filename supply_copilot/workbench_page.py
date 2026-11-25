@@ -299,8 +299,8 @@ border-radius:0;font-size:11.5px;color:#5c2b2b;white-space:nowrap}
 .gate-more{position:relative;flex:none;font-size:11.5px}
 .gate-more summary{cursor:pointer;color:#8a1f1f;list-style:none}
 .gate-more summary::-webkit-details-marker{display:none}
-.gate-more summary::after{content:"\25BE";margin-left:3px}
-.gate-more[open] summary::after{content:"\25B4"}
+.gate-more summary::after{content:"";display:inline-block;margin-left:4px;width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid currentColor;vertical-align:1px;transition:transform .15s}
+.gate-more[open] summary::after{transform:rotate(180deg)}
 .gate-more-body{position:absolute;right:0;top:calc(100% + 4px);width:min(620px,90vw);
 max-height:50vh;overflow:auto;background:#fff8f6;border:1px solid #d9a3a3;border-radius:4px;
 padding:8px 12px;box-shadow:0 6px 18px #172e4333;white-space:normal;z-index:40;color:#5c2b2b}
@@ -432,8 +432,8 @@ scroll-margin-top:130px;outline:none}
 .lay>summary{cursor:pointer;padding:8px 10px;font-size:12px;line-height:1.8;
 list-style:none;overflow-wrap:anywhere}
 .lay>summary::-webkit-details-marker{display:none}
-.lay>summary::before{content:"\\25B8";color:var(--muted);margin-right:5px}
-.lay[open]>summary::before{content:"\\25BE"}
+.lay>summary::before{content:"";display:inline-block;margin-right:6px;width:0;height:0;border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:5px solid var(--muted);vertical-align:1px;transition:transform .15s}
+.lay[open]>summary::before{transform:rotate(90deg)}
 .lay>summary b{font-weight:bold}
 .lay>summary strong{font-family:Georgia,serif;font-size:14px;margin:0 2px}
 .lay .lay-body{padding:0 10px 10px;border-top:1px dashed #e2e6e1}
@@ -4064,7 +4064,7 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None,
     doc += "<p class='mutednote' id='legacy-proposals' hidden></p>"
     doc += "<div id='proposals'><p class='mutednote'>还没有提案。</p></div>"
     doc += "<p class='form-message' id='collab-message' aria-live='polite'></p></details>"
-    doc += "</div><div class='tablefoot'><span id='wb-foot'></span><span id='wb-version'></span></div></section>"
+    doc += "</div></section>"
     doc += "<div class='detail-slot' id='detail-slot' aria-label='详情'>"
     doc += "<div class='detail detail-content' id='detail-content'>"
     doc += "<div class='empty'>选择左侧一行查看结论、证据和可用操作。<br>"
