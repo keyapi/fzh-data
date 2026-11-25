@@ -889,3 +889,283 @@ console.log(JSON.stringify(out));
     assert [p["id"] for p in out["validList"]["list"]] == ["p1"]
     assert out["badElement"]["corrupted"] is True
     assert out["badVersion"]["corrupted"] is True
+
+
+# ------------------------------------------------------ snapshot_v2 evidence
+
+def _v2_snapshot():
+    """Synthetic snapshot_v2: no private data, exercises every v2 empty-state."""
+    return {
+        "schema_version": "supply-workbench-snapshot-v2",
+        "version": "test-v2",
+        "bundle_id": "b" * 64,
+        "branch": "美东USNJ",
+        "as_of": "2026-11-24T16:00:00+08:00",
+        "computed_at": "2026-11-24T16:00:00+08:00",
+        "horizon_days": 90,
+        "period_start": "2026-11-24",
+        "period_end": "2027-02-22",
+        "period_basis": "full_period",
+        "model": {
+            "policy": "classified",
+            "policy_version": "classified-map+pattern@test",
+            "rule_version": "autoets_m3_naive@test",
+            "run_id": "run-1",
+            "as_of": "2026-11-24",
+        },
+        "config_version": "classified-map+pattern@test",
+        "unknown_policy": "null_with_reason",
+        "quantile_note": "只独立产出 p50/p90；q90/q95 与 p90 相同或未校准",
+        "service_level_note": "p90 是需求分位，不是满足率/不缺货率",
+        "limits": ["缺口是窗口总量口径，不是某一天的缺货日"],
+        "assumptions": None,
+        "sources": {
+            "pack": {"version": "2026-11-13.1", "as_of": "2026-11-13"},
+            "stock": {"run_id": "stock-1", "snapshot_date": "2026-11-24",
+                      "sha256": "1" * 64, "current": True},
+            "forecast": {"run_id": "run-1", "lead_days": 90, "sha256": "2" * 64},
+            "so": {"rows": 317, "as_of": "2026-11-24", "sha256": "3" * 64},
+            "po": {"rows": 141, "as_of": "2026-11-24", "sha256": "4" * 64},
+        },
+        "totals": {"rows": 3, "unique_keys": 3, "duplicate_rows": 0},
+        "rows": [
+            {
+                "sku": "V2-A", "customer": "美东USNJ", "physical_form": "成品", "uom": "个",
+                "action": "补", "new_qty": 10, "forecast": 12, "c_qty": 2, "e_qty": 3,
+                "coverage": 30, "reason": "需求 12 > 供给 3",
+                "branch": "美东USNJ", "warehouse": "仓-A", "pool": "池-A",
+                "period_start": "2026-11-24", "period_end": "2027-02-22",
+                "period_basis": "full_period", "horizon_days": 90,
+                "demand": {
+                    "forecast": 12, "d6_q95": 15, "source": "forecast_refresh",
+                    "evidence": "forecast window p90", "model": "autoets", "pattern": "smooth",
+                    "p50": 9, "p90": 12, "q90": 12, "q95": 12,
+                    "quantile_status": "p90_alias",
+                    "quantile_reason": "q90/q95 与 p90 相同",
+                },
+                "supply": {
+                    "opening": 2, "intransit": 1, "po": 0, "cg": 0, "so": 0,
+                    "so_on_time": 0, "so_conditional": 0, "expected": 3, "proven": 3,
+                },
+                "stock": {"run_id": "stock-1", "snapshot_at": "2026-11-24 05:00:00",
+                          "snapshot_date": "2026-11-24", "sha256": "1" * 64,
+                          "current_for_decision": True},
+                "forecast_run": {"run_id": "run-1", "as_of": "2026-11-24",
+                                 "lead_days": 90, "windows_sha256": "2" * 64},
+                "provenance": {"so_sha256": "3" * 64, "po_sha256": "4" * 64,
+                               "source_row": None, "source_hash": None,
+                               "source_row_reason": "decide 不含逐行源指针"},
+                "so_open_qty": 20, "so_recent_open_qty": 20, "so_history_open_qty": 0,
+                "so_source_as_of": "2026-11-24T16:00:00+08:00",
+                "so_lines_status": "ok",
+                "so_lines": [{
+                    "so": "SO-1", "so_line": None, "so_line_reason": "无行号",
+                    "status": "open_balance", "status_reason": "只给开放余额",
+                    "open_qty": 20, "delivered_qty": None,
+                    "delivered_qty_reason": "未给已交付", "delivery_date": "2026-08-30",
+                    "date_bucket": "recent", "delivery_relation": "past",
+                }],
+                "coverage_basis": None,
+                "coverage_basis_reason": "导出未定义 coverage 语义",
+                "confidence_level": "normal", "service_level": "p90",
+                "assumptions": ["需求=90 天 p90"],
+            },
+            {
+                "sku": "V2-B", "customer": "美东USNJ", "physical_form": "皮壳", "uom": "套",
+                "action": "观察", "forecast": None, "c_qty": 0, "e_qty": 0,
+                "branch": "美东USNJ", "warehouse": None, "pool": "池-B",
+                "period_start": "2026-11-24", "period_end": "2027-02-22",
+                "period_basis": "full_period", "horizon_days": 90,
+                "demand": {"forecast": None, "p50": None, "p90": None, "q90": None, "q95": None,
+                           "quantile_status": "unavailable",
+                           "quantile_reason": "本地预测未覆盖该键；需求退回 D6 q95"},
+                "supply": {"opening": 0, "intransit": 0, "po": None, "cg": 0, "so": 0,
+                           "so_on_time": 0, "so_conditional": 0, "expected": 0, "proven": 0},
+                "stock": {"run_id": "stock-1", "snapshot_date": "2026-11-24",
+                          "sha256": "1" * 64, "current_for_decision": True},
+                "forecast_run": {"run_id": "run-1", "as_of": "2026-11-24",
+                                 "lead_days": 90, "windows_sha256": "2" * 64},
+                "provenance": {"so_sha256": "3" * 64, "po_sha256": "4" * 64,
+                               "source_row": None, "source_hash": None},
+                "so_open_qty": 0, "so_recent_open_qty": 0, "so_history_open_qty": 0,
+                "so_lines_status": "empty_in_export", "so_lines": [],
+                "coverage_basis": None,
+                "coverage_basis_reason": "导出未定义 coverage 语义",
+                "confidence_level": "low", "service_level": "p90",
+            },
+            {
+                "sku": "V2-C", "customer": "美东USNJ", "physical_form": "成品", "uom": "个",
+                "action": "补", "forecast": 5, "c_qty": 0, "e_qty": 0,
+                "branch": "美东USNJ", "warehouse": "仓-C", "pool": "池-C",
+                "period_start": "2026-11-24", "period_end": "2027-02-22",
+                "period_basis": "full_period", "horizon_days": 90,
+                "demand": {"forecast": 5, "p50": 4, "p90": 5, "q90": 5, "q95": 5,
+                           "quantile_status": "p90_alias"},
+                "supply": {"opening": 0, "intransit": 0, "po": 0, "cg": 0, "so": 0,
+                           "so_on_time": 0, "so_conditional": 0, "expected": 0, "proven": 0},
+                "stock": {"run_id": "stock-1", "snapshot_date": "2026-11-24",
+                          "sha256": "1" * 64, "current_for_decision": True},
+                "forecast_run": {"run_id": "run-1", "as_of": "2026-11-24",
+                                 "lead_days": 90, "windows_sha256": "2" * 64},
+                "provenance": {"so_sha256": "3" * 64, "po_sha256": "4" * 64,
+                               "source_row": None, "source_hash": None},
+                "so_open_qty": 3, "so_recent_open_qty": 3, "so_history_open_qty": 0,
+                "so_lines_status": "line_sum_mismatch",
+                "so_lines": [{"so": "SO-2", "so_line": 1, "open_qty": 1,
+                              "delivery_date": "2026-12-01", "delivery_relation": "in_period",
+                              "date_bucket": "recent", "status": "open_balance"}],
+                "coverage_basis": None, "confidence_level": "normal", "service_level": "p90",
+            },
+        ],
+    }
+
+
+@pytest.fixture()
+def inputs_v2(tmp_path):
+    snap = _v2_snapshot()
+    baseline = {
+        "as_of": "2026-11-12", "version": "test-baseline", "demo": True,
+        "rows": _baseline_rows(),
+    }
+    snap_path = tmp_path / "snapshot_v2.json"
+    base_path = tmp_path / "baseline.json"
+    snap_path.write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")
+    base_path.write_text(json.dumps(baseline, ensure_ascii=False), encoding="utf-8")
+    return snap_path, base_path, snap
+
+
+def test_v2_meta_embedded_and_header_strip(inputs_v2):
+    snap_path, base_path, snap = inputs_v2
+    html = build(snap_path, base_path)
+    payload = json.loads(_embedded_payload(html))
+    meta = payload["meta"]
+    assert payload["schema_version"] == "supply-workbench-snapshot-v2"
+    assert meta["period_start"] == "2026-11-24"
+    assert meta["period_end"] == "2027-02-22"
+    assert meta["horizon_days"] == 90
+    assert meta["computed_at"] == snap["computed_at"]
+    assert meta["bundle_id"] == snap["bundle_id"]
+    assert meta["config_version"] == "classified-map+pattern@test"
+    assert meta["model"]["run_id"] == "run-1"
+    # Page header strip (server-rendered, compact).
+    assert "class='metastrip'" in html
+    for text in ("期间", "2026-11-24", "2027-02-22", "窗口", "90 天",
+                 "bundle", "配置", "classified-map+pattern@test", "分支", "美东USNJ",
+                 "computed", "模型", "run-1"):
+        assert text in html, text
+    # SO totals are surfaced in the evidence header.
+    assert "2 个键有明细" in html and "2 条明细" in html
+
+
+def test_v2_rows_are_embedded_verbatim_with_nulls(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    payload = json.loads(_embedded_payload(build(snap_path, base_path)))
+    rows = {r["sku"]: r for r in payload["rows"]}
+    assert rows["V2-A"]["demand"]["quantile_status"] == "p90_alias"
+    assert rows["V2-A"]["supply"]["proven"] == 3
+    assert rows["V2-B"]["demand"]["forecast"] is None       # unknown, not 0
+    assert rows["V2-B"]["supply"]["po"] is None             # unconnected, not 0
+    assert rows["V2-B"]["warehouse"] is None                # explicit null
+    assert rows["V2-B"]["provenance"]["source_row"] is None
+    assert rows["V2-A"]["forecast_run"]["windows_sha256"] == "2" * 64
+
+
+def test_v2_quantile_status_wording(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    html = build(snap_path, base_path)
+    js = html.split("<script>", 1)[1]
+    assert "p90_alias" in js
+    assert "q90/q95 与 p90 相同" in js
+    assert "不应当作更高服务水平" in js
+    assert "unavailable" in js
+    assert "本地预测未覆盖该键" in js
+    assert "p90 是需求分位，不是满足率" in html
+
+
+def test_v2_so_status_semantics_and_expandable_lines(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    html = build(snap_path, base_path)
+    js = html.split("<script>", 1)[1]
+    assert "empty_in_export" in js
+    assert "本次导出真实无开放 SO（不是未知）" in js
+    assert "line_sum_mismatch" in js
+    assert "SO 明细行合计与管线合计不一致" in js
+    # v2 SO table columns: 单据号 / 行 / 开放量 / 交付日 / 日期关系.
+    tbl = _function_body(js, "soTable")
+    for head in ("SO 单据号", "开放量", "交付日", "日期关系"):
+        assert head in tbl, head
+    assert "delivery_relation" in tbl and "relationLabel" in tbl
+
+
+def test_v2_unconnected_stages_stay_unavailable(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    html = build(snap_path, base_path)
+    js = html.split("<script>", 1)[1]
+    supply = _function_body(js, "supplyFull")
+    assert "PO 聚合 supply.po" in supply
+    assert "生产单 / DN 阶段" in supply
+    assert "未接入（null，不补 0）" in supply
+    # No silent zero-filling: the display helper returns null for blank.
+    assert "function qty(v) { var t = formatQty(v); return t === null ? unknown() : t; }" in js
+
+
+def test_v2_sources_sha_and_notes_in_method_view(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    html = build(snap_path, base_path)
+    method = html[html.index("id='view-method'"):]
+    for text in ("快照 v2 元数据（证据完整版）", "quantile_note", "service_level_note",
+                 "只独立产出 p50/p90", "p90 是需求分位", "已知限制 limits",
+                 "缺口是窗口总量口径", "来源与版本 sources", "stock-1", "run-1",
+                 "1111111111111111", "2222222222222222", "未知与空集语义",
+                 "empty_in_export", "顶层 assumptions 未提供（null）"):
+        assert text in method, text
+
+
+def test_v2_detail_functions_prefer_new_fields(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    js = build(snap_path, base_path).split("<script>", 1)[1]
+    assert "isV2(" in js
+    for fn in ("identityFull", "periodFull", "demandFull", "supplyFull", "soFull",
+               "stockFull", "sourceFull"):
+        body = _function_body(js, fn)
+        assert ("rowDemand" in body or "rowSupply" in body or "rowStock" in body or
+                "rowProvenance" in body or "so_lines_status" in body or "isV2" in body), fn
+    identity = _function_body(js, "identityFull")
+    assert "warehouseText" in identity and "未提供" in js
+    stock = _function_body(js, "stockFull")
+    assert "snapshot_date" in stock and "current_for_decision" in stock
+    source = _function_body(js, "sourceFull")
+    assert "coverage_basis" in source and "source_row_reason" in js
+
+
+def test_v2_missing_notes_do_not_flag_present_period(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    js = build(snap_path, base_path).split("<script>", 1)[1]
+    notes = _function_body(js, "unknownNotes")
+    # v2 branch guards the period-missing note behind an explicit absence check.
+    assert "r.period_start || r.period_end || r.period_basis" in notes
+    assert "demand.forecast 缺失" in notes
+    assert "r.so_lines_status === 'empty_in_export'" not in notes   # facts live in knownFacts
+    facts = _function_body(js, "knownFacts")
+    assert "empty_in_export" in facts and "p90_alias" in facts
+
+
+def test_v2_is_backward_compatible_with_flat_snapshot(inputs):
+    snap_path, base_path, _ = inputs
+    html = build(snap_path, base_path)
+    payload = json.loads(_embedded_payload(html))
+    # No v2 metadata: page still builds, meta is null-filled, legacy keys render.
+    assert payload["meta"]["schema_version"] is None
+    assert "class='metastrip'" not in html
+    js = html.split("<script>", 1)[1]
+    assert "预测中位 forecast" in js and "E 按时供给 e_qty" in js
+    assert "旧版扁平快照（无 snapshot_v2 元数据）" in html
+
+
+def test_v2_so_summary_counts_match_rows(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    payload = json.loads(_embedded_payload(build(snap_path, base_path)))
+    assert payload["meta"]["so_summary"] == {
+        "keys_with_lines": 2, "lines_total": 2,
+        "empty_in_export": 1, "line_sum_mismatch": 1,
+    }
