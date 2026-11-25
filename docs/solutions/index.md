@@ -13,6 +13,8 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-25 | 通途 OpenAPI 业务接口集体 500：NoSuchMethodError 是网关部署故障，不是鉴权/参数 | [integration-issues/tongtool-openapi-gateway-500-nosuchmethod.md](integration-issues/tongtool-openapi-gateway-500-nosuchmethod.md) |
+| 2026-11-25 | pandas 兜底回填的 NaN 写进 Frappe decimal → 整单 save 失败（mask 里 NaN != 0 为真） | [integration-issues/pandas-nan-frappe-decimal-order-cost.md](integration-issues/pandas-nan-frappe-decimal-order-cost.md) |
 | 2026-11-24 | 赛狐官方 MCP 换协议——子账号 X-MCP-Key 开通 + 元工具发现目录（零副作用验证写能力） | [integration-issues/sellfox-mcp-subaccount-key-metatool-protocol.md](integration-issues/sellfox-mcp-subaccount-key-metatool-protocol.md) |
 | 2026-11-19 | 钉钉 aflow 导出工具 UI 漂移：表单改名与日期控件选择器失效 | [developer-experience/dingtalk-aflow-export-ui-drift.md](developer-experience/dingtalk-aflow-export-ui-drift.md) |
 | 2026-11-19 | 账期附件跨桶错放：同一结算文件出现在另一账期桶 | [workflow-issues/amazon-period-cross-bucket-attachment-misfile.md](workflow-issues/amazon-period-cross-bucket-attachment-misfile.md) |

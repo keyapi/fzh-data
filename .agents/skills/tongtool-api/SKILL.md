@@ -34,6 +34,12 @@ CLI / pytest 继续用 `tongtool_api/mcp_http.py`。那是脚本通道，不是�
 - 524: App 未授权该接口或权限族。
 - 525: 参数不完整或不合法，通常说明认证和权限已通过。
 - 526: 服务端超频，停止密集重试并退避。
+- **HTTP 500 + `NoSuchMethodError`（text/html）**: 通途网关部署故障，**不是** Key/授权/参数问题；
+  认证接口仍 200、非法参数仍 525 即可定性。换 Key 无用，直接报障并等恢复。见
+  [`docs/solutions/integration-issues/tongtool-openapi-gateway-500-nosuchmethod.md`](../../../docs/solutions/integration-issues/tongtool-openapi-gateway-500-nosuchmethod.md)。
 - MCP -32602: 工具输入未通过 MCP schema。
+
+> ⚠️ 排障时**不要**用 EN 的 `TongToolClient` 验证：它把 HTTP 500 当网络异常，按 5/10/20 分钟退避重试，
+> 单次调用可卡 ~35 分钟。用 `requests` 直连 + `timeout=20` 拿原始响应。
 
 当前按同一商户合计最多 5 次 ERP2 业务调用/分钟限流；2026-08-13 已通过双 App MCP 判别实验确认：主 App 的 5 次成功后，第二 App 第 1 次即触发 526。MCP 不会绕开通途 API 限额。完整证据见 tongtool_api/docs/research/2026-08-13-rate-limit-experiment.md。

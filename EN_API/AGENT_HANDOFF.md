@@ -226,3 +226,5 @@ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8099   # 应返回 200
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/architecture-patterns/en-end-to-end-supply-chain-fulfillment-visibility.md` —— EN 端到端供应链履约可视化蓝图 — 从销售订单到国外仓上架
+- `docs/solutions/integration-issues/pandas-nan-frappe-decimal-order-cost.md` —— `tongtool_integration` 订单同步把 NaN 写进 decimal 导致成本/尾差/尾程三步失败（PR #29 已修；含只读复现与数据修复方法）
+- `docs/solutions/integration-issues/tongtool-openapi-gateway-500-nosuchmethod.md` —— 通途 OpenAPI 全 500 的定性方法；排障勿走 EN 客户端（HTTP 500 会被当网络错误退避 ~35 分钟）
