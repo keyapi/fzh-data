@@ -19,5 +19,6 @@ timestamp: 2026-08-13
 | Review source comparison | research/2026-08-13-source-audit.md |
 | Review Cursor MCP install evidence | research/2026-08-14-cursor-mcp-install.md |
 | Review rate-limit evidence | research/2026-08-13-rate-limit-experiment.md |
+| Diagnose an API-wide HTTP 500 (gateway fault, not auth) | ../../docs/solutions/integration-issues/tongtool-openapi-gateway-500-nosuchmethod.md |
 | Avoid repeated mistakes | lessons/lessons-learned.md |
 | Review changes | log.md |

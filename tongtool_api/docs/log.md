@@ -9,6 +9,10 @@ timestamp: 2026-08-13
 
 # Change Log
 
+## 2026-11-25
+- Recorded the 2026-11-24 gateway incident: valid business requests returned HTTP 500 with `NoSuchMethodError: Context.getIsNewApp` while auth and parameter validation stayed healthy — a Tongtool-side deployment fault. Added the three-step discrimination recipe and the warning not to diagnose through EN's retrying client (HTTP 500 treated as network error, 5/10/20-minute backoff).
+- Linked the order-cost NaN learning (`nan can not be used with MySQL` from pandas backfill) to the shared solutions library.
+
 ## 2026-08-14
 - Added Cursor MCP registration: `setup_cursor_mcp.py` writes user-level `~/.cursor/mcp.json`. Same-chat `erp2_product_goodsquery` returned business 200. Secondary with the same URL did not appear in Cursor Available servers. No Marketplace install prompt.
 - HTTP `mcp_http.py` remains the CLI/script channel, not a silent substitute when Cursor MCP tools are missing.

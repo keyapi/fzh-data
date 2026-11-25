@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-25（通途网关故障 + 订单成本 NaN）
+
+- **新增**: `integration-issues/tongtool-openapi-gateway-500-nosuchmethod.md` —— 业务接口全 500 是通途网关类版本不匹配；三级探测法定责，换 Key 无效；客户端 500 走 5/10/20 分钟退避是排查变慢的元凶。
+- **新增**: `integration-issues/pandas-nan-frappe-decimal-order-cost.md` —— pandas 分组回填的 NaN 写进 Frappe decimal 导致整单 save 失败；修复随 `tongtool_integration` PR #29 上线，17 张历史单中 6 张已补成本、11 张待物料匹配确证。
+
 ## 2026-11-19（账期 7–10 月端到端审计与第二轮修复）
 
 - **新增**: `workflow-issues/amazon-period-source-corrections-and-e2e-gate.md` —— E2E 独立复核查出源定稿错数（7 月 JohnaSE 100 倍）与 4 条账号错归属；修正凭据 + corrected 副本、写前硬门禁、run manifest、人民币补列。

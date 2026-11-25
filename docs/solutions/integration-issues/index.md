@@ -10,6 +10,8 @@ tags: [integration, solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-25 | 通途 OpenAPI 业务接口集体 500：NoSuchMethodError 是网关部署故障，不是鉴权/参数（含 500 被当网络错误退避 35 分钟的坑） | [tongtool-openapi-gateway-500-nosuchmethod.md](tongtool-openapi-gateway-500-nosuchmethod.md) |
+| 2026-11-25 | pandas 兜底回填的 NaN 写进 Frappe decimal → 整单 save 失败（mask 里 NaN != 0 为真） | [pandas-nan-frappe-decimal-order-cost.md](pandas-nan-frappe-decimal-order-cost.md) |
 | 2026-11-24 | 赛狐官方 MCP 换协议——子账号 X-MCP-Key 开通 + 元工具发现目录（零副作用验证写能力） | [sellfox-mcp-subaccount-key-metatool-protocol.md](sellfox-mcp-subaccount-key-metatool-protocol.md) |
 | 2026-11-19 | Amazon 结算报告 V1/V2 与 XML：旧格式会让 Tax/FBA 静默少算 | [amazon-settlement-v1-v2-flatfile.md](amazon-settlement-v1-v2-flatfile.md) |
 | 2026-11-19 | 账期币种匹配：全角括号与零宽字符让币种/汇率变空、人民币全 0 | [amazon-period-fx-currency-label-invisible-chars.md](amazon-period-fx-currency-label-invisible-chars.md) |

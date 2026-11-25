@@ -6,6 +6,10 @@ title: 集成问题 — 变更日志
 
 # 变更日志
 
+## 2026-11-25
+- **新增**: 通途 OpenAPI 业务接口集体 500（`NoSuchMethodError: Context.getIsNewApp`）—— 用「认证 200 / 非法参数 525 / 合法请求 500」三级探测 30 秒定性为服务端部署故障；换 Key、换商户、换出口均无效。附带发现 EN 客户端把 HTTP 500 当网络异常，按 5/10/20 分钟退避，单次调用可卡 ~35 分钟。 → `tongtool-openapi-gateway-500-nosuchmethod.md`
+- **新增**: BOM 重量模板兜底回填把 0 覆盖成 NaN（`NaN != 0` 恒真），再撞上成本函数无 NaN 防护 → Frappe `decimal` 列 save 报 `nan can not be used with MySQL`，订单成本/尾差/尾程三步连续失败。修复 = mask 加 `notna()` + 成本列 `fillna(0)` + 取值前统一清洗（PR #29）。 → `pandas-nan-frappe-decimal-order-cost.md`
+
 ## 2026-11-09
 - **更新**: 通途SKU↔EN物料 权威映射 — 补「登记位置与组件多对多」：唯一登记位置是 Item 子表 `customer_items.ref_code`（不是主表 `Item.customer_code`）；同一 Item 可同时有整件与 `-Cover/-Foam`；组件 SKU 多对多（共享皮壳/填充物），完整 SKU 才唯一；配套 `work_order_task#4`（校验放宽）与 `tongtool_integration#22`（同步不要 LIMIT 1）。 → `tongtu-en-item-mapping-and-gsheet-source-fix.md`
 
