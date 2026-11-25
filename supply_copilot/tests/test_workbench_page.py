@@ -897,6 +897,7 @@ def _v2_snapshot():
     """Synthetic snapshot_v2: no private data, exercises every v2 empty-state."""
     return {
         "schema_version": "supply-workbench-snapshot-v2",
+        "display_version": "v2.1.0-test",
         "version": "test-v2",
         "bundle_id": "b" * 64,
         "branch": "美东USNJ",
@@ -919,15 +920,41 @@ def _v2_snapshot():
         "service_level_note": "p90 是需求分位，不是满足率/不缺货率",
         "limits": ["缺口是窗口总量口径，不是某一天的缺货日"],
         "assumptions": None,
+        "executable": False,
+        "executable_reasons": ["68 行预测未覆盖，退回 D6 q95", "存在已过下单日"],
+        "warnings": ["未接入 supply_netting 的批次去重"],
+        "gate": {
+            "open": False,
+            "message": "总提示：本批结果不可直接下单；采购/运营复核后才可下单",
+            "row_can_order_count": 0,
+            "row_blocked_count": 4,
+            "blocking_reason_counts": {"下单日已过": 2, "需求未知": 1, "重复形态，不单独计": 1},
+        },
         "sources": {
             "pack": {"version": "2026-11-13.1", "as_of": "2026-11-13"},
-            "stock": {"run_id": "stock-1", "snapshot_date": "2026-11-24",
-                      "sha256": "1" * 64, "current": True},
+            "stock": {"run_id": "stock-1", "snapshot_at": "2026-11-24 05:00:00",
+                      "snapshot_date": "2026-11-24", "sha256": "1" * 64,
+                      "used_in_decision": True, "age_hours_at_compute": 10.7,
+                      "freshness_at_compute": "fresh", "fresh_at_view": None},
             "forecast": {"run_id": "run-1", "lead_days": 90, "sha256": "2" * 64},
-            "so": {"rows": 317, "as_of": "2026-11-24", "sha256": "3" * 64},
-            "po": {"rows": 141, "as_of": "2026-11-24", "sha256": "4" * 64},
+            "so": {"rows": 317, "keys": 96, "decision_scope_rows": 142,
+                   "outside_scope_rows": 175, "export_scope": "live_export_current_run",
+                   "as_of": "2026-11-24", "sha256": "3" * 64,
+                   "history_available": False,
+                   "history_reason": "历史 SO 未接入；不能证明历史余额为 0"},
+            "po": {"rows": 141, "as_of": "2026-11-24", "sha256": "4" * 64,
+                   "stage_detail_available": False,
+                   "stage_detail_reason": "当前只有聚合 supply.po"},
         },
-        "totals": {"rows": 3, "unique_keys": 3, "duplicate_rows": 0},
+        "totals": {
+            "rows": 4, "unique_keys": 4, "duplicate_rows": 1,
+            "demand_origin": {"forecast": 2, "d6_q95_fallback": 0, "unknown": 1,
+                              "forecast_zero": 0, "zero_recent_share": 0},
+            "quantile_status": {"p90_alias": 2, "unavailable": 1, "zero": 0,
+                                "zero_recent_share": 0},
+            "so_decision_scope": {"keys_with_so": 82, "source_rows": 142,
+                                  "lines": 142, "qty": 6414.0},
+        },
         "rows": [
             {
                 "sku": "V2-A", "customer": "美东USNJ", "physical_form": "成品", "uom": "个",
@@ -937,25 +964,37 @@ def _v2_snapshot():
                 "period_start": "2026-11-24", "period_end": "2027-02-22",
                 "period_basis": "full_period", "horizon_days": 90,
                 "demand": {
-                    "forecast": 12, "d6_q95": 15, "source": "forecast_refresh",
+                    "forecast": 12, "d6_q95": 15, "source": "forecast",
+                    "origin": "forecast", "origin_reason": "本地预测覆盖该键",
+                    "decide_demand_source": "forecast_refresh",
                     "evidence": "forecast window p90", "model": "autoets", "pattern": "smooth",
                     "p50": 9, "p90": 12, "q90": 12, "q95": 12,
+                    "q95_independent": False, "q95_service_commitment": False,
                     "quantile_status": "p90_alias",
                     "quantile_reason": "q90/q95 与 p90 相同",
                 },
                 "supply": {
-                    "opening": 2, "intransit": 1, "po": 0, "cg": 0, "so": 0,
-                    "so_on_time": 0, "so_conditional": 0, "expected": 3, "proven": 3,
+                    "opening": 2, "intransit": 1, "po": 0, "cg": 0, "so": 20,
+                    "so_on_time": 20, "so_conditional": 0, "expected": 3, "proven": 3,
                 },
                 "stock": {"run_id": "stock-1", "snapshot_at": "2026-11-24 05:00:00",
                           "snapshot_date": "2026-11-24", "sha256": "1" * 64,
-                          "current_for_decision": True},
+                          "used_in_decision": True, "age_hours_at_compute": 10.7,
+                          "freshness_at_compute": "fresh", "fresh_at_view": None},
+                "row_can_order": False,
+                "row_can_order_reason": "全局 gate 未放行（executable=false）",
+                "blocking_reasons": ["下单日已过", "预测未覆盖，退回 D6 q95"],
                 "forecast_run": {"run_id": "run-1", "as_of": "2026-11-24",
                                  "lead_days": 90, "windows_sha256": "2" * 64},
                 "provenance": {"so_sha256": "3" * 64, "po_sha256": "4" * 64,
                                "source_row": None, "source_hash": None,
                                "source_row_reason": "decide 不含逐行源指针"},
-                "so_open_qty": 20, "so_recent_open_qty": 20, "so_history_open_qty": 0,
+                "so_open_qty": 20, "so_current_export_open_qty": 20,
+                "so_recent_open_qty": None,
+                "so_recent_open_qty_reason": "语义已拆分：见 so_current_export_open_qty",
+                "so_history_open_qty": None,
+                "so_history_open_qty_reason": "历史 SO 未接入；不能证明历史余额为 0",
+                "so_history_status": "not_connected",
                 "so_source_as_of": "2026-11-24T16:00:00+08:00",
                 "so_lines_status": "ok",
                 "so_lines": [{
@@ -963,7 +1002,11 @@ def _v2_snapshot():
                     "status": "open_balance", "status_reason": "只给开放余额",
                     "open_qty": 20, "delivered_qty": None,
                     "delivered_qty_reason": "未给已交付", "delivery_date": "2026-08-30",
-                    "date_bucket": "recent", "delivery_relation": "past",
+                    "export_scope": "live_export_current_run", "created_at": None,
+                    "created_at_reason": "backlog 导出无创建时间",
+                    "delivery_bucket": "past", "delivery_relation": "past",
+                    "date_bucket": None,
+                    "date_bucket_reason": "已拆分，不表示创建时间",
                 }],
                 "coverage_basis": None,
                 "coverage_basis_reason": "导出未定义 coverage 语义",
@@ -977,17 +1020,26 @@ def _v2_snapshot():
                 "period_start": "2026-11-24", "period_end": "2027-02-22",
                 "period_basis": "full_period", "horizon_days": 90,
                 "demand": {"forecast": None, "p50": None, "p90": None, "q90": None, "q95": None,
+                           "origin": "unknown", "origin_reason": "源快照未给需求",
+                           "q95_independent": False, "q95_service_commitment": False,
                            "quantile_status": "unavailable",
                            "quantile_reason": "本地预测未覆盖该键；需求退回 D6 q95"},
                 "supply": {"opening": 0, "intransit": 0, "po": None, "cg": 0, "so": 0,
                            "so_on_time": 0, "so_conditional": 0, "expected": 0, "proven": 0},
-                "stock": {"run_id": "stock-1", "snapshot_date": "2026-11-24",
-                          "sha256": "1" * 64, "current_for_decision": True},
+                "stock": {"run_id": "stock-1", "snapshot_at": "2026-11-24 05:00:00",
+                          "snapshot_date": "2026-11-24", "sha256": "1" * 64,
+                          "used_in_decision": True, "age_hours_at_compute": 10.7,
+                          "freshness_at_compute": "fresh", "fresh_at_view": None},
+                "row_can_order": False,
+                "row_can_order_reason": "全局 gate 未放行（executable=false）",
+                "blocking_reasons": ["需求未知", "待核（需求未知）"],
                 "forecast_run": {"run_id": "run-1", "as_of": "2026-11-24",
                                  "lead_days": 90, "windows_sha256": "2" * 64},
                 "provenance": {"so_sha256": "3" * 64, "po_sha256": "4" * 64,
                                "source_row": None, "source_hash": None},
-                "so_open_qty": 0, "so_recent_open_qty": 0, "so_history_open_qty": 0,
+                "so_open_qty": 0, "so_current_export_open_qty": 0,
+                "so_recent_open_qty": None, "so_history_open_qty": None,
+                "so_history_status": "not_connected",
                 "so_lines_status": "empty_in_export", "so_lines": [],
                 "coverage_basis": None,
                 "coverage_basis_reason": "导出未定义 coverage 语义",
@@ -1000,20 +1052,59 @@ def _v2_snapshot():
                 "period_start": "2026-11-24", "period_end": "2027-02-22",
                 "period_basis": "full_period", "horizon_days": 90,
                 "demand": {"forecast": 5, "p50": 4, "p90": 5, "q90": 5, "q95": 5,
-                           "quantile_status": "p90_alias"},
+                           "origin": "forecast_zero", "origin_reason": "模型输出为 0",
+                           "q95_independent": False, "q95_service_commitment": False,
+                           "quantile_status": "zero"},
                 "supply": {"opening": 0, "intransit": 0, "po": 0, "cg": 0, "so": 0,
                            "so_on_time": 0, "so_conditional": 0, "expected": 0, "proven": 0},
-                "stock": {"run_id": "stock-1", "snapshot_date": "2026-11-24",
-                          "sha256": "1" * 64, "current_for_decision": True},
+                "stock": {"run_id": "stock-1", "snapshot_at": "2026-11-24 05:00:00",
+                          "snapshot_date": "2026-11-24", "sha256": "1" * 64,
+                          "used_in_decision": True, "age_hours_at_compute": 10.7,
+                          "freshness_at_compute": "fresh", "fresh_at_view": None},
+                "row_can_order": False,
+                "row_can_order_reason": "全局 gate 未放行（executable=false）",
+                "blocking_reasons": ["下单日已过"],
                 "forecast_run": {"run_id": "run-1", "as_of": "2026-11-24",
                                  "lead_days": 90, "windows_sha256": "2" * 64},
                 "provenance": {"so_sha256": "3" * 64, "po_sha256": "4" * 64,
                                "source_row": None, "source_hash": None},
-                "so_open_qty": 3, "so_recent_open_qty": 3, "so_history_open_qty": 0,
+                "so_open_qty": 3, "so_current_export_open_qty": 3,
+                "so_recent_open_qty": None, "so_history_open_qty": None,
+                "so_history_status": "not_connected",
                 "so_lines_status": "line_sum_mismatch",
                 "so_lines": [{"so": "SO-2", "so_line": 1, "open_qty": 1,
                               "delivery_date": "2026-12-01", "delivery_relation": "in_period",
-                              "date_bucket": "recent", "status": "open_balance"}],
+                              "delivery_bucket": "in_period", "date_bucket": None,
+                              "status": "open_balance"}],
+                "coverage_basis": None, "confidence_level": "normal", "service_level": "p90",
+            },
+            {
+                # Duplicate form: the SO amount lives on the main form only. The
+                # page must not add this row's supply.so into SO evidence again.
+                "sku": "V2-D", "customer": "美东USNJ", "physical_form": "皮壳", "uom": "套",
+                "action": "观察", "forecast": 1, "c_qty": 0, "e_qty": 20,
+                "branch": "美东USNJ", "warehouse": "仓-D", "pool": "池-D",
+                "period_start": "2026-11-24", "period_end": "2027-02-22",
+                "period_basis": "full_period", "horizon_days": 90,
+                "demand": {"forecast": 1, "p50": 1, "p90": 1, "q90": 1, "q95": 1,
+                           "origin": "zero_recent_share",
+                           "origin_reason": "近期无本分公司份额，按 0 分配；需人工确认",
+                           "q95_independent": False, "q95_service_commitment": False,
+                           "quantile_status": "zero_recent_share"},
+                "supply": {"opening": 0, "intransit": 0, "po": 0, "cg": 0, "so": 20,
+                           "so_on_time": 20, "so_conditional": 0, "expected": 20, "proven": 20},
+                "stock": {"run_id": "stock-1", "snapshot_at": "2026-11-24 05:00:00",
+                          "snapshot_date": "2026-11-24", "sha256": "1" * 64,
+                          "used_in_decision": True, "age_hours_at_compute": 10.7,
+                          "freshness_at_compute": "fresh", "fresh_at_view": None},
+                "row_can_order": False,
+                "row_can_order_reason": "全局 gate 未放行（executable=false）",
+                "blocking_reasons": ["重复形态，不单独计"],
+                "duplicate_form": True,
+                "so_open_qty": 20, "so_current_export_open_qty": 20,
+                "so_recent_open_qty": None, "so_history_open_qty": None,
+                "so_history_status": "not_connected",
+                "so_lines_status": "duplicate_form", "so_lines": [],
                 "coverage_basis": None, "confidence_level": "normal", "service_level": "p90",
             },
         ],
@@ -1133,7 +1224,9 @@ def test_v2_detail_functions_prefer_new_fields(inputs_v2):
     identity = _function_body(js, "identityFull")
     assert "warehouseText" in identity and "未提供" in js
     stock = _function_body(js, "stockFull")
-    assert "snapshot_date" in stock and "current_for_decision" in stock
+    assert "used_in_decision" in stock and "freshness_at_compute" in stock
+    assert "fresh_at_view" in stock and "按浏览时间" in stock
+    assert "已废弃" in stock   # current_for_decision is only mentioned as deprecated
     source = _function_body(js, "sourceFull")
     assert "coverage_basis" in source and "source_row_reason" in js
 
@@ -1167,5 +1260,193 @@ def test_v2_so_summary_counts_match_rows(inputs_v2):
     payload = json.loads(_embedded_payload(build(snap_path, base_path)))
     assert payload["meta"]["so_summary"] == {
         "keys_with_lines": 2, "lines_total": 2,
-        "empty_in_export": 1, "line_sum_mismatch": 1,
+        "empty_in_export": 1, "line_sum_mismatch": 1, "duplicate_form": 1,
     }
+
+
+# ------------------------------------------------------------ v2.1 release semantics
+
+
+def _release_stub():
+    """Manifest-shaped release dict. File/hash verification is tested separately
+    in test_release_manifest.py."""
+    return {
+        "manifest": {
+            "release_id": "20261125T095418+0800",
+            "display_version": "v2.1.0-20261125",
+            "parent_bundle": "b" * 64,
+            "counts": {
+                "so_full_export": {"rows": 317, "keys": 96,
+                                   "decision_scope_rows": 142, "outside_scope_rows": 175},
+            },
+            "source_times": {"stock_age_hours_at_compute": 10.7},
+            "remaining_gaps": [
+                {"item": "PO 阶段明细/ETA/来源", "status": "pending",
+                 "reason": "当前只有聚合 supply.po", "owner": "A"},
+                {"item": "历史 SO 余额", "status": "pending",
+                 "reason": "历史包未接入", "owner": "A/供应数据"},
+            ],
+        }
+    }
+
+
+def test_v21_gate_banner_headline_and_freshness_placeholder(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    html = build(snap_path, base_path, release=_release_stub())
+    assert "class='gatebanner'" in html
+    assert "整体 gate 关闭 · 本批不可直接下单" in html
+    assert "总提示：本批结果不可直接下单" in html
+    assert "68 行预测未覆盖" in html
+    assert "即使各行数据齐全，本批也一律不放行" in html
+    # View-time freshness is computed by the page, never hard-coded.
+    assert "id='stock-fresh-view'" in html
+    assert "按浏览时间" in html
+
+
+def test_v21_gate_repeated_in_list_detail_and_analysis(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    html = build(snap_path, base_path, release=_release_stub())
+    js = html.split("<script>", 1)[1]
+    for fn in ("gateClosed", "rowCanOrder", "gateBadge", "gateRowHtml", "gatePresent"):
+        assert "function %s(" % fn in js, fn
+    row = _function_body(js, "gateRowHtml")
+    assert "row_can_order=false" in row and "不可下单" in row
+    table_row = _function_body(js, "recRowHtml")
+    assert "gateBadge(r)" in table_row
+    assert "gateRowHtml(r)" in _function_body(js, "recSummaryHtml")
+    assert "gateRowHtml(ctx.row)" in _function_body(js, "evidenceSections")
+    analysis = html.split("id='view-analysis'", 1)[1]
+    assert "gatebar" in analysis and "整体 gate 关闭" in analysis
+
+
+def test_v21_export_carries_gate_origin_and_identity(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    html = build(snap_path, base_path, release=_release_stub())
+    js = html.split("<script>", 1)[1]
+    export = _function_body(js, "exportText")
+    for token in ("display_version=", "release_id=", "parent_bundle=", "period=",
+                  "gate.open=", "executable_reasons=", "demand_origin",
+                  "quantile_status", "q95_independent", "row_can_order",
+                  "blocking_reasons", "row_can_order_reason"):
+        assert token in export, token
+    assert "export-text" in html and "export-copy" in html
+
+
+def test_v21_five_demand_origins_and_quantile_flags(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    html = build(snap_path, base_path, release=_release_stub())
+    method = html[html.index("id='view-method'"):]
+    for code in ("forecast", "forecast_zero", "zero_recent_share",
+                 "d6_q95_fallback", "unknown"):
+        assert code in method, code
+    assert "本地预测未覆盖，退回 D6 q95" in method
+    assert "近期无本分公司份额" in method
+    assert "需求未知（null，不是 0）" in method
+    assert "q95_independent=false" in html and "q95_service_commitment=false" in html
+    js = html.split("<script>", 1)[1]
+    demand = _function_body(js, "demandFull")
+    assert "demand.origin" in demand and "quantileFlagsHtml" in demand
+    assert "ORIGIN_LABELS" in js and "originHtml" in js
+
+
+def test_v21_four_quantile_statuses(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    js = build(snap_path, base_path).split("<script>", 1)[1]
+    q = _function_body(js, "quantileStatusHtml")
+    for status in ("p90_alias", "zero", "zero_recent_share", "unavailable"):
+        assert status in q, status
+    assert "不应当作更高服务水平" in q
+
+
+def test_v21_stock_uses_decision_and_view_time_not_legacy_flag(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    js = build(snap_path, base_path).split("<script>", 1)[1]
+    assert "current_for_decision ===" not in js   # legacy flag is never read
+    fresh = _function_body(js, "freshnessAtView")
+    assert "Date.now()" in fresh and "24" in fresh
+    stock = _function_body(js, "stockFull")
+    for token in ("used_in_decision", "age_hours_at_compute", "freshness_at_compute",
+                  "fresh_at_view", "按浏览时间", "已废弃"):
+        assert token in stock, token
+
+
+def test_v21_so_scope_duplicate_and_history(inputs_v2):
+    snap_path, base_path, _ = inputs_v2
+    html = build(snap_path, base_path, release=_release_stub())
+    js = html.split("<script>", 1)[1]
+    bucket = _function_body(js, "soBucket")
+    assert "delivery_bucket" in bucket
+    sofull = _function_body(js, "soFull")
+    assert "so_current_export_open_qty" in sofull
+    assert "决策证据合计" in sofull
+    assert "全量导出（不进决策证据）" in sofull
+    assert "不重复挂载" in sofull
+    assert "不能证明余额为 0" in sofull
+    assert "不能再叫「近期 = 创建时间」" in sofull
+    # Evidence totals come from totals.so_decision_scope, not from summing rows.
+    assert "6414" in html
+
+
+def test_v21_evidence_totals_not_summed_from_duplicate_rows(inputs_v2):
+    """V2-A contributes 20 and V2-D (duplicate_form) also carries 20; the
+    evidence total must stay 6,414 from totals, never 40 or 6,434."""
+    snap_path, base_path, snap = inputs_v2
+    payload = json.loads(_embedded_payload(build(snap_path, base_path,
+                                                release=_release_stub())))
+    assert payload["totals"]["so_decision_scope"]["qty"] == 6414.0
+    rows = {r["sku"]: r for r in payload["rows"]}
+    assert rows["V2-D"]["duplicate_form"] is True
+    assert rows["V2-D"]["so_lines"] == []
+
+
+def test_v21_baseline_v2_joins_on_complete_key(tmp_path):
+    def row(sku, form, uom, wh, pool, start, end, qty, origin):
+        return {"id": "%s|%s|%s" % (sku, wh, form), "branch": "美东USNJ", "sku": sku,
+                "physical_form": form, "uom": uom, "warehouse": wh, "pool": pool,
+                "period_start": start, "period_end": end, "horizon_days": 90,
+                "demand_qty": qty, "demand_origin": origin, "parent_bundle": "p" * 64}
+
+    snap = {
+        "schema_version": "supply-workbench-snapshot-v2",
+        "display_version": "v2.1.0-test", "version": "t", "bundle_id": "b" * 64,
+        "branch": "美东USNJ", "as_of": "2026-11-24T16:00:00+08:00",
+        "horizon_days": 90, "period_start": "2026-11-24", "period_end": "2027-02-22",
+        "gate": {"open": False, "message": "不可下单"},
+        "totals": {"rows": 2},
+        "rows": [
+            {"sku": "KSX", "physical_form": "成品", "uom": "个", "warehouse": "仓-1",
+             "pool": "池-1", "period_start": "2026-11-24", "period_end": "2027-02-22",
+             "demand": {"forecast": 1}, "row_can_order": False},
+            {"sku": "KSX", "physical_form": "成品", "uom": "个", "warehouse": "仓-2",
+             "pool": "池-2", "period_start": "2026-11-24", "period_end": "2027-02-22",
+             "demand": {"forecast": 2}, "row_can_order": False},
+        ],
+    }
+    baseline = {
+        "schema_version": "supply-workbench-baseline-v2", "version": "b",
+        "as_of": "2026-11-24T16:00:00+08:00", "branch": "美东USNJ",
+        "period_start": "2026-11-24", "period_end": "2027-02-22",
+        "rows": [
+            row("KSX", "成品", "个", "仓-1", "池-1", "2026-11-24", "2027-02-22", 11, "forecast"),
+            row("KSX", "成品", "个", "仓-2", "池-2", "2026-11-24", "2027-02-22", 22, "unknown"),
+        ],
+    }
+    snap_path = tmp_path / "snapshot_v2.json"
+    base_path = tmp_path / "baseline_v2.json"
+    snap_path.write_text(json.dumps(snap, ensure_ascii=False), encoding="utf-8")
+    base_path.write_text(json.dumps(baseline, ensure_ascii=False), encoding="utf-8")
+
+    html = build(snap_path, base_path)
+    payload = json.loads(_embedded_payload(html))
+    recon = payload["recon"]
+    assert recon["full_key"] is True
+    assert recon["unique"] == 2 and recon["ambiguous"] == []
+    assert recon["only_rec"] == 0 and recon["only_base"] == 0
+    assert payload["baseline"]["schema_version"] == "supply-workbench-baseline-v2"
+    js = html.split("<script>", 1)[1]
+    assert "BASELINE_V2" in js and "fullKeyOf" in js
+    twin = _function_body(js, "twinRow")
+    assert "fullKeyOf" in twin
+    assert "set === 'rec' ? (BASE_FULL[fk] || null)" in twin
+    identity = _function_body(js, "identityFull")
+    assert "BASELINE_V2" in identity and "parent_bundle" in identity

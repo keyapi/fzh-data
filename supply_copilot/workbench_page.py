@@ -35,6 +35,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from .release_manifest import ReleaseVerificationError, verify_release
 from .usnj_page import action, b_table, badge, esc, extra, i, read_b, so_lines
 
 STORAGE_KEY = "supply-workbench:proposals:v2"
@@ -278,6 +279,24 @@ color:#c8d3dc;line-height:1.5;min-width:0}
 .metastrip span{white-space:nowrap}
 .metastrip b{color:#eaf1f6;font-weight:600;margin-right:3px}
 .metastrip code{font-family:ui-monospace,Consolas,monospace;color:#dceaf2;font-size:10px}
+.gatebanner{margin:0 0 8px;background:#fdecec;border:1px solid #d9a3a3;border-left:5px solid var(--warn);
+border-radius:4px;padding:9px 12px;font-size:12px;color:#5c2b2b}
+.gate-main{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
+.gate-main b{color:#8a1f1f;letter-spacing:.3px}
+.gate-msg{color:#6b3a3a}
+.gate-stats{font-size:11px;color:#7a4a4a;margin-top:3px}
+.gate-reasons{margin:5px 0 0 18px;padding:0;font-size:11.5px}
+.gate-reasons li{margin:1px 0}
+.gate-more{margin-top:5px;font-size:11px}
+.gate-more summary{cursor:pointer;color:#8a1f1f}
+.gate-more ul{margin:3px 0 6px 18px;padding:0}
+.gate-fresh{display:block;margin-top:4px;font-size:10.5px;color:#7a4a4a}
+.gatebar{margin:0 0 12px;padding:7px 11px;border:1px solid #d9a3a3;background:#fdecec;
+border-radius:4px;font-size:12px;color:#6b2b2b}
+.gate-row{margin:6px 0;padding:6px 10px;border:1px solid #d9a3a3;background:#fdf3f3;
+border-radius:4px;font-size:11.5px;color:#6b2b2b}
+.gate-row ul{margin:3px 0 0 16px;padding:0}
+.export-panel textarea{width:100%;min-height:180px;font-family:ui-monospace,Consolas,monospace;font-size:11px}
 .shell-info{margin-left:auto;font-size:11px}
 .shell-info>summary{cursor:pointer;white-space:nowrap}
 .shell-info-body{position:absolute;right:8px;top:100%;padding:12px;max-width:min(600px,95vw);
@@ -663,8 +682,15 @@ APP_JS = """
   // snapshot_v2 top-level metadata. Older flat snapshots have none, so every
   // accessor falls back to the legacy row keys below (never crashes, never 0).
   var META = (DATA && DATA.meta) || {};
+  var GATE = (DATA && DATA.gate) || {};
+  var TOTALS = (DATA && DATA.totals) || {};
+  var REL = (DATA && DATA.release) || {};
+  var DISPLAY_VERSION = (DATA && DATA.display_version) || META.display_version || REL.display_version || '';
+  var RELEASE_ID = REL.release_id || META.release_id || '';
+  var PARENT_BUNDLE = REL.parent_bundle || META.parent_bundle || META.bundle_id || '';
   var REC = Array.isArray(DATA.rows) ? DATA.rows : [];
   var BASEDOC = DATA.baseline || {};
+  var BASELINE_V2 = BASEDOC.schema_version === 'supply-workbench-baseline-v2';
   var BASE = Array.isArray(BASEDOC.rows) ? BASEDOC.rows : [];
   var AS_OF = DATA.as_of || BASEDOC.as_of || '未知';
   var COMPUTED_AT = META.computed_at || '';
@@ -675,6 +701,30 @@ APP_JS = """
   REC.forEach(function (r) { REC_INDEX[rowKey(r)] = r; });
   BASE.forEach(function (r) { BASE_INDEX[rowKey(r)] = r; });
   var REC_COUNT = countKeys(REC), BASE_COUNT = countKeys(BASE);
+  // baseline_v2 joins on the complete key (SKU|形态|单位|期间|仓|池); no SKU
+  // inheritance and no "first row wins". Falls back to the short key for the
+  // legacy baseline document so old fixtures keep working.
+  var REC_FCOUNT = {}, BASE_FCOUNT = {}, REC_FULL = {}, BASE_FULL = {};
+  if (BASELINE_V2) {
+    REC.forEach(function (r) {
+      var k = fullKeyOf(r);
+      REC_FCOUNT[k] = (REC_FCOUNT[k] || 0) + 1;
+      REC_FULL[k] = r;
+    });
+    BASE.forEach(function (r) {
+      var k = fullKeyOf(r);
+      BASE_FCOUNT[k] = (BASE_FCOUNT[k] || 0) + 1;
+      BASE_FULL[k] = r;
+    });
+  }
+  function twinRow(row, set) {
+    if (BASELINE_V2) {
+      var fk = fullKeyOf(row);
+      return set === 'rec' ? (BASE_FULL[fk] || null) : (REC_FULL[fk] || null);
+    }
+    var key = rowKey(row);
+    return set === 'rec' ? (BASE_INDEX[key] || null) : (REC_INDEX[key] || null);
+  }
   var DATA_KEY = 'v:' + (REC_VERSION || '-') + '|b:' + (BASE_VERSION || '-') +
     '|' + (DATA.branch || 'USNJ');
 
@@ -714,6 +764,14 @@ APP_JS = """
       return '<span class="rec-badge warn">unavailable</span> ' +
         (reason || '本地预测未覆盖该键，需求分位不可得（不补 0）');
     }
+    if (status === 'zero') {
+      return '<span class="rec-badge">zero</span> 模型分位为 0（真实输出，不是未知）' +
+        (reason && reason.indexOf('0') < 0 ? '（' + reason + '）' : '');
+    }
+    if (status === 'zero_recent_share') {
+      return '<span class="rec-badge warn">zero_recent_share</span> ' +
+        (reason || '近期无本分公司份额，按 0 分配，需人工确认');
+    }
     return status ? esc(status) : '<span class="hint">未标注</span>';
   }
   function soLinesStatusHtml(r) {
@@ -743,6 +801,98 @@ APP_JS = """
   function rowStock(r) { return isPlainObject(r && r.stock) ? r.stock : null; }
   function rowProvenance(r) { return isPlainObject(r && r.provenance) ? r.provenance : null; }
   function rowForecastRun(r) { return isPlainObject(r && r.forecast_run) ? r.forecast_run : null; }
+
+  /* ---------------- A1 gate: closed by contract ---------------- */
+  // Never infer orderability from data completeness. The gate stays closed and
+  // every row says so in the list, the detail and the export.
+  function gateClosed() { return GATE.open === false || DATA.executable === false; }
+  function gatePresent() {
+    return (isPlainObject(GATE) && hasKey(GATE, 'open')) || hasKey(DATA, 'executable');
+  }
+  function gateMessage() {
+    return GATE.message || '本批结果不可直接下单；采购/运营复核后才可下单';
+  }
+  function gateReasons() {
+    if (Array.isArray(DATA.executable_reasons)) return DATA.executable_reasons;
+    if (Array.isArray(GATE.executable_reasons)) return GATE.executable_reasons;
+    return [];
+  }
+  function rowCanOrder(r) { return !!(r && r.row_can_order === true) && !gateClosed(); }
+  function rowGateReason(r) {
+    if (r && !isBlank(r.row_can_order_reason)) return String(r.row_can_order_reason);
+    return gatePresent() ? '全局 gate 未放行（executable=false）' : '只读演示：本页没有下单入口';
+  }
+  function rowBlocking(r) { return Array.isArray(r && r.blocking_reasons) ? r.blocking_reasons : []; }
+  function gateBadge(r) {
+    return '<span class="rec-badge warn" title="' + esc(rowGateReason(r)) + '">' +
+      (rowCanOrder(r) ? 'gate 未定义可下单' : '不可下单') + '</span>';
+  }
+  function gateRowHtml(r) {
+    var reasons = rowBlocking(r);
+    return '<div class="gate-row" role="note"><b>本行不可下单</b>（row_can_order=false）· ' +
+      esc(rowGateReason(r)) +
+      (reasons.length ? '<ul>' + reasons.map(function (x) {
+        return '<li>' + esc(x) + '</li>';
+      }).join('') + '</ul>' : '') +
+      '<span class="hint">数据齐全也不放行；本页没有下单入口。</span></div>';
+  }
+
+  /* ---------------- A2 demand origin + quantile flags ---------------- */
+  var ORIGIN_LABELS = {
+    forecast: '本地预测（独立产出）',
+    forecast_zero: '预测为 0（模型输出，不是未知）',
+    zero_recent_share: '近期无本分公司份额，按 0 分配（需人工确认）',
+    d6_q95_fallback: '本地预测未覆盖，退回 D6 q95（旧包，非独立高分位）',
+    unknown: '需求未知（null，不是 0）'
+  };
+  function originOf(d) { return d ? (d.origin || d.source || '') : ''; }
+  function originLabel(v) { return ORIGIN_LABELS[v] || (isBlank(v) ? '未标注' : String(v)); }
+  function originHtml(d) {
+    var v = originOf(d);
+    if (!v) return '<span class="hint">未标注</span>';
+    var tone = (v === 'd6_q95_fallback' || v === 'unknown') ? ' warn' : '';
+    return '<span class="rec-badge' + tone + '">' + esc(v) + '</span> ' + esc(originLabel(v)) +
+      (d && d.origin_reason
+        ? '<small class="hint" style="display:block">' + esc(d.origin_reason) + '</small>' : '');
+  }
+  function quantileFlagsHtml(d) {
+    if (!d) return '';
+    var bits = [];
+    if (hasKey(d, 'q95_independent')) bits.push('q95_independent=' + (d.q95_independent === true));
+    if (hasKey(d, 'q95_service_commitment')) {
+      bits.push('q95_service_commitment=' + (d.q95_service_commitment === true));
+    }
+    return bits.length ? bits.join(' · ') : '未提供';
+  }
+
+  /* ---------------- A2 stock freshness: decision time vs view time ---------------- */
+  function parseSnapshotAt(v) {
+    if (isBlank(v)) return null;
+    var s = String(v).trim();
+    if (s.indexOf('T') < 0 && s.indexOf(':') < 0) return null;  // date only, no time
+    s = s.replace(' ', 'T').replace(/[.]([0-9]{3})[0-9]+$/, '.$1');
+    var d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  function freshnessAtView(st) {
+    var d = parseSnapshotAt(st && st.snapshot_at);
+    if (!d) return {known: false, text: '未知（快照无时点，无法按浏览时间计算）'};
+    var hours = (Date.now() - d.getTime()) / 3600000;
+    if (hours < 0) hours = 0;
+    var fresh = hours <= 24;
+    return {
+      known: true, fresh: fresh, hours: hours,
+      text: (fresh ? '新鲜' : '已过期') + '（约 ' + hours.toFixed(1) +
+        ' 小时前，阈值 24h，按浏览时间）'
+    };
+  }
+
+  /* ---------------- baseline_v2 complete key ---------------- */
+  function fullKeyOf(r) {
+    if (!r) return '';
+    return [r.sku || '', r.physical_form || '', unitOf(r), r.period_start || '',
+      r.period_end || '', r.warehouse || '', r.pool || ''].join('|');
+  }
 
   var state = {
     view: 'workbench', set: 'rec', q: '', action: '',
@@ -856,6 +1006,9 @@ APP_JS = """
     var key = rowKey(r);
     var selected = key === state.recKey;
     var acts = actionParts(r);
+    var d = rowDemand(r);
+    var originNote = d && originOf(d) ? ' · 来源 ' + esc(originOf(d)) : '';
+    var firstBlock = rowBlocking(r)[0];
     return '<tr data-key="' + esc(key) + '"' + (selected ? ' class="selected"' : '') + '>' +
       '<td data-label="商品"><button type="button" class="row-select" data-row="' + esc(key) + '"' +
       (selected ? ' aria-current="true"' : '') + '>' +
@@ -867,12 +1020,15 @@ APP_JS = """
       '<td data-label="期间" class="col-period"><span class="week">' + periodShort(r) + '</span></td>' +
       '<td data-label="建议">' + actionBadge(r) +
       (acts.length ? '<small class="hint" style="display:block">' + acts.join(' + ') + '</small>' : '') +
-      '<small class="sub-merged">覆盖 ' + qty(r.coverage) + ' 天 · ' + flagsHtml(r) + '</small>' +
+      '<small class="sub-merged">覆盖 ' + qty(r.coverage) + ' 天' + originNote + ' · ' +
+      flagsHtml(r) + '</small>' +
       '</td>' +
       '<td data-label="覆盖" class="col-coverage">' + qty(r.coverage) + ' 天</td>' +
       '<td data-label="原因" class="col-reason">' +
-      (isBlank(r.reason) ? unknown() : esc(r.reason)) + '</td>' +
-      '<td data-label="标记" class="col-flags">' + flagsHtml(r) + '</td></tr>';
+      (isBlank(r.reason) ? unknown() : esc(r.reason)) +
+      (firstBlock ? '<small class="hint" style="display:block">阻断：' + esc(firstBlock) + '</small>' : '') +
+      '</td>' +
+      '<td data-label="标记" class="col-flags">' + flagsHtml(r) + gateBadge(r) + '</td></tr>';
   }
 
   function baseRowHtml(r) {
@@ -952,8 +1108,8 @@ APP_JS = """
     var foot = byId('wb-foot');
     if (foot) {
       foot.textContent = state.set === 'rec'
-        ? '补货建议只读，不可下单；与需求基准不相加。'
-        : '需求基准是唯一允许填写演示提案的数据；建议行只读。';
+        ? '整体 gate 关闭：' + gateMessage() + '（row_can_order=false，只读，不可下单）'
+        : '需求基准是唯一允许填写演示提案的数据；建议行只读、不可下单。';
     }
     var ver = byId('wb-version');
     if (ver) {
@@ -1047,7 +1203,10 @@ APP_JS = """
 
   /* ---------------- detail: summary / evidence / actions ---------------- */
 
-  function matchKindFor(row) { return matchKind(REC_COUNT, BASE_COUNT, rowKey(row)); }
+  function matchKindFor(row) {
+    if (BASELINE_V2) return matchKind(REC_FCOUNT, BASE_FCOUNT, fullKeyOf(row));
+    return matchKind(REC_COUNT, BASE_COUNT, rowKey(row));
+  }
 
   function matchBadge(ctx) {
     if (ctx.kind === 'unique') return '<span class="rec-badge approved">唯一匹配</span>';
@@ -1062,9 +1221,10 @@ APP_JS = """
     var kind = matchKindFor(row);
     var twin = null;
     if (kind === 'unique') {
-      twin = set === 'rec' ? (BASE_INDEX[key] || null) : (REC_INDEX[key] || null);
+      twin = twinRow(row, set);
     }
-    return {row: row, set: set, key: key, kind: kind, twin: twin};
+    return {row: row, set: set, key: key, kind: kind, twin: twin,
+      fullKey: BASELINE_V2 ? fullKeyOf(row) : ''};
   }
 
   function foldKey(ctx, prefix, idx) {
@@ -1081,9 +1241,9 @@ APP_JS = """
   function soTable(lines) {
     // v2-only markers; legacy lines also carry open_qty, so don't key on it.
     var v2 = lines.some(function (x) {
-      return hasKey(x, 'delivery_relation') || hasKey(x, 'so_line_reason') ||
-        hasKey(x, 'delivered_qty_reason') || hasKey(x, 'date_bucket_reason') ||
-        hasKey(x, 'status_reason');
+      return hasKey(x, 'delivery_relation') || hasKey(x, 'delivery_bucket') ||
+        hasKey(x, 'so_line_reason') || hasKey(x, 'delivered_qty_reason') ||
+        hasKey(x, 'export_scope') || hasKey(x, 'status_reason');
     });
     if (v2) {
       return '<table><thead><tr><th>SO 单据号</th><th>行</th><th>开放量</th>' +
@@ -1100,7 +1260,7 @@ APP_JS = """
           return '<tr><td>' + esc(x.so || '—') + '</td><td>' + lineCell + '</td>' +
             '<td>' + intq(x.open_qty) + '</td><td>' + deliveredCell + '</td>' +
             '<td>' + esc(x.delivery_date || '未知') + '</td>' +
-            '<td>' + esc(relationLabel(x.delivery_relation)) + '</td><td>' + status + '</td></tr>';
+            '<td>' + esc(relationLabel(deliveryRelation(x))) + '</td><td>' + status + '</td></tr>';
         }).join('') + '</tbody></table>';
     }
     return '<table><thead><tr><th>SO</th><th>行</th><th>创建日</th><th>交付日</th>' +
@@ -1114,8 +1274,22 @@ APP_JS = """
       }).join('') + '</tbody></table>';
   }
 
+  function deliveryRelation(x) {
+    if (!isBlank(x && x.delivery_relation)) return x.delivery_relation;
+    var b = x && x.delivery_bucket;
+    if (b === 'past' || b === 'in_period' || b === 'after_period' || b === 'unknown') return b;
+    return 'unknown';
+  }
+
   function soBucket(lines, bucket) {
-    return lines.filter(function (x) { return (x.date_bucket || 'unknown') === bucket; });
+    // v2.1: delivery_bucket (past/in_period/after_period/unknown). The legacy
+    // date_bucket is only consulted when delivery_bucket is absent, and is
+    // never read as "created recently".
+    return lines.filter(function (x) {
+      var b = hasKey(x, 'delivery_bucket')
+        ? (x.delivery_bucket || 'unknown') : (x.date_bucket || 'unknown');
+      return b === bucket;
+    });
   }
 
   // Split "missing / unknown" from "known facts that look empty". v2 rows treat
@@ -1253,12 +1427,15 @@ APP_JS = """
       ['客户 / 归属', esc(r.customer || r.branch || (ctx.set === 'rec' ? '归属待确认' : '—'))],
       ['形态 / 单位', esc(r.physical_form || '—') + ' · ' + esc(unitOf(r) || '—')]
     ];
-    if (isV2(r)) {
+    if (isV2(r) || BASELINE_V2) {
       items.push(['分支 branch', esc(r.branch || metaText('branch') || '—')]);
       items.push(['仓库 warehouse', warehouseText(r)]);
       items.push(['池 pool', isBlank(r.pool) ? '<span class="unknown">未提供</span>' : esc(r.pool)]);
+      if (hasKey(r, 'parent_bundle')) {
+        items.push(['父 bundle parent_bundle', code(r.parent_bundle)]);
+      }
     }
-    items.push(['套件标识 bundle_id', esc(r.bundle_id || META.bundle_id || '—')]);
+    items.push(['套件标识 bundle_id', esc(r.bundle_id || r.parent_bundle || META.bundle_id || '—')]);
     items.push(['规范化行键', esc(ctx.key)]);
     items.push(['匹配状态', matchBadge(ctx) + (ctx.kind === 'unique' ? ' 同键唯一' :
       ctx.kind === 'ambiguous' ? ' 同键多行，不取第一条' : ' 只有本侧行')]);
@@ -1296,6 +1473,7 @@ APP_JS = """
     var d = rowDemand(r);
     if (d) {
       return '决策需求 <strong>' + qty(d.forecast) + '</strong> ' + esc(unitOf(r)) +
+        ' · 来源 ' + esc(originOf(d) || '未标注') +
         ' · p50/p90 ' + qty(d.p50) + '/' + qty(d.p90) +
         ' · ' + esc(d.quantile_status || '未标注');
     }
@@ -1343,9 +1521,12 @@ APP_JS = """
     if (d) {
       var rows = [
         ['决策用需求 demand.forecast', qty(d.forecast) + ' ' + esc(unitOf(r))],
+        ['需求来源 demand.origin', originHtml(d)],
         ['需求 p50（独立产出）', qty(d.p50)],
         ['需求 p90（独立产出）', qty(d.p90)],
         ['q90 / q95', intq(d.q90) + ' / ' + intq(d.q95)],
+        ['q90/q95 不是独立高分位', quantileFlagsHtml(d) +
+          '<small class="hint" style="display:block">q90/q95 与 p90 相同或未校准；不是满足率承诺</small>'],
         ['分位状态 quantile_status', quantileStatusHtml(d)],
         ['模型 / 模式', esc(d.model || '—') + ' / ' + esc(d.pattern || '—')],
         ['来源 / 证据', esc(d.source || '—') + ' · ' + esc(d.evidence || '—')]
@@ -1413,13 +1594,24 @@ APP_JS = """
     return r && Array.isArray(r.so_lines) ? r.so_lines : [];
   }
 
+  function soExportQty(r) {
+    if (!r) return null;
+    return hasKey(r, 'so_current_export_open_qty') ? r.so_current_export_open_qty : r.so_recent_open_qty;
+  }
+  function soExportLabel(r) {
+    return hasKey(r, 'so_current_export_open_qty') ? '本批导出开放 SO' : '近期 SO（旧字段，非创建时间）';
+  }
+
   function soKey(ctx) {
     var r = ctx.set === 'rec' ? ctx.row : ctx.twin;
     if (!r) return '<span class="unknown">未关联</span>';
     var lines = soLinesFor(ctx);
-    var parts = ['合计 <strong>' + intq(r.so_open_qty) + '</strong>',
-      '近期 ' + intq(r.so_recent_open_qty),
-      '历史 ' + intq(r.so_history_open_qty)];
+    var parts = [esc(soExportLabel(r)) + ' <strong>' + intq(soExportQty(r)) + '</strong>'];
+    if (r.so_history_status === 'not_connected') {
+      parts.push('历史 SO 未接入（null，不能证明为 0）');
+    } else if (hasKey(r, 'so_history_open_qty')) {
+      parts.push('历史 ' + intq(r.so_history_open_qty));
+    }
     if (r.so_lines_status) {
       parts.push(soLinesStatusHtml(r));
     } else if (lines.length) {
@@ -1435,22 +1627,53 @@ APP_JS = """
     if (!r) return '<p class="mutednote">未关联到唯一补货建议行，本层不可用。</p>';
     var lines = soLinesFor(ctx);
     var v2 = !!r.so_lines_status;
+    if (!v2) {
+      return kv([
+        ['SO 管线合计 so_open_qty', intq(r.so_open_qty)],
+        ['近期 SO so_recent_open_qty（旧字段，非创建时间）', intq(r.so_recent_open_qty)],
+        ['历史开放 SO so_history_open_qty', intq(r.so_history_open_qty)],
+        ['SO 取数时点', esc(r.so_source_as_of || '未记录')]
+      ]) + '<p class="mutednote">旧版扁平快照：SO 三段字段按原样展示，不与建议量相加。</p>';
+    }
+    var history = r.so_history_status === 'not_connected'
+      ? '<span class="unknown">null</span>（历史 SO 未接入，不能证明余额为 0）' +
+        (r.so_history_open_qty_reason ? ' · ' + esc(r.so_history_open_qty_reason) : '')
+      : intq(r.so_history_open_qty);
     var items = [
-      ['SO 管线合计 so_open_qty', intq(r.so_open_qty)],
-      ['近期 SO so_recent_open_qty', intq(r.so_recent_open_qty)],
-      ['历史开放 SO so_history_open_qty', intq(r.so_history_open_qty)],
-      ['SO 取数时点', esc(r.so_source_as_of || '未记录')]
+      ['本批导出开放 SO so_current_export_open_qty', intq(soExportQty(r))],
+      ['导出范围 export_scope', esc((META.sources && META.sources.so && META.sources.so.export_scope)
+        || 'live_export_current_run') + '（当前 live 导出的开放余额，不是 Closed）'],
+      ['历史开放 SO so_history_open_qty', history],
+      ['历史状态 so_history_status', esc(r.so_history_status || '未提供')],
+      ['SO 取数时点', esc(r.so_source_as_of || '未记录')],
+      ['明细行 so_lines', lines.length + ' 行（默认折叠，可展开）'],
+      ['明细状态 so_lines_status', soLinesStatusHtml(r)],
+      ['已废弃 so_recent_open_qty', '不再展示数值：语义已拆分（见本批导出量 + export_scope），' +
+        '不能再叫「近期 = 创建时间」' +
+        (r.so_recent_open_qty_reason ? '；' + esc(r.so_recent_open_qty_reason) : '')]
     ];
-    if (v2) {
-      items.push(['明细行 so_lines', lines.length + ' 行（默认折叠，可展开）']);
-      items.push(['明细状态 so_lines_status', soLinesStatusHtml(r)]);
+    if (r.duplicate_form) {
+      items.push(['重复形态 duplicate_form',
+        '本行 SO 只在主行计，不重复挂载；supply.so 不再累加进证据合计']);
     }
     var html = kv(items);
+    var scopeTotals = TOTALS.so_decision_scope || null;
     var soSum = META.so_summary || DATA.so_summary || null;
-    if (soSum) {
+    if (scopeTotals) {
+      html += '<p class="mutednote">决策证据合计：' + esc(scopeTotals.keys_with_so) + ' 键 / ' +
+        esc(scopeTotals.lines) + ' 条 / ' + intq(scopeTotals.qty) + ' 件' +
+        '（重复形态只在主行计，不重复挂载）。</p>';
+    } else if (soSum) {
       html += '<p class="mutednote">全表 SO 证据：' + esc(soSum.keys_with_lines || 0) +
         ' 个键有明细 / ' + esc(soSum.lines_total || 0) + ' 条明细；' +
         'empty_in_export ' + esc(soSum.empty_in_export || 0) + ' 个键（真实空集，不是未知）。</p>';
+    }
+    var full = (REL.counts && REL.counts.so_full_export) || null;
+    if (full) {
+      html += '<details class="raw"><summary>全量导出（不进决策证据）：' + esc(full.rows) +
+        ' 行 / ' + esc(full.keys) + ' 键，其中范围外 ' + esc(full.outside_scope_rows) +
+        ' 行</summary><p class="mutednote">这是当次 USNJ live backlog 的全部开放余额（不是 Closed）；'
+        + '范围外组件/皮壳键单列展示，<b>不进决策证据，也不与 142 条决策行相加</b>。</p></details>';
     }
     if (r.so_lines_status === 'line_sum_mismatch') {
       html += '<p class="mutednote warn">line_sum_mismatch：明细行开放量合计与管线合计不一致，' +
@@ -1464,12 +1687,17 @@ APP_JS = """
           : '<p class="mutednote">未查到开放 SO 行（空集，不是未知）。</p>');
       return html;
     }
-    [['recent', '近期 SO'], ['history', '历史开放 SO'], ['unknown', '创建日未知 SO']]
+    var sample = lines[0] || {};
+    html += '<p class="micro">逐行 export_scope=' + esc(sample.export_scope || 'live_export_current_run') +
+      '；created_at=null' + (sample.created_at_reason ? '（' + esc(sample.created_at_reason) + '）' : '') +
+      '；date_bucket 已废弃，不表示创建时间。</p>';
+    [['past', '已过期（delivery_bucket=past）'], ['in_period', '期间内（delivery_bucket=in_period）'],
+      ['after_period', '期间后（delivery_bucket=after_period）'], ['unknown', '交付日未知（delivery_bucket=unknown）']]
       .forEach(function (pair) {
-        var items = soBucket(lines, pair[0]);
-        if (!items.length) return;
-        html += '<details class="raw"><summary>' + pair[1] + '（' + items.length +
-          ' 行，不加入建议量）</summary>' + soTable(items) + '</details>';
+        var items2 = soBucket(lines, pair[0]);
+        if (!items2.length) return;
+        html += '<details class="raw"><summary>' + pair[1] + '（' + items2.length +
+          ' 行，不加入建议量）</summary>' + soTable(items2) + '</details>';
       });
     return html;
   }
@@ -1479,10 +1707,12 @@ APP_JS = """
     if (!r) return '<span class="unknown">未关联</span>';
     var st = rowStock(r);
     if (st) {
+      var fv = freshnessAtView(st);
       return '快照 <strong>' + esc(st.snapshot_date || '—') + '</strong> · run ' +
-        esc(shortHash(st.run_id, 18)) + ' · ' +
-        (st.current_for_decision === true ? '决策用当前快照' :
-          st.current_for_decision === false ? '非决策快照' : '决策标记未提供');
+        esc(shortHash(st.run_id, 18)) + ' · 决策用 ' +
+        (st.used_in_decision === true ? '是' : st.used_in_decision === false ? '否' : '未提供') +
+        ' · 决策时新鲜度 ' + esc(st.freshness_at_compute || '未提供') +
+        ' · 浏览时新鲜度 ' + esc(fv.text);
     }
     return '快照 C <strong>' + qty(r.c_qty) + '</strong>（' + esc(AS_OF) + '）· 当前观察不可得';
   }
@@ -1492,13 +1722,22 @@ APP_JS = """
     if (!r) return '<p class="mutednote">未关联到唯一补货建议行，本层不可用。</p>';
     var st = rowStock(r);
     if (st) {
+      var fv = freshnessAtView(st);
       return kv([
         ['库存 run_id', esc(st.run_id || '未提供')],
+        ['决策用 used_in_decision', st.used_in_decision === true ? '是' :
+          st.used_in_decision === false ? '否' : '<span class="unknown">未提供</span>'],
         ['快照时点 snapshot_at', esc(st.snapshot_at || '未提供')],
         ['快照日期 snapshot_date', esc(st.snapshot_date || '未提供')],
+        ['决策时年龄 age_hours_at_compute', isBlank(st.age_hours_at_compute)
+          ? '<span class="unknown">未提供</span>' : esc(st.age_hours_at_compute) + ' 小时'],
+        ['决策时新鲜度 freshness_at_compute', esc(st.freshness_at_compute || '未提供')],
+        ['浏览时新鲜度 fresh_at_view（按浏览时间）', esc(fv.text) +
+          '<small class="hint" style="display:block">由页面按当前时间计算；静态页也计算，'
+          + '快照不硬编码</small>'],
+        ['新鲜度策略 freshness_policy', esc(st.freshness_policy || 'fresh if age <= 24h')],
         ['快照 sha256', code(st.sha256)],
-        ['current_for_decision', st.current_for_decision === true ? '是（决策用当前快照）' :
-          st.current_for_decision === false ? '否（历史快照）' : '<span class="unknown">未提供</span>'],
+        ['current_for_decision', '已废弃（v2.1 拆为 used_in_decision + freshness_*），不再作为决策依据'],
         ['快照 C（时点 ' + esc(AS_OF) + '）', qty(r.c_qty)],
         ['当前库存观察', '静态页不可得'],
         ['可用性拆开说', '服务=静态 / 库存=快照 / 建议=只读']
@@ -1542,6 +1781,9 @@ APP_JS = """
         ['coverage_basis', isBlank(r.coverage_basis)
           ? '<span class="unknown">未提供</span>' + (r.coverage_basis_reason ? ' · ' + esc(r.coverage_basis_reason) : '')
           : esc(r.coverage_basis)],
+        ['行级 assumptions', Array.isArray(r.assumptions) && r.assumptions.length
+          ? '<ul>' + r.assumptions.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>'
+          : '<span class="unknown">未提供</span>'],
         ['unknown_policy', esc(metaText('unknown_policy') || '—')],
         ['数据来源文件', esc(DATA.version || '—')]
       ].concat(forecastRunItems(r));
@@ -1587,7 +1829,9 @@ APP_JS = """
   // Side-effect free: the same markup feeds the in-detail evidence block and the
   // cross-row audit view (different id prefixes keep ids unique).
   function evidenceSections(ctx, prefix) {
-    return '<h3>证据链（七层，本行）</h3>' +
+    var gate = (ctx.set === 'rec' && ctx.row && hasKey(ctx.row, 'row_can_order'))
+      ? gateRowHtml(ctx.row) : '';
+    return gate + '<h3>证据链（七层，本行）</h3>' +
       warnSummary(ctx) +
       layer(ctx, prefix, 0, '① 身份', identityKey(ctx), identityFull(ctx)) +
       layer(ctx, prefix, 1, '② 期间', periodKey(ctx), periodFull(ctx)) +
@@ -1642,7 +1886,8 @@ APP_JS = """
     if (flag(r, 'needs_decision')) concl.push('需人工拍板');
     if (flag(r, 'low_confidence')) concl.push('源模型标记低置信');
     if (flag(r, 'ownership_pending')) concl.push('归属待确认');
-    return '<p class="l0">' + concl.join('；') + '。</p>' +
+    var gateHtml = hasKey(r, 'row_can_order') ? gateRowHtml(r) : '';
+    return gateHtml + '<p class="l0">' + concl.join('；') + '。</p>' +
       '<div class="l1">' +
       tile(d ? '需求（决策用）' : '需求（预测中位 q50）', qty(demand),
         esc(unitOf(r)) + (d
@@ -1672,11 +1917,16 @@ APP_JS = """
   function baseSummaryHtml(r) {
     var demand = baselineQty(r);
     var demandKnown = !isBlank(demand);
-    var twin = REC_INDEX[rowKey(r)] || null;
+    var twin = twinRow(r, 'base');
     var supplyKnown = !!(twin && !isBlank(twin.e_qty));
     var unit = unitOf(r);
+    var origin = r.demand_origin ? (' · 来源 origin ' + esc(r.demand_origin) +
+      '（' + esc(originLabel(r.demand_origin)) + '）') : '';
+    var keyNote = BASELINE_V2
+      ? '完整键关联（期间/仓/池），不按 SKU 继承。'
+      : '同键（SKU×形态×单位）关联，不按 SKU 继承。';
     return '<p class="l0">本期需求基准 ' +
-      (demandKnown ? qty(demand) + ' ' + esc(unit) : '缺证据，暂不能确定') + '；' +
+      (demandKnown ? qty(demand) + ' ' + esc(unit) : '缺证据，暂不能确定') + origin + '；' +
       (supplyKnown ? '对应建议行 E 按时供给 ' + qty(twin.e_qty) : '未关联到建议行，供给未知') +
       '。</p>' +
       '<div class="l1">' +
@@ -1688,8 +1938,8 @@ APP_JS = """
         gapText(demandKnown, supplyKnown, demand, twin ? twin.e_qty : null, unit),
         '只作对照，不是补货量') +
       '</div>' +
-      '<div class="note">期间：' + periodShort(r) + '。库存快照：C ' +
-      (twin ? qty(twin.c_qty) : unknown()) + '（快照时点 ' + esc(AS_OF) +
+      '<div class="note">期间：' + periodShort(r) + '。' + esc(keyNote) +
+      ' 库存快照：C ' + (twin ? qty(twin.c_qty) : unknown()) + '（快照时点 ' + esc(AS_OF) +
       '）；当前观察：静态页不可得。空日期写「待核」，不编造。</div>' +
       '<div class="actions">' +
       '<button type="button" class="btn small" data-expand-evidence="1">展开证据明细</button>' +
@@ -2244,6 +2494,87 @@ APP_JS = """
     return res.ok;
   }
 
+  /* ---------------- export: decision evidence, not just the main table ---------------- */
+
+  function csvCell(v) {
+    if (v === null || v === undefined) return '';
+    var s = String(v);
+    if (s.indexOf('"') >= 0 || s.indexOf(',') >= 0 ||
+      s.indexOf(String.fromCharCode(10)) >= 0 || s.indexOf(String.fromCharCode(13)) >= 0) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function exportText() {
+    var lines = [];
+    lines.push('# display_version=' + csvCell(DISPLAY_VERSION));
+    lines.push('# release_id=' + csvCell(RELEASE_ID));
+    lines.push('# parent_bundle=' + csvCell(PARENT_BUNDLE));
+    lines.push('# period=' + csvCell((META.period_start || '') + '~' + (META.period_end || '')) +
+      '; horizon_days=' + csvCell(META.horizon_days));
+    lines.push('# as_of=' + csvCell(AS_OF) + '; computed_at=' + csvCell(META.computed_at || ''));
+    lines.push('# gate.open=' + (GATE.open === false ? 'false' : String(GATE.open)) +
+      '; row_can_order_count=' + csvCell(GATE.row_can_order_count) +
+      '; message=' + csvCell(gateMessage()));
+    lines.push('# executable_reasons=' + csvCell(gateReasons().join(' | ')));
+    var sc = TOTALS.so_decision_scope || {};
+    if (sc.keys_with_so != null) {
+      lines.push('# so_decision_scope=' + csvCell(sc.keys_with_so + ' keys / ' +
+        sc.lines + ' lines / ' + sc.qty + ' qty'));
+    }
+    lines.push(['sku', 'physical_form', 'uom', 'warehouse', 'pool', 'period_start', 'period_end',
+      'demand_forecast', 'demand_origin', 'quantile_status', 'q95_independent',
+      'q95_service_commitment', 'supply_proven', 'so_current_export_open_qty',
+      'so_history_status', 'row_can_order', 'blocking_reasons', 'row_can_order_reason'].join(','));
+    REC.forEach(function (r) {
+      var d = rowDemand(r) || {};
+      var s = rowSupply(r) || {};
+      var cells = [
+        r.sku, r.physical_form, r.uom, r.warehouse, r.pool, r.period_start, r.period_end,
+        !isBlank(d.forecast) ? d.forecast : r.forecast,
+        originOf(d), d.quantile_status || '',
+        hasKey(d, 'q95_independent') ? String(d.q95_independent) : '',
+        hasKey(d, 'q95_service_commitment') ? String(d.q95_service_commitment) : '',
+        !isBlank(s.proven) ? s.proven : r.e_qty,
+        soExportQty(r), r.so_history_status || '',
+        r.row_can_order === true ? 'true' : 'false',
+        rowBlocking(r).join(' | '), rowGateReason(r)
+      ];
+      lines.push(cells.map(csvCell).join(','));
+    });
+    var nl = String.fromCharCode(10);
+    return lines.join(nl) + nl;
+  }
+
+  function renderExport() {
+    var ta = byId('export-text');
+    if (ta) ta.value = exportText();
+  }
+
+  function copyExport() {
+    var ta = byId('export-text');
+    var note = byId('export-note');
+    if (!ta) return;
+    var done = function (ok) {
+      if (note) note.textContent = ok ? '已复制到剪贴板' : '复制失败，请手动全选复制';
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(function () { done(true); },
+        function () { ta.select(); done(false); });
+    } else { ta.select(); done(false); }
+  }
+
+  function renderStockFreshness() {
+    var el = byId('stock-fresh-view');
+    if (!el) return;
+    var st = (META.sources && META.sources.stock) || {};
+    var fv = freshnessAtView(st);
+    el.textContent = '库存新鲜度（按浏览时间）：' + fv.text +
+      ' · 决策时 ' + (st.freshness_at_compute || '未提供') +
+      ' · used_in_decision=' + (st.used_in_decision === true);
+  }
+
   function renderSummary() {
     var list = proposals();
     var pending = list.filter(function (p) { return p.status === 'submitted'; }).length;
@@ -2575,6 +2906,8 @@ APP_JS = """
         if (title) { try { title.focus({preventScroll: true}); } catch (e) { title.focus(); } }
       });
     }
+    var copyExportBtn = byId('export-copy');
+    if (copyExportBtn) copyExportBtn.addEventListener('click', copyExport);
     Array.prototype.forEach.call(document.querySelectorAll('[data-pane]'), function (b) {
       b.addEventListener('click', function () {
         var pane = b.getAttribute('data-pane');
@@ -2633,6 +2966,8 @@ APP_JS = """
       renderEvidenceList();
       renderEvidencePanel();
       renderProposals();
+      renderExport();
+      renderStockFreshness();
       Array.prototype.forEach.call(document.querySelectorAll('.analysis-pane table'), function (table) {
         var headers = table.querySelectorAll('thead th');
         Array.prototype.forEach.call(table.querySelectorAll('tbody tr'), function (row) {
@@ -2697,10 +3032,16 @@ def json_safe(obj, counts: dict | None = None, key: str | None = None):
     return obj
 
 
+def _is_usnj_branch(value) -> bool:
+    """Accept both ``USNJ`` (legacy baseline) and ``美东USNJ`` (baseline_v2)."""
+    text = str(value or "").strip()
+    return text == BRANCH or text.endswith(BRANCH)
+
+
 def filter_usnj(baseline: dict) -> list:
     """Keep only demand-baseline rows owned by the USNJ branch."""
     rows = baseline.get("rows") or []
-    return [r for r in rows if str(r.get("branch") or "").strip() == BRANCH]
+    return [r for r in rows if _is_usnj_branch(r.get("branch"))]
 
 
 def load_baseline(path: Path):
@@ -2709,21 +3050,29 @@ def load_baseline(path: Path):
     return doc, filter_usnj(doc)
 
 
-def _key(row: dict) -> tuple:
+def _key(row: dict, full: bool = False) -> tuple:
     unit = row.get("uom")
     if unit in (None, ""):
         unit = row.get("unit")
-    return (str(row.get("sku") or ""), str(row.get("physical_form") or ""), str(unit or ""))
+    base = (str(row.get("sku") or ""), str(row.get("physical_form") or ""), str(unit or ""))
+    if not full:
+        return base
+    # baseline_v2 rows carry period/warehouse/pool; joining on the complete key
+    # avoids inheriting another row's demand when one SKU has several pools.
+    extra_key = (str(row.get("period_start") or ""), str(row.get("period_end") or ""),
+                 str(row.get("warehouse") or ""), str(row.get("pool") or ""))
+    return base + extra_key
 
 
-def reconcile(rec_rows: list, base_rows: list) -> dict:
-    """Full outer join of suggestion vs baseline rows on SKU x 形态 x 单位.
+def reconcile(rec_rows: list, base_rows: list, full_key: bool = False) -> dict:
+    """Full outer join of suggestion vs baseline rows on the row key.
 
-    SKU alone is one-to-many in this snapshot (same SKU sold as 成品 and 皮壳),
-    so a SKU-only join would silently pick a row. Counts are kept on both sides.
+    Default key is SKU x 形态 x 单位. A ``baseline_v2`` document switches to the
+    complete key (SKU x 形态 x 单位 x 期间 x 仓 x 池) so demand is never inherited
+    from another row of the same SKU.
     """
-    rec_counts = Counter(_key(r) for r in rec_rows)
-    base_counts = Counter(_key(r) for r in base_rows)
+    rec_counts = Counter(_key(r, full_key) for r in rec_rows)
+    base_counts = Counter(_key(r, full_key) for r in base_rows)
     rec_keys, base_keys = set(rec_counts), set(base_counts)
     only_rec = sorted(rec_keys - base_keys)
     only_base = sorted(base_keys - rec_keys)
@@ -2734,7 +3083,8 @@ def reconcile(rec_rows: list, base_rows: list) -> dict:
     dup_skus = {k for k, v in sku_counts.items() if v > 1} | {
         k for k, v in sku_counts_base.items() if v > 1}
     return {
-        "key": "SKU×形态×单位",
+        "key": "SKU×形态×单位×期间×仓×池" if full_key else "SKU×形态×单位",
+        "full_key": bool(full_key),
         "unique": unique,
         "only_rec": len(only_rec),
         "only_base": len(only_base),
@@ -2763,10 +3113,16 @@ def _forecast_rows(rows) -> str:
 
 
 def _supply_rows(rows) -> str:
+    # v2.1: "近期/历史" 是废弃语义；本批导出量优先 so_current_export_open_qty，
+    # 旧快照退化到 so_recent_open_qty（也不解释成创建时间）。
+    def _export_so(r):
+        value = r.get("so_current_export_open_qty")
+        return r.get("so_recent_open_qty") if value is None else value
+
     return "".join(
         f"<tr><td>{esc(r.get('sku'))}</td><td>{i(r.get('c_qty'))}</td><td>{extra(r, 'EN已发运量')}</td>"
         f"<td>{extra(r, 'EN待发量')}</td><td>{extra(r, 'PO追加(去重)')}</td><td>{extra(r, 'SO已下')}</td>"
-        f"<td>{extra(r, 'CG可调拨抵扣')}</td><td>{i(r.get('so_recent_open_qty'))}</td>"
+        f"<td>{extra(r, 'CG可调拨抵扣')}</td><td>{i(_export_so(r))}</td>"
         f"<td>{i(r.get('so_history_open_qty'))}</td></tr>"
         for r in rows
     )
@@ -2810,8 +3166,8 @@ def _analysis_c(rows) -> str:
             "<p class='intro'>C = 当前可发，不含在途；EN 已发运/待发、PO、SO、CG 同表列出但各自口径，"
             "不能相加替代；CG 是下游缓冲，不可回拨。</p>"
             "<div class='scroll-x'><table id='table-c'><thead><tr><th>SKU</th><th>C</th>"
-            "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO</th><th>CG</th><th>近期SO</th>"
-            "<th>历史SO</th></tr></thead><tbody>" + _supply_rows(rows) + "</tbody></table></div>")
+            "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO</th><th>CG</th><th>本批导出SO</th>"
+            "<th>历史SO（未接入=—）</th></tr></thead><tbody>" + _supply_rows(rows) + "</tbody></table></div>")
 
 
 def _analysis_d(rows) -> str:
@@ -2827,8 +3183,8 @@ def _analysis_e(rows) -> str:
             "<p class='intro'>按需要日汇总的到期供给；SO 管线不加入建议量；生产/DN/通途 PO 尚未接入，"
             "显示缺失而非 0。</p>"
             "<div class='scroll-x'><table id='table-e'><thead><tr><th>SKU</th><th>C</th>"
-            "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO</th><th>CG</th><th>近期SO</th>"
-            "<th>历史SO</th></tr></thead><tbody>" + _supply_rows(rows) + "</tbody></table></div>")
+            "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO</th><th>CG</th><th>本批导出SO</th>"
+            "<th>历史SO（未接入=—）</th></tr></thead><tbody>" + _supply_rows(rows) + "</tbody></table></div>")
 
 
 def _analysis_nav() -> str:
@@ -2853,6 +3209,13 @@ def _meta_strip(meta: dict) -> str:
     if not (meta.get("schema_version") or meta.get("period_start") or meta.get("bundle_id")):
         return ""
     parts = []
+    if meta.get("display_version"):
+        parts.append("<span><b>版本</b>%s</span>" % esc(meta.get("display_version")))
+    if meta.get("release_id"):
+        parts.append("<span class='opt'><b>release</b><code>%s</code></span>" % esc(meta.get("release_id")))
+    if meta.get("parent_bundle"):
+        p = str(meta.get("parent_bundle"))
+        parts.append("<span class='opt'><b>parent</b><code title='%s'>%s</code></span>" % (esc(p), esc(p[:12])))
     if meta.get("period_start") or meta.get("period_end"):
         parts.append("<span><b>期间</b>%s ~ %s</span>" % (
             esc(meta.get("period_start") or "?"), esc(meta.get("period_end") or "?")))
@@ -2880,6 +3243,68 @@ def _meta_strip(meta: dict) -> str:
     return "<div class='metastrip'>" + "".join(parts) + "</div>"
 
 
+def _gate_banner(snap: dict) -> str:
+    """Top-level A1 gate: the whole batch is not orderable, even when complete.
+
+    Server-rendered so it shows with JavaScript disabled and on the very first
+    paint. Never green: gate closed is a blocking statement.
+    """
+    gate = snap.get("gate")
+    if not isinstance(gate, dict):
+        return ""
+    reasons = snap.get("executable_reasons") or []
+    warnings = snap.get("warnings") or gate.get("global_warnings") or []
+    limits = snap.get("limits") or []
+    counts = gate.get("blocking_reason_counts") or {}
+    total = (snap.get("totals") or {}).get("rows")
+    can_order = gate.get("row_can_order_count")
+    blocked = gate.get("row_blocked_count")
+
+    head = gate.get("message") or "本批结果不可直接下单；采购/运营复核后才可下单"
+    stats = []
+    if can_order is not None:
+        stats.append("可下单行 %s" % esc(can_order))
+    if blocked is not None:
+        stats.append("阻断行 %s" % esc(blocked))
+    if total is not None:
+        stats.append("总行 %s" % esc(total))
+    stat_text = " · ".join(stats)
+
+    reason_html = "".join("<li>%s</li>" % esc(str(x)) for x in reasons) or "<li>未提供原因（不视为可下单）</li>"
+    warn_html = "".join("<li>%s</li>" % esc(str(x)) for x in warnings) or "<li>无</li>"
+    limit_html = "".join("<li>%s</li>" % esc(str(x)) for x in limits) or "<li>未提供</li>"
+    count_html = "".join("<li>%s：%s 行</li>" % (esc(str(k)), esc(str(v))) for k, v in counts.items()) or "<li>无</li>"
+
+    return (
+        "<div class='gatebanner' role='alert' aria-label='整体 gate 不可下单'>"
+        "<div class='gate-main'><b>整体 gate 关闭 · 本批不可直接下单</b>"
+        "<span class='gate-msg'>%s</span></div>"
+        "<div class='gate-stats'>%s</div>"
+        "<ul class='gate-reasons'>%s</ul>"
+        "<details class='gate-more'><summary>阻断原因 / 警告 / 限制（%d 项）</summary>"
+        "<div><b>executable_reasons</b><ul>%s</ul></div>"
+        "<div><b>warnings / global_warnings</b><ul>%s</ul></div>"
+        "<div><b>逐行阻断原因统计</b><ul>%s</ul></div>"
+        "<div><b>limits</b><ul>%s</ul></div>"
+        "<p class='hint'>即使各行数据齐全，本批也一律不放行（row_can_order=false）。"
+        "页面不会提供下单入口，也不把齐全度当成可执行信号。</p></details>"
+        "<span class='gate-fresh' id='stock-fresh-view'>库存新鲜度（按浏览时间）：脚本计算中…</span>"
+        "</div>"
+    ) % (esc(head), esc(stat_text), reason_html, len(reasons) + len(warnings) + len(limits),
+         reason_html, warn_html, count_html, limit_html)
+
+
+def _analysis_gate(snap: dict) -> str:
+    """Compact gate line repeated inside the analysis view."""
+    gate = snap.get("gate")
+    if not isinstance(gate, dict):
+        return ""
+    msg = gate.get("message") or "本批结果不可直接下单"
+    reasons = " / ".join(str(x) for x in (snap.get("executable_reasons") or []))
+    return ("<p class='gatebar' role='note'><b>整体 gate 关闭</b>：%s"
+            "%s</p>") % (esc(msg), (" · " + esc(reasons)) if reasons else "")
+
+
 def _method_v2_sections(meta: dict) -> str:
     """口径页新增：snapshot_v2 的说明、限制、来源与假设。"""
     if not isinstance(meta, dict) or not meta.get("schema_version"):
@@ -2901,11 +3326,97 @@ def _method_v2_sections(meta: dict) -> str:
     limits_html = "".join("<li>%s</li>" % esc(x) for x in limits) if isinstance(limits, list) and limits else \
         "<li>未提供（null）</li>"
 
+    sources = meta.get("sources") if isinstance(meta.get("sources"), dict) else {}
+    totals = meta.get("totals") if isinstance(meta.get("totals"), dict) else {}
+    gate = meta.get("gate") if isinstance(meta.get("gate"), dict) else {}
+    rcounts = meta.get("release_counts") if isinstance(meta.get("release_counts"), dict) else {}
+    gaps = meta.get("remaining_gaps") if isinstance(meta.get("remaining_gaps"), list) else []
+
+    gate_html = ""
+    if gate:
+        greasons = meta.get("executable_reasons") or gate.get("executable_reasons") or []
+        gwarn = meta.get("warnings") or gate.get("global_warnings") or []
+        gate_html = (
+            "<h2>整体 gate（A1，不可下单）</h2><ul>"
+            "<li><b>gate.message</b>：%s</li>" % esc(gate.get("message") or "未提供") +
+            "<li>executable=<code>%s</code> · row_can_order_count=<code>%s</code> · "
+            "row_blocked_count=<code>%s</code></li>" % (
+                esc(meta.get("executable")), esc(gate.get("row_can_order_count")),
+                esc(gate.get("row_blocked_count"))) +
+            "<li><b>executable_reasons</b>：%s</li>" % ("；".join(esc(x) for x in greasons) or "—") +
+            "<li><b>warnings / global_warnings</b>：%s</li>" % ("；".join(esc(x) for x in gwarn) or "—") +
+            "<li>逐行 <code>blocking_reasons</code> / <code>row_can_order=false</code> / "
+            "<code>row_can_order_reason</code> 在主表、详情、分析与导出同步展示；"
+            "数据齐全也不放行，页面不提供下单入口。</li></ul>"
+        )
+
+    origin_counts = totals.get("demand_origin") or {}
+    origin_labels = [
+        ("forecast", "本地预测（独立产出）"),
+        ("forecast_zero", "预测为 0（模型输出，不是未知）"),
+        ("zero_recent_share", "近期无本分公司份额，按 0 分配（需人工确认）"),
+        ("d6_q95_fallback", "本地预测未覆盖，退回 D6 q95（旧包，非独立高分位）"),
+        ("unknown", "需求未知（null，不是 0）"),
+    ]
+    origin_html = (
+        "<h2>需求来源 demand.origin（A2，五类）</h2>"
+        "<table><thead><tr><th>origin</th><th>含义</th><th>行数</th></tr></thead><tbody>" +
+        "".join("<tr><td><code>%s</code></td><td>%s</td><td>%s</td></tr>" % (
+            esc(code), esc(label), esc(origin_counts.get(code, 0))) for code, label in origin_labels) +
+        "</tbody></table><ul>"
+        "<li><code>q95_independent=false</code> 与 <code>q95_service_commitment=false</code>："
+        "q90/q95 与 p90 相同或未校准，<b>不是独立高分位，也不是满足率承诺</b>。</li>"
+        "<li><code>quantile_status</code>：p90_alias / zero / zero_recent_share / unavailable；"
+        "只有 p50/p90 是独立产出。</li></ul>"
+    )
+
+    stock_block = sources.get("stock") or {}
+    stock_html = (
+        "<h2>库存语义（A2，决策时点 vs 浏览时点）</h2><ul>"
+        "<li><code>used_in_decision=%s</code>：该快照参与了本次决策。</li>" % esc(stock_block.get("used_in_decision")) +
+        "<li><code>snapshot_at=%s</code> · <code>age_hours_at_compute=%s</code> · "
+        "<code>freshness_at_compute=%s</code>（按决策时点，24h 阈值）。</li>" % (
+            esc(stock_block.get("snapshot_at")), esc(stock_block.get("age_hours_at_compute")),
+            esc(stock_block.get("freshness_at_compute"))) +
+        "<li><code>fresh_at_view=null</code> 由页面按<b>当前浏览时间</b>计算（静态页也计算，"
+        "不硬编码），并明确标注「按浏览时间」。</li>"
+        "<li><code>current_for_decision</code> 已废弃：不再用单一布尔冒充决策依据。</li></ul>"
+    )
+
+    scope = totals.get("so_decision_scope") or {}
+    full = rcounts.get("so_full_export") or {}
+    so_html = (
+        "<h2>SO 口径（A2，决策证据 vs 全量导出）</h2><ul>"
+        "<li>决策证据：<b>%s 键 / %s 条 / %s 件</b>"
+        "（<code>so_decision_scope</code>，重复形态只在主行计，不重复挂载）。</li>" % (
+            esc(scope.get("keys_with_so")), esc(scope.get("lines")), i(scope.get("qty"))) +
+        "<li><code>so_lines_status</code>：ok / empty_in_export（真实空集，不是未知）/ "
+        "duplicate_form（本行不挂明细）/ line_sum_mismatch（需复核）。</li>"
+        "<li><code>so_history_status=not_connected</code>：历史开放 SO 为 null + 原因，"
+        "<b>不能证明历史余额为 0</b>。</li>"
+        "<li>废弃字段：<code>so_recent_open_qty</code>（改用 <code>so_current_export_open_qty</code>）、"
+        "<code>so_history_open_qty</code>（null）、<code>so_lines[].date_bucket</code>"
+        "（改用 <code>export_scope</code> + <code>delivery_bucket</code>，不再表示创建时间）。</li>"
+    )
+    if full:
+        so_html += (
+            "<li>全量导出（<b>不进决策证据</b>）：%s 行 / %s 键，其中范围外 %s 行 / %s 键。"
+            "单列展示，不与决策证据混加。</li></ul>" % (
+                esc(full.get("rows")), esc(full.get("keys")),
+                esc(full.get("outside_scope_rows", scope.get("outside_scope_rows"))),
+                esc(full.get("outside_scope_keys", 14))))
+    else:
+        so_html += "</ul>"
+
+    gap_html = "".join(
+        "<li><b>%s</b>（%s）：%s；责任 %s</li>" % (
+            esc(g.get("item")), esc(g.get("status")), esc(g.get("reason")), esc(g.get("owner")))
+        for g in gaps if isinstance(g, dict)) or "<li>未提供剩余缺口清单（remaining_gaps）。</li>"
+
     assumptions = meta.get("assumptions")
     assumptions_html = "".join("<li>%s</li>" % esc(x) for x in assumptions) if isinstance(assumptions, list) and assumptions else \
         "<li>顶层 assumptions 未提供（null）；行级 assumptions 见各行证据层的口径说明。</li>"
 
-    sources = meta.get("sources") if isinstance(meta.get("sources"), dict) else {}
     src_rows = []
 
     def _src(name, keys):
@@ -2953,6 +3464,14 @@ def _method_v2_sections(meta: dict) -> str:
         "<li>未接入的 PO 阶段明细 / ETA、生产单、DN、逐行 source_row/source_hash 与 "
         "coverage 业务定义，一律 null + 原因，不用 0 或 D6 聚合冒充。</li>"
         "</ul>"
+        "<h2>来源与追溯 provenance</h2><ul>"
+        "<li><code>provenance.so_sha256</code> / <code>po_sha256</code> 见上表；"
+        "逐行 <code>source_row</code> / <code>source_hash</code> 为 null + 原因"
+        "（decide 不含逐行源指针，按 key + forecast_run_id + stock/SO/PO sha 追溯）。</li>"
+        "<li>未接入项一律 null + 原因：PO 明细/ETA、生产单/DN 行级明细、coverage basis、历史 SO 余额。</li>"
+        "</ul>"
+        + gate_html + origin_html + stock_html + so_html +
+        "<h2>仍未接入（remaining_gaps）</h2><ul>" + gap_html + "</ul>"
     )
 
 
@@ -3000,13 +3519,15 @@ def _method_view(recon: dict, as_of: str, nonfinite: dict, meta: dict | None = N
         "<td>快照 rows；缺失写「未记录」</td></tr>"
         "</tbody></table>"
         "<h2>行键与对账</h2><ul>"
-        f"<li>对单键 = SKU × 形态 × 单位；本次唯一匹配 {recon['unique']} / "
+        f"<li>对单键 = {esc(recon['key'])}；本次唯一匹配 {recon['unique']} / "
         f"建议 {recon['rec_total']} 行 / 基准 {recon['base_total']} 行。</li>"
         f"<li>仅建议 {recon['only_rec']} · 仅基准 {recon['only_base']} · 歧义 "
         f"{len(recon['ambiguous'])}；两边总数分别守恒。</li>"
         f"<li>若只按 SKU 对单，本次会有 {recon['sku_only_ambiguous']} 个 SKU 一对多"
         "（同一 SKU 同时以成品/皮壳出现），因此不按 SKU 单列 join、不取第一条。</li>"
-        "<li>页面从 SKU×形态×单位派生「规范化行键」仅用于定位，不写入数据。</li>"
+        "<li>baseline_v2 使用完整键（含期间/仓/池）关联；缺失时退回 SKU×形态×单位，"
+        "不按 SKU 继承其他行的需求。</li>"
+        "<li>页面从行键派生「规范化行键」仅用于定位，不写入数据。</li>"
         "</ul>"
         "<h2>本阶段不做</h2><ul>"
         "<li>不改业务计算、不扩范围、不做周桶重分配、不生成订单。</li>"
@@ -3017,15 +3538,25 @@ def _method_view(recon: dict, as_of: str, nonfinite: dict, meta: dict | None = N
         "</div>")
 
 
-def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -> str:
+def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None,
+          release: dict | None = None) -> str:
+    """Render the single-file page.
+
+    ``release`` is the result of :func:`release_manifest.verify_release` (or
+    None when building from loose files in tests). It only contributes the
+    manifest-bound identity: release_id, display_version, parent_bundle,
+    counts, remaining gaps. Data still comes from the verified snapshot files.
+    """
     snap = json.loads(Path(snapshot_path).read_text(encoding="utf-8"))
     rows = snap["rows"]
     baseline_doc, baseline_rows = load_baseline(Path(baseline_path))
+    baseline_v2 = baseline_doc.get("schema_version") == "supply-workbench-baseline-v2"
+    manifest = (release or {}).get("manifest") or {}
 
     b1 = read_b(b_dir, "B_USNJ归属清单.csv")
     b2 = read_b(b_dir, "B_待确认.csv")
     as_of = snap.get("as_of") or baseline_doc.get("as_of") or "未知"
-    recon = reconcile(rows, baseline_rows)
+    recon = reconcile(rows, baseline_rows, full_key=baseline_v2)
 
     summary = {k: sum(1 for r in rows if r.get(k)) for k in
                ("needs_decision", "low_confidence", "special", "ownership_pending")}
@@ -3034,6 +3565,9 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     # None; the page then falls back to the legacy row keys.
     meta = {
         "schema_version": snap.get("schema_version"),
+        "display_version": snap.get("display_version") or manifest.get("display_version"),
+        "release_id": manifest.get("release_id"),
+        "parent_bundle": manifest.get("parent_bundle") or snap.get("bundle_id"),
         "version": snap.get("version"),
         "bundle_id": snap.get("bundle_id"),
         "branch": snap.get("branch"),
@@ -3049,35 +3583,59 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
         "quantile_note": snap.get("quantile_note"),
         "service_level_note": snap.get("service_level_note"),
         "limits": snap.get("limits"),
+        "executable": snap.get("executable"),
+        "executable_reasons": snap.get("executable_reasons"),
+        "warnings": snap.get("warnings"),
+        "gate": snap.get("gate"),
         "sources": snap.get("sources"),
         "assumptions": snap.get("assumptions"),
         "totals": snap.get("totals"),
+        "release_counts": manifest.get("counts"),
+        "source_times": manifest.get("source_times"),
+        "remaining_gaps": manifest.get("remaining_gaps"),
     }
     so_keys = sum(1 for r in rows if r.get("so_lines"))
     so_lines_total = sum(len(r.get("so_lines") or []) for r in rows)
     so_empty = sum(1 for r in rows if r.get("so_lines_status") == "empty_in_export")
     so_mismatch = sum(1 for r in rows if r.get("so_lines_status") == "line_sum_mismatch")
-    if so_keys or so_lines_total or so_empty or so_mismatch:
+    so_duplicate = sum(1 for r in rows if r.get("so_lines_status") == "duplicate_form")
+    if so_keys or so_lines_total or so_empty or so_mismatch or so_duplicate:
         meta["so_summary"] = {
             "keys_with_lines": so_keys,
             "lines_total": so_lines_total,
             "empty_in_export": so_empty,
             "line_sum_mismatch": so_mismatch,
+            "duplicate_form": so_duplicate,
         }
 
     payload = {
         "version": snap.get("version"),
+        "display_version": snap.get("display_version") or manifest.get("display_version"),
         "as_of": as_of,
         "demo": baseline_doc.get("demo"),
         "branch": BRANCH,
         "recommendation_rows": len(rows),
         "schema_version": snap.get("schema_version"),
+        "executable": snap.get("executable"),
+        "executable_reasons": snap.get("executable_reasons"),
+        "warnings": snap.get("warnings"),
+        "gate": snap.get("gate"),
+        "totals": snap.get("totals"),
+        "release": {
+            "release_id": manifest.get("release_id"),
+            "display_version": manifest.get("display_version") or snap.get("display_version"),
+            "parent_bundle": manifest.get("parent_bundle") or snap.get("bundle_id"),
+            "counts": manifest.get("counts"),
+            "source_times": manifest.get("source_times"),
+            "remaining_gaps": manifest.get("remaining_gaps"),
+        },
         "meta": meta,
         "recon": recon,
         "baseline": {
             "version": baseline_doc.get("version"),
             "as_of": baseline_doc.get("as_of"),
             "demo": baseline_doc.get("demo"),
+            "schema_version": baseline_doc.get("schema_version"),
             "rows": baseline_rows,
         },
         "rows": rows,
@@ -3116,7 +3674,12 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     doc += f"<span class='mchips'>{chips}</span></div><div class='datachips'>"
     doc += f"<span class='chip'>补货建议 {len(rows)} 行（只读）</span>"
     doc += f"<span class='chip'>需求基准 {len(baseline_rows)} 行（仅 USNJ）</span>"
-    doc += f"<span class='chip'>对单 {recon['unique']}/{recon['rec_total']}</span></div>"
+    doc += f"<span class='chip'>对单 {recon['unique']}/{recon['rec_total']}</span>"
+    if meta.get("display_version"):
+        doc += f"<span class='chip'>版本 {esc(meta.get('display_version'))}</span>"
+    if isinstance(snap.get("gate"), dict) and snap["gate"].get("open") is False:
+        doc += "<span class='chip' style='border-color:#d9a3a3;color:#f4d6d6'>gate 关闭 · 不可下单</span>"
+    doc += "</div>"
     doc += f"<div class='sitemeta'>快照 {esc(snap.get('version'))} · 基准 {esc(baseline_doc.get('version'))}"
     doc += "<br>提案只存本浏览器；不上传、不审批、不写 EN；采购/运营需复核。</div></div></details>"
     doc += _meta_strip(meta)
@@ -3124,6 +3687,7 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
 
     doc += "<main>"
     doc += "<p class='storage-notice' id='collab-storage-notice' role='alert' hidden></p>"
+    doc += _gate_banner(snap)
 
     # ---- 工作台 ----
     doc += "<section class='view active' id='view-workbench' role='tabpanel'>"
@@ -3169,6 +3733,14 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     doc += "<div class='empty'>选择左侧一行查看结论、证据和可用操作。<br>"
     doc += "补货建议只读；唯一关联到需求基准时可在本栏填写演示判断。</div>"
     doc += "</div></div></div>"
+    doc += "<details class='panel-fold export-panel' id='export-fold'>"
+    doc += "<summary>导出决策清单（CSV，带 gate 与口径）</summary>"
+    doc += "<p class='hint'>导出含 display_version / release_id / parent_bundle / 期间 / gate / "
+    doc += "逐行阻断原因 / demand.origin / quantile_status / row_can_order，不只导主表数字；"
+    doc += "数据齐全也不等于可下单。</p>"
+    doc += "<div class='actions'><button type='button' class='btn small' id='export-copy'>复制 CSV</button>"
+    doc += "<span class='hint' id='export-note' aria-live='polite'></span></div>"
+    doc += "<textarea id='export-text' readonly aria-label='导出 CSV'></textarea></details>"
     doc += "<p class='sr-only' id='wb-announce' aria-live='polite'></p>"
     doc += "<dialog class='sheet' id='detail-sheet' aria-label='详情'>"
     doc += "<div class='sheet-wrap'><div class='sheet-bar'>"
@@ -3202,6 +3774,7 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
     doc += "<p class='sub'>同一快照的分析投影，不是第二套决策列表：A 商品范围 / B 归属 / C 库存 / "
     doc += "D 需求预估 / E 到期供给。字段与迁移前一致。</p></div>"
     doc += "<button type='button' class='btn small' data-goto-workbench='1'>返回所选建议</button></div>"
+    doc += _analysis_gate(snap)
     doc += f"<div class='analysis-nav' role='group' aria-label='分析方法页签'>{_analysis_nav()}</div>"
     doc += f"<div class='analysis-pane active' id='pane-a'>{_analysis_a(rows)}</div>"
     doc += f"<div class='analysis-pane' id='pane-b'>{_analysis_b(b1, b2)}</div>"
@@ -3226,16 +3799,31 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None) -
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="USNJ 补货协同工作台（单文件静态页）")
-    ap.add_argument("--snapshot", required=True, help="快照 JSON 路径")
-    ap.add_argument("--baseline", required=True, help="需求基准 JSON 路径")
+    ap.add_argument("--release-dir", default=None,
+                    help="冻结 release 目录（校验 manifest + sha256 后只消费其中工件）")
+    ap.add_argument("--snapshot", default=None, help="快照 JSON 路径（无 --release-dir 时必填）")
+    ap.add_argument("--baseline", default=None, help="需求基准 JSON 路径（无 --release-dir 时必填）")
     ap.add_argument("--b-dir", default=None, help="B_*.csv 目录（可选）")
     ap.add_argument("--out", required=True, help="输出 HTML 路径")
     args = ap.parse_args(argv)
 
+    release = None
+    snapshot, baseline = args.snapshot, args.baseline
+    if args.release_dir:
+        try:
+            release = verify_release(Path(args.release_dir))
+        except ReleaseVerificationError as exc:
+            ap.error(str(exc))  # whole batch rejected, nothing rendered
+        snapshot = str(release["artifacts"]["snapshot_v2.json"]["path"])
+        baseline = str(release["artifacts"]["baseline_v2.json"]["path"])
+    if not snapshot or not baseline:
+        ap.error("--snapshot 与 --baseline 必填，或改用 --release-dir")
+
     doc = build(
-        Path(args.snapshot),
-        Path(args.baseline),
+        Path(snapshot),
+        Path(baseline),
         Path(args.b_dir) if args.b_dir else None,
+        release=release,
     )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

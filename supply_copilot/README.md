@@ -20,6 +20,26 @@ uv run python -m supply_copilot refresh --branch USNJ --sku KS0001-XMMBS-194-HEM
 
 口径：D6 q95 − C/EN/PO/SO/CG；催已有与新补分开；未知不补 0；数据包有版本/as_of/哈希。
 
+## 工作台静态页（v2.1，只读）
+
+只消费 A 的冻结 release，不按目录「最新文件」混装。渲染前校验 manifest 与每个 artifact 的
+sha256/size，任何一项不符整批拒绝：
+
+```bash
+uv run python -m supply_copilot.workbench_page \
+  --release-dir D:/Work/fzh-order-store/analysis/workbench-latest-20261124/releases/20261125T095418+0800/ \
+  --out D:/private/demand/v21/workbench-v21.html
+```
+
+- `--release-dir` 读取并校验 `release_manifest.json` → `snapshot_v2.json` + `baseline_v2.json`；
+  也可用 `--snapshot/--baseline` 直接指定松散文件（开发/测试）。
+- 页头：display_version / release_id / parent_bundle / 期间 / as_of / computed_at / branch。
+- A1 gate：整体 gate 关闭贯穿主表、详情、分析、导出；`row_can_order` 恒 false。
+- A2：demand.origin 五类、quantile_status 四类、stock `used_in_decision` + 决策时/浏览时新鲜度、
+  SO 决策证据 82 键/142 条/6,414 件（duplicate_form 不重复计）。
+- A3：需求基准页签改用 baseline_v2，按完整键（SKU×形态×单位×期间×仓×池）关联，不按 SKU 继承。
+- 导出：CSV 带 gate、blocked 原因、origin/quantile、period、bundle/display_version。
+
 ## 数据包管理（管理员）
 
 1. zip 分卷放在站点 `private/files/`（文件名固定 `supply-copilot-pack-<version>.partNNN`）；
