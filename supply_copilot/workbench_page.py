@@ -887,6 +887,30 @@ APP_JS = """
     };
   }
 
+  // F4: stock source time is stock.snapshot_at, never the data AS_OF (16:00).
+  // computed_at is shown separately; the two must not be conflated.
+  function stockSnapshotAtOf(r) {
+    var st = r && r.stock;
+    if (st && !isBlank(st.snapshot_at)) return String(st.snapshot_at);
+    return AS_OF;
+  }
+
+  // F5: coverage_basis is null for all rows; the day number is a legacy value,
+  // not a current coverage promise. Never show a bare "N 天" as if known.
+  function coverageCell(r) {
+    if (isBlank(r && r.coverage_basis)) {
+      return '<span class="unknown">基准待核</span><small class="sub-merged">旧值 ' +
+        qty(r && r.coverage) + ' 天 · 非当前覆盖承诺</small>';
+    }
+    return qty(r && r.coverage) + ' 天';
+  }
+  function coverageInline(r) {
+    if (isBlank(r && r.coverage_basis)) {
+      return '旧值 ' + qty(r && r.coverage) + ' 天（基准待核，非当前覆盖承诺）';
+    }
+    return qty(r && r.coverage) + ' 天';
+  }
+
   /* ---------------- baseline_v2 complete key ---------------- */
   function fullKeyOf(r) {
     if (!r) return '';
@@ -1020,10 +1044,10 @@ APP_JS = """
       '<td data-label="期间" class="col-period"><span class="week">' + periodShort(r) + '</span></td>' +
       '<td data-label="建议">' + actionBadge(r) +
       (acts.length ? '<small class="hint" style="display:block">' + acts.join(' + ') + '</small>' : '') +
-      '<small class="sub-merged">覆盖 ' + qty(r.coverage) + ' 天' + originNote + ' · ' +
+      '<small class="sub-merged">覆盖 ' + coverageInline(r) + originNote + ' · ' +
       flagsHtml(r) + '</small>' +
       '</td>' +
-      '<td data-label="覆盖" class="col-coverage">' + qty(r.coverage) + ' 天</td>' +
+      '<td data-label="覆盖" class="col-coverage">' + coverageCell(r) + '</td>' +
       '<td data-label="原因" class="col-reason">' +
       (isBlank(r.reason) ? unknown() : esc(r.reason)) +
       (firstBlock ? '<small class="hint" style="display:block">阻断：' + esc(firstBlock) + '</small>' : '') +
@@ -1453,7 +1477,7 @@ APP_JS = """
     var items = [
       ['期间起 period_start', esc(start || '待核')],
       ['期间止 period_end', esc(end || '待核')],
-      ['快照时点 as_of', esc(AS_OF)]
+      ['数据时点 as_of（非库存快照）', esc(AS_OF)]
     ];
     if (isV2(r) || metaText('period_start')) {
       items.push(['期间口径 period_basis', esc(r.period_basis || metaText('period_basis') || '—')]);
@@ -1714,7 +1738,7 @@ APP_JS = """
         ' · 决策时新鲜度 ' + esc(st.freshness_at_compute || '未提供') +
         ' · 浏览时新鲜度 ' + esc(fv.text);
     }
-    return '快照 C <strong>' + qty(r.c_qty) + '</strong>（' + esc(AS_OF) + '）· 当前观察不可得';
+    return '快照 C <strong>' + qty(r.c_qty) + '</strong>（' + esc(stockSnapshotAtOf(r)) + '）· 当前观察不可得';
   }
 
   function stockFull(ctx) {
@@ -1738,13 +1762,13 @@ APP_JS = """
         ['新鲜度策略 freshness_policy', esc(st.freshness_policy || 'fresh if age <= 24h')],
         ['快照 sha256', code(st.sha256)],
         ['current_for_decision', '已废弃（v2.1 拆为 used_in_decision + freshness_*），不再作为决策依据'],
-        ['快照 C（时点 ' + esc(AS_OF) + '）', qty(r.c_qty)],
+        ['快照 C（时点 ' + esc(st.snapshot_at || AS_OF) + '）', qty(r.c_qty)],
         ['当前库存观察', '静态页不可得'],
         ['可用性拆开说', '服务=静态 / 库存=快照 / 建议=只读']
       ]);
     }
     return kv([
-      ['快照 C（时点 ' + esc(AS_OF) + '）', qty(r.c_qty)],
+      ['快照 C（时点 ' + esc(stockSnapshotAtOf(r)) + '）', qty(r.c_qty)],
       ['快照 E', qty(r.e_qty)],
       ['当前库存观察', '静态页不可得'],
       ['可用性拆开说', '服务=静态 / 库存=快照 / 建议=只读']
@@ -1900,8 +1924,10 @@ APP_JS = """
         gapText(demandKnown, supplyKnown, demand, supply, unitOf(r)),
         '只作对照，不是补货量') +
       '</div>' +
-      '<div class="note">库存快照：C ' + qty(r.c_qty) + '（快照时点 ' + esc(AS_OF) +
-      '）；当前观察：静态页不可得（页面不发起任何请求）。两者分开标注，不用旧值冒充实时。</div>' +
+      '<div class="note">库存快照：C ' + qty(r.c_qty) + '（stock.snapshot_at ' +
+      esc(stockSnapshotAtOf(r)) + '）· 计算时点 computed_at ' + esc(COMPUTED_AT || '未记录') +
+      '；当前观察：静态页不可得（页面不发起任何请求）。快照时点、计算时点与现时观测分开标注，'
+      '不用 AS_OF 或旧值冒充实时。</div>' +
       '<div class="actions">' +
       '<button type="button" class="btn small" data-expand-evidence="1">展开证据明细</button>' +
       '<button type="button" class="btn small ghost" data-goto-audit="1">跨行审计视图 →</button>' +
@@ -1939,8 +1965,9 @@ APP_JS = """
         '只作对照，不是补货量') +
       '</div>' +
       '<div class="note">期间：' + periodShort(r) + '。' + esc(keyNote) +
-      ' 库存快照：C ' + (twin ? qty(twin.c_qty) : unknown()) + '（快照时点 ' + esc(AS_OF) +
-      '）；当前观察：静态页不可得。空日期写「待核」，不编造。</div>' +
+      ' 库存快照：C ' + (twin ? qty(twin.c_qty) : unknown()) + '（stock.snapshot_at ' +
+      esc(stockSnapshotAtOf(twin || r)) + '）· 计算时点 ' + esc(COMPUTED_AT || '未记录') +
+      '；当前观察：静态页不可得。空日期写「待核」，不编造。</div>' +
       '<div class="actions">' +
       '<button type="button" class="btn small" data-expand-evidence="1">展开证据明细</button>' +
       '<button type="button" class="btn small ghost" data-goto-audit="1">跨行审计视图 →</button>' +
@@ -2922,6 +2949,22 @@ APP_JS = """
     Array.prototype.forEach.call(document.querySelectorAll('[data-goto-workbench]'), function (b) {
       b.addEventListener('click', function () { setView('workbench'); });
     });
+    // F2: an analysis row links back to its full suggestion row; clearing filters
+    // first guarantees the target row is visible and selectable.
+    document.addEventListener('click', function (e) {
+      var t = e.target && e.target.closest ? e.target.closest('[data-analysis-select]') : null;
+      if (!t) return;
+      e.preventDefault();
+      var key = t.getAttribute('data-analysis-select');
+      state.q = ''; state.action = '';
+      Object.keys(state.flags).forEach(function (k) { state.flags[k] = false; });
+      if (byId('wb-search')) byId('wb-search').value = '';
+      if (byId('wb-action')) byId('wb-action').value = '';
+      Array.prototype.forEach.call(document.querySelectorAll('[data-flag]'), function (x) { x.checked = false; });
+      setView('workbench');
+      renderTable({});
+      selectRow(key);
+    });
     var evSearch = byId('ev-search');
     if (evSearch) {
       evSearch.addEventListener('input', function () {
@@ -3113,8 +3156,7 @@ def _forecast_rows(rows) -> str:
 
 
 def _supply_rows(rows) -> str:
-    # v2.1: "近期/历史" 是废弃语义；本批导出量优先 so_current_export_open_qty，
-    # 旧快照退化到 so_recent_open_qty（也不解释成创建时间）。
+    # legacy flat snapshot: keep the original nine columns (v2 uses _supply_rows_v2).
     def _export_so(r):
         value = r.get("so_current_export_open_qty")
         return r.get("so_recent_open_qty") if value is None else value
@@ -3126,6 +3168,169 @@ def _supply_rows(rows) -> str:
         f"<td>{i(r.get('so_history_open_qty'))}</td></tr>"
         for r in rows
     )
+
+
+# ---------------------------------------------------------------- v2 analysis
+# F1/F2/F3: the v2 analysis projections keep the decision semantics — decision
+# demand (never mislabeled q50), per-row gate/blocking linked back to the full
+# suggestion row, and duplicate forms isolated from any addable column.
+def _is_v2_rows(rows) -> bool:
+    """True when rows come from snapshot_v2 (carry a per-row ``demand`` object)."""
+    return any(isinstance(r.get("demand"), dict) for r in (rows or []))
+
+
+def _rowkey(r):
+    unit = r.get("uom") if r.get("uom") not in (None, "") else r.get("unit")
+    return "%s|%s|%s" % (str(r.get("sku") or ""), str(r.get("physical_form") or ""),
+                         str(unit or ""))
+
+
+def _num(v):
+    """Number cell preserving 2 decimals; null/blank -> em dash (never an invented 0)."""
+    if v in (None, ""):
+        return "—"
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "—"
+    if f != f or f in (float("inf"), float("-inf")):
+        return "—"
+    return f"{int(f):,}" if f == int(f) else f"{f:,.2f}"
+
+
+def _reasons_of(rows):
+    out = []
+    for r in rows:
+        for x in (r.get("blocking_reasons") or []):
+            if x not in out:
+                out.append(x)
+    return out
+
+
+def _gate_cell(linked):
+    """Per-row gate + every linked suggestion row's blocking reasons (multi-row safe)."""
+    if not linked:
+        return "<span class='unknown'>无关联建议行</span>"
+    any_order = any(r.get("row_can_order") is True for r in linked)
+    parts = ["<span class='rec-badge warn'>%s</span>" %
+             ("gate 未定义可下单" if any_order else "不可下单")]
+    rcr = next((r.get("row_can_order_reason") for r in linked if r.get("row_can_order_reason")), "")
+    if rcr:
+        parts.append("<div class='hint'>%s</div>" % esc(rcr))
+    reasons = _reasons_of(linked)
+    if reasons:
+        parts.append("<ul>" + "".join("<li>%s</li>" % esc(x) for x in reasons) + "</ul>")
+    if len(linked) > 1:
+        parts.append("<div class='hint'>同键 %d 行，状态与原因合并显示</div>" % len(linked))
+    return "".join(parts)
+
+
+def _detail_cell(linked):
+    """Detail entry per linked suggestion row; ambiguous keys list each, no silent pick."""
+    if not linked:
+        return "—"
+    btns = []
+    for r in linked:
+        if len(linked) == 1:
+            label = "详情"
+        else:
+            label = "%s·%s" % (r.get("physical_form") or "?",
+                               r.get("pool") or r.get("warehouse") or r.get("uom") or "")
+        btns.append("<button type='button' class='btn small ghost' data-analysis-select=\"%s\">%s</button>"
+                    % (esc(_rowkey(r)), esc(label)))
+    return "".join(btns)
+
+
+_ORIGIN_LABELS = {
+    "forecast": "本地预测（独立产出）",
+    "forecast_zero": "预测为 0（模型输出，不是未知）",
+    "zero_recent_share": "近期无本分公司份额，按 0 分配（需人工确认）",
+    "d6_q95_fallback": "本地预测未覆盖，退回 D6 q95（旧包，非独立高分位）",
+    "unknown": "需求未知（null，不是 0）",
+}
+
+
+def _qq_label(d):
+    """q90/q95 are p90 aliases / zero / unavailable — never an independent high quantile."""
+    status = d.get("quantile_status")
+    if status == "p90_alias":
+        return "q90=q95=p90（别名，非独立高分位）"
+    if status == "zero":
+        return "q90/q95=0（模型零，不是未知）"
+    if status == "zero_recent_share":
+        return "q90/q95=0（近期无份额，需人工确认）"
+    if status == "unavailable":
+        return "<span class='unknown'>不可得（unavailable）</span>"
+    return "%s / %s" % (_num(d.get("q90")), _num(d.get("q95")))
+
+
+def _forecast_rows_v2(rows) -> str:
+    """F1: decision demand (demand.forecast) + real origin/quantile_status."""
+    out = []
+    for r in rows:
+        d = r.get("demand") if isinstance(r.get("demand"), dict) else {}
+        origin = d.get("origin") or "—"
+        origin_cell = esc(origin)
+        if origin in _ORIGIN_LABELS:
+            origin_cell += "<div class='hint'>%s</div>" % esc(_ORIGIN_LABELS[origin])
+        demand_cell = _num(d.get("forecast"))
+        if origin == "unknown":
+            demand_cell = "<span class='unknown'>null（未知，非 0）</span>"
+        model = d.get("model") or r.get("model") or "—"
+        conf = r.get("confidence_level")
+        model_cell = esc(model) + ((" / " + esc(conf)) if conf else "")
+        linked = [r]
+        out.append(
+            "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
+            "<td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+                esc(r.get("sku")), esc(r.get("physical_form")), demand_cell, origin_cell,
+                esc(d.get("quantile_status") or "—"), _num(d.get("p50")), _num(d.get("p90")),
+                _qq_label(d), model_cell, _gate_cell(linked), _detail_cell(linked)))
+    return "".join(out)
+
+
+def _supply_rows_v2(rows) -> str:
+    """F3: mark physical form + duplicate_form; duplicate supply.so is not addable."""
+    def _export_so(r):
+        value = r.get("so_current_export_open_qty")
+        return r.get("so_recent_open_qty") if value is None else value
+
+    out = []
+    for r in rows:
+        dup = bool(r.get("duplicate_form"))
+        form_cell = esc(r.get("physical_form"))
+        if dup:
+            form_cell += " <span class='rec-badge warn'>重复形态·不累加</span>"
+            supply_so = "<span class='unknown'>引用主行（不可加总）</span>"
+        else:
+            supply_so = extra(r, "SO已下")
+        linked = [r]
+        out.append(
+            "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>"
+            "<td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+                esc(r.get("sku")), form_cell, i(r.get("c_qty")), extra(r, "EN已发运量"),
+                extra(r, "EN待发量"), extra(r, "PO追加(去重)"), supply_so,
+                extra(r, "CG可调拨抵扣"), i(_export_so(r)), i(r.get("so_history_open_qty")),
+                _gate_cell(linked), _detail_cell(linked)))
+    return "".join(out)
+
+
+def _b_table_v2(b_rows, rec_rows):
+    """F2: ownership list rows linked to suggestion rows by SKU, keeping per-row limits."""
+    by_sku = {}
+    for r in rec_rows or []:
+        by_sku.setdefault(str(r.get("sku") or ""), []).append(r)
+    body = []
+    for x in b_rows or []:
+        linked = by_sku.get(str(x.get("product_id") or ""), [])
+        body.append(
+            f"<tr><td>{esc(x.get('product_id'))}</td><td>{esc(x.get('current_owner'))}</td>"
+            f"<td>{esc(x.get('hist_pools'))}</td><td>{esc(x.get('标记'))}</td>"
+            f"<td>{esc(x.get('2025总销量'))}</td><td>{esc(x.get('2026总销量'))}</td>"
+            f"<td>{_gate_cell(linked)}</td><td>{_detail_cell(linked)}</td></tr>")
+    return ("<table><thead><tr><th>SKU</th><th>current owner</th><th>历史仓</th><th>标记</th>"
+            "<th>2025</th><th>2026</th><th>建议限制 / 阻断</th><th>详情</th></tr></thead><tbody>"
+            + "".join(body) + "</tbody></table>")
 
 
 def _decision_cards(summary: dict, rec_total: int, base_total: int, recon: dict) -> str:
@@ -3143,48 +3348,108 @@ def _decision_cards(summary: dict, rec_total: int, base_total: int, recon: dict)
 
 
 def _analysis_a(rows) -> str:
-    a_rows = _sku_universe(rows)
+    if not _is_v2_rows(rows):
+        a_rows = _sku_universe(rows)
+        body = "".join(
+            f"<tr><td>{esc(x[0])}</td><td>{esc(x[1])}</td><td>{esc(x[2])}</td><td>{esc(x[3])}</td></tr>"
+            for x in a_rows)
+        return (f"<h2>A 商品范围（{len(a_rows)} 个 SKU×形态×UOM，去重）</h2>"
+                "<p class='intro'>同一 SKU 可能以不同形态出现在建议里；这里是去重后的商品宇宙，"
+                "不改变建议行数量。</p>"
+                "<div class='scroll-x'><table id='table-a'><thead><tr><th>SKU</th><th>形态</th>"
+                "<th>UOM</th><th>客户</th></tr></thead><tbody>" + body + "</tbody></table></div>")
+    groups = {}
+    for r in rows:
+        groups.setdefault((r.get("sku"), r.get("physical_form"), r.get("uom"), r.get("customer")),
+                          []).append(r)
+    ordered = sorted(groups.items(), key=lambda kv: tuple("" if v is None else str(v) for v in kv[0]))
     body = "".join(
-        f"<tr><td>{esc(x[0])}</td><td>{esc(x[1])}</td><td>{esc(x[2])}</td><td>{esc(x[3])}</td></tr>"
-        for x in a_rows)
-    return (f"<h2>A 商品范围（{len(a_rows)} 个 SKU×形态×UOM，去重）</h2>"
-            "<p class='intro'>同一 SKU 可能以不同形态出现在建议里；这里是去重后的商品宇宙，"
-            "不改变建议行数量。</p>"
+        "<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
+            esc(k[0]), esc(k[1]), esc(k[2]), esc(k[3]), _gate_cell(g), _detail_cell(g))
+        for k, g in ordered)
+    return (f"<h2>A 商品范围（{len(ordered)} 个 SKU×形态×UOM，去重）</h2>"
+            "<p class='intro'>同一 SKU 可能以不同形态出现在建议里；这里是去重后的商品宇宙。"
+            "每行关联回完整建议行，限制/阻断逐行展示，可点详情。</p>"
             "<div class='scroll-x'><table id='table-a'><thead><tr><th>SKU</th><th>形态</th>"
-            "<th>UOM</th><th>客户</th></tr></thead><tbody>" + body + "</tbody></table></div>")
+            "<th>UOM</th><th>客户</th><th>限制 / 阻断</th><th>详情</th></tr></thead><tbody>"
+            + body + "</tbody></table></div>")
 
 
-def _analysis_b(b1, b2) -> str:
+def _analysis_b(b1, b2, rows=None) -> str:
+    if _is_v2_rows(rows or []):
+        return (f"<h2>B 归属（{len(b1)} 个 current USNJ / {len(b2)} 个待确认）</h2>"
+                "<p class='intro'>归属以 B 清单为准；待确认行不并入 current，也不静默丢弃。"
+                "每行按 SKU 关联回完整建议行，逐行 gate/阻断可见，可点详情。</p>"
+                f"<h3>B 归属清单（{len(b1)} 个 current USNJ）</h3><div class='scroll-x'>{_b_table_v2(b1, rows)}</div>"
+                f"<h3>归属待确认（{len(b2)} 个）</h3><div class='scroll-x'>{_b_table_v2(b2, rows)}</div>")
     return (f"<h2>B 归属（{len(b1)} 个 current USNJ / {len(b2)} 个待确认）</h2>"
             "<p class='intro'>归属以 B 清单为准；待确认行不并入 current，也不静默丢弃。</p>"
             f"<h3>B 归属清单（{len(b1)} 个 current USNJ）</h3><div class='scroll-x'>{b_table(b1)}</div>"
             f"<h3>归属待确认（{len(b2)} 个）</h3><div class='scroll-x'>{b_table(b2)}</div>")
 
 
+def _stock_snapshot_at(rows):
+    for r in rows:
+        st = r.get("stock")
+        if isinstance(st, dict) and st.get("snapshot_at"):
+            return st.get("snapshot_at")
+    return None
+
+
 def _analysis_c(rows) -> str:
-    return ("<h2>C 库存（当前可发，不含在途）</h2>"
-            "<p class='intro'>C = 当前可发，不含在途；EN 已发运/待发、PO、SO、CG 同表列出但各自口径，"
-            "不能相加替代；CG 是下游缓冲，不可回拨。</p>"
-            "<div class='scroll-x'><table id='table-c'><thead><tr><th>SKU</th><th>C</th>"
-            "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO</th><th>CG</th><th>本批导出SO</th>"
-            "<th>历史SO（未接入=—）</th></tr></thead><tbody>" + _supply_rows(rows) + "</tbody></table></div>")
+    if not _is_v2_rows(rows):
+        return ("<h2>C 库存（当前可发，不含在途）</h2>"
+                "<p class='intro'>C = 当前可发，不含在途；EN 已发运/待发、PO、SO、CG 同表列出但各自口径，"
+                "不能相加替代；CG 是下游缓冲，不可回拨。</p>"
+                "<div class='scroll-x'><table id='table-c'><thead><tr><th>SKU</th><th>C</th>"
+                "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO</th><th>CG</th><th>本批导出SO</th>"
+                "<th>历史SO（未接入=—）</th></tr></thead><tbody>" + _supply_rows(rows) + "</tbody></table></div>")
+    snap_at = _stock_snapshot_at(rows)
+    return ("<h2>C 库存（本次决策库存快照，不含在途）</h2>"
+            "<p class='intro'>C = 本次决策使用的库存快照可发，不含在途，<b>不是现时观测</b>；"
+            "EN 已发运/待发、PO、SO、CG 同表列出但各自口径，不能相加替代；CG 是下游缓冲，不可回拨。</p>"
+            "<p class='hint'>库存快照 stock.snapshot_at=" + esc(snap_at or "未提供") +
+            "；重复形态行的 supply.so 为保留值，不并入可加总列；决策证据合计 142 条 / 6,414 件（见口径页）。"
+            "逐行 gate/阻断见右侧，可点详情跳回工作台。</p>"
+            "<div class='scroll-x'><table id='table-c'><thead><tr><th>SKU</th><th>形态</th><th>C</th>"
+            "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO（supply.so，重复不可加）</th><th>CG</th>"
+            "<th>本批导出SO</th><th>历史SO（未接入=—）</th><th>限制 / 阻断</th><th>详情</th></tr></thead><tbody>"
+            + _supply_rows_v2(rows) + "</tbody></table></div>")
 
 
 def _analysis_d(rows) -> str:
-    return ("<h2>D 需求预估（q50 中位，不是补货量）</h2>"
-            "<p class='intro'>分位与模型来自预测快照；预测不加进建议量，也不与需求基准相加。</p>"
-            "<div class='scroll-x'><table id='table-d'><thead><tr><th>SKU</th><th>预测 q50</th>"
-            "<th>q50</th><th>q90</th><th>q95</th><th>模型</th></tr></thead><tbody>"
-            + _forecast_rows(rows) + "</tbody></table></div>")
+    if not _is_v2_rows(rows):
+        return ("<h2>D 需求预估（q50 中位，不是补货量）</h2>"
+                "<p class='intro'>分位与模型来自预测快照；预测不加进建议量，也不与需求基准相加。</p>"
+                "<div class='scroll-x'><table id='table-d'><thead><tr><th>SKU</th><th>预测 q50</th>"
+                "<th>q50</th><th>q90</th><th>q95</th><th>模型</th></tr></thead><tbody>"
+                + _forecast_rows(rows) + "</tbody></table></div>")
+    return ("<h2>D 决策需求（demand.forecast，不是 q50 中位；不是补货量）</h2>"
+            "<p class='intro'>首列是本次决策需求 demand.forecast（来源可能是 p90 别名、D6 q95 兜底或未知 null），"
+            "按 demand.origin / quantile_status 展示真实来源；q90/q95 若为 p90 别名或不可用，明确标注，"
+            "<b>不是独立高分位、不是满足率承诺</b>。预测不加进建议量，也不与需求基准相加。"
+            "逐行 gate/阻断见右侧，可点详情。</p>"
+            "<div class='scroll-x'><table id='table-d'><thead><tr><th>SKU</th><th>形态</th>"
+            "<th>决策需求</th><th>来源 origin</th><th>分位状态 quantile_status</th><th>p50</th><th>p90</th>"
+            "<th>q90 / q95</th><th>模型 / 置信</th><th>限制 / 阻断</th><th>详情</th></tr></thead><tbody>"
+            + _forecast_rows_v2(rows) + "</tbody></table></div>")
 
 
 def _analysis_e(rows) -> str:
+    if not _is_v2_rows(rows):
+        return ("<h2>E 到期供给（SO/EN/PO/C/CG）</h2>"
+                "<p class='intro'>按需要日汇总的到期供给；SO 管线不加入建议量；生产/DN/通途 PO 尚未接入，"
+                "显示缺失而非 0。</p>"
+                "<div class='scroll-x'><table id='table-e'><thead><tr><th>SKU</th><th>C</th>"
+                "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO</th><th>CG</th><th>本批导出SO</th>"
+                "<th>历史SO（未接入=—）</th></tr></thead><tbody>" + _supply_rows(rows) + "</tbody></table></div>")
     return ("<h2>E 到期供给（SO/EN/PO/C/CG）</h2>"
             "<p class='intro'>按需要日汇总的到期供给；SO 管线不加入建议量；生产/DN/通途 PO 尚未接入，"
-            "显示缺失而非 0。</p>"
-            "<div class='scroll-x'><table id='table-e'><thead><tr><th>SKU</th><th>C</th>"
-            "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO</th><th>CG</th><th>本批导出SO</th>"
-            "<th>历史SO（未接入=—）</th></tr></thead><tbody>" + _supply_rows(rows) + "</tbody></table></div>")
+            "显示缺失而非 0。重复形态行的 supply.so 为保留值，不并入可加总列。逐行 gate/阻断见右侧，可点详情。</p>"
+            "<div class='scroll-x'><table id='table-e'><thead><tr><th>SKU</th><th>形态</th><th>C</th>"
+            "<th>EN已发运</th><th>EN待发</th><th>PO</th><th>SO（supply.so，重复不可加）</th><th>CG</th>"
+            "<th>本批导出SO</th><th>历史SO（未接入=—）</th><th>限制 / 阻断</th><th>详情</th></tr></thead><tbody>"
+            + _supply_rows_v2(rows) + "</tbody></table></div>")
 
 
 def _analysis_nav() -> str:
@@ -3777,7 +4042,7 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None,
     doc += _analysis_gate(snap)
     doc += f"<div class='analysis-nav' role='group' aria-label='分析方法页签'>{_analysis_nav()}</div>"
     doc += f"<div class='analysis-pane active' id='pane-a'>{_analysis_a(rows)}</div>"
-    doc += f"<div class='analysis-pane' id='pane-b'>{_analysis_b(b1, b2)}</div>"
+    doc += f"<div class='analysis-pane' id='pane-b'>{_analysis_b(b1, b2, rows)}</div>"
     doc += f"<div class='analysis-pane' id='pane-c'>{_analysis_c(rows)}</div>"
     doc += f"<div class='analysis-pane' id='pane-d'>{_analysis_d(rows)}</div>"
     doc += f"<div class='analysis-pane' id='pane-e'>{_analysis_e(rows)}</div>"
