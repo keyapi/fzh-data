@@ -726,6 +726,9 @@ APP_JS = """
         'SO 明细行合计与管线合计不一致，需复核';
     }
     if (status === 'ok') return '<span class="rec-badge approved">ok</span> 明细与管线合计一致';
+    if (status === 'duplicate_form') {
+      return '<span class="rec-badge">duplicate_form</span> 重复形态行：SO 只在主行计，本行不挂明细（预期）';
+    }
     return '<span class="hint">未标注</span>';
   }
   function relationLabel(v) {
@@ -1202,6 +1205,9 @@ APP_JS = """
     if (r.so_lines_status === 'line_sum_mismatch') {
       facts.push('SO：明细行合计与管线合计不一致（line_sum_mismatch，需复核）');
     }
+    if (r.so_lines_status === 'duplicate_form') {
+      facts.push('SO：重复形态行，SO 只在主行计，本行不挂明细（duplicate_form，预期）');
+    }
     if (d.quantile_status === 'p90_alias') {
       facts.push('需求：q90/q95 与 p90 相同（p90_alias），不应当作更高服务水平');
     }
@@ -1453,7 +1459,9 @@ APP_JS = """
     if (!lines.length) {
       html += r.so_lines_status === 'empty_in_export'
         ? '<p class="mutednote">本次导出真实无开放 SO（empty_in_export），不是未知。</p>'
-        : '<p class="mutednote">未查到开放 SO 行（空集，不是未知）。</p>';
+        : (r.so_lines_status === 'duplicate_form'
+          ? '<p class="mutednote">重复形态行：SO 只在主行计，本行不挂明细（duplicate_form，预期）。</p>'
+          : '<p class="mutednote">未查到开放 SO 行（空集，不是未知）。</p>');
       return html;
     }
     [['recent', '近期 SO'], ['history', '历史开放 SO'], ['unknown', '创建日未知 SO']]
