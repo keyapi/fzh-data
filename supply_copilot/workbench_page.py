@@ -3289,8 +3289,17 @@ def _forecast_rows_v2(rows) -> str:
     return "".join(out)
 
 
+def _dup_main_rows(r, rows):
+    """Rows that own the SO amount a duplicate_form row only references (same SKU+UOM, not duplicate)."""
+    sku, uom = r.get("sku"), r.get("uom")
+    return [m for m in (rows or [])
+            if m is not r and m.get("sku") == sku and m.get("uom") == uom
+            and not m.get("duplicate_form")]
+
+
 def _supply_rows_v2(rows) -> str:
-    """F3: mark physical form + duplicate_form; duplicate supply.so is not addable."""
+    """F3: mark physical form + duplicate_form; duplicate supply.so is not addable and
+    points to the main row (SKU + form) that owns the amount."""
     def _export_so(r):
         value = r.get("so_current_export_open_qty")
         return r.get("so_recent_open_qty") if value is None else value
@@ -3301,7 +3310,17 @@ def _supply_rows_v2(rows) -> str:
         form_cell = esc(r.get("physical_form"))
         if dup:
             form_cell += " <span class='rec-badge warn'>重复形态·不累加</span>"
-            supply_so = "<span class='unknown'>引用主行（不可加总）</span>"
+            mains = _dup_main_rows(r, rows)
+            if mains:
+                cites = []
+                for m in mains:
+                    cites.append("主行 %s · %s <button type='button' class='btn small ghost' "
+                                 "data-analysis-select=\"%s\">定位</button>" % (
+                                     esc(m.get("sku")), esc(m.get("physical_form")), esc(_rowkey(m))))
+                supply_so = ("<span class='unknown'>引用主行（不可加总）</span>"
+                             "<div class='hint'>" + "；".join(cites) + "</div>")
+            else:
+                supply_so = "<span class='unknown'>引用主行（不可加总）· 主行未在范围内</span>"
         else:
             supply_so = extra(r, "SO已下")
         linked = [r]
@@ -3424,7 +3443,7 @@ def _analysis_d(rows) -> str:
                 "<div class='scroll-x'><table id='table-d'><thead><tr><th>SKU</th><th>预测 q50</th>"
                 "<th>q50</th><th>q90</th><th>q95</th><th>模型</th></tr></thead><tbody>"
                 + _forecast_rows(rows) + "</tbody></table></div>")
-    return ("<h2>D 决策需求（demand.forecast，不是 q50 中位；不是补货量）</h2>"
+    return ("<h2>D 需求预估（决策需求，非补货量）</h2>"
             "<p class='intro'>首列是本次决策需求 demand.forecast（来源可能是 p90 别名、D6 q95 兜底或未知 null），"
             "按 demand.origin / quantile_status 展示真实来源；q90/q95 若为 p90 别名或不可用，明确标注，"
             "<b>不是独立高分位、不是满足率承诺</b>。预测不加进建议量，也不与需求基准相加。"
