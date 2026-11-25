@@ -43,3 +43,6 @@ def test_native_page_has_canonical_route_and_shadow_boundary():
     assert 'attachShadow' in js and 'documentProxy' in js
     assert "createElement('iframe')" not in js
     assert '.get_parts' in js
+    # The duplicate Desk page-head is hidden only inside this Page's wrapper.
+    assert '.supply-planning-page .page-head' in js
+    assert 'display:none!important' in js

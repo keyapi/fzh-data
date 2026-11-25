@@ -1140,6 +1140,11 @@ def test_v2_meta_embedded_and_header_strip(inputs_v2):
     assert meta["model"]["run_id"] == "run-1"
     # Page header strip (server-rendered, compact).
     assert "class='metastrip'" in html
+    # The visible line is exactly version · period/window · as_of; everything
+    # else collapses into the 快照信息 details.
+    assert "v2.1.0-test</b> · 2026-11-24 ~ 2027-02-22/90天 · as_of 2026-11-24T16:00:00+08:00" in html
+    assert "class='metafold'" in html and "快照信息" in html
+    assert "class='navrow'" in html
     for text in ("期间", "2026-11-24", "2027-02-22", "窗口", "90 天",
                  "bundle", "配置", "classified-map+pattern@test", "分支", "美东USNJ",
                  "computed", "模型", "run-1"):
@@ -1295,6 +1300,8 @@ def test_v21_gate_banner_headline_and_freshness_placeholder(inputs_v2):
     html = build(snap_path, base_path, release=_release_stub())
     assert "class='gatebanner'" in html
     assert "整体 gate 关闭 · 本批不可直接下单" in html
+    assert "可下单行 0 / 阻断 4" in html
+    assert "class='gate-reasons-inline'" in html and "class='gate-more'" in html
     assert "总提示：本批结果不可直接下单" in html
     assert "68 行预测未覆盖" in html
     assert "即使各行数据齐全，本批也一律不放行" in html
@@ -1329,7 +1336,11 @@ def test_v21_export_carries_gate_origin_and_identity(inputs_v2):
                   "quantile_status", "q95_independent", "row_can_order",
                   "blocking_reasons", "row_can_order_reason"):
         assert token in export, token
-    assert "export-text" in html and "export-copy" in html
+    # Export moved to the top action row: one click downloads the same CSV.
+    assert "id='export-csv'" in html and "id='export-note'" in html
+    assert "id='export-fold'" not in html and "id='export-text'" not in html
+    download = _function_body(js, "downloadExport")
+    assert "Blob" in download and "download" in download
 
 
 def test_v21_five_demand_origins_and_quantile_flags(inputs_v2):

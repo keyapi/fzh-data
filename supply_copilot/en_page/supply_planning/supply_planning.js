@@ -13,6 +13,13 @@ frappe.pages['supply-planning'].on_page_load = function (wrapper) {
   hostStyle.textContent = `
     .supply-planning-page .supply-planning-main {padding:0!important;margin:0!important;border:0;box-sizing:border-box;min-height:0;}
     .supply-planning-page .supply-planning-surface {height:100%;min-height:0;min-width:0;}
+    /* The workbench draws its own title/identity; hide only this Page's Desk
+       page-head so it does not duplicate the in-page header. Breadcrumbs live
+       in the Desk navbar and stay untouched. */
+    .supply-planning-page .page-head {
+      display:none!important;height:0!important;min-height:0!important;margin:0!important;
+      padding:0!important;border:0!important;overflow:hidden!important;
+    }
     .supply-planning-page.supply-fit,.supply-planning-page .supply-fit {
       min-height:0!important;min-width:0;overflow:hidden;overflow:clip;margin-bottom:0!important;padding-bottom:0!important;
     }`;

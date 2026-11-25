@@ -270,35 +270,53 @@ label{font-size:11px;color:#596a77}
 h1,h2,h3,h4{margin:0}
 .app-shell{height:100vh;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr);
 min-height:0;min-width:0;overflow:hidden;overflow:clip}
-.topstack{position:relative;z-index:30;min-width:0;background:var(--navy);color:#fff}
-.shellbar{display:flex;align-items:center;gap:12px;padding:7px 12px;min-width:0;flex-wrap:wrap}
-.shellbar .brand{font:600 15px "Microsoft YaHei UI",sans-serif;letter-spacing:0}
-.shellbar .snapshot{font-size:11px;color:#c8d3dc}
-.metastrip{display:flex;gap:2px 14px;flex-wrap:wrap;padding:0 12px 6px;font-size:10.5px;
-color:#c8d3dc;line-height:1.5;min-width:0}
-.metastrip span{white-space:nowrap}
+.topstack{position:sticky;top:0;z-index:30;min-width:0;background:var(--navy);color:#fff}
+.shellbar{display:flex;align-items:center;gap:10px;padding:4px 10px;min-width:0;flex-wrap:nowrap}
+.shellbar .brand{font:600 13px "Microsoft YaHei UI",sans-serif;letter-spacing:0;white-space:nowrap;
+flex:none}
+.shellbar .snapshot{font-size:10.5px;color:#c8d3dc;white-space:nowrap;flex:none}
+.metastrip{display:inline-flex;gap:2px 10px;flex-wrap:nowrap;font-size:10.5px;
+color:#c8d3dc;line-height:1.4;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .metastrip b{color:#eaf1f6;font-weight:600;margin-right:3px}
 .metastrip code{font-family:ui-monospace,Consolas,monospace;color:#dceaf2;font-size:10px}
-.gatebanner{margin:0 0 8px;background:#fdecec;border:1px solid #d9a3a3;border-left:5px solid var(--warn);
-border-radius:4px;padding:9px 12px;font-size:12px;color:#5c2b2b}
-.gate-main{display:flex;gap:10px;flex-wrap:wrap;align-items:baseline}
-.gate-main b{color:#8a1f1f;letter-spacing:.3px}
-.gate-msg{color:#6b3a3a}
-.gate-stats{font-size:11px;color:#7a4a4a;margin-top:3px}
-.gate-reasons{margin:5px 0 0 18px;padding:0;font-size:11.5px}
-.gate-reasons li{margin:1px 0}
-.gate-more{margin-top:5px;font-size:11px}
-.gate-more summary{cursor:pointer;color:#8a1f1f}
-.gate-more ul{margin:3px 0 6px 18px;padding:0}
-.gate-fresh{display:block;margin-top:4px;font-size:10.5px;color:#7a4a4a}
+.navrow{display:flex;align-items:center;gap:10px;padding:0 10px;border-top:1px solid #2b4459;
+min-width:0}
+.shell-actions{display:flex;align-items:center;gap:6px;margin-left:auto;flex:none}
+.shell-btn{border:1px solid #476073;background:none;color:#dceaf2;border-radius:3px;
+padding:3px 9px;font-size:11px;white-space:nowrap}
+.shell-btn:hover{border-color:#c8d3dc}
+.metafold{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:8px 0 0;
+font-size:11px;color:#dceaf2}
+.metafold dt{color:#93a9b8}.metafold dd{margin:0;word-break:break-all}
+.gatebanner{display:flex;align-items:center;gap:8px;min-width:0;margin:0;padding:4px 10px;
+background:#fdecec;border-top:1px solid #d9a3a3;border-bottom:1px solid #d9a3a3;
+border-radius:0;font-size:11.5px;color:#5c2b2b;white-space:nowrap}
+.gate-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.gate-main b{color:#8a1f1f;letter-spacing:0;flex:none}
+.gate-msg{color:#6b3a3a;margin:0 0 4px}
+.gate-stats{color:#7a4a4a;flex:none}
+.gate-reasons-inline{color:#6b3a3a;min-width:0;overflow:hidden;text-overflow:ellipsis;flex:1}
+.gate-more{position:relative;flex:none;font-size:11.5px}
+.gate-more summary{cursor:pointer;color:#8a1f1f;list-style:none}
+.gate-more summary::-webkit-details-marker{display:none}
+.gate-more summary::after{content:"\25BE";margin-left:3px}
+.gate-more[open] summary::after{content:"\25B4"}
+.gate-more-body{position:absolute;right:0;top:calc(100% + 4px);width:min(620px,90vw);
+max-height:50vh;overflow:auto;background:#fff8f6;border:1px solid #d9a3a3;border-radius:4px;
+padding:8px 12px;box-shadow:0 6px 18px #172e4333;white-space:normal;z-index:40;color:#5c2b2b}
+.gate-more-body b{display:block;color:#8a1f1f;margin-top:6px}
+.gate-more-body ul{margin:2px 0 4px 16px;padding:0}
+.gate-fresh{display:block;margin-top:6px;font-size:10.5px;color:#7a4a4a}
 .gatebar{margin:0 0 12px;padding:7px 11px;border:1px solid #d9a3a3;background:#fdecec;
 border-radius:4px;font-size:12px;color:#6b2b2b}
 .gate-row{margin:6px 0;padding:6px 10px;border:1px solid #d9a3a3;background:#fdf3f3;
 border-radius:4px;font-size:11.5px;color:#6b2b2b}
 .gate-row ul{margin:3px 0 0 16px;padding:0}
-.export-panel textarea{width:100%;min-height:180px;font-family:ui-monospace,Consolas,monospace;font-size:11px}
-.shell-info{margin-left:auto;font-size:11px}
-.shell-info>summary{cursor:pointer;white-space:nowrap}
+.shell-info{font-size:11px;flex:none}
+.shell-info>summary{cursor:pointer;white-space:nowrap;border:1px solid #476073;border-radius:3px;
+padding:3px 9px;color:#dceaf2;list-style:none}
+.shell-info>summary::-webkit-details-marker{display:none}
+.shell-info[open]>summary{background:#2f5871}
 .shell-info-body{position:absolute;right:8px;top:100%;padding:12px;max-width:min(600px,95vw);
 background:var(--navy);border:1px solid #476073;box-shadow:0 5px 12px #172e4333}
 .shell-info-body .modebanner{padding:4px 0;background:none;font-size:11px}
@@ -320,13 +338,13 @@ margin-left:14px}
 .datachips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .datachips .chip{border:1px solid #2f5871;border-radius:20px;padding:3px 11px;font-size:11px;
 color:#dceaf2}
-nav.topnav{background:var(--navy);display:flex;flex-wrap:wrap;gap:2px;padding:0;
-border-top:1px solid #2b4459}
-nav.topnav button{border:0;background:none;color:#b9c8d2;padding:5px 10px;font-size:12px;
-border-bottom:3px solid transparent;white-space:nowrap}
+nav.topnav{background:none;display:flex;flex-wrap:nowrap;gap:2px;padding:0;border:0;
+flex:1;min-width:0;overflow:hidden}
+nav.topnav button{border:0;background:none;color:#b9c8d2;padding:3px 9px;font-size:11.5px;
+border-bottom:2px solid transparent;white-space:nowrap}
 nav.topnav button.active{color:#fff;border-bottom-color:var(--orange);font-weight:bold}
-main{padding:8px 12px;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;overflow:clip}
-main>.storage-notice{flex:none;margin:0 0 6px}
+main{padding:5px 10px;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden;overflow:clip}
+main>.storage-notice{flex:none;margin:0 0 4px}
 .view.active{flex:1;min-height:0;min-width:0}
 #view-workbench.active{display:flex;flex-direction:column}
 .view{display:none}.view.active{display:block}
@@ -346,7 +364,7 @@ padding:8px 13px;font-size:12px}
 background:var(--white)}
 .setswitch button{border:0;background:none;padding:8px 14px;color:var(--muted);font-size:13px}
 .setswitch button.active{background:var(--navy);color:#fff}
-.wbtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;min-width:0}
+.wbtop{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;min-width:0}
 .wbfilters{display:flex;gap:6px;flex:1;min-width:0;align-items:center;flex-wrap:wrap}
 .wbfilters input[type=search]{flex:1;min-width:100px;width:120px;padding:5px 8px}
 .wbfilters select{width:100px;padding:5px}
@@ -591,7 +609,8 @@ border-radius:4px;padding:16px}
 border-top:1px solid var(--line);z-index:2}
 #proposal-form input,#proposal-form select,#proposal-form textarea{padding:5px 7px}
 #proposal-form textarea{min-height:44px}
-.wbtop .setswitch button{padding:5px 8px;font-size:12px}
+.wbtop .setswitch button{padding:4px 8px;font-size:12px}
+.wbtop .btn.small{padding:4px 7px}
 .wbcount{gap:6px;flex-wrap:nowrap}
 .viewhead{margin-bottom:6px}.viewhead h1{font-size:17px}.viewhead .sub{display:none}
 #view-evidence.active,#view-analysis.active,#view-method.active{display:flex;flex-direction:column}
@@ -606,16 +625,22 @@ border-top:1px solid var(--line);z-index:2}
 #view-method>.method{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:12px}
 .topstack nav{border:0}
 @media(max-width:767px){
-  .shellbar{gap:5px;padding:5px 7px}.shellbar .brand{font-size:13px}
-  .shellbar .snapshot{font-size:10px}.shell-info{margin-left:0}
-  .shellbar nav{margin-left:auto}.shellbar nav button{padding:4px 7px}
-  .metastrip{padding:0 7px 5px;font-size:10px}
+  .shellbar{gap:5px;padding:4px 7px}.shellbar .brand{font-size:12px}
+  .shellbar .snapshot{font-size:10px}
+  .navrow{padding:0 7px;gap:6px}
+  .navrow nav button{padding:3px 6px}
+  .metastrip{font-size:10px}
+  .gate-reasons-inline{display:none}
   .wbtop{gap:5px}.wbfilters{gap:4px}.wbcount>#wb-count{display:none}
 }
 @media(max-width:480px){
-  .shellbar .snapshot{display:none}.shellbar nav{width:100%;margin:0}
-  .shellbar nav{order:2}.shellbar .shell-info{order:1;margin-left:auto}
-  .shellbar nav button{flex:1;padding:3px 5px}
+  .shellbar .snapshot{display:none}
+  .navrow{flex-wrap:wrap}
+  .navrow nav{width:100%;overflow-x:auto}
+  .navrow nav button{flex:1;padding:3px 5px}
+  .shell-actions{margin-left:auto;padding:2px 0}
+  .gatebanner{white-space:normal}
+  .gate-main{flex-wrap:wrap;row-gap:2px}
   .wbtop{display:grid;grid-template-columns:minmax(0,1fr)}
   .wbcount{justify-content:space-between;gap:2px}
   .wbcount .btn{padding:4px}.wbfilters{width:100%}
@@ -635,8 +660,9 @@ border-top:1px solid var(--line);z-index:2}
   .two{grid-template-columns:minmax(0,1fr)}
 }
 @media(max-height:480px){
-  .shellbar{padding:3px 6px;gap:4px}.shellbar .snapshot{display:none}
-  .shellbar .brand{font-size:11px}.shellbar nav button{font-size:10px;padding:3px 5px}
+  .shellbar{padding:2px 6px;gap:4px}.shellbar .snapshot{display:none}
+  .shellbar .brand{font-size:11px}.navrow nav button{font-size:10px;padding:2px 5px}
+  .gatebanner{padding:2px 6px;font-size:10.5px}
   .tablefoot{padding:3px 6px;font-size:9px;gap:2px}
   .wbtop{margin-bottom:3px;gap:3px}.wbtop .btn{font-size:10px;padding:3px}
   .wbfilters input[type=search],.wbfilters select{font-size:11px;padding:3px}
@@ -2574,22 +2600,23 @@ APP_JS = """
     return lines.join(nl) + nl;
   }
 
-  function renderExport() {
-    var ta = byId('export-text');
-    if (ta) ta.value = exportText();
-  }
-
-  function copyExport() {
-    var ta = byId('export-text');
+  function downloadExport() {
     var note = byId('export-note');
-    if (!ta) return;
-    var done = function (ok) {
-      if (note) note.textContent = ok ? '已复制到剪贴板' : '复制失败，请手动全选复制';
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(ta.value).then(function () { done(true); },
-        function () { ta.select(); done(false); });
-    } else { ta.select(); done(false); }
+    try {
+      var blob = new Blob([exportText()], {type: 'text/csv;charset=utf-8'});
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = 'supply-decisions.csv';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+      if (note) note.textContent = '已下载 CSV';
+    } catch (e) {
+      if (note) note.textContent = '下载失败：' + (e && e.message ? e.message : String(e));
+    }
   }
 
   function renderStockFreshness() {
@@ -2933,8 +2960,8 @@ APP_JS = """
         if (title) { try { title.focus({preventScroll: true}); } catch (e) { title.focus(); } }
       });
     }
-    var copyExportBtn = byId('export-copy');
-    if (copyExportBtn) copyExportBtn.addEventListener('click', copyExport);
+    var exportBtn = byId('export-csv');
+    if (exportBtn) exportBtn.addEventListener('click', downloadExport);
     Array.prototype.forEach.call(document.querySelectorAll('[data-pane]'), function (b) {
       b.addEventListener('click', function () {
         var pane = b.getAttribute('data-pane');
@@ -3009,7 +3036,6 @@ APP_JS = """
       renderEvidenceList();
       renderEvidencePanel();
       renderProposals();
-      renderExport();
       renderStockFreshness();
       Array.prototype.forEach.call(document.querySelectorAll('.analysis-pane table'), function (table) {
         var headers = table.querySelectorAll('thead th');
@@ -3487,58 +3513,77 @@ def _sha(h) -> str:
 
 
 def _meta_strip(meta: dict) -> str:
-    """One compact line of snapshot_v2 provenance under the shellbar."""
+    """One compact provenance line: version · period/window · as_of."""
     if not isinstance(meta, dict):
         return ""
     if not (meta.get("schema_version") or meta.get("period_start") or meta.get("bundle_id")):
         return ""
-    parts = []
+    bits = []
     if meta.get("display_version"):
-        parts.append("<span><b>版本</b>%s</span>" % esc(meta.get("display_version")))
-    if meta.get("release_id"):
-        parts.append("<span class='opt'><b>release</b><code>%s</code></span>" % esc(meta.get("release_id")))
-    if meta.get("parent_bundle"):
-        p = str(meta.get("parent_bundle"))
-        parts.append("<span class='opt'><b>parent</b><code title='%s'>%s</code></span>" % (esc(p), esc(p[:12])))
+        bits.append("<b>%s</b>" % esc(meta.get("display_version")))
     if meta.get("period_start") or meta.get("period_end"):
-        parts.append("<span><b>期间</b>%s ~ %s</span>" % (
-            esc(meta.get("period_start") or "?"), esc(meta.get("period_end") or "?")))
-    if meta.get("horizon_days") is not None:
-        parts.append("<span><b>窗口</b>%s 天</span>" % esc(meta.get("horizon_days")))
+        period = "%s ~ %s" % (meta.get("period_start") or "?",
+                              meta.get("period_end") or "?")
+        if meta.get("horizon_days") is not None:
+            period += "/%s天" % meta.get("horizon_days")
+        bits.append(esc(period))
     if meta.get("as_of"):
-        parts.append("<span><b>as_of</b>%s</span>" % esc(meta.get("as_of")))
-    if meta.get("computed_at"):
-        parts.append("<span class='opt'><b>computed</b>%s</span>" % esc(meta.get("computed_at")))
-    if meta.get("bundle_id"):
-        b = str(meta.get("bundle_id"))
-        parts.append("<span><b>bundle</b><code title='%s'>%s</code></span>" % (esc(b), esc(b[:12])))
+        bits.append("as_of %s" % esc(meta.get("as_of")))
+    if not bits:
+        return ""
+    return "<span class='metastrip'>" + " · ".join(bits) + "</span>"
+
+
+def _meta_details(meta: dict) -> str:
+    """Collapsed provenance rows behind the '快照信息' summary."""
+    if not isinstance(meta, dict):
+        return ""
+    if not (meta.get("schema_version") or meta.get("period_start") or meta.get("bundle_id")):
+        return ""
+    rows = []
+
+    def add(label, value):
+        if value is not None and value != "":
+            rows.append("<dt>%s</dt><dd>%s</dd>" % (esc(label), esc(value)))
+
+    add("版本", meta.get("display_version"))
+    add("release_id", meta.get("release_id"))
+    add("parent_bundle", meta.get("parent_bundle"))
+    add("bundle", meta.get("bundle_id"))
     model = meta.get("model")
     if isinstance(model, dict):
-        bits = [str(model.get(k)) for k in ("policy", "policy_version", "run_id") if model.get(k)]
-        if bits:
-            parts.append("<span class='opt'><b>模型</b>%s</span>" % esc(" · ".join(bits)))
-    if meta.get("config_version"):
-        c = str(meta.get("config_version"))
-        parts.append("<span class='opt'><b>配置</b><code title='%s'>%s</code></span>" % (esc(c), esc(c)))
-    if meta.get("branch"):
-        parts.append("<span><b>分支</b>%s</span>" % esc(meta.get("branch")))
-    if not parts:
+        add("模型", " · ".join(str(model.get(k)) for k in
+                               ("policy", "policy_version", "run_id") if model.get(k)))
+    add("配置", meta.get("config_version"))
+    add("分支", meta.get("branch"))
+    if meta.get("period_start") or meta.get("period_end"):
+        add("期间", "%s ~ %s" % (meta.get("period_start") or "?",
+                                 meta.get("period_end") or "?"))
+    if meta.get("horizon_days") is not None:
+        add("窗口", "%s 天" % meta.get("horizon_days"))
+    add("as_of", meta.get("as_of"))
+    add("computed", meta.get("computed_at"))
+    if not rows:
         return ""
-    return "<div class='metastrip'>" + "".join(parts) + "</div>"
+    return "<dl class='metafold'>" + "".join(rows) + "</dl>"
 
 
 def _gate_banner(snap: dict) -> str:
-    """Top-level A1 gate: the whole batch is not orderable, even when complete.
+    """Top-level A1 gate, compressed to one sticky line.
 
-    Server-rendered so it shows with JavaScript disabled and on the very first
-    paint. Never green: gate closed is a blocking statement.
+    The whole batch is not orderable even when complete. One line always shows
+    the closed headline, row counts and the first two reasons; every reason,
+    warning, per-row count and limit lives in a collapsed ``<details>``. Server
+    rendered so it shows with JavaScript disabled and on the very first paint.
+    Never green: gate closed is a blocking statement.
     """
     gate = snap.get("gate")
     if not isinstance(gate, dict):
         return ""
-    reasons = snap.get("executable_reasons") or []
-    warnings = snap.get("warnings") or gate.get("global_warnings") or []
-    limits = snap.get("limits") or []
+    reasons = [str(x) for x in (snap.get("executable_reasons")
+                                or gate.get("executable_reasons") or [])]
+    warnings = [str(x) for x in (snap.get("warnings") or gate.get("global_warnings") or [])]
+    limits = [str(x) for x in (snap.get("limits") or [])]
     counts = gate.get("blocking_reason_counts") or {}
     total = (snap.get("totals") or {}).get("rows")
     can_order = gate.get("row_can_order_count")
@@ -3549,32 +3594,34 @@ def _gate_banner(snap: dict) -> str:
     if can_order is not None:
         stats.append("可下单行 %s" % esc(can_order))
     if blocked is not None:
-        stats.append("阻断行 %s" % esc(blocked))
-    if total is not None:
+        stats.append("阻断 %s" % esc(blocked))
+    elif total is not None:
         stats.append("总行 %s" % esc(total))
-    stat_text = " · ".join(stats)
+    stat_text = " / ".join(stats)
+    summary = "；".join(reasons[:2]) or "未提供原因（不视为可下单）"
 
-    reason_html = "".join("<li>%s</li>" % esc(str(x)) for x in reasons) or "<li>未提供原因（不视为可下单）</li>"
-    warn_html = "".join("<li>%s</li>" % esc(str(x)) for x in warnings) or "<li>无</li>"
-    limit_html = "".join("<li>%s</li>" % esc(str(x)) for x in limits) or "<li>未提供</li>"
-    count_html = "".join("<li>%s：%s 行</li>" % (esc(str(k)), esc(str(v))) for k, v in counts.items()) or "<li>无</li>"
+    reason_html = "".join("<li>%s</li>" % esc(x) for x in reasons) or "<li>未提供原因（不视为可下单）</li>"
+    warn_html = "".join("<li>%s</li>" % esc(x) for x in warnings) or "<li>无</li>"
+    limit_html = "".join("<li>%s</li>" % esc(x) for x in limits) or "<li>未提供</li>"
+    count_html = "".join("<li>%s：%s 行</li>" % (esc(str(k)), esc(str(v)))
+                         for k, v in counts.items()) or "<li>无</li>"
 
     return (
         "<div class='gatebanner' role='alert' aria-label='整体 gate 不可下单'>"
         "<div class='gate-main'><b>整体 gate 关闭 · 本批不可直接下单</b>"
-        "<span class='gate-msg'>%s</span></div>"
-        "<div class='gate-stats'>%s</div>"
-        "<ul class='gate-reasons'>%s</ul>"
-        "<details class='gate-more'><summary>阻断原因 / 警告 / 限制（%d 项）</summary>"
+        "<span class='gate-stats'>%s</span>"
+        "<span class='gate-reasons-inline' title='%s'>%s</span>"
+        "<details class='gate-more'><summary>展开</summary><div class='gate-more-body'>"
+        "<p class='gate-msg'>%s</p>"
         "<div><b>executable_reasons</b><ul>%s</ul></div>"
         "<div><b>warnings / global_warnings</b><ul>%s</ul></div>"
         "<div><b>逐行阻断原因统计</b><ul>%s</ul></div>"
         "<div><b>limits</b><ul>%s</ul></div>"
         "<p class='hint'>即使各行数据齐全，本批也一律不放行（row_can_order=false）。"
-        "页面不会提供下单入口，也不把齐全度当成可执行信号。</p></details>"
+        "页面不会提供下单入口，也不把齐全度当成可执行信号。</p>"
         "<span class='gate-fresh' id='stock-fresh-view'>库存新鲜度（按浏览时间）：脚本计算中…</span>"
-        "</div>"
-    ) % (esc(head), esc(stat_text), reason_html, len(reasons) + len(warnings) + len(limits),
+        "</div></details></div></div>"
+    ) % (stat_text, esc(summary), esc(summary), esc(head),
          reason_html, warn_html, count_html, limit_html)
 
 
@@ -3951,9 +3998,12 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None,
 
     doc += "<div class='app-shell'><div class='topstack'><div class='shellbar'>"
     doc += "<div class='brand'>供应链计划 · 演示</div>"
-    doc += f"<span class='snapshot'>静态演示 · 快照 {esc(as_of)} · 只读</span>"
+    doc += "<span class='snapshot'>静态演示 · 只读</span>"
+    doc += _meta_strip(meta)
+    doc += "</div><div class='navrow'>"
     doc += f"<nav class='topnav' role='tablist' aria-label='一级视图'>{nav}</nav>"
-    doc += "<details class='shell-info'><summary aria-label='快照与模式'>ⓘ</summary><div class='shell-info-body'>"
+    doc += "<div class='shell-actions'>"
+    doc += "<details class='shell-info'><summary aria-label='快照信息'>快照信息</summary><div class='shell-info-body'>"
     doc += f"<div class='modebanner' role='note'><span class='mb-main'>{esc(BANNER_TEXT.format(as_of=as_of))}</span>"
     doc += f"<span class='mchips'>{chips}</span></div><div class='datachips'>"
     doc += f"<span class='chip'>补货建议 {len(rows)} 行（只读）</span>"
@@ -3965,13 +4015,16 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None,
         doc += "<span class='chip' style='border-color:#d9a3a3;color:#f4d6d6'>gate 关闭 · 不可下单</span>"
     doc += "</div>"
     doc += f"<div class='sitemeta'>快照 {esc(snap.get('version'))} · 基准 {esc(baseline_doc.get('version'))}"
-    doc += "<br>提案只存本浏览器；不上传、不审批、不写 EN；采购/运营需复核。</div></div></details>"
-    doc += _meta_strip(meta)
+    doc += "<br>提案只存本浏览器；不上传、不审批、不写 EN；采购/运营需复核。</div>"
+    doc += _meta_details(meta) + "</div></details>"
+    doc += "<button type='button' class='shell-btn' id='export-csv' title='下载决策清单 CSV（含 gate / 逐行阻断 / 口径）'>导出 CSV</button>"
+    doc += "<span class='sr-only' id='export-note' aria-live='polite'></span>"
     doc += "</div></div>"
+    doc += _gate_banner(snap)
+    doc += "</div>"
 
     doc += "<main>"
     doc += "<p class='storage-notice' id='collab-storage-notice' role='alert' hidden></p>"
-    doc += _gate_banner(snap)
 
     # ---- 工作台 ----
     doc += "<section class='view active' id='view-workbench' role='tabpanel'>"
@@ -4017,14 +4070,6 @@ def build(snapshot_path: Path, baseline_path: Path, b_dir: Path | None = None,
     doc += "<div class='empty'>选择左侧一行查看结论、证据和可用操作。<br>"
     doc += "补货建议只读；唯一关联到需求基准时可在本栏填写演示判断。</div>"
     doc += "</div></div></div>"
-    doc += "<details class='panel-fold export-panel' id='export-fold'>"
-    doc += "<summary>导出决策清单（CSV，带 gate 与口径）</summary>"
-    doc += "<p class='hint'>导出含 display_version / release_id / parent_bundle / 期间 / gate / "
-    doc += "逐行阻断原因 / demand.origin / quantile_status / row_can_order，不只导主表数字；"
-    doc += "数据齐全也不等于可下单。</p>"
-    doc += "<div class='actions'><button type='button' class='btn small' id='export-copy'>复制 CSV</button>"
-    doc += "<span class='hint' id='export-note' aria-live='polite'></span></div>"
-    doc += "<textarea id='export-text' readonly aria-label='导出 CSV'></textarea></details>"
     doc += "<p class='sr-only' id='wb-announce' aria-live='polite'></p>"
     doc += "<dialog class='sheet' id='detail-sheet' aria-label='详情'>"
     doc += "<div class='sheet-wrap'><div class='sheet-bar'>"
