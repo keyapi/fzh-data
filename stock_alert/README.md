@@ -22,10 +22,10 @@ EN 不可达时回退通途 OpenAPI。可用库存 < 5，排除可用=0 且在�
 （SKU、产品名称、当前库存），不限条数；**无新增的仓不显示**。
 底部下载“今日新增明细”和“全部低库存明细”；不在卡片上显示在途合计，Excel 保留每个 SKU 的在途库存。
 
-某仓昨日基线整体缺失时，图片不把全量低库存当成新增，只提示“无法判断今日新增”并指向 Excel；
+某仓昨日基线整体缺失时，卡片不把全量低库存当成新增，只提示“无法判断今日新增”并指向 Excel；
 Excel 仍可导出该仓全量低库存。未获取基线（`--no-baseline` 或缺 EN 凭证）时不生成新增 Excel。
 两份Excel都按仓分sheet，列为SKU、产品名称、可用库存、在途库存。
-今日无新增（或没有低库存）时**不推送**，也不生成图片/Excel。
+今日无新增（或没有低库存）时**不推送**，也不生成消息/Excel。
 
 ## 采购入库（每天 14:00 一张卡）
 
@@ -34,7 +34,7 @@ Excel 仍可导出该仓全量低库存。未获取基线（`--no-baseline` 或�
 EN 的 `stock_change` 每天约 05:53 才同步一次，白天会滞后，所以不走 EN。
 只保留采购单 `relatedVoucherType=02` 且 `availableStockIncrease > 0` 的事件，按仓、SKU 合并。
 **所有有入库的仓合成一张卡片**；没有入库的仓不显示；三个仓都没有则整次不推送。
-图片列出各仓全部入库 SKU，不限条数；一个 Excel 按仓分 sheet，下载全部有入库的仓。
+消息列出各仓全部入库 SKU（默认文字，可直接复制）；一个 Excel 按仓分 sheet，下载全部有入库的仓。
 本次没有采购入库时**不推送**。此提醒描述已同步的库存事件，不代表采购单全部到货。
 上次检查时间保存在 `stock_alert_output/inbound_state.json`，dry-run 不推进。
 手动查历史某天：`inbound --date YYYY-MM-DD --source tongtool`；沿用 EN：`--source en`。
@@ -51,21 +51,21 @@ uv run python -m stock_alert.cli inbound --notify
 uv run pytest stock_alert/tests -q
 ```
 
-`--dry-run` 只读 API、更新本地名称缓存并生成本地 Excel/图片卡片预览，不发群、不上传文件。
+`--dry-run` 只读 API、更新本地名称缓存并生成本地 Excel/文字卡片预览，不发群、不上传文件。
 名称取通途 `goodsQuery.productName`；缓存每周全量重建、日常补缺，失败用已有缓存/SKU。
 首次刷新实测约30分钟（13504个商品），通途商户共享 5 次/分钟限流，名称刷新带非阻塞缓存锁，任务重叠时另一任务直接用缓存/SKU，不争抢名称查询额度。
 
 ## 卡片样式
 
-默认把提醒渲染成 **PNG 图片卡片**（蓝底居中标题、低库存今日新增在标题下方、低库存各仓今日新增 SKU / 入库各仓明细），
-上传后用现有群机器人发图 + 原生下载按钮；**不需要企业内部应用或卡片模板**。图片生成/上传失败会自动回退文本 ActionCard。
+默认发送 **Markdown 文字卡片**（`STOCK_ALERT_CARD_MODE=text`）：低库存列出 SKU/产品名称/库存，
+入库列出产品明细，**可直接复制粘贴**；有下载按钮时使用 ActionCard。图片卡片仍可选。
 
 可选模式（环境变量 `STOCK_ALERT_CARD_MODE`）：
 
-- `image`（默认）：图片卡片；
-- `text`：纯文本/表格 ActionCard；
+- `text`（默认）：纯文本/ActionCard，可直接复制；
+- `image`：PNG 图片卡片（蓝底居中标题、低库存今日新增在标题下方、各仓明细）；
 - `interactive` / `auto`：钉钉原生互动卡片（需按 [互动卡片接入](docs/reference/interactive-card.md)
-  配置企业内部应用与两个已发布模板；未配置时回退图片卡片）。
+  配置企业内部应用与两个已发布模板；未配置时回退文字卡片）。
 
 ## 配置与定时
 

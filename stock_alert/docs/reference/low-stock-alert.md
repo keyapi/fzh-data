@@ -18,21 +18,21 @@ description: 低库存新增基线、采购入库正增量、名称缓存与独�
 各仓标题右侧也不显示低库存总数；不显示在途合计（Excel 保留每个 SKU 的在途库存），
 今日新增不限条数。
 底部提供新增Excel与全量Excel两个按钮，列 `SKU | 产品名称 | 可用库存 | 在途库存`。
-今日无新增（或没有低库存）**不推送**，也不生成图片/Excel。图片只列今日新增 SKU，完整 411 行仍在 Excel。
+今日无新增（或没有低库存）**不推送**，也不生成消息/Excel。卡片只列今日新增 SKU，完整 411 行仍在 Excel。
 低库存按地区：**波兰仓每天 14:00**；**美中 + 美东每天 20:00**（共用一张卡，只显示有新增的仓）。
 采购入库每天 **14:00** 一次，直连通途 OpenAPI
 `/openapi/tongtool/stocksChangeDetailQuery`（`warehouseName`、`updatedDateFrom`、`pageNo`、`pageSize`），
 查今天 00:00 到运行时间的增量；EN 的 `stock_change` 每天约 05:53 才同步一次，白天滞后。
 只保留 `relatedVoucherType=02` 且 `availableStockIncrease>0` 的事件。
 **所有有入库的仓合成一张卡片**；无入库的仓不显示；三个仓都没有则整次不推送。
-图片按仓列出全部产品（不限条数），一个 Excel 按仓分 sheet；无入库不生成文件。
+消息按仓列出全部产品（默认文字，可直接复制；不限条数，超长文本回退汇总+Excel），一个 Excel 按仓分 sheet；无入库不生成文件。
 窗口状态保存在 `stock_alert_output/inbound_state.json`，dry-run 不推进；发送失败也不推进。
 手动历史查询仍可用 `--date YYYY-MM-DD --source tongtool`，或 `--source en` 走 EN 日更数据。
 
 新增基线由 `get_stock_history` 精确查询昨日，各仓独立处理；重复 SKU 取最大可用值。
 昨日 >= 阈值或不存在此 SKU 则标记新增；昨日 < 阈值不算新增。
 整仓基线缺失/读取失败，明确标注“昨日基线缺失，无法判断今日新增”；
-图片不把该仓全量低库存当成新增，全量低库存仍进入 Excel。
+卡片不把该仓全量低库存当成新增，全量低库存仍进入 Excel。
 未启用基线或无法建立 EN 客户端时不标记新增，stderr 说明原因。
 
 ## 接口边界
@@ -77,10 +77,10 @@ worktree 不带这些 gitignored 文件；定时任务跑主检出，主检出�
 - `FZH-StockAlert-Poland`：14:00，仅波兰仓，有新增才推送。
 - `FZH-StockAlert-US`：20:00，美中 + 美东共用一张卡，只显示有新增的仓。
 - `FZH-StockInbound-daily`：14:00，一张合并卡片，只显示有入库的仓；无入库不推送。
-- 卡片默认渲染为 PNG 图片（`STOCK_ALERT_CARD_MODE=image`）：蓝底居中标题、
-  今日新增在标题下方、低库存各仓今日新增 SKU / 入库各仓明细；
-  图片上传失败回退文本 ActionCard。单按钮卡片使用 `btns` 独立跳转，点图片不会触发下载。
-  入库数量单位为「个」，低库存在途合计仍为「件」。
+- 默认**文字卡片**（`STOCK_ALERT_CARD_MODE=text`）：Markdown 可直接复制；
+  低库存列出 SKU/产品名称/库存，入库列出产品明细；有下载按钮时使用 ActionCard。
+  图片卡片可选（`image`）：蓝底居中标题、今日新增在标题下方、各仓明细；图片失败回退文字。
+  单按钮卡片使用 `btns` 独立跳转，点图片不会触发下载。入库数量单位为「个」。
 - 三条任务的包装、日志和异常独立；Windows 注册设置 StartWhenAvailable / WakeToRun，
   仍需电脑开机、用户登录。为避免睡眠漏跑：`powercfg /change standby-timeout-ac 0`
   （交流电永不休眠；屏幕仍可关闭）；关机/注销登录不会执行。

@@ -52,7 +52,8 @@ def test_large_low_stock_is_one_compact_warehouse_card():
     assert '今日新增：**1**' in body
     assert '### 美中-FZH-DANEEY' in body
     assert '### 美东-CENTRADE' not in body  # 该仓无新增，不展示
-    assert '在途合计：**1233**' in body
+    assert '• S0 产品甲：库存1个' in body
+    assert '在途合计' not in body
     assert '\n\n###' in body
     assert '第1/' not in body and 'S410' not in body
     assert '低库存：**411**' not in body
@@ -145,7 +146,7 @@ def test_inbound_has_real_paragraphs_for_name_sku_quantity_and_warehouses():
     assert len(messages) == 1
     text = messages[0]
     assert '\n\n### 美中-FZH-DANEEY' in text
-    assert '**产品甲**\n\nSKU：A0\n\n入库：**45 个**' in text
+    assert '• A0 产品甲：入库45个' in text
     assert '\n\n### 美东-CENTRADE' in text and '无采购入库' in text
 
 def test_large_inbound_is_one_card_with_full_download(monkeypatch, tmp_path):

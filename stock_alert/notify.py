@@ -17,6 +17,7 @@ WEBHOOK_ENV = "DINGTALK_WEBHOOK_STOCK"
 SECRET_ENV = "DINGTALK_SECRET_STOCK"
 DINGTALK_MAX_BYTES = 20000
 CARD_BUDGET_BYTES = 18000
+MAX_TEXT_NEW = 100
 
 
 def _robot_path() -> str:
@@ -48,8 +49,8 @@ def _check_body(body: str) -> str:
 
 
 def _card_mode() -> str:
-    """STOCK_ALERT_CARD_MODE：image（默认，渲染图片卡片）/ text / interactive / auto。"""
-    return os.environ.get("STOCK_ALERT_CARD_MODE", "image").strip().lower()
+    """STOCK_ALERT_CARD_MODE：text（默认，可直接复制）/ image / interactive / auto。"""
+    return os.environ.get("STOCK_ALERT_CARD_MODE", "text").strip().lower()
 
 
 def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None,
@@ -59,18 +60,33 @@ def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None
     if new_count == 0:
         return [f"## {title}\n\n今日无新增低库存。"]
     threshold = _fmt_num(result.threshold)
-    parts = [f"## {title}", f"今日新增：**{new_count}** 个"]
+    header = [f"## {title}", f"今日新增：**{new_count}** 个"]
+    sections: list[str] = []
+    shown = 0
+    omitted = 0
     for wh in result.warehouses:
-        new_for_wh = sum(item.is_new for item in wh.low)
-        if not new_for_wh:
+        new_items = [item for item in wh.low if item.is_new]
+        if not new_items:
             continue
-        parts.extend([f"### {_clean(wh.warehouse)}",
-                      f"今日新增：**{new_for_wh}** 个",
-                      f"在途合计：**{_fmt_num(wh.intransit_total)}** 件"])
+        lines = [f"### {_clean(wh.warehouse)}", f"今日新增：**{len(new_items)}** 个"]
         if wh.baseline_missing and wh.count:
-            parts.append("> 昨日基线缺失，无法判断今日新增。")
-    parts.append(f"> 口径：可用库存 < {threshold}，排除可用=0且在途=0。")
-    return [_check_body("\n\n".join(parts))]
+            lines.append("> 昨日基线缺失，无法判断今日新增。")
+        for item in new_items:
+            if shown >= MAX_TEXT_NEW:
+                omitted += 1
+                continue
+            name = _clean(item.name)[:60]
+            label = f"• {item.sku}"
+            if name and name != item.sku:
+                label += f" {name}"
+            lines.append(f"{label}：库存{_fmt_num(item.available)}个")
+            shown += 1
+        sections.append("\n".join(lines))
+    tail = []
+    if omitted:
+        tail.append(f"> 另有 {omitted} 个新增，完整见 Excel。")
+    tail.append(f"> 口径：可用库存 < {threshold}，排除可用=0且在途=0。")
+    return [_check_body("\n\n".join(header + sections + tail))]
 
 
 def _inbound_body(result: InboundResult) -> tuple[str, bool]:
@@ -84,24 +100,29 @@ def _inbound_body(result: InboundResult) -> tuple[str, bool]:
         empty = (f"本次无采购入库（{result.label}）。" if result.label
                  else f"昨日（{day}）无采购入库。")
         return "\n\n".join([title, empty]), False
-    summary = [title]
-    detailed = [title]
+    summary_sections = [title]
+    detailed_sections = [title]
     for wh in result.warehouses:
-        section = [f"入库：**{_fmt_num(wh.total_qty)}** 个 · **{wh.count}** 个 SKU"]
+        lines = [f"入库：**{_fmt_num(wh.total_qty)}** 个 · **{wh.count}** 个 SKU"]
         if single is None:
-            section.insert(0, f"### {_clean(wh.warehouse)}")
+            lines.insert(0, f"### {_clean(wh.warehouse)}")
         if not wh.items:
-            section.append("本次无采购入库。" if result.label else "昨日无采购入库。")
-        summary.extend(section)
-        detailed.extend(section)
+            lines.append("本次无采购入库。" if result.label else "昨日无采购入库。")
+        summary_sections.append("\n".join(lines))
+        detail_lines = list(lines)
         for item in wh.items:
-            name = _clean(item.name) or _clean(item.sku)
-            detailed.append(f"**{name}**\n\nSKU：{_clean(item.sku)}\n\n入库：**{_fmt_num(item.qty)} 个**")
-    body = "\n\n".join(detailed)
+            sku = _clean(item.sku)
+            name = _clean(item.name) or sku
+            label = f"• {sku}"
+            if name and name != sku:
+                label += f" {name}"
+            detail_lines.append(f"{label}：入库{_fmt_num(item.qty)}个")
+        detailed_sections.append("\n".join(detail_lines))
+    body = "\n\n".join(detailed_sections)
     if len(body.encode("utf-8")) <= CARD_BUDGET_BYTES:
         return body, False
-    summary.append("明细较多，完整产品、SKU和入库数量请点击本卡片底部下载按钮。")
-    return _check_body("\n\n".join(summary)), True
+    summary_sections.append("明细较多，完整产品、SKU和入库数量请点击本卡片底部下载按钮。")
+    return _check_body("\n\n".join(summary_sections)), True
 
 
 def build_inbound_messages(result: InboundResult) -> list[str]:

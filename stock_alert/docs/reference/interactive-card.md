@@ -6,8 +6,8 @@ description: 用企业内部应用与卡片模板实现居中标题、蓝底头�
 ---
 # 钉钉互动卡片
 
-> **默认不需要本页**：`stock_alert` 默认用 `card_image.py` 渲染 PNG 图片卡片，通过现有群机器人发送。
-> 本页仅用于需要钉钉**原生互动卡片**（可更新卡片、模板级布局）时。
+> **默认不需要本页**：`stock_alert` 默认用 `STOCK_ALERT_CARD_MODE=text` 发送可复制的文字卡片；
+> 图片卡片（`image`）也可选。本页仅用于需要钉钉**原生互动卡片**时。
 
 ## 为什么需要它
 
@@ -61,7 +61,7 @@ DINGTALK_INBOUND_TEMPLATE_ID=...
 | `title` | 卡片标题（模板里设置居中） | 低库存预警 |
 | `subtitle` | 日期 | 2026-11-17 |
 | `overview` | 概览（可放统计框） | 今日新增 **18** 个 |
-| `body` | 分仓明细 Markdown | `### 美中-FZH-DANEEY\n\n今日新增 **6** 个 · 在途 **2723** 件` |
+| `body` | 分仓明细 Markdown | `### 美中-FZH-DANEEY\n\n今日新增 **6** 个\n\n• SKU 产品名称：库存3个` |
 | `btn1Title` | 按钮 1 文案 | 下载今日新增（18） |
 | `btn1Url` | 按钮 1 链接 | https://erpnext.vilavi.cn/files/...xlsx |
 | `btn2Title` | 按钮 2 文案 | 下载全部低库存（411） |

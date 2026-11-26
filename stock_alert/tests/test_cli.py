@@ -57,7 +57,7 @@ def test_inbound_mock_dry_run_defaults_to_yesterday(capsys):
     out = capsys.readouterr().out
     yesterday = (_dt.date.today() - _dt.timedelta(days=1)).isoformat()
     assert "通途采购入库提醒" in out and "美中-FZH-DANEEY" in out and yesterday in out
-    assert "SKU：DEMO-IN-0\n\n入库：**10 个**" in out
+    assert "• DEMO-IN-0：入库10个" in out
 
 
 def test_inbound_mock_respects_date(capsys):
@@ -127,7 +127,7 @@ def test_inbound_only_resolves_names_for_real_receipts(monkeypatch, capsys):
     assert main(["inbound", "--dry-run", "--warehouses", "W"]) == 0
     assert wanted == ["ARRIVED"]
     out = capsys.readouterr()
-    assert "**产品甲**\n\nSKU：ARRIVED\n\n入库：**45 个**" in out.out
+    assert "• ARRIVED 产品甲：入库45个" in out.out
     assert '"zero_change": 1' in out.err
 
 
