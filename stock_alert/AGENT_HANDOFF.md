@@ -4,25 +4,23 @@ title: stock_alert Agent 交接
 ---
 # stock_alert 交接
 
-## 当前版本（2026-11-18 图片卡片）
+## 当前版本（2026-11-26 图片卡片 + 按地区）
 
 默认 `STOCK_ALERT_CARD_MODE=image`：`card_image.py` 用 Pillow 渲染 PNG（蓝底居中标题、
-低库存概览在标题下方、低库存各仓今日新增 SKU / 入库各仓明细；无顶部统计框和「分仓明细」标题），
-上传后由现有群机器人发图 + 原生下载按钮；
-**无需企业内部应用**。单按钮 ActionCard 使用 `btns` 独立跳转，点图片不会触发下载。
-低库存卡片按仓列出**今日新增 SKU**（SKU、产品名称、当前库存），不限条数；不显示低库存总数
-（各仓标题右侧也不显示），不再显示在途合计（Excel 仍保留每个 SKU 的在途库存）；
-今日无新增（或全无低库存）不推送。采购入库图片同样不限条数，数量单位为「个」。
-昨日基线缺失的仓提示「无法判断今日新增」，不把全量低库存当新增。
-图片生成/上传失败自动回退文本 ActionCard。
-可选 `interactive` / `auto` 走钉钉原生互动卡片（见 `docs/reference/interactive-card.md`）。
-采购入库改为 **10:00 / 14:00 / 17:00** 三次直连通途 `/openapi/tongtool/stocksChangeDetailQuery`
-（EN `stock_change` 每天约 05:53 才同步一次，白天滞后）；按「上次成功检查 → 本次」增量窗口查询，
+今日新增在标题下方、低库存各仓今日新增 SKU / 入库各仓明细；无顶部统计框和「分仓明细」标题），
+上传后由现有群机器人发图 + 原生下载按钮；**无需企业内部应用**。
+单按钮 ActionCard 使用 `btns` 独立跳转，点图片不会触发下载。
+低库存标题「低库存预警」：
+- **波兰每天 14:00**；**美中+美东每天 20:00**（共用一张卡，只显示有新增的仓）。
+- 只提醒今日新增 SKU（今日快照 vs 昨日历史）；同一 SKU 继续低不重复；无新增不推送。
+- 不显示低库存总数（含各仓标题右侧），不显示在途合计（Excel 保留每个 SKU 的在途库存）。
+采购入库**每天 14:00 一次**，直连通途 `/openapi/tongtool/stocksChangeDetailQuery`，
+查今天 00:00–14:00；**合成一张卡，只显示有入库的仓**；全无入库不推送；Excel 按仓分 sheet。
 窗口状态存 `stock_alert_output/inbound_state.json`，dry-run/发送失败不推进。
-失败告警会脱敏 `app_token`/`sign`/`timestamp`；入库 OpenAPI 500 最多重试 3 次。
-每次执行**只为有入库的仓发卡片**（最多 3 张；空仓不推送，三个仓都为 0 时整次不推送），
-每张卡只含该仓明细与该仓 Excel。
-当前 93 项测试通过；图片卡片已实推，errcode=0。
+失败告警脱敏 `app_token`/`sign`/`timestamp`；入库 OpenAPI 500 最多重试 3 次。
+定时任务：`FZH-StockAlert-Poland` 14:00、`FZH-StockAlert-US` 20:00、`FZH-StockInbound-daily` 14:00。
+避免睡眠漏跑：`powercfg /change standby-timeout-ac 0`（交流电永不休眠；屏幕仍可关闭）。
+当前 94 项测试通过；图片卡片已实推，errcode=0。
 
 以下阶段2首版/单卡样式为历史记录，不是当前发送样式。
 

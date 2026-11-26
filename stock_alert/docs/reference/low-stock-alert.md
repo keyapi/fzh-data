@@ -19,16 +19,13 @@ description: 低库存新增基线、采购入库正增量、名称缓存与独�
 今日新增不限条数。
 底部提供新增Excel与全量Excel两个按钮，列 `SKU | 产品名称 | 可用库存 | 在途库存`。
 今日无新增（或没有低库存）**不推送**，也不生成图片/Excel。图片只列今日新增 SKU，完整 411 行仍在 Excel。
-采购入库图片按仓列出全部产品（不限条数），不显示顶部统计框和「分仓明细」标题；
-每次执行按仓检查，**只为有入库的仓发卡片**（最多 3 张）；空仓不推送，三个仓都为 0 时整次不推送；
-每张卡只含该仓明细，标题/副标题带仓名，Excel 也只含该仓；
-文本回退超过18000 UTF-8字节时退为单卡汇总，完整明细仍通过同卡 Excel 下载，不拆条。
-
-白天 10:00 / 14:00 / 17:00 的采购入库**直连通途 OpenAPI**
+低库存按地区：**波兰仓每天 14:00**；**美中 + 美东每天 20:00**（共用一张卡，只显示有新增的仓）。
+采购入库每天 **14:00** 一次，直连通途 OpenAPI
 `/openapi/tongtool/stocksChangeDetailQuery`（`warehouseName`、`updatedDateFrom`、`pageNo`、`pageSize`），
-因为 EN 的 `stock_change` 每天约 05:53 才同步一次，无法支撑实时检查。
-每次窗口从上次成功检查时间到本次运行时间，当天首次从 00:00 开始；
+查今天 00:00 到运行时间的增量；EN 的 `stock_change` 每天约 05:53 才同步一次，白天滞后。
 只保留 `relatedVoucherType=02` 且 `availableStockIncrease>0` 的事件。
+**所有有入库的仓合成一张卡片**；无入库的仓不显示；三个仓都没有则整次不推送。
+图片按仓列出全部产品（不限条数），一个 Excel 按仓分 sheet；无入库不生成文件。
 窗口状态保存在 `stock_alert_output/inbound_state.json`，dry-run 不推进；发送失败也不推进。
 手动历史查询仍可用 `--date YYYY-MM-DD --source tongtool`，或 `--source en` 走 EN 日更数据。
 
@@ -77,14 +74,16 @@ worktree 不带这些 gitignored 文件；定时任务跑主检出，主检出�
 
 ## 消息与定时
 
-- `FZH-StockAlert-daily`：09:23，一张低库存汇总卡片，下载按钮与正文同卡。
-- `FZH-StockInbound-daily`：10:00 / 14:00 / 17:00，直连通途查当天增量（首次 00:00 起），
-  只为有入库的仓推卡片（最多 3 张）；都为 0 时不推送。
-- 卡片默认渲染为 PNG 图片（`STOCK_ALERT_CARD_MODE=image`）：蓝底居中标题、统计框、
-  低库存各仓今日新增 SKU / 入库分仓明细；
+- `FZH-StockAlert-Poland`：14:00，仅波兰仓，有新增才推送。
+- `FZH-StockAlert-US`：20:00，美中 + 美东共用一张卡，只显示有新增的仓。
+- `FZH-StockInbound-daily`：14:00，一张合并卡片，只显示有入库的仓；无入库不推送。
+- 卡片默认渲染为 PNG 图片（`STOCK_ALERT_CARD_MODE=image`）：蓝底居中标题、
+  今日新增在标题下方、低库存各仓今日新增 SKU / 入库各仓明细；
   图片上传失败回退文本 ActionCard。单按钮卡片使用 `btns` 独立跳转，点图片不会触发下载。
   入库数量单位为「个」，低库存在途合计仍为「件」。
-- 两条任务的包装、日志和异常独立；Windows 注册设置 StartWhenAvailable / WakeToRun，仍需电脑开机、用户登录。
+- 三条任务的包装、日志和异常独立；Windows 注册设置 StartWhenAvailable / WakeToRun，
+  仍需电脑开机、用户登录。为避免睡眠漏跑：`powercfg /change standby-timeout-ac 0`
+  （交流电永不休眠；屏幕仍可关闭）；关机/注销登录不会执行。
 - 文件先生成/上传，再发送一次卡片；文件失败仍只发一次汇总并注明失败，返回非零状态。
 - 低库存文件：新增与全量分别导出，均按仓分sheet。入库有记录时始终生成完整明细Excel；无入库不生成文件。
 - `--dry-run` 不发群、不上传；真实调用用 `--notify`。包装脚本默认带 `--notify`，预览请直接用 CLI。

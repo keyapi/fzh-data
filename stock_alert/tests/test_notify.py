@@ -51,7 +51,7 @@ def test_large_low_stock_is_one_compact_warehouse_card():
     body = messages[0]
     assert '今日新增：**1**' in body
     assert '### 美中-FZH-DANEEY' in body
-    assert '### 美东-CENTRADE' in body
+    assert '### 美东-CENTRADE' not in body  # 该仓无新增，不展示
     assert '在途合计：**1233**' in body
     assert '\n\n###' in body
     assert '第1/' not in body and 'S410' not in body
@@ -204,7 +204,7 @@ def test_low_stock_falls_back_to_actioncard_when_interactive_fails(monkeypatch, 
 def test_dry_run_includes_card_preview_when_configured(monkeypatch, tmp_path):
     _set_card_env(monkeypatch, tmp_path=tmp_path)
     resp = notify_low_stock(result(), out_xlsx=tmp_path / 'new.xlsx', dry_run=True)
-    assert resp['card_preview']['title'] == '通途低库存提醒'
+    assert resp['card_preview']['title'] == '低库存预警'
     assert resp['card_preview']['btn1Title']
 
 

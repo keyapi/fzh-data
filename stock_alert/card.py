@@ -150,6 +150,8 @@ def low_stock_params(result, *, when: _dt.date | None = None, new_count: int = 0
     for wh in result.warehouses:
         section = [f"### {wh.warehouse}"]
         new_for_wh = sum(item.is_new for item in wh.low)
+        if not new_for_wh:
+            continue
         section.append(
             f"今日新增 **{new_for_wh}** 个 · 在途 **{_fmt(wh.intransit_total)}** 件"
         )
@@ -157,7 +159,7 @@ def low_stock_params(result, *, when: _dt.date | None = None, new_count: int = 0
             section.append("> 昨日基线缺失，本仓按全量低库存导出。")
         lines.append("\n\n".join(section))
     params = {
-        "title": "通途低库存提醒",
+        "title": "低库存预警",
         "subtitle": day.isoformat(),
         "overview": f"今日新增 **{new_count}** 个",
         "body": "\n\n".join(lines),

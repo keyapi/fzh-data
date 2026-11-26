@@ -55,14 +55,17 @@ def _card_mode() -> str:
 def build_low_stock_messages(result: ScanResult, *, when: _dt.date | None = None,
                              new_count: int = 0) -> list[str]:
     day = when or _dt.date.today()
-    title = f"通途低库存提醒 · {day.isoformat()}"
+    title = f"低库存预警 · {day.isoformat()}"
     if new_count == 0:
         return [f"## {title}\n\n今日无新增低库存。"]
     threshold = _fmt_num(result.threshold)
     parts = [f"## {title}", f"今日新增：**{new_count}** 个"]
     for wh in result.warehouses:
+        new_for_wh = sum(item.is_new for item in wh.low)
+        if not new_for_wh:
+            continue
         parts.extend([f"### {_clean(wh.warehouse)}",
-                      f"今日新增：**{sum(item.is_new for item in wh.low)}** 个",
+                      f"今日新增：**{new_for_wh}** 个",
                       f"在途合计：**{_fmt_num(wh.intransit_total)}** 件"])
         if wh.baseline_missing and wh.count:
             parts.append("> 昨日基线缺失，无法判断今日新增。")
@@ -274,7 +277,7 @@ def notify_low_stock(result: ScanResult, *, when: _dt.date | None = None,
         except Exception as exc:  # noqa: BLE001 - 图片失败回退文本
             print(f"[warn] 低库存卡片图片生成失败，回退文本：{type(exc).__name__}: {exc}",
                   file=sys.stderr)
-    return _notify_one(f"通途低库存提醒 · {day.isoformat()}", body, files, errors,
+    return _notify_one(f"低库存预警 · {day.isoformat()}", body, files, errors,
                        dry_run=dry_run, interactive=send, preview=preview, image_path=image_path)
 
 
@@ -350,7 +353,7 @@ def _redact_secrets(text: str) -> str:
     return text
 
 
-def notify_failure(message: str, *, title: str = "通途低库存任务失败") -> dict:
+def notify_failure(message: str, *, title: str = "低库存预警任务失败") -> dict:
     """无人值守跑挂时的告警；凭证缺失会同样抛出，由调用方兜底打印。"""
     _robot_path()
     from send_dingtalk import send_markdown
@@ -364,7 +367,7 @@ def notify_failure(message: str, *, title: str = "通途低库存任务失败") 
 def sync_incomplete_body(detail: str, *, when: _dt.date | None = None) -> str:
     day = when or _dt.date.today()
     return (
-        f"## 通途低库存提醒 · {day.isoformat()}\n\n"
+        f"## 低库存预警 · {day.isoformat()}\n\n"
         "⚠️ **库存同步未完成**，本次不生成低库存明细（避免把同步失败误报为断货）。\n\n"
         f"> {detail}"
     )
@@ -373,7 +376,7 @@ def sync_incomplete_body(detail: str, *, when: _dt.date | None = None) -> str:
 def notify_sync_incomplete(detail: str, *, when: _dt.date | None = None, dry_run: bool = False) -> dict:
     """EN 快照不新鲜时只发「同步未完成」，不发低库存明细。"""
     day = when or _dt.date.today()
-    title = f"通途低库存提醒 · {day.isoformat()}"
+    title = f"低库存预警 · {day.isoformat()}"
     text = sync_incomplete_body(detail, when=day)
     if dry_run:
         return {"errcode": 0, "dry_run": True, "mode": "sync_incomplete", "title": title, "text": text}

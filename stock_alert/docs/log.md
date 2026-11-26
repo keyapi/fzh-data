@@ -8,6 +8,16 @@ tags: [stock-alert, changelog, dingtalk, tongtool]
 
 # 变更日志
 
+## 2026-11-26
+
+- 低库存预警按地区拆分：**波兰 14:00**；**美中 + 美东 20:00**（共用一张卡，只显示有新增的仓）。
+  标题改为「低库存预警」；只提醒今日新增 SKU，同一 SKU 明天继续低不重复提醒；无新增不推送。
+- 采购入库合并为**每天 14:00 一张卡**，只显示真正有入库的仓；三个仓都没有则整次不推送。
+- 定时任务：`FZH-StockAlert-Poland` 14:00、`FZH-StockAlert-US` 20:00、
+  `FZH-StockInbound-daily` 14:00；旧的 09:23 任务移除。
+- 为避免睡眠漏跑：`powercfg /change standby-timeout-ac 0`（交流电永不休眠，屏幕仍可关闭）。
+- 当前 94 项测试通过。
+
 ## 2026-11-24
 
 - 通途 OpenAPI 整体返回 500（`stocksQuery` / `stocksChangeQuery` / `stocksChangeDetailQuery`

@@ -22,7 +22,7 @@ def _alert(message: str) -> None:
     try:
         from stock_alert.notify import notify_failure
 
-        notify_failure(message, title="通途低库存任务失败")
+        notify_failure(message, title="低库存预警任务失败")
         print("[告警] 已推送失败告警到钉钉", file=sys.stderr)
     except Exception as exc:  # 告警本身失败不能盖住主流程
         print(f"[告警] 发送不成功：{exc}", file=sys.stderr)

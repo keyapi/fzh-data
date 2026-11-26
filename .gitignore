@@ -166,3 +166,5 @@ qms/training/_libs/
 /playground.png
 qms/training/report_p1.png
 stock_alert/scripts/run_stock_inbound_scheduled.cmd
+stock_alert/scripts/run_stock_alert_poland_scheduled.cmd
+stock_alert/scripts/run_stock_alert_us_scheduled.cmd

@@ -7,36 +7,34 @@ title: stock_alert 通途库存提醒
 三仓低库存汇总卡片（同卡下载新增/全部明细），以及独立的昨日采购入库提醒。
 默认仓库：美中-FZH-DANEEY、美东-CENTRADE、波兰-FZHPoland-covers。
 
-## 低库存
+## 低库存预警
 
-每日 09:23，默认读 EN `Tongtool Stock Latest`，要求今日快照同步成功；
+标题「低库存预警」。按地区两个任务：
+
+- **波兰**：每日 14:00，仅 `波兰-FZHPoland-covers`；
+- **美中 + 美东**：每日 20:00，共用一张卡片，只显示有新增的仓。
+
+默认读 EN `Tongtool Stock Latest`，要求今日快照同步成功；
 EN 不可达时回退通途 OpenAPI。可用库存 < 5，排除可用=0 且在途=0。
-每次只发一张卡片：**只显示今日新增数**在标题下方，不显示低库存总数；正文按三个仓库分别显示
-「仓名 + 今日新增数」，并在每个仓下列出**当天新增**的低库存 SKU
-（SKU、产品名称、当前库存），不限条数；各仓标题右侧也不显示低库存总数。
-不在卡片上显示在途合计；Excel 仍保留每个 SKU 的在途库存。
-底部按钮直接下载“今日新增明细”和“全部低库存明细”。
+**只提醒今日新增的低库存 SKU**：今日快照 vs 昨日历史，昨日 ≥5 或昨日无记录才算新增；
+同一 SKU 明天继续低不会重复提醒。某地区今日无新增则整次不推送。
+卡片标题下方只显示今日新增数，不显示低库存总数；每仓显示「今日新增 N 个」+ 当天新增 SKU
+（SKU、产品名称、当前库存），不限条数；**无新增的仓不显示**。
+底部下载“今日新增明细”和“全部低库存明细”；不在卡片上显示在途合计，Excel 保留每个 SKU 的在途库存。
 
-新增Excel的判定：昨日可用 >= 阈值，或昨日无此 SKU。另提供全部低库存Excel。
 某仓昨日基线整体缺失时，图片不把全量低库存当成新增，只提示“无法判断今日新增”并指向 Excel；
-Excel 仍可导出该仓全量低库存。
-未获取基线（`--no-baseline` 或缺 EN 凭证）时不生成新增 Excel。
+Excel 仍可导出该仓全量低库存。未获取基线（`--no-baseline` 或缺 EN 凭证）时不生成新增 Excel。
 两份Excel都按仓分sheet，列为SKU、产品名称、可用库存、在途库存。
 今日无新增（或没有低库存）时**不推送**，也不生成图片/Excel。
 
-## 采购入库（白天实时检查）
+## 采购入库（每天 14:00 一张卡）
 
-每日 **10:00 / 14:00 / 17:00** 三次，默认直连通途 OpenAPI
-`/openapi/tongtool/stocksChangeDetailQuery` 查当天增量：
-EN 的 `stock_change` 每天约 05:53 才同步一次，白天会滞后，所以实时检查不走 EN。
-每次从上次成功检查时间开始，到本次运行时间；当天首次为 00:00。
-每次执行按仓检查，**只为有入库的仓发卡片**（最多 3 张：美中 / 美东 / 波兰各一张）；
-空仓不推送，三个仓都为 0 时整次不推送。
+每日 **14:00** 一次，直连通途 OpenAPI `/openapi/tongtool/stocksChangeDetailQuery`
+查今天 00:00 到运行时间的增量：
+EN 的 `stock_change` 每天约 05:53 才同步一次，白天会滞后，所以不走 EN。
 只保留采购单 `relatedVoucherType=02` 且 `availableStockIncrease > 0` 的事件，按仓、SKU 合并。
-零增量是创建/无变化事件，负增量也不计入；它们不能证明真实入库。
-卡片副标题显示仓名和窗口（如 `美中-FZH-DANEEY · 10:00–14:00 新增`）；图片列出该仓**全部**入库 SKU，不限条数；
-文本回退受 20000 字节限制时只展示该仓汇总并附 Excel。
-每个有入库的仓，卡片提供该仓的完整明细 Excel 下载；无入库不发。
+**所有有入库的仓合成一张卡片**；没有入库的仓不显示；三个仓都没有则整次不推送。
+图片列出各仓全部入库 SKU，不限条数；一个 Excel 按仓分 sheet，下载全部有入库的仓。
 本次没有采购入库时**不推送**。此提醒描述已同步的库存事件，不代表采购单全部到货。
 上次检查时间保存在 `stock_alert_output/inbound_state.json`，dry-run 不推进。
 手动查历史某天：`inbound --date YYYY-MM-DD --source tongtool`；沿用 EN：`--source en`。
@@ -59,7 +57,7 @@ uv run pytest stock_alert/tests -q
 
 ## 卡片样式
 
-默认把提醒渲染成 **PNG 图片卡片**（蓝底居中标题、低库存概览在标题下方、低库存各仓今日新增 SKU / 入库各仓明细），
+默认把提醒渲染成 **PNG 图片卡片**（蓝底居中标题、低库存今日新增在标题下方、低库存各仓今日新增 SKU / 入库各仓明细），
 上传后用现有群机器人发图 + 原生下载按钮；**不需要企业内部应用或卡片模板**。图片生成/上传失败会自动回退文本 ActionCard。
 
 可选模式（环境变量 `STOCK_ALERT_CARD_MODE`）：
@@ -76,12 +74,16 @@ uv run pytest stock_alert/tests -q
 钉钉默认复用 `DINGTALK_WEBHOOK` / `DINGTALK_SECRET`；可用 `*_STOCK` 覆盖。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File stock_alert/scripts/install_stock_alert_schedule.ps1 -AtTime "09:23" -InboundTimes "10:00,14:00,17:00"
+powershell -ExecutionPolicy Bypass -File stock_alert/scripts/install_stock_alert_schedule.ps1 -PolandAtTime "14:00" -UsAtTime "20:00" -InboundAtTime "14:00"
 ```
 
-注册 `FZH-StockAlert-daily`（09:23）/ `FZH-StockInbound-daily`（10:00、14:00、17:00）；
-脚本支持 `-SkipInbound`、`-Remove`。
-日志分别为 `stock_alert_output/logs/stock_alert-daily.log`、`stock_inbound-daily.log`。
+注册 `FZH-StockAlert-Poland`（14:00）/ `FZH-StockAlert-US`（20:00）/ `FZH-StockInbound-daily`（14:00）；
+旧的 `FZH-StockAlert-daily` 会一并移除。脚本支持 `-SkipInbound`、`-Remove`。
+日志分别为 `stock_alert_output/logs/stock_alert_poland-daily.log`、`stock_alert_us-daily.log`、`stock_inbound-daily.log`。
 注册不会立即发送消息，任务到点会自动推送；首次发群前先审阅 dry-run。
+
+**避免睡眠影响**：`powercfg /change standby-timeout-ac 0`（交流电永不休眠；屏幕仍可关闭），
+这样只要电脑不关机，定时任务就能按时执行；任务本身仍保留 `StartWhenAvailable` / `WakeToRun` 兜底。
+如果关机/注销登录，任务不会执行。
 
 详细接口边界与排障见 [参考](docs/reference/low-stock-alert.md)。

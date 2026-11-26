@@ -106,9 +106,14 @@ def _new_items(wh) -> list:
     return [item for item in wh.low if item.is_new]
 
 
+def _display_warehouses(result) -> list:
+    """卡片只显示当天有新增的仓；无新增的仓不展示。"""
+    return [wh for wh in result.warehouses if _new_items(wh)]
+
+
 def _low_height(result) -> int:
     height = MARGIN * 2 + 200 + GAP + 8 + 52
-    for wh in result.warehouses:
+    for wh in _display_warehouses(result):
         height += 52 + 24 + 10 + 8
         if wh.baseline_missing:
             height += NEW_ROW_H
@@ -127,10 +132,10 @@ def render_low_stock(result, path: str | Path, *, when: _dt.date | None = None,
     img = Image.new("RGB", (WIDTH, height), BG)
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle([MARGIN, MARGIN, WIDTH - MARGIN, height - MARGIN], radius=28, fill=CARD)
-    _header(draw, 200, "通途低库存提醒", day.isoformat())
+    _header(draw, 200, "低库存预警", day.isoformat())
     _center(draw, MARGIN + 134, f"今日新增 {new_count} 个", _font(20), "#E6EEF6")
     y = MARGIN + 200 + GAP + 8
-    for wh in result.warehouses:
+    for wh in _display_warehouses(result):
         draw.text((MARGIN + PAD, y + 4), _fit(draw, wh.warehouse, _font(26, bold=True),
                                               WIDTH - 2 * MARGIN - 2 * PAD),
                   font=_font(26, bold=True), fill=TEXT)

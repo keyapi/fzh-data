@@ -29,7 +29,7 @@ from pathlib import Path
 
 from .client import StockRow
 from .en_client import EnStockClient, StockSyncIncomplete
-from .inbound import InboundResult, aggregate as aggregate_inbound
+from .inbound import aggregate as aggregate_inbound
 from .tongtool_inbound import collect_inbound as collect_tongtool_inbound
 from .names import NameCache
 from .notify import (
@@ -320,26 +320,17 @@ def cmd_inbound(args) -> int:
                      ensure_ascii=False), file=sys.stderr)
 
     preview = args.dry_run or not args.notify
-    pieces = [
-        InboundResult(day=result.day, warehouses=[wh],
-                      input_rows=result.input_rows, accepted_rows=result.accepted_rows,
-                      skipped=result.skipped, label=result.label, as_of=result.as_of)
-        for wh in result.warehouses if wh.items
-    ]
-    responses = []
-    rc = 0
-    for piece in pieces:
-        resp = notify_inbound(piece, dry_run=preview)
-        responses.append(resp)
-        if preview:
-            rc = max(rc, _show_notification(resp, preview=True))
-        else:
-            rc = max(rc, 0 if resp.get("errcode") == 0 else 1)
-    if not preview:
-        print(json.dumps(responses, ensure_ascii=False))
-    if not preview and rc == 0 and state_update:
+    nonempty = [wh for wh in result.warehouses if wh.items]
+    if not nonempty:
+        print("本次无采购入库，不推送。")
+        if not preview and state_update:
+            _save_inbound_state(*state_update)
+        return 0
+    result.warehouses = nonempty
+    resp = notify_inbound(result, dry_run=preview)
+    if not preview and resp.get("errcode") == 0 and state_update:
         _save_inbound_state(*state_update)
-    return rc
+    return _show_notification(resp, preview=preview)
 
 
 def cmd_probe(args) -> int:

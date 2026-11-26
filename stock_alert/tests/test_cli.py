@@ -21,25 +21,25 @@ def test_run_mock_dry_run_shows_single_warehouse_summary(capsys):
     rc = main(["run", "--mock", "--dry-run", "--warehouses", "美中-FZH-DANEEY,美东-CENTRADE"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert "通途低库存提醒" in out
+    assert "低库存预警" in out
     assert "### 美中-FZH-DANEEY" in out
     assert "### 美东-CENTRADE" in out
     assert "今日新增：**2**" in out
     assert "今日新增：**1**" in out
     assert "低库存：" not in out
-    assert out.count("## 通途低库存提醒") == 1
+    assert out.count("## 低库存预警") == 1
     assert "波兰-FZHPoland-covers" not in out  # 只传了两仓
 
 
 def test_run_mock_without_notify_does_not_push(capsys, monkeypatch):
     def _preview(*a, **k):
         assert k["dry_run"] is True
-        return {"errcode": 0, "messages": ["通途低库存提醒"], "files": [], "file_errors": []}
+        return {"errcode": 0, "messages": ["低库存预警"], "files": [], "file_errors": []}
 
     monkeypatch.setattr(cli, "notify_low_stock", _preview)
     rc = cli.main(["run", "--mock", "--warehouses", "美中-FZH-DANEEY"])
     assert rc == 0
-    assert "通途低库存提醒" in capsys.readouterr().out
+    assert "低库存预警" in capsys.readouterr().out
 
 
 def test_threshold_changes_result(capsys):
@@ -131,17 +131,17 @@ def test_inbound_only_resolves_names_for_real_receipts(monkeypatch, capsys):
     assert '"zero_change": 1' in out.err
 
 
-def test_inbound_sends_one_card_per_warehouse(monkeypatch, capsys):
+def test_inbound_sends_one_merged_card(monkeypatch, capsys):
     calls = []
 
     def fake(result, dry_run=False):
-        calls.append(result.warehouses[0].warehouse)
+        calls.append([wh.warehouse for wh in result.warehouses])
         return {"errcode": 0, "messages": [], "files": [], "file_errors": [], "dry_run": True}
 
     monkeypatch.setattr(cli, "notify_inbound", fake)
     rc = main(["inbound", "--mock", "--dry-run", "--warehouses", "W1,W2,W3"])
     assert rc == 0
-    assert calls == ["W1", "W2", "W3"]
+    assert calls == [["W1", "W2", "W3"]]
     capsys.readouterr()
 
 
