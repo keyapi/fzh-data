@@ -21,6 +21,7 @@ timestamp: 2026-09-14
 | 销售订单「已发/未发」状态 + 生产/工序进度 | [../AGENT_HANDOFF_物料发货状态.md](../AGENT_HANDOFF_物料发货状态.md) |
 | 销售出库 → 物料移动追溯 | [../AGENT_HANDOFF_DN追溯报表.md](../AGENT_HANDOFF_DN追溯报表.md) |
 | BOM Cost List V2 报表逻辑与列定义 | [reference/BOM成本报表逻辑.md](reference/BOM成本报表逻辑.md) |
+| 通途库存同步时间点与查询接口（含午间波兰 / 晚间美国） | [reference/tongtool-stock-sync.md](reference/tongtool-stock-sync.md) |
 | 物料组英文翻译管道 | [reference/item-group-translation-pipeline.md](reference/item-group-translation-pipeline.md) |
 | 腾讯云 TMT 开通与密钥 | [reference/tmt-setup.md](reference/tmt-setup.md) |
 | 经验教训 | [lessons/item-group-translation.md](lessons/item-group-translation.md) |

@@ -6,6 +6,13 @@ title: EN_API 文档变更日志
 
 # 变更日志
 
+## 2026-11-27（盘中库存查询 API 上线 + 同步口径归档）
+
+- **新增接口（app `keyapi/tongtool_integration` PR #30，生产已部署）**：`get_stock_intraday` 只读查询 `stock_intraday.parquet`，支持 `slot=eu|us`、仓库/SKU、日期区间、`limit≤5000`；权限沿用 `read on Tongtool Stock Latest`。生产实测 11-26：eu 1,374（波兰）、us 3,133（美东 2,105 + 美中 1,028）。
+- **新增文档**：[reference/tongtool-stock-sync.md](reference/tongtool-stock-sync.md) —— 四个库存任务的时间点/覆盖仓/产出、三个读取接口、口径边界。
+- **澄清**：午/晚库存任务自 2026-10-27 上线即 12:00 / 18:00，从未改成 13 点或 19 点；`5,13,21:40` 属于独立站产品同步（`daneey_sync`），`5,13,21:30` 属于 NAS 物料组路径刷新。
+
+
 ## 2026-10-13（晚 2：Stage 2 原生报表，测试机已部署）
 
 - **新增（路线第 2 档：原生 KPI/例外）**：Script Report「**SO Chain Overview**」 —— 每行「还未发完」的订单行（阶段/已发/未发/异常）+ 顶部 KPI 卡（行数·未发总量·交期已过·死单）+ 阶段分布柱图。产物见 `supply_chain_visibility/key_test/key_test__report__so_chain_overview__*`。
