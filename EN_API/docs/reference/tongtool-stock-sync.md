@@ -1,7 +1,7 @@
 ---
 okf: v0.1
 type: Reference
-title: EN 通途库存同步与读取接口（05:17 全量 / 12:00 波兰 / 18:00 美国）
+title: EN 通途库存同步与读取接口（05:17 全量 / 13:00 波兰 / 19:00 美国）
 description: EN（ERPNext）tongtool_integration 四个库存同步任务的 cron、覆盖仓、产出文件，以及三个只读查询接口的用法与口径边界
 date: 2026-11-27
 category: reference
@@ -30,8 +30,9 @@ cron 用**服务器本地时间 = 北京时间（CST）**。任务内部用通�
 | `stock_sync.sync_daily_stock_snapshot` | `17 5 * * *` | 14 个活跃仓（全量，~5,385 行） | `Tongtool Stock Latest`（整体替换）+ `stock.parquet` |
 | `stock_sync.retry_stock_snapshot_0617` / `_if_needed` | `17 6 * * *` / `17 7 * * *` | 同上 | 失败补跑 |
 | `stock_change_sync.sync_daily_stock_change` | `47 5 * * *` | 14 仓（变动明细） | `stock_change.parquet` + Run 日志 |
-| `stock_intraday.sync_intraday_eu` | `0 12 * * *` | **波兰-FZHPoland-covers**（1 仓，~1,374 行） | `stock_intraday.parquet`，`slot=eu` |
-| `stock_intraday.sync_intraday_us` | `0 18 * * *` | **美东-CENTRADE + 美中-FZH-DANEEY**（~3,133 行） | 同一 parquet，`slot=us` |
+| `stock_intraday.sync_intraday_eu` | `0 13 * * *` | **波兰-FZHPoland-covers**（1 仓，~1,374 行） | `stock_intraday.parquet`，`slot=eu` |
+| `stock_intraday.sync_intraday_us` | `0 19 * * *` | **美东-CENTRADE + 美中-FZH-DANEEY**（~3,133 行） | 同一 parquet，`slot=us` |
+| `stock_intraday.retry_intraday_*_1320/1340/1920/1940` | `20 13` / `40 13` / `20 19` / `40 19` | 同上 | 当天该 slot 无 `complete=1` 的 Run 才重跑 |
 
 数据目录（`Tongtool Settings.stock_snapshot_dir`，默认 `/home/frappe/fzh-inventory/`）：
 `stock.parquet`、`stock_change.parquet`、`stock_intraday.parquet`，各自带 `.prev.parquet` 上一版备份。
@@ -41,16 +42,25 @@ cron 用**服务器本地时间 = 北京时间（CST）**。任务内部用通�
 
 ### 时间点与「卡死」的真实历史（重要）
 
-**当前生效值：12:00 / 18:00**（2026-10-27 上线即如此，DB 与 `hooks.py` 一致）。但**有过两次「往后挪」的建议，均未实施**：
+**当前生效值（2026-11-27 起）：欧洲 13:00 / 美国 19:00**，各带 2 次条件重试（13:20/13:40、19:20/19:40），对应 app PR #31。
 
-1. **2026-10-27（fzh-data `bac970ca`）**：因周一美国操作量最重，建议后续加 `0 19 * * 1` 美国槽；文档明确标注「周一 19:00 建议（暂不实施），当前统一 18:00」。
-2. **2026-11-18 事故后的建议（计划文件 `en-graceful-micali.md`）**：11-18 18:02 在 18 点窗口执行 `bench restart`，RQ 优雅停机必须等 `run_stock_intraday(slot=us)` 跑完（等 6m33），期间 SSH 断连 → 站点全停 14 小时。建议 **美国改 `30 19 * * *`**、欧洲可考虑挪到 13:30。**未实施**（DB 仍是 `0 18`，11-26 实际 18:00:29 起跑）。
+调整原因与历史：
+
+1. **2026-10-27（fzh-data `bac970ca`）**：上线时是 12:00 / 18:00；因周一美国操作量最重，记录过「周一 19:00」建议（`0 19 * * 1`），当时标注「暂不实施」。
+2. **2026-11-18 停站事故**：18:02 在 18 点窗口执行 `bench restart`，RQ 优雅停机必须等 `run_stock_intraday(slot=us)` 跑完（等 6m33），期间 SSH 断连 → 站点全停 14 小时；当时计划（`en-graceful-micali.md`）建议美国改 19:30，未实施。
+3. **2026-11-27 实施**：业务方要求 14:00 / 20:00 前能读到数据，最终定为 **欧洲 13:00、美国 19:00**（都在 `0 */6 * * *` 备份窗口结束后），并补条件重试。
+
+配套的可靠性改动（同一 PR）：
+
+- **超时 3600 → 1200 秒**：卡住的运行不会拖过 20:00，也给 19:20/19:40 重试让路。
+- **部分成功不发布**：原先 partial 也整槽覆盖写 parquet，会删掉缺失仓的旧行（11-04 事故：18:00 的 partial 覆盖了 12:58 的完整结果）。现在只有 `complete`（无缺仓、无错误）才写文件，partial 只记 Run，等重试补。
+- 重试闸门读 `Tongtool Stock Run`：当天该 slot 有 `complete=1` 就直接跳过；复用 `run_stock_intraday`，按 `(snapshot_date, slot)` 整槽替换，幂等。
 
 「会卡/延迟」的机制：
-- frappe crontab `0 */6 * * *` 备份（00 / 06 / 12 / 18 点，7.6GB，约 55 分钟），18:00 与 US 盘中同步、整点任务叠加；
-- 两个 intraday 任务都是 `enqueue(queue="long", timeout=3600)`，**整点只是入队时间**，long 队列被占（备份、S3 上传每天占 25–75 分钟、订单重扫）就晚开始；
+- frappe crontab `0 */6 * * *` 备份（00 / 06 / 12 / 18 点，7.6GB，约 55 分钟）——13:00 / 19:00 已避开其起点；
+- 两个 intraday 任务都是 `enqueue(queue="long")`，**整点只是入队时间**，long 队列被占（S3 上传、订单重扫）就晚开始；生产有 2 个 long worker，`Daily Long` 类任务集中在 00:0x；
 - `.stock_intraday.lock` 使并发的那一次直接 skip；
-- 在该窗口做 `bench restart` 会等待长任务跑完，是 11-18 停站事故的直接原因。
+- 在 13:00 / 19:00 附近做 `bench restart` 仍会等待长任务，重启请避开。
 
 时间点容易记混的地方：
 - `40 5,13,21 * * *` 是 `daneey_sync.sync_daneey_products`（独立站**产品链接**同步）；
