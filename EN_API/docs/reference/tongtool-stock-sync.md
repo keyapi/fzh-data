@@ -115,7 +115,28 @@ curl -sG ".../get_stock_intraday" -H "Authorization: token $ERP_API_KEY:$ERP_API
   --data-urlencode "slot=us" --data-urlencode "start_date=2026-11-26"
 ```
 
-### 4. 库存变动明细（05:47 口径）
+### 4. 最近一次完整槽（含新鲜度，推荐业务读取用这个）
+
+```
+GET /api/method/tongtool_integration.sync.stock_intraday.get_intraday_latest
+    ?slot=eu|us&warehouse=&warehouse_id=&sku=&limit=5000&allow_stale=0
+```
+
+一次调用同时给数据和「这是不是当天的、完整不完整」：
+
+| 字段 | 含义 |
+|---|---|
+| `data_complete` | 这份快照本身是否完整成功（`Success` 且 `complete=1`，且 parquet 的 `run_id` 与运行记录一致） |
+| `is_today` | 是否当天槽 |
+| `age_seconds` / `snapshot_at` / `finished_at` | 快照年龄与时间（带 `+08:00`） |
+| `reason` | `no_complete_snapshot`（从未完整成功）/ `stale_snapshot`（旧数据被拦）/ `no_match`（过滤无命中）/ `null` |
+| `row_count` / `returned_count` / `truncated` | 过滤后总数 / 实际返回 / 是否被 `limit` 截断 |
+| `latest_attempt_today` | 当天最近一次尝试（含 `Partial`/`Failed`、`missing_warehouses`），用来解释为什么今天没数据 |
+| `next_retry_at` | 当天未完成且仍有重试位时给出下一次重试时间 |
+
+**旧快照默认不返回 `rows`**（`reason=stale_snapshot`），要取旧数据必须显式 `allow_stale=1`——避免静默拿到过期库存。`slot` 必填。
+
+### 5. 库存变动明细（05:47 口径）
 
 ```
 GET /api/method/tongtool_integration.sync.stock_change_sync.get_stock_change
@@ -132,11 +153,40 @@ GET /api/method/tongtool_integration.sync.stock_change_sync.get_stock_change
 
 ## 四、口径纪律
 
-1. 要「05:17 全量」→ 接口 1/2；要「12:00 波兰 / 18:00 美国」→ 只能接口 3 并带 `slot`。
+1. 要「05:17 全量」→ 接口 1/2；要「13:00 波兰 / 19:00 美国」→ 接口 3（按日期区间）或接口 4（最近完整槽 + 新鲜度）。
 2. `Tongtool Stock Latest` 被 `demand_collaboration/live_stock.py`、`supply_copilot/en_live.py` 消费，
    **绝不要把 intraday 写进 Latest**，否则这两个工作台的口径会被污染。
 3. 行数对账基准（2026-11-26）：`eu` 1,374（波兰）；`us` 3,133（美东 2,105 + 美中 1,028）；合并 4,507。
 4. 未知/缺仓不补 0：看 `Tongtool Stock Run` 的 `complete` / `missing_warehouses` / `error_summary`。
+
+## 五、给同事的读法（可直接转发）
+
+**每天 14:00 读波兰、20:00 读美国**，推荐只用接口 4，不用自己拼 Run 查询：
+
+```python
+import os, requests
+
+BASE = "https://erpnext.vilavi.cn/api/method/tongtool_integration.sync.stock_intraday.get_intraday_latest"
+H = {"Authorization": f"token {os.environ['ERP_API_KEY']}:{os.environ['ERP_API_SECRET']}"}
+
+def read_slot(slot: str):
+    r = requests.get(BASE, params={"slot": slot, "limit": 5000}, headers=H, timeout=120)
+    r.raise_for_status()
+    data = r.json()["message"]
+    if data["data_complete"] and data["is_today"]:
+        return data["rows"], "ok"
+    # 当天还没成功：先看有没有重试位，再决定是否用旧数据
+    return None, data["reason"]
+```
+
+**失败时的处理顺序（兜底）**：
+
+1. `data_complete=true` 且 `is_today=true` → 直接用，`snapshot_at` 就是数据时间。
+2. 当天还没完成 → 看 `next_retry_at`，等到重试结束（最晚 13:45 / 19:45）再读一次。
+3. 仍没有 → 两种降级，**都必须标注非当日**：
+   - 旧槽：同一接口加 `allow_stale=1`（返回 `snapshot_date` 与 `age_seconds`，自己判断可接受性）；
+   - 05:17 全量：`/api/resource/Tongtool Stock Latest`，它是当天开门基线，不是盘中数据。
+4. **不建议直连通途 OpenAPI**：那是共享 app_key + 13 秒/请求的限流，多一个消费者会把 EN 自己的同步打出 526（历史上的失败多是这类限流/网关抖动）。只有 EN 完全不可用时才考虑，且必须单独申请 key、串行限速。
 
 ## 相关
 
