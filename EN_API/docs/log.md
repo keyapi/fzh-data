@@ -6,6 +6,15 @@ title: EN_API 文档变更日志
 
 # 变更日志
 
+## 2026-11-27（盘中库存查询 API 上线 + 同步改点 + 口径归档）
+
+- **新增接口（app `keyapi/tongtool_integration` PR #30，生产已部署）**：`get_stock_intraday` 只读查询 `stock_intraday.parquet`，支持 `slot=eu|us`、仓库/SKU、日期区间、`limit≤5000`；权限沿用 `read on Tongtool Stock Latest`。生产实测 11-26：eu 1,374（波兰）、us 3,133（美东 2,105 + 美中 1,028）。
+- **同步改点（app PR #31，生产已部署）**：欧洲 12:00→**13:00**、美国 18:00→**19:00**，各加两次条件重试（13:20/13:40、19:20/19:40）；超时 3600→1200 秒；partial 不再整槽覆盖写 parquet。`sync_jobs` 需先 `clear-cache` 再执行（hooks 有 Redis 缓存）。
+- **新增「最近完整槽」接口（app PR #32，生产已部署）**：`get_intraday_latest?slot=eu|us` 一次返回数据 + `data_complete` / `is_today` / `age_seconds` / `reason` / `latest_attempt_today` / `next_retry_at`；旧槽默认不返回 rows（需 `allow_stale=1`）。生产实测：11-26 eu 1,374、us 3,133，默认如实拦旧数据。
+- **新增文档**：[reference/tongtool-stock-sync.md](reference/tongtool-stock-sync.md) —— 库存任务时间点/覆盖仓/产出、四个读取接口、口径与可靠性边界、给同事的读法与兜底顺序。
+- **澄清**：10-27 的「周一 19:00」与 11-18 停站事故后的「美国 19:30」都是当时未实施的建议；13:40/21:40 属独立站产品同步，13:30/21:30 属 NAS 物料组刷新。
+
+
 ## 2026-10-13（晚 2：Stage 2 原生报表，测试机已部署）
 
 - **新增（路线第 2 档：原生 KPI/例外）**：Script Report「**SO Chain Overview**」 —— 每行「还未发完」的订单行（阶段/已发/未发/异常）+ 顶部 KPI 卡（行数·未发总量·交期已过·死单）+ 阶段分布柱图。产物见 `supply_chain_visibility/key_test/key_test__report__so_chain_overview__*`。
