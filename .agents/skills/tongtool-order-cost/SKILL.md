@@ -6,7 +6,7 @@ description: >
   用户提到特殊规则、订单改销售额成本、黄-特殊规则、Jeck特殊规则（旧表只读）、1.7.0、通途订单202606、
   Google Sheet 通途SKU 替换、gspread、FBA 尾程、账期差异、参考值优先、月度盈利审计、平均成本低、
   美中USTX、二次加工成本、测算表对比、绍兴发货方式、拆单合并、组合SKU登记、
-  分公司发货 vs FBA 成本对比、Colab 移植/退场、build-order-tabs、parity 时触发。
+  分公司发货 vs FBA 成本对比、Colab 移植/退场、build-order-tabs、parity、皮壳成本为0/借用同款成本 时触发。
   不要用于赛狐打单或 ERPNext 工单排查。
 metadata:
   module: tongtool_order_cost
@@ -62,6 +62,7 @@ metadata:
 踩过的坑与设计取舍，动手前先读：
 
 - `docs/solutions/best-practices/tongtu-e2e-gates-silent-failures.md` —— 通途 E2E 门禁：汇率/仓库/渠道/FBA 国家/空键/非有限值/输入输出哈希/回读
+- `docs/solutions/workflow-issues/tongtu-missing-finished-bom-zero-shell-cost.md` —— 皮壳成品 BOM 缺失致皮壳成本=0；借用同款补齐（众数 + 跨面料 override）+ warn 门禁
 - `docs/solutions/architecture-patterns/tongtu-branch-processing-cost-and-coefficients.md` —— 分公司国外加工理论值、财务系数 1.0/1.2/1.6、GS 基础列 vs `*系数` 列、美国本地/整套组件口径
 - `docs/solutions/workflow-issues/tongtu-multicolor-cover-shared-foam-attribution.md` —— 多色 Cover + 共享 Foam 的产品归属修复
 - `docs/solutions/workflow-issues/tongtool-sku-rename-gsheet-remap.md` —— 通途主档 SKU 改名后用本地 gspread 对齐订单 Google Sheet

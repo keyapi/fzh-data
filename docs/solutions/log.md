@@ -7,6 +7,11 @@ tags: [solutions, log]
 
 # 变更日志
 
+## 2026-11-27
+
+- **新增**: `workflow-issues/tongtu-missing-finished-bom-zero-shell-cost.md` —— 皮壳成品 BOM 缺失（`bom_fg` 空、`cost_fg=0`）致皮壳成本静默=0；借用同「品类-面料-尺寸」其它颜色补齐（众数 + 跨面料 override），202610 借回 +3,268.23 并写回三表。
+- **更新**: `best-practices/tongtu-e2e-gates-silent-failures.md` —— 新增「按月输入默认必须命中本月」（EN 明细曾静默回落 `en_items_all_089.csv`）与皮壳借用两条门禁。
+
 ## 2026-11-18
 
 - **新增**: `best-practices/tongtu-e2e-gates-silent-failures.md` —— 通途 E2E 门禁：静默 fallback 清单、fail/warn 分级、输入输出哈希与写回回读。

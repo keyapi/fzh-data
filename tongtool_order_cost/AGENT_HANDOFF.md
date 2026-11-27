@@ -251,3 +251,29 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
 - **已用 EN 报表验证**（`BOM Cost List V2`，filters 见 `build-order-tabs.md`）：KS0050 六个尺寸
   `cost_fg=0 / cost_sxbzcp=0 / shipping_method=成品`，USNJ/USTX valuation 正确（5LB=35.4239/35.8839）。
   日报表带 `show_ref_code=1` 会按每个客户码重复行；本地导出用 `show_ref_code=0` 或按 `item_fg` 去重。
+
+### 坑：皮壳成本=0 疑似成品 BOM 缺失（2026-11-26）
+
+- **现象**：`build-order-tabs` 的 self 表里，部分 `是否皮壳=皮壳` 的行 `皮壳成本=0`、
+  但 `1件产品成本>0`（只剩目的地 `二次加工`）。对拍旧 Colab 表，同一 `通途SKU` 旧 `皮壳成本` 非 0，
+  差的就是皮壳那一行（如 `TT0031112K0063740` 旧 191.30→新 117.95）。
+- **根因**：1104 BOM 里这些成品 `bom_fg` 为空、`cost_fg=0`，只有绍兴成品包装 BOM（`cost_sxbzcp`）；
+  method=皮壳 时绍兴二次固定 0，皮壳一截被丢。**不是** US 本地棉包 KS0050（那类 `是否皮壳≠皮壳`）。
+- **系统性**：202607/08/09/10 命中 **50/45/32/36 行**；202610 涉及 14 个物料
+  （KS0301-XER-*、KS0001-TR/CMM/CMGDTH/MM/HLR、KS0464），预估少计约 2,700（仅旧值可估部分）。
+- **已实现借用（2026-11-27）**：`_apply_finished_bom_borrow` 对 `皮壳 + bom_fg空 + cost_fg=0` 的物料，
+  先借同「品类-面料-尺寸」其它颜色的 `cost_fg`（取**众数**，避免个别异常色如 CMM-153-PURPLE=19.575）；
+  整族都缺 BOM 的个例走 `config/finished_bom_borrow_overrides.csv` 跨面料指定 lender
+  （`MM-153-BLUE←CMM-153=64.93`、`KS0464-FHXYR←MSTWB=43.228`）。只改派生文件 `out/bom_cost_borrowed_<月>.csv`
+  的 `cost_fg`，**原始 1104 BOM 不动**；审计 `out/finished_bom_borrow_audit_<月>.csv` + manifest `finished_bom_borrow`。
+- **门禁**：`皮壳成本=0但产品有成本（疑似成品BOM缺失）`（`warn`；借完后应为 `pass`）；确认应为 0 的写
+  `config/known_zero_shell_allowlist.csv`。与「目的地加工缺失」互补（那是 皮壳>0、二次=0）。
+- **10 月已借入并写回**：self 皮壳 +3,268.23（总成本 1,856,044.80→1,859,313.03，利润 −3,268.23），
+  FBA Δ0，merged 同步 +3,268.23；三表 readback 0。**7/8/9 月不重算**（已提交财务，老板定）。
+- **根治**：让 EN/BOM 补成品 BOM（`bom_fg`）；或财务先定「用 `cost_sxbzcp` 当皮壳」的口径（会与
+  destination valuation 覆盖面冲突，不能擅自改）。经验：`docs/solutions/workflow-issues/tongtu-missing-finished-bom-zero-shell-cost.md`。
+- **BOM 版本事实**：`out/bom_cost_product_with_disabled.csv` = 11-04 启用物料成本（2,142 行，与 11-04 `latest` 0 差异）
+  + 11-11 补的 216 停用行 + 6 棉包 = 2,364；**未用 11-18 之后版本**。4 个 XER 至今停用（cost_fg=0）即为此快照早于重开。
+- **静默源坑（已修）**：`build-order-tabs` 的 EN 默认曾固定找 `en_items_all_089.csv`，不带 `--en-items` 会
+  **静默用错月份 EN**（10 月曾致 5 行组件阻断、2 单拆错、self 6236→6238）。已改为优先取
+  `en_items_all_<月>.csv`（8/9 月本就该用 089，不受影响）。

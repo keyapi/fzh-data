@@ -5,6 +5,12 @@ title: tongtool_order_cost 变更日志
 ---
 # 变更日志
 
+## 2026-11-27
+- **皮壳成品 BOM 缺失 → 借用补齐**：1104 BOM 有 142 个 `皮壳 + bom_fg空 + cost_fg=0` 物料（含 4 个 XER 误停用、KS0001-CMGDTH/CMM/MM/TR/HLR、KS0464）。新增 `_apply_finished_bom_borrow`：借同「品类-面料-尺寸」其它颜色 `cost_fg`（众数），整族缺 BOM 的个例走 `config/finished_bom_borrow_overrides.csv` 跨面料指定（MM-153←CMM-153=64.93、KS0464-FHXYR←MSTWB=43.228）。只改派生 `out/bom_cost_borrowed_<月>.csv`，原始 1104 BOM 不动；审计 `out/finished_bom_borrow_audit_<月>.csv` + manifest。新增 `warn` 门禁「皮壳成本=0但产品有成本」（借完为 pass）。
+- **202610 借入并写回**：self 皮壳 +3,268.23、总成本 1,856,044.80→1,859,313.03、利润 −3,268.23；FBA Δ0；merged 同步 +3,268.23；三表 readback 0（self 保留 `补发费用` 167 列）。7/8/9 月**不重算**（已提交财务）。
+- **静默源坑修复**：`build-order-tabs` 的 EN 明细默认曾固定找 `en_items_all_089.csv`，不带 `--en-items` 会静默用错月份 EN（10 月致 5 行组件阻断、2 单拆错，self 6236→6238）。改为优先 `en_items_all_<月>.csv`。
+- **BOM 版本澄清**：`out/bom_cost_product_with_disabled.csv`(11-11 导出) = 11-04 启用物料 2,142 行（与 11-04 `latest` 0 差异）+ 11-11 补的 216 停用行 + 6 棉包 = 2,364；未用 11-18 之后版本。
+
 ## 2026-11-17
 - **四个月重算**：202607-202610 全部用固定 1104 BOM（仅补 KS0050 棉包 6 行）重建；7/8/9 月 GS 三表重写（readback 0），10 月本地从 GS 源表 + EN 明细重建（self 6,236 / FBA 1,550 / merged 7,786，门禁全 pass）。
 - **棉包**：7 月 1 单 +71.77；8 月 4 单 +242.54；9 月 36 个美国棉包 +2,862.32（波兰 Cotton-EU 1KG 仍 0）；10 月 78 行 +4,291.45。PP*LB 不再按配件零成本，按 KS0050 的 USNJ/USTX valuation 计。

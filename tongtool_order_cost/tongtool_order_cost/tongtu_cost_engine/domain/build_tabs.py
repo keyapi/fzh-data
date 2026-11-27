@@ -20,6 +20,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import uuid
 from collections import Counter, defaultdict
@@ -140,6 +141,112 @@ def _merge_alias_overrides(ref_map: Path, overrides: Path, out_dir: Path) -> Pat
     dest = out_dir / "ref_map_merged.csv"
     merged.to_csv(dest, index=False, encoding="utf-8-sig")
     return dest
+
+
+def _borrow_key(item_fg: str) -> str:
+    """品类-面料-尺寸 借用键：取前 3 段（≥4 段时），整串（3 段时），否则不可借。
+
+    与 `item_cost_sx/bom_cost_to_saihu_item_cost.py:_sku_borrow_key` 保持一致。
+    """
+    s = _text(item_fg)
+    if not s:
+        return ""
+    parts = s.split("-")
+    if len(parts) >= 4:
+        return "-".join(parts[:3])
+    if len(parts) == 3:
+        return s
+    return ""
+
+
+def _apply_finished_bom_borrow(
+    bom_path: Path, out_dir: Path, month: str, overrides_path: Path | None = None
+) -> tuple[Path, list[dict]]:
+    """皮壳商品成品 BOM 缺失（bom_fg 空、cost_fg=0）时，借同「品类-面料-尺寸」其它颜色的 cost_fg。
+
+    只动 `cost_fg`（=皮壳），只对 `shipping_method=皮壳` 且 `bom_fg` 为空的物料；
+    出借方取同键、`bom_fg` 非空、`cost_fg>0` 的物料，取值用**众数**（并列取文档中最先出现），
+    避免个别异常色（如某 PURPLE 只有半截成本）污染。借用明细写入审计 CSV 并进 manifest。
+    `overrides_path`（config/finished_bom_borrow_overrides.csv，列 item_fg/lender_item_fg/note）
+    用于整族都缺 BOM、只能跨面料借的个例，优先于同键众数。
+    无法借到（同键全部缺 BOM 且无 override）的原样保留 0，由 build 的 warn 门禁兜底。
+    """
+    df = _read_csv(bom_path)
+    if "cost_fg" not in df.columns or "item_fg" not in df.columns:
+        return bom_path, []
+
+    def _cf(v) -> float:
+        try:
+            return float(_text(v) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    recs = df.to_dict("records")
+    cost_by_item = {_text(r.get("item_fg")): _cf(r.get("cost_fg")) for r in recs}
+    # 显式跨面料借用（整族无同面料 lender 时）
+    overrides: dict[str, tuple[str, float]] = {}
+    if overrides_path and Path(overrides_path).exists():
+        for o in _read_csv(Path(overrides_path)).to_dict("records"):
+            item = _text(o.get("item_fg"))
+            lender = _text(o.get("lender_item_fg"))
+            if item and lender and cost_by_item.get(lender, 0) > 0:
+                overrides[item] = (lender, round(cost_by_item[lender], 6))
+    # 出借方：方法皮壳、bom_fg 非空、cost_fg>0
+    lenders: dict[str, list[tuple[float, str]]] = defaultdict(list)
+    for rec in recs:
+        if _text(rec.get("shipping_method")) != "皮壳":
+            continue
+        if not _text(rec.get("bom_fg")):
+            continue
+        c = _cf(rec.get("cost_fg"))
+        if c <= 0:
+            continue
+        k = _borrow_key(rec.get("item_fg"))
+        if k:
+            lenders[k].append((round(c, 6), _text(rec.get("item_fg"))))
+
+    borrowed: list[dict] = []
+    for idx, rec in enumerate(recs):
+        if _text(rec.get("shipping_method")) != "皮壳":
+            continue
+        if _text(rec.get("bom_fg")):  # 只有真缺成品 BOM 才借
+            continue
+        if _cf(rec.get("cost_fg")) > 0:
+            continue
+        item = _text(rec.get("item_fg"))
+        if item in overrides:
+            best_val, best_sku, source, n_cand = overrides[item][1], overrides[item][0], "override_cross_fabric", 1
+        else:
+            cands = lenders.get(_borrow_key(item)) or []
+            if not cands:
+                continue
+            # 众数：先统计，再按 (次数 desc, 首次出现 asc) 选
+            counts: dict[float, int] = {}
+            first_pos: dict[float, int] = {}
+            for pos, (val, _sku) in enumerate(cands):
+                counts[val] = counts.get(val, 0) + 1
+                first_pos.setdefault(val, pos)
+            best_val = min(counts, key=lambda v: (-counts[v], first_pos[v]))
+            best_sku = next(sku for val, sku in cands if val == best_val)
+            source, n_cand = "sibling_same_fabric", len(cands)
+        df.at[df.index[idx], "cost_fg"] = str(best_val)
+        borrowed.append({
+            "item_fg": item,
+            "borrowed_cost_fg": best_val,
+            "lender_item_fg": best_sku,
+            "source": source,
+            "n_candidates": n_cand,
+        })
+
+    if not borrowed:
+        return bom_path, []
+    dest = out_dir / f"bom_cost_borrowed_{month}.csv"
+    df.to_csv(dest, index=False, encoding="utf-8-sig")
+    pd.DataFrame(borrowed).to_csv(
+        out_dir / f"finished_bom_borrow_audit_{month}.csv", index=False, encoding="utf-8-sig"
+    )
+    return dest, borrowed
+
 
 
 def load_special_order_ids(path: str | Path) -> set[str]:
@@ -1064,12 +1171,25 @@ def build_order_tabs(
     overrides = root / "config" / "item_alias_overrides.csv"
     if overrides.exists():
         ref_map = _merge_alias_overrides(ref_map, overrides, out_dir)
-    en_items = _pick(en_items_csv, out / "en_items_all_089.csv",
-                     out / "snapshots" / month / "en_items_all_089.csv")
+    # EN 明细必须优先取本月快照；历史曾用固定名 en_items_all_089.csv，
+    # 若默认回落到旧月份文件会静默用错 EN（仅作最后兜底）。
+    en_items = _pick(en_items_csv,
+                     out / f"en_items_all_{month}.csv",
+                     out / "snapshots" / month / f"en_items_all_{month}.csv",
+                     out / "snapshots" / month / "en_items_all_089.csv",
+                     out / "en_items_all_089.csv")
     flags = _pick(flags_csv, out / "snapshots" / month / "order_flags.csv")
     branch = _pick(branch_map_csv, out / "item_group_branch.tsv")
     bom = _pick(bom_csv, out / "bom_cost_product_with_disabled.csv",
                 out / "bom_cost_product_with_kits.csv")
+    # 皮壳成品 BOM 缺失时，借同「品类-面料-尺寸」其它颜色 cost_fg（只改 cost_fg）
+    bom_source = bom
+    bom_borrow: list[dict] = []
+    if bom_source and Path(bom_source).exists() and not os.environ.get("TONGTU_NO_BOM_BORROW"):
+        bom, bom_borrow = _apply_finished_bom_borrow(
+            Path(bom_source), out, month,
+            overrides_path=root / "config" / "finished_bom_borrow_overrides.csv",
+        )
     wh_map = _pick(wh_map_tsv, out / "snapshots" / month / "wh_map.tsv", out / "wh_map.tsv")
     fx_path = _pick(fx_csv, out / f"fx_{month}.csv")
     wh_sources = _pick(wh_sources_tsv, out / "warehouse_cost_sources.tsv")
@@ -1306,6 +1426,28 @@ def build_order_tabs(
         "status": "warn" if zero_proc else "pass",
         "detail": f"{len(zero_proc)} 行皮壳商品目的地 valuation=0；清单见 parity 报告",
     })
+    # 待确认：皮壳商品皮壳成本=0 但仍有产品成本（通常只剩目的地加工）。
+    # 多因 1104 BOM 缺成品 BOM（bom_fg 空 → cost_fg=0，只剩 SXBZCP），旧 Colab 该列非 0。
+    shell_allow_path = root / "config" / "known_zero_shell_allowlist.csv"
+    shell_allow = set()
+    if shell_allow_path.exists():
+        for rec in _read_csv(shell_allow_path).to_dict("records"):
+            shell_allow.add(_text(rec.get("item_fg")))
+    missing_shell = [
+        r for r in self_rows
+        if _text(r.get("是否皮壳")) == "皮壳"
+        and not re.search(r"-(?:COVER|FOAM|PPCOTTON)", _text(r.get("通途SKU")), re.I)
+        and (_num(r.get("皮壳成本")) or 0) == 0
+        and (_num(r.get("1件产品成本")) or 0) > 0
+        and _text(r.get("品类尺寸面料编码")) not in shell_allow
+    ]
+    _ms_items = sorted({_text(r.get("品类尺寸面料编码")) for r in missing_shell})
+    assertions.append({
+        "name": "皮壳成本=0但产品有成本（疑似成品BOM缺失）",
+        "status": "warn" if missing_shell else "pass",
+        "detail": (f"{len(missing_shell)} 行 / {len(_ms_items)} 个物料；"
+                   f"示例 {', '.join(_ms_items[:6])}" if missing_shell else "0 行"),
+    })
     assertions.append({
         "name": "特殊订单清单已应用",
         "status": "pass" if special_stats["file"] else "warn",
@@ -1326,9 +1468,12 @@ def build_order_tabs(
 
     stats = {"self": self_stats, "fba": fba_stats,
              "special_orders": special_stats,
+             "finished_bom_borrow": bom_borrow,
              "inputs": {k: str(v) for k, v in {
                  "raw": raw_path, "ref_map": ref_map, "en_items": en_items,
                  "flags": flags, "branch_map": branch, "bom": bom,
+                 "bom_source": bom_source,
+                 "bom_borrow_overrides": root / "config" / "finished_bom_borrow_overrides.csv",
                  "wh_map": wh_map, "fx": fx_path, "wh_sources": wh_sources,
                  "attr_master": attr_master, "old_writeback": old_wb,
                  "fba_gs": gs_path, "fba_shadow": shadow_path,

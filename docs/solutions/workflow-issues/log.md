@@ -7,6 +7,9 @@ tags: [solutions, workflow-issues, log]
 
 # workflow-issues 变更日志
 
+## 2026-11-26
+- **新增**: `tongtu-missing-finished-bom-zero-shell-cost.md` —— 1104 BOM 有 14 个成品 `bom_fg` 空（`cost_fg=0`）只剩 `cost_sxbzcp`，method=皮壳 → 皮壳成本被静默丢成 0；202607/08/09/10 命中 50/45/32/36 行。已加 build `warn` 门禁 + `known_zero_shell_allowlist.csv`。
+
 ## 2026-11-18
 - **新增**: `tongtu-multicolor-cover-shared-foam-attribution.md` —— 多色 Cover 共享 Foam 时填充行挂错产品（KS0428 vs KS0316），只重挂成本物料、不合并；绍兴二次 +953.235、头程 −1,129.95。
 

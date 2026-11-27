@@ -13,6 +13,7 @@ tags: [solutions, index]
 
 | 日期 | 标题 | 文件 |
 |------|------|------|
+| 2026-11-26 | 皮壳商品皮壳成本=0（成品 BOM 缺失）的识别与门禁 | [workflow-issues/tongtu-missing-finished-bom-zero-shell-cost.md](workflow-issues/tongtu-missing-finished-bom-zero-shell-cost.md) |
 | 2026-11-18 | 通途订单 E2E 门禁：把静默 fallback 变成可解释的失败 | [best-practices/tongtu-e2e-gates-silent-failures.md](best-practices/tongtu-e2e-gates-silent-failures.md) |
 | 2026-11-18 | 通途多颜色皮壳 + 共享海绵：填充行成本挂错产品族 | [workflow-issues/tongtu-multicolor-cover-shared-foam-attribution.md](workflow-issues/tongtu-multicolor-cover-shared-foam-attribution.md) |
 | 2026-11-18 | 通途分公司国外加工成本：BOM 理论、财务系数与 GS 基础/系数列 | [architecture-patterns/tongtu-branch-processing-cost-and-coefficients.md](architecture-patterns/tongtu-branch-processing-cost-and-coefficients.md) |

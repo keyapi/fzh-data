@@ -9,6 +9,7 @@ tags: [workflow-issues, index]
 
 | 文档 | 说明 |
 |------|------|
+| [tongtu-missing-finished-bom-zero-shell-cost.md](tongtu-missing-finished-bom-zero-shell-cost.md) | 皮壳商品皮壳成本=0（成品 BOM bom_fg 空）：静默少计皮壳一截，跨月系统性，已加 warn 门禁 |
 | [tongtu-multicolor-cover-shared-foam-attribution.md](tongtu-multicolor-cover-shared-foam-attribution.md) | 多颜色 Cover + 共享 Foam：填充行挂错产品族，绍兴二次少计/头程多计 |
 | [tongtu-split-merge-writeback-cost-rules.md](tongtu-split-merge-writeback-cost-rules.md) | 拆单合并成本写回五类错误：组行匹配、件数翻倍、产品族（PP棉/海绵）、订单号截断、审计口径；8/9 月 0/0 失败 |
 | [tongtool-special-rule-ref-priority-and-bom-caliber.md](tongtool-special-rule-ref-priority-and-bom-caliber.md) | 换表后参考值优先；FBA 二次/绍兴换列；旧 9/3 BOM 参考值遇到新 BOM 会把扣减翻成增加 |

@@ -4,6 +4,7 @@ type: Reference
 title: 通途订单 E2E 门禁：把静默 fallback 变成可解释的失败
 description: 从 GS 源表到成本写回的逐步骤审计；汇率/仓库/渠道/FBA 国家/空键/非有限值/输入哈希/回读等门禁设计
 date: 2026-11-18
+last_updated: 2026-11-27
 category: best-practices
 module: tongtool_order_cost
 problem_type: best_practice
@@ -42,6 +43,8 @@ related_components: [tongtool_order_cost]
 - FBA 国家：GS 站点/EN FBA 仓无法识别国家 → fail，不能默认 EUFBA；
 - 关键业务键：`订单号`、`通途SKU` 空值 fail；数值非有限（Inf/NaN/不可解析）fail；
 - 特殊订单清单：写回时必须有；`order_flags` 缺失禁止写回。
+- **按月命名的输入默认必须命中本月**：EN 明细等若默认回落固定文件名（曾固定找 `en_items_all_089.csv`），
+  不带显式参数会**静默用错月份**；应优先 `en_items_all_<月>.csv`，旧文件名仅作最后兜底。
 
 ### 必须 fail（产物/写回）
 
@@ -55,6 +58,8 @@ related_components: [tongtool_order_cost]
 
 - 同包裹合法重复明细（订单号+SKU+包裹号）只报告，不去重；
 - 皮壳非组件行“有成本但目的地加工=0” → warn；确认后把 `item_fg` 加入 `config/known_zero_processing_allowlist.csv`；
+- 皮壳非组件行“皮壳成本=0 但产品有成本”（成品 BOM `bom_fg` 缺失）→ 先**借用**同「品类-面料-尺寸」其它颜色的 `cost_fg`
+  （整族缺 BOM 的个例走 `config/finished_bom_borrow_overrides.csv` 跨面料）；仍借不到才 warn；
 - 零售价异常告警，不普遍阻断（退货/补发/赠品可能合法）；
 - merged 78 键级 95↔78、self/FBA 互斥：同账号同 SKU 可合法并存，保留总计对账；
 - 旧写回兜底只在同键值冲突且影响金额时报告。
@@ -75,11 +80,15 @@ related_components: [tongtool_order_cost]
 
 - USTX 系数：只写 `二次加工成本系数`，`*系数` 列派生；基数列不动；
 - FBA 未知国家：`FBA 国家识别=0` fail，避免默认欧洲 FBA 成本；
+- EN 明细默认源：曾固定回落到 `en_items_all_089.csv`，10 月不带 `--en-items` 即静默用 8 月 EN，
+  导致 5 行组件阻断、2 单拆错（self 6236→6238）；改为优先 `en_items_all_<月>.csv` 后恢复 6236；
+- 皮壳成品 BOM 缺失：不静默按 0，先借用同款；202610 借回皮壳 +3,268.23；
 - GS 写回：manifest + 输入/输出哈希 + 回读错误非零，避免半完成状态被当成功。
 
 ## Related
 
 - `docs/solutions/architecture-patterns/tongtu-branch-processing-cost-and-coefficients.md`
 - `docs/solutions/workflow-issues/tongtu-multicolor-cover-shared-foam-attribution.md`
+- [tongtu-missing-finished-bom-zero-shell-cost.md](../workflow-issues/tongtu-missing-finished-bom-zero-shell-cost.md) —— 皮壳成品 BOM 缺失的借用补齐
 - `tongtool_order_cost/docs/reference/build-order-tabs.md`
 - `tongtool_order_cost/docs/reference/tongtool-order-pipeline.md`

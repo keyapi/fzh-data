@@ -159,6 +159,14 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs \
 - **输入绑定**：manifest `inputs_sha256` 记录 raw/EN/ref/flags/BOM/仓库/汇率/特殊订单哈希，便于追溯。
 - **待确认（warn，不阻断）**：皮壳非组件行有成本但目的地加工=0（默认排除 allowlist
   `config/known_zero_processing_allowlist.csv`）。
+- **待确认（warn，不阻断）**：皮壳非组件行 `皮壳成本=0` 但 `1件产品成本>0`（疑似成品 BOM `bom_fg` 缺失，
+  只剩绍兴成品包装 `cost_sxbzcp`）。build 会先**借用**同「品类-面料-尺寸」其它颜色的 `cost_fg`
+  （众数；整族缺 BOM 的个例走 `config/finished_bom_borrow_overrides.csv` 跨面料指定），只改派生
+  `out/bom_cost_borrowed_<月>.csv`，原始 BOM 不动；审计 `out/finished_bom_borrow_audit_<月>.csv`。
+  确认应为 0 的写 `config/known_zero_shell_allowlist.csv`；`TONGTU_NO_BOM_BORROW=1` 可关闭。与上一条互补。
+- **EN 明细来源**：默认优先 `out/en_items_all_<月>.csv` / `out/snapshots/<月>/en_items_all_<月>.csv`；
+  回落到 `en_items_all_089.csv` 仅作最后兜底（8/9 月历史快照即 089）。曾因固定找 089 导致
+  「不带 `--en-items` 静默用错月份 EN」（10 月 5 行组件阻断、2 单拆错），已修为优先本月。
 
 ## 已知缺口 / 后续
 
