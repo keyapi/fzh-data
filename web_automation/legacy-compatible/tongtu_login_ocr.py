@@ -226,7 +226,14 @@ def login(page) -> bool:
 
     logger.info("导航到通途登录页...")
     page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
-    page.wait_for_selector('input[name="username"]', state='attached', timeout=15000)
+    try:
+        page.wait_for_selector('input[name="username"]', state='attached', timeout=15000)
+    except Exception:
+        # 已有 ticket 时会直接跳到目标报表页（无登录框）——视为已登录成功
+        if "passport" not in (page.url or ""):
+            logger.info("已登录（跳转至 %s，无登录框），跳过填表", page.url)
+            return True
+        raise
     page.wait_for_timeout(1500)
 
     # 勾选"7天内自动登录"
