@@ -270,6 +270,19 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
   `config/known_zero_shell_allowlist.csv`。与「目的地加工缺失」互补（那是 皮壳>0、二次=0）。
 - **10 月已借入并写回**：self 皮壳 +3,268.23（总成本 1,856,044.80→1,859,313.03，利润 −3,268.23），
   FBA Δ0，merged 同步 +3,268.23；三表 readback 0。**7/8/9 月不重算**（已提交财务，老板定）。
+- **精修（2026-11-27 晚）**：`finished_bom_borrow_overrides.csv` 增加 `cost_fg` 绝对列（`override_absolute`），
+  用于「BOM 已重开/可重建」的精确值：
+  - `KS0464-FHXYR-60x45x42-RED=45.867`（成品 BOM 重开，PK#36.418+ND#9.4492）；
+  - `KS0301-XER-{100,140,194,200}-GREYBEIGE=95.1992/115.196/148.6108/149.9282`、
+    `XER-153=124.1124`——**成品 BOM 虽重开，但 PK#(皮壳) 子 BOM 仍停用**，成品里 PK# 用的是旧缓存价
+    （100/194 明显偏低 58.05/88.97）；正确=停用 PK# BOM 的 total_cost + ND#。
+  - `CMGDTH-183-GREY=59.882`、`CMM-153-YELLOW=64.93`：同款换面料价格相同（17.64 / 23.5），借用值与重建一致。
+  - 10 月精修后再写：self 总成本 **1,859,364.74**、利润 1,649,762.25（较借用版 +51.71）；self+merged readback 0。
+- **颜色≠同价**：不同颜色面料单价可能不同（XER 100/194 即因此借用值偏低），颜色变体**不能一律借标量**，
+  优先用「本族停用 PK# BOM + ND#」重建，或按目标颜色面料单价重算；面料物料不存在时（如 CMM2020-BLUE-142-260 404）只能借。
+- **EN 客户码变更（2026-11-27）**：`SXQC-CENKMM-Blue-153` 从 `KS0001-MM-153-BLUE` 改名为
+  `删除SXQC-CENKMM-Blue-153`，并新登记到 `KS0001-CMM-153-BLUE`（纯棉麻）。本地 `ref_map` 快照需重新拉取才生效。
+- **根因日期**：误停用批次约 **2026-09-10 14:47**（非 9/20）；XER-153 的 PK# 仍 `is_active=0`。
 - **根治**：让 EN/BOM 补成品 BOM（`bom_fg`）；或财务先定「用 `cost_sxbzcp` 当皮壳」的口径（会与
   destination valuation 覆盖面冲突，不能擅自改）。经验：`docs/solutions/workflow-issues/tongtu-missing-finished-bom-zero-shell-cost.md`。
 - **BOM 版本事实**：`out/bom_cost_product_with_disabled.csv` = 11-04 启用物料成本（2,142 行，与 11-04 `latest` 0 差异）

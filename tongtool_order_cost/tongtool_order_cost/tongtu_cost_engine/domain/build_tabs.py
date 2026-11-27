@@ -183,14 +183,20 @@ def _apply_finished_bom_borrow(
 
     recs = df.to_dict("records")
     cost_by_item = {_text(r.get("item_fg")): _cf(r.get("cost_fg")) for r in recs}
-    # 显式跨面料借用（整族无同面料 lender 时）
-    overrides: dict[str, tuple[str, float]] = {}
+    # 显式借用：cost_fg 列给绝对值（重开 BOM / 重建 PK#+内胆 得到），否则用 lender_item_fg 借其 cost_fg
+    override_abs: dict[str, float] = {}
+    override_lender: dict[str, tuple[str, float]] = {}
     if overrides_path and Path(overrides_path).exists():
         for o in _read_csv(Path(overrides_path)).to_dict("records"):
             item = _text(o.get("item_fg"))
+            if not item:
+                continue
+            absv = _cf(o.get("cost_fg"))
             lender = _text(o.get("lender_item_fg"))
-            if item and lender and cost_by_item.get(lender, 0) > 0:
-                overrides[item] = (lender, round(cost_by_item[lender], 6))
+            if absv > 0:
+                override_abs[item] = round(absv, 6)
+            elif lender and cost_by_item.get(lender, 0) > 0:
+                override_lender[item] = (lender, round(cost_by_item[lender], 6))
     # 出借方：方法皮壳、bom_fg 非空、cost_fg>0
     lenders: dict[str, list[tuple[float, str]]] = defaultdict(list)
     for rec in recs:
@@ -214,8 +220,11 @@ def _apply_finished_bom_borrow(
         if _cf(rec.get("cost_fg")) > 0:
             continue
         item = _text(rec.get("item_fg"))
-        if item in overrides:
-            best_val, best_sku, source, n_cand = overrides[item][1], overrides[item][0], "override_cross_fabric", 1
+        if item in override_abs:
+            best_val, best_sku, source, n_cand = override_abs[item], "(override)", "override_absolute", 1
+        elif item in override_lender:
+            best_val, best_sku = override_lender[item][1], override_lender[item][0]
+            source, n_cand = "override_cross_fabric", 1
         else:
             cands = lenders.get(_borrow_key(item)) or []
             if not cands:
