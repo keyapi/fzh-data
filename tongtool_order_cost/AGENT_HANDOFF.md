@@ -280,8 +280,15 @@ uv run python -m tongtool_order_cost.tongtu_cost_engine.cli build-order-tabs --m
   - 10 月精修后再写：self 总成本 **1,859,364.74**、利润 1,649,762.25（较借用版 +51.71）；self+merged readback 0。
 - **颜色≠同价**：不同颜色面料单价可能不同（XER 100/194 即因此借用值偏低），颜色变体**不能一律借标量**，
   优先用「本族停用 PK# BOM + ND#」重建，或按目标颜色面料单价重算；面料物料不存在时（如 CMM2020-BLUE-142-260 404）只能借。
+- **PK# 已启用 + 为何报表仍差**（2026-11-27）：已把 XER 100/140/194/200/153 的 PK# BOM（及 153 成品 BOM）`is_active/is_default=1`。
+  但成品 BOM `rm_cost_as_per=Price List`，其 PK# 行取的是**皮壳物料的 valuation_rate（库存估值，停用期未重估而陈旧）**，
+  不是 PK# BOM 实时成本 → 启用 PK# **不会自动刷新报表 cost_fg**（153 启用后仍 14.44）。要让 EN 报表自洽需
+  「重估 PK# 物料估值」或「成品 BOM 改 BOM Rate」；GS 成本已用补丁里的 BOM 成本重建值兜住。
 - **EN 客户码变更（2026-11-27）**：`SXQC-CENKMM-Blue-153` 从 `KS0001-MM-153-BLUE` 改名为
-  `删除SXQC-CENKMM-Blue-153`，并新登记到 `KS0001-CMM-153-BLUE`（纯棉麻）。本地 `ref_map` 快照需重新拉取才生效。
+  `删除SXQC-CENKMM-Blue-153`，并新登记到 `KS0001-CMM-153-BLUE`（纯棉麻）。本地 `out/item_refcode.csv` 已同步修改
+  （MM→删除…、CMM→SXQC…），`EnResolver` 实测 `SXQC-CENKMM-Blue-153→KS0001-CMM-153-BLUE`；10 月 GS 未因此重写（成本不变）。
+- **10 月对财务口径**：`绍兴二次加工成本` **完全不变**（54,139.00）；`皮壳成本` 341,904.90→**345,224.83**（+3,319.93，+0.97%）；
+  `订单总成本` +3,319.94（+0.18%）。若财务拿到的是 11/17 版，皮壳需按此更新，绍兴二次沿用。
 - **根因日期**：误停用批次约 **2026-09-10 14:47**（非 9/20）；XER-153 的 PK# 仍 `is_active=0`。
 - **根治**：让 EN/BOM 补成品 BOM（`bom_fg`）；或财务先定「用 `cost_sxbzcp` 当皮壳」的口径（会与
   destination valuation 覆盖面冲突，不能擅自改）。经验：`docs/solutions/workflow-issues/tongtu-missing-finished-bom-zero-shell-cost.md`。
